@@ -63,7 +63,7 @@ def embed(request, *elements, **kw):
     # check to see if this embed is a non-object field
     if len(path.split('/')) != 4 and path[0] != '/':
         return path.split('/')[0]  # grab field from <field>/@@embed
-    print('embed: %s', path)
+    log.debug('embed: %s', path)
     if as_user is not None:
         result, embedded, linked = _embed(request, path, as_user)
     else:
@@ -112,7 +112,8 @@ def parse_result(result, fields_to_embed, schema):
     # First add all non-link to fields if top-level
     for key, val in result.items():
         if key in schema['properties'].keys():
-            if 'linkTo' in schema['properties'][key]: # single obj
+            # single obj
+            if 'linkTo' in schema['properties'][key]:
                 linkTo_fields.append(key)
             # array of objs
             elif 'items' in schema['properties'][key] and 'linkTo' in schema['properties'][key]['items']:

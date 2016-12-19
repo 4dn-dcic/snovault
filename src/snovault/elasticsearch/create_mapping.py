@@ -142,7 +142,7 @@ def schema_mapping(name, schema, field='*'):
             # keywords because fields are analyzed by nGram analyzer
         if name in NON_SUBSTRING_FIELDS:
             if name in PATH_FIELDS:
-                sub_mapping['index_analyzer'] = 'snovault_path_analyzer'
+                sub_mapping['analyzer'] = 'snovault_path_analyzer'
             else:
                 sub_mapping['index'] = 'not_analyzed'
             sub_mapping['include_in_all'] = False
@@ -175,7 +175,7 @@ def schema_mapping(name, schema, field='*'):
 
 def index_settings():
     return {
-        'index': {
+        'settings': {
             'number_of_shards': 5,
             'merge': {
                 'policy': {
@@ -262,7 +262,7 @@ def es_mapping(mapping):
     return {
         '_all': {
             'enabled': True,
-            'index_analyzer': 'snovault_index_analyzer',
+            'analyzer': 'snovault_index_analyzer',
             'search_analyzer': 'snovault_search_analyzer'
         },
         'dynamic_templates': [
@@ -464,11 +464,14 @@ def type_mapping(types, item_type, embed=True):
             elif p in m['properties'].keys():
                 if m['properties'][p]['type'] == 'string':
                     m['properties'][p] = schema_mapping(p, s, field)
-                elif m['properties'][p]['type'] == 'object':  # simply adding a field
+                # add a field to the object
+                elif m['properties'][p]['type'] == 'object' and p != field and field != '*':
                     m['properties'][p][field] = schema_mapping(p, s, field)
             else:
                 m['properties'][p] = schema_mapping(p, s, field)
             m = m['properties'][p] if not ultimate_obj else m['properties']
+
+    # REMOVE THE BOOST VAL CODE BELOW?
 
     # boost_values = schema.get('boost_values', None)
     # if boost_values is None:
@@ -508,13 +511,7 @@ def run(app, collections=None, dry_run=False, check_first=True):
     if not dry_run:
         es = app.registry[ELASTIC_SEARCH]
         try:
-            exists = False
-            if check_first:
-                exists = es.indices.exists(index=index)
-            if not exists:
-                es.indices.create(index=index, body=index_settings())
-            else:
-                print("index %s already exists no need to create mapping" % (index))
+            es.indices.create(index=index, body=index_settings())
         except RequestError as e:
             if not collections:
                 es.indices.delete(index=index)

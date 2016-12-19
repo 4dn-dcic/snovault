@@ -5,11 +5,10 @@ try:
 except ImportError:
     import subprocess
 
-
+#TODO: add pagination to settings, remove max_result_window
 def server_process(datadir, host='127.0.0.1', port=9200, prefix='', echo=False):
     args = [
-        os.path.join(prefix, 'elasticsearch'),
-        '-f',  # foreground
+        os.path.join(prefix, '/Users/carl/Downloads/elasticsearch-2.4.3/bin/elasticsearch'),
         '-Des.path.data="%s"' % os.path.join(datadir, 'data'),
         '-Des.path.logs="%s"' % os.path.join(datadir, 'logs'),
         '-Des.node.local=true',
@@ -18,11 +17,8 @@ def server_process(datadir, host='127.0.0.1', port=9200, prefix='', echo=False):
         '-Des.http.port=%d' % port,
         '-Des.index.number_of_shards=1',
         '-Des.index.number_of_replicas=0',
-        '-Des.index.store.type=memory',
-        '-Des.index.store.fs.memory.enabled=true',
-        '-Des.index.gateway.type=none',
-        '-Des.gateway.type=none',
-        '-XX:MaxDirectMemorySize=4096m',
+        '-Des.index.max_result_window=2147483647',
+        '--XX:MaxDirectMemorySize=4096m',
     ]
     # elasticsearch.deb setup
     if os.path.exists('/etc/elasticsearch'):
