@@ -224,7 +224,7 @@ def update_embedded_obj(emb_obj, field, update_val):
     Used to combine the resulting json from one embedded field from
     inner_parse() with the aggregate embedded result.
     Used recursively if in object is found within the embedded object.
-    emb_obj is the json aggregate json result so far, field is the field that
+    emb_obj is the aggregate json result so far, field is the field that
     will be embedded on, and update_val is the result from inner_parse().
     """
     curr_field_val = emb_obj[field] if field in emb_obj.keys() else {}
