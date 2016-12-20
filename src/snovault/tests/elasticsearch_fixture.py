@@ -8,7 +8,7 @@ except ImportError:
 #TODO: add pagination to settings, remove max_result_window
 def server_process(datadir, host='127.0.0.1', port=9200, prefix='', echo=False):
     args = [
-        os.path.join(prefix, 'elasticsearch'),
+        os.path.join(prefix, '/Users/carl/Downloads/elasticsearch-2.4.3/bin/elasticsearch'),
         '-Des.path.data="%s"' % os.path.join(datadir, 'data'),
         '-Des.path.logs="%s"' % os.path.join(datadir, 'logs'),
         '-Des.node.local=true',
@@ -26,11 +26,11 @@ def server_process(datadir, host='127.0.0.1', port=9200, prefix='', echo=False):
     # FOR ES 5.x:
     # args = [
     #     os.path.join(prefix, 'elasticsearch'),
-    #     '-Epath.data="%s"' % os.path.join(datadir, 'data'),
-    #     '-Epath.logs="%s"' % os.path.join(datadir, 'logs'),
-    #     '-Etransport.type=local',
-    #     '-Enetwork.host=%s' % host,
-    #     '-Ehttp.port=%d' % port,
+    #     '-Edefault.path.data="%s"' % os.path.join(datadir, 'data'),
+    #     '-Edefault.path.logs="%s"' % os.path.join(datadir, 'logs'),
+    #     '-Edefault.transport.type=local',
+    #     '-Edefault.network.host=%s' % host,
+    #     '-Edefault.http.port=%d' % port,
     # ]
     # Removed the following from args:
     # '--XX:MaxDirectMemorySize=4096m',

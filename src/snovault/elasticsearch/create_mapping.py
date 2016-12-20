@@ -176,7 +176,9 @@ def schema_mapping(name, schema, field='*'):
 def index_settings():
     return {
         'settings': {
+            'index.mapping.total_fields.limit': 10000,
             'number_of_shards': 5,
+            'number_of_replicas': 0,
             'merge': {
                 'policy': {
                     'max_merged_segment': '2gb',
