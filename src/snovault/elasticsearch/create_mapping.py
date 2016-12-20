@@ -176,6 +176,7 @@ def schema_mapping(name, schema, field='*'):
 def index_settings():
     return {
         'settings': {
+            'index.max_result_window': 2147483647,
             'index.mapping.total_fields.limit': 10000,
             'number_of_shards': 5,
             'number_of_replicas': 0,
@@ -186,7 +187,7 @@ def index_settings():
                 }
             },
             'analysis': {
-                'filter': {
+                'filters': {
                     'substring': {
                         'type': 'nGram',
                         'min_gram': 1,
@@ -198,7 +199,7 @@ def index_settings():
                         'type': 'custom',
                         'tokenizer': 'whitespace',
                         'char_filter': 'html_strip',
-                        'filter': [
+                        'filters': [
                             'standard',
                             'lowercase',
                         ]
@@ -207,7 +208,7 @@ def index_settings():
                         'type': 'custom',
                         'tokenizer': 'whitespace',
                         'char_filter': 'html_strip',
-                        'filter': [
+                        'filters': [
                             'standard',
                             'lowercase',
                             'asciifolding',
@@ -217,7 +218,7 @@ def index_settings():
                     'snovault_search_analyzer': {
                         'type': 'custom',
                         'tokenizer': 'whitespace',
-                        'filter': [
+                        'filters': [
                             'standard',
                             'lowercase',
                             'asciifolding'
@@ -226,7 +227,7 @@ def index_settings():
                     'snovault_path_analyzer': {
                         'type': 'custom',
                         'tokenizer': 'snovault_path_tokenizer',
-                        'filter': ['lowercase']
+                        'filters': ['lowercase']
                     }
                 },
                 'tokenizer': {
@@ -513,6 +514,8 @@ def run(app, collections=None, dry_run=False, check_first=True):
     if not dry_run:
         es = app.registry[ELASTIC_SEARCH]
         try:
+            if es.indices.get(index):
+                es.indices.delete(index=index)
             es.indices.create(index=index, body=index_settings())
         except RequestError as e:
             if not collections:

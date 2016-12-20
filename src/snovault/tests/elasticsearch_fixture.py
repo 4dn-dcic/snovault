@@ -7,40 +7,31 @@ except ImportError:
 
 #TODO: add pagination to settings, remove max_result_window
 def server_process(datadir, host='127.0.0.1', port=9200, prefix='', echo=False):
-    args = [
-        os.path.join(prefix, '/Users/carl/Downloads/elasticsearch-2.4.3/bin/elasticsearch'),
-        '-Des.path.data="%s"' % os.path.join(datadir, 'data'),
-        '-Des.path.logs="%s"' % os.path.join(datadir, 'logs'),
-        '-Des.node.local=true',
-        '-Des.discovery.zen.ping.multicast.enabled=false',
-        '-Des.network.host=%s' % host,
-        '-Des.http.port=%d' % port,
-        '-Des.index.number_of_shards=1',
-        '-Des.index.number_of_replicas=0',
-        # '-Des.index.store.type=memory',
-        # '-Des.index.store.fs.memory.enabled=true',
-        # '-Des.index.gateway.type=none',
-        # '-Des.gateway.type=none',
-        '--XX:MaxDirectMemorySize=4096m',
-    ]
-    # FOR ES 5.x:
     # args = [
-    #     os.path.join(prefix, 'elasticsearch'),
-    #     '-Edefault.path.data="%s"' % os.path.join(datadir, 'data'),
-    #     '-Edefault.path.logs="%s"' % os.path.join(datadir, 'logs'),
-    #     '-Edefault.transport.type=local',
-    #     '-Edefault.network.host=%s' % host,
-    #     '-Edefault.http.port=%d' % port,
+    #     os.path.join(prefix, '/Users/carl/Downloads/elasticsearch-2.4.3/bin/elasticsearch'),
+    #     '-Des.path.data="%s"' % os.path.join(datadir, 'data'),
+    #     '-Des.path.logs="%s"' % os.path.join(datadir, 'logs'),
+    #     '-Des.node.local=true',
+    #     '-Des.discovery.zen.ping.multicast.enabled=false',
+    #     '-Des.network.host=%s' % host,
+    #     '-Des.http.port=%d' % port,
+    #     '-Des.index.number_of_shards=1',
+    #     '-Des.index.number_of_replicas=0',
+    #     # '-Des.index.store.type=memory',
+    #     # '-Des.index.store.fs.memory.enabled=true',
+    #     # '-Des.index.gateway.type=none',
+    #     # '-Des.gateway.type=none',
+    #     '--XX:MaxDirectMemorySize=4096m',
     # ]
-    # Removed the following from args:
-    # '--XX:MaxDirectMemorySize=4096m',
-    # '-Ediscovery.zen.ping.multicast.enabled=false',
-    # '-Des.index.number_of_shards=1',
-    # '-Des.index.number_of_replicas=0',
-    # '-Des.index.store.type=memory',
-    # '-Des.index.store.fs.memory.enabled=true',
-    # '-Des.index.gateway.type=none',
-    # '-Egateway.type=none',
+    # FOR ES 5.x:
+    args = [
+        os.path.join(prefix, 'elasticsearch'),
+        '-Edefault.path.data="%s"' % os.path.join(datadir, 'data'),
+        '-Edefault.path.logs="%s"' % os.path.join(datadir, 'logs'),
+        '-Edefault.transport.type=local',
+        '-Edefault.network.host=%s' % host,
+        '-Edefault.http.port=%d' % port,
+    ]
 
     # elasticsearch.deb setup
     if os.path.exists('/etc/elasticsearch'):

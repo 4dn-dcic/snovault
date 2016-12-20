@@ -615,7 +615,9 @@ def search(context, request, search_type=None, return_generator=False):
 
     # Execute the query
     if do_scan:
-        es_results = es.search(body=query, index=es_index, search_type='count')
+        query['size'] = 0
+        es_results = es.search(body=query, index=es_index)
+        # es_results = es.search(body=query, index=es_index, search_type='count')
     else:
         es_results = es.search(body=query, index=es_index, from_=from_, size=size)
 
@@ -655,9 +657,9 @@ def search(context, request, search_type=None, return_generator=False):
     # Scan large result sets.
     del query['aggs']
     if size is None:
-        # preserve_order=True has unexpected results in clustered environment 
+        # preserve_order=True has unexpected results in clustered environment
         # https://github.com/elastic/elasticsearch-py/blob/master/elasticsearch/helpers/__init__.py#L257
-        hits = scan(es, query=query, index=es_index, preserve_order=False) 
+        hits = scan(es, query=query, index=es_index, preserve_order=False)
     else:
         hits = scan(es, query=query, index=es_index, from_=from_, size=size, preserve_order=False)
     graph = format_results(request, hits)

@@ -114,7 +114,7 @@ def index(request):
 
         es.indices.refresh(index=INDEX)
         res = es.search(index=INDEX, size=SEARCH_MAX, body={
-            'filter': {
+            'filters': {
                 'or': [
                     {
                         'terms': {

@@ -18,7 +18,9 @@ def embeds_uuid(es, uuid, item_type):
             'item_type': {'terms': {'field': 'item_type'}},
         },
     }
-    res = es.search(index='encoded', search_type='count', body=query)
+    query['size'] = 0
+    res = es.search(body=query, index='encoded')
+    # res = es.search(index='encoded', search_type='count', body=query)
     return {
         'uuid': uuid,
         'item_type': item_type,

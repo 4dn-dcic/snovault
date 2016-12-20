@@ -137,21 +137,22 @@ class ElasticSearchStorage(object):
     def get_by_unique_key(self, unique_key, name):
         term = 'unique_keys.' + unique_key
         query = {
-            'filter': {'term': {term: name}},
-            'version': True,
+            'query': {
+                'match': {term: name},
+            }
         }
         return self._one(query)
 
     def get_rev_links(self, model, rel, *item_types):
         filter_ = {'term': {'links.' + rel: str(model.uuid)}}
         if item_types:
-            filter_ = {'and': [
+            filter_ = {'must': [
                 filter_,
                 {'terms': {'item_type': item_types}},
             ]}
         query = {
-            'fields': [],
-            'filter': filter_,
+            'stored_fields': [],
+            'query': {'bool':filter_},
         }
         data = self.es.search(index=self.index, body=query, size=SEARCH_MAX)
         return [
@@ -160,7 +161,7 @@ class ElasticSearchStorage(object):
 
     def __iter__(self, *item_types):
         query = {
-            'fields': [],
+            'stored_fields': [],
             'filter': {'terms': {'item_type': item_types}} if item_types else {'match_all': {}},
         }
         for hit in scan(self.es, query=query):
