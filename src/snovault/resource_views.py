@@ -276,3 +276,15 @@ def item_view_edit(context, request):
         )
 
     return properties
+
+
+@view_config(context=Item, permission='view_raw', request_method='GET',
+             name='properties')
+def item_view_properties(context, request):
+    properties = item_links(context, request)
+    calculated = calculate_properties(context, request, properties)
+    if calculated['@id']:
+        properties.update({'@id': calculated['@id']})
+    if calculated['uuid']:
+        properties.update({'uuid': calculated['uuid']})
+    return properties
