@@ -154,7 +154,13 @@ def add_audit_checker(config, checker, type_, condition=None, frame='embedded'):
         types = config.registry[TYPES]
         ti = types[type_]
         auditor = config.registry[AUDITOR]
-        auditor.add_audit_checker(checker, ti.name, condition, frame)
+        # support adding audits by AbstractType
+        if len(ti.subtypes) > 1:
+            for subtype in ti.subtypes:
+                st = types[subtype]
+                auditor.add_audit_checker(checker, st.name, condition, frame)
+        else:
+            auditor.add_audit_checker(checker, ti.name, condition, frame)
 
     config.action(None, callback)
 
