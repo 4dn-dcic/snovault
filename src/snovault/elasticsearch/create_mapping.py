@@ -14,6 +14,7 @@ from snovault import (
     TYPES,
 )
 from snovault.schema_utils import combine_schemas
+from snovault.fourfront_utils import add_default_embeds
 from .interfaces import ELASTIC_SEARCH
 import collections
 import json
@@ -30,6 +31,11 @@ log = logging.getLogger(__name__)
 
 # An index to store non-content metadata
 META_MAPPING = {
+    '_all': {
+        'enabled': False,
+        'analyzer': 'snovault_index_analyzer',
+        'search_analyzer': 'snovault_search_analyzer'
+    },
     'dynamic_templates': [
         {
             'store_generic': {
@@ -55,7 +61,12 @@ def sorted_dict(d):
     return json.loads(json.dumps(d), object_pairs_hook=sorted_pairs_hook)
 
 
-def schema_mapping(name, schema):
+def schema_mapping(name, schema, field='*'):
+    """
+    Create the mapping for a given schema. Defaults to using all fields for
+    objects (*), but can handle specific fields using the field parameter.
+    This allows for the mapping to match the selective embedding
+    """
     if 'linkFrom' in schema:
         type_ = 'string'
     else:
@@ -63,14 +74,15 @@ def schema_mapping(name, schema):
 
     # Elasticsearch handles multiple values for a field
     if type_ == 'array' and schema['items']:
-        return schema_mapping(name, schema['items'])
+        return schema_mapping(name, schema['items'], field)
 
     if type_ == 'object':
         properties = {}
         for k, v in schema.get('properties', {}).items():
-            mapping = schema_mapping(k, v)
+            mapping = schema_mapping(k, v, '*')
             if mapping is not None:
-                properties[k] = mapping
+                if field == '*' or k == field:
+                    properties[k] = mapping
         return {
             'type': 'object',
             'include_in_all': False,
@@ -92,6 +104,10 @@ def schema_mapping(name, schema):
                 'raw': {
                     'type': 'string',
                     'index': 'not_analyzed'
+                },
+                'lower_case_sort': {
+                    'type': 'string',
+                    'analyzer': 'case_insensistive_sort'
                 }
             }
         }
@@ -104,11 +120,18 @@ def schema_mapping(name, schema):
                 'raw': {
                     'type': 'string',
                     'index': 'not_analyzed'
+                },
+                'lower_case_sort': {
+                    'type': 'string',
+                    'analyzer': 'case_insensistive_sort'
                 }
             }
         }
 
     if type_ == 'string':
+        # don't make a mapping for non-embedded objects
+        if 'linkTo' in schema.keys():
+            return
 
         sub_mapping = {
             'type': 'string',
@@ -124,6 +147,10 @@ def schema_mapping(name, schema):
                                 'raw': {
                                     'type': 'string',
                                     'index': 'not_analyzed'
+                                },
+                                'lower_case_sort': {
+                                    'type': 'string',
+                                    'analyzer': 'case_insensistive_sort'
                                 }
                             }
                         })
@@ -145,6 +172,10 @@ def schema_mapping(name, schema):
                 'raw': {
                     'type': 'string',
                     'index': 'not_analyzed'
+                },
+                'lower_case_sort': {
+                    'type': 'string',
+                    'analyzer': 'case_insensistive_sort'
                 }
             }
         }
@@ -157,6 +188,10 @@ def schema_mapping(name, schema):
                 'raw': {
                     'type': 'string',
                     'index': 'not_analyzed'
+                },
+                'lower_case_sort': {
+                    'type': 'string',
+                    'analyzer': 'case_insensistive_sort'
                 }
             }
         }
@@ -210,6 +245,12 @@ def index_settings():
                             'asciifolding'
                         ]
                     },
+                    'case_insensistive_sort': {
+                        'tokenizer': 'keyword',
+                        'filter': [
+                            'lowercase',
+                        ]
+                    },
                     'snovault_path_analyzer': {
                         'type': 'custom',
                         'tokenizer': 'snovault_path_tokenizer',
@@ -235,7 +276,7 @@ def audit_mapping():
         },
         'detail': {
             'type': 'string',
-            'index': 'analyzed', 
+            'index': 'analyzed',
         },
         'level_name': {
             'type': 'string',
@@ -385,24 +426,56 @@ def combined_mapping(types, *item_types):
 
 
 def type_mapping(types, item_type, embed=True):
+    """
+    Create mapping for each type. This is relatively simple if embed=False.
+    When embed=True, the embedded fields (defined in /types/ directory) will
+    be used to generate custom embedding of objects. Embedding paths are
+    separated by dots. If the last field is an object, all fields in that
+    object will be embedded (e.g. biosource.individual). To embed a specific
+    field only, do add it at the end of the path: biosource.individual.title
+
+    No field checking has been added yet (TODO?), so make sure fields are
+    spelled correctly.
+
+    Any fields that are not objects will NOT be embedded UNLESS they are in the
+    embedded list, again defined in the types .py file for the object.
+    """
     type_info = types[item_type]
     schema = type_info.schema
     mapping = schema_mapping(item_type, schema)
+    embeds = add_default_embeds(type_info.embedded, schema)
     if not embed:
         return mapping
-
-    for prop in type_info.embedded:
+    for prop in embeds:
+        single_embed = {}
         s = schema
         m = mapping
-
         for p in prop.split('.'):
             ref_types = None
-
-            subschema = s.get('properties', {}).get(p)
-            if subschema is None:
-                msg = 'Unable to find schema for %r embedding %r in %r' % (p, prop, item_type)
-                raise ValueError(msg)
-
+            subschema = None
+            ultimate_obj = False # set to true if on last level of embedding
+            field = '*'
+            # Check if we're at the end of a hierarchy of embeds
+            if p == prop.split('.')[-1] and len(prop.split('.')) > 1:
+                # See if the embedding was done improperly (last field is object)
+                subschema = s.get('properties', {}).get(p)
+                    # if last field is object, default to embedding all fields (*)
+                if subschema is None: # Check if second to last field is object
+                    subschema = s
+                    ultimate_obj = True
+                    field = p
+            # Check if only an object was given. Embed fully (leave field = *)
+            elif len(prop.split('.')) == 1:
+                subschema = s.get('properties', {}).get(p)
+                # if a non-obj field, return (no embedding is going on)
+                if subschema is None:
+                    break
+            else: # in this case, field itself should be an object. If not, return
+                # If last field is an object, embed it entirely
+                subschema = s.get('properties', {}).get(p)
+                field = p
+                if subschema is None:
+                    break
             subschema = subschema.get('items', subschema)
             if 'linkFrom' in subschema:
                 _ref_type, _ = subschema['linkFrom'].split('.', 1)
@@ -411,68 +484,76 @@ def type_mapping(types, item_type, embed=True):
                 ref_types = subschema['linkTo']
                 if not isinstance(ref_types, list):
                     ref_types = [ref_types]
-
             if ref_types is None:
-                m = m['properties'][p]
                 s = subschema
-                continue
-
-            s = reduce(combine_schemas, (types[t].schema for t in ref_types))
-
-            # Check if mapping for property is already an object
-            # multiple subobjects may be embedded, so be carful here
-            if m['properties'][p]['type'] == 'string':
-                m['properties'][p] = schema_mapping(p, s)
-
-            m = m['properties'][p]
-
-    boost_values = schema.get('boost_values', None)
-    if boost_values is None:
-        boost_values = {
-            prop_name: 1.0
-            for prop_name in ['@id', 'title']
-            if prop_name in mapping['properties']
-        }
-    for name, boost in boost_values.items():
-        props = name.split('.')
-        last = props.pop()
-        new_mapping = mapping['properties']
-        for prop in props:
-            new_mapping = new_mapping[prop]['properties']
-        new_mapping[last]['boost'] = boost
-        if last in NON_SUBSTRING_FIELDS:
-            new_mapping[last]['include_in_all'] = False
-            if last in PATH_FIELDS:
-                new_mapping[last]['index_analyzer'] = 'snovault_path_analyzer'
             else:
-                new_mapping[last]['index'] = 'not_analyzed'
-        else:
-            new_mapping[last]['index_analyzer'] = 'snovault_index_analyzer'
-            new_mapping[last]['search_analyzer'] = 'snovault_search_analyzer'
-            new_mapping[last]['include_in_all'] = True
+                s = reduce(combine_schemas, (types[t].schema for t in ref_types))
+            # Check if mapping for property is already an object
+            # multiple subobjects may be embedded, so be careful here
+            if ultimate_obj: # this means we're at the at the end of an embed
+                m['properties'][field] = schema_mapping(p, s, field)
+            elif p in m['properties'].keys():
+                if m['properties'][p]['type'] == 'string':
+                    m['properties'][p] = schema_mapping(p, s, field)
+                # add a field that's an object
+                elif m['properties'][p]['type'] == 'object' and p != field and field != '*':
+                    m['properties'][p][field] = schema_mapping(p, s, field)
+            else:
+                m['properties'][p] = schema_mapping(p, s, field)
+            m = m['properties'][p] if not ultimate_obj else m['properties']
 
-    # Automatic boost for uuid
-    if 'uuid' in mapping['properties']:
-        mapping['properties']['uuid']['index'] = 'not_analyzed' 
-        mapping['properties']['uuid']['include_in_all'] = False
+    # boost_values = schema.get('boost_values', None)
+    # if boost_values is None:
+    #     boost_values = {
+    #         prop_name: 1.0
+    #         for prop_name in ['@id', 'title']
+    #         if prop_name in mapping['properties']
+    #     }
+    # for name, boost in boost_values.items():
+    #     props = name.split('.')
+    #     last = props.pop()
+    #     new_mapping = mapping['properties']
+    #     for prop in props:
+    #         new_mapping = new_mapping[prop]['properties']
+    #     new_mapping[last]['boost'] = boost
+    #     if last in NON_SUBSTRING_FIELDS:
+    #         new_mapping[last]['include_in_all'] = False
+    #         if last in PATH_FIELDS:
+    #             new_mapping[last]['index_analyzer'] = 'snovault_path_analyzer'
+    #         else:
+    #             new_mapping[last]['index'] = 'not_analyzed'
+    #     else:
+    #         new_mapping[last]['index_analyzer'] = 'snovault_index_analyzer'
+    #         new_mapping[last]['search_analyzer'] = 'snovault_search_analyzer'
+    #         new_mapping[last]['include_in_all'] = True
+    #
+    # # Automatic boost for uuid
+    # if 'uuid' in mapping['properties']:
+    #     mapping['properties']['uuid']['index'] = 'not_analyzed'
+    #     mapping['properties']['uuid']['include_in_all'] = False
     return mapping
 
 
-def run(app, collections=None, dry_run=False):
+def run(app, collections=None, dry_run=False, check_first=True):
     index = app.registry.settings['snovault.elasticsearch.index']
     registry = app.registry
     if not dry_run:
         es = app.registry[ELASTIC_SEARCH]
         try:
-            es.indices.create(index=index, body=index_settings())
-        except RequestError:
-            if collections is None:
+            exists = False
+            if check_first:
+                exists = es.indices.exists(index=index)
+            if not exists:
+                es.indices.create(index=index, body=index_settings())
+            else:
+                print("index %s already exists no need to create mapping" % (index))
+        except RequestError as e:
+            if not collections:
                 es.indices.delete(index=index)
                 es.indices.create(index=index, body=index_settings())
 
     if not collections:
         collections = ['meta'] + list(registry[COLLECTIONS].by_item_type.keys())
-
     for collection_name in collections:
         if collection_name == 'meta':
             doc_type = 'meta'
@@ -481,7 +562,6 @@ def run(app, collections=None, dry_run=False):
             doc_type = collection_name
             collection = registry[COLLECTIONS].by_item_type[collection_name]
             mapping = type_mapping(registry[TYPES], collection.type_info.item_type)
-
         if mapping is None:
             continue  # Testing collections
         if dry_run:
@@ -490,9 +570,9 @@ def run(app, collections=None, dry_run=False):
 
         if collection_name is not 'meta':
             mapping = es_mapping(mapping)
-
         try:
-            es.indices.put_mapping(index=index, doc_type=doc_type, body={doc_type: mapping})
+            es.indices.put_mapping(index=index, doc_type=doc_type, body={doc_type: mapping},
+                                  update_all_types=True)
         except:
             log.exception("Could not create mapping for the collection %s", doc_type)
         else:
@@ -510,6 +590,8 @@ def main():
     parser.add_argument(
         '--dry-run', action='store_true', help="Don't post to ES, just print")
     parser.add_argument('config_uri', help="path to configfile")
+    parser.add_argument('--check-first', action='store_true',
+                        help="check if index exists first before attempting creation")
     args = parser.parse_args()
 
     logging.basicConfig()
@@ -518,7 +600,7 @@ def main():
     # Loading app will have configured from config file. Reconfigure here:
     logging.getLogger('snovault').setLevel(logging.DEBUG)
 
-    return run(app, args.item_type, args.dry_run)
+    return run(app, args.item_type, args.dry_run, args.check_first)
 
 
 if __name__ == '__main__':

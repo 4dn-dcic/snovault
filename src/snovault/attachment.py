@@ -5,6 +5,7 @@ from mimetypes import guess_type
 from PIL import Image
 from pyramid.httpexceptions import (
     HTTPNotFound,
+    HTTPFound
 )
 from pyramid.response import Response
 from pyramid.traversal import find_root
@@ -20,6 +21,7 @@ from snovault import (
 from .validation import ValidationFailure
 import magic
 import mimetypes
+import uuid
 
 
 def includeme(config):
@@ -137,9 +139,11 @@ class ItemWithAttachment(Item):
             download_meta['md5sum'] = attachment['md5sum'] = md5sum
 
         registry = find_root(self).registry
-        registry[BLOBS].store_blob(data, download_meta)
+        blob_id = str(uuid.uuid4())
+        registry[BLOBS].store_blob(data, download_meta, blob_id)
 
         attachment['href'] = '@@download/%s/%s' % (prop_name, quote(filename))
+        attachment['blob_id'] = blob_id
 
     def _update(self, properties, sheets=None):
         changed = []
@@ -207,7 +211,9 @@ def download(context, request):
     blob_storage = request.registry[BLOBS]
     if hasattr(blob_storage, 'get_blob_url'):
         blob_url = blob_storage.get_blob_url(download_meta)
-        return Response(headers={'X-Accel-Redirect': '/_proxy/' + str(blob_url)})
+        # we don't use nginx in production
+        # return Response(headers={'X-Accel-Redirect': '/_proxy/' + str(blob_url)})
+        raise HTTPFound(location=str(blob_url))
 
     # Otherwise serve the blob data ourselves
     blob = request.registry[BLOBS].get_blob(download_meta)

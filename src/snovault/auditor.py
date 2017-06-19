@@ -154,7 +154,13 @@ def add_audit_checker(config, checker, type_, condition=None, frame='embedded'):
         types = config.registry[TYPES]
         ti = types[type_]
         auditor = config.registry[AUDITOR]
-        auditor.add_audit_checker(checker, ti.name, condition, frame)
+        # support adding audits by AbstractType
+        if len(ti.subtypes) > 1:
+            for subtype in ti.subtypes:
+                st = types[subtype]
+                auditor.add_audit_checker(checker, st.name, condition, frame)
+        else:
+            auditor.add_audit_checker(checker, ti.name, condition, frame)
 
     config.action(None, callback)
 
@@ -193,6 +199,9 @@ def traversed_path_ids(request, obj, path):
     if isinstance(path, basestring):
         path = path.split('.')
     if not path:
+        # handle embedding subobjects that aren't actually in the DB
+        if isinstance(obj, dict) and '@id' not in obj.keys():
+            return
         yield obj if isinstance(obj, basestring) else obj['@id']
         return
     name = path[0]
@@ -217,6 +226,9 @@ def inherit_audits(request, embedded, embedded_paths):
     audits = {}
     for audit_path in audit_paths:
         result = request.embed(audit_path, '@@audit-self')
+        # catch situations when fields, not objects, are embedded
+        if result is None or not isinstance(result, dict) or 'audit' not in result.keys():
+            continue
         for audit in result['audit']:
             if audit['level_name'] in audits:
                 audits[audit['level_name']].append(audit)
@@ -239,6 +251,7 @@ def item_view_audit_self(context, request):
 @view_config(context=Item, permission='audit', request_method='GET',
              name='audit')
 def item_view_audit(context, request):
+
     path = request.resource_path(context)
     properties = request.embed(path, '@@object')
     audit = inherit_audits(request, properties, context.audit_inherit or context.embedded)
