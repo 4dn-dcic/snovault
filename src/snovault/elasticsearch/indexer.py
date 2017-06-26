@@ -23,7 +23,7 @@ import logging
 import pytz
 import time
 import copy
-
+from profilehooks import profile, coverage
 
 log = logging.getLogger(__name__)
 SEARCH_MAX = 99999  # OutOfMemoryError if too high
@@ -38,6 +38,10 @@ def includeme(config):
 
 @view_config(route_name='index', request_method='POST', permission="index")
 def index(request):
+    return do_indexing(request)
+
+
+def do_indexing(request):
     # Setting request.datastore here only works because routed views are not traversed.
     request.datastore = 'database'
     record = request.json.get('record', False)

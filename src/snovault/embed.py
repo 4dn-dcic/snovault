@@ -10,6 +10,8 @@ from pyramid.httpexceptions import HTTPNotFound
 from pyramid.traversal import find_resource
 from pyramid.interfaces import IRoutesMapper
 import logging
+from profilehooks import profile
+
 log = logging.getLogger(__name__)
 
 
@@ -60,6 +62,7 @@ embed_cache = ManagerLRUCache('embed_cache')
 #       Embedding, as it stands, is complete in its recursiveness. Objects are
 #       fully embedded all the way down
 #       One option would be to use fields_to_embed to limit recursion
+@profile(immediate=True)
 def embed(request, *elements, **kw):
     """ as_user=True for current user
     Pass in fields_to_embed as a keyword arg
