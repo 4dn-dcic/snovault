@@ -37,6 +37,18 @@ PY2 = sys.version_info[0] == 2
 
 def run(testapp, timeout=DEFAULT_TIMEOUT, dry_run=False, path='/index', control=None, update_status=None):
 
+    # set env variables if we are on elasticbeanstalk
+    if os.path.exists("/opt/python/current/env"):
+        import subprocess
+        command = ['bash', '-c', 'source /opt/python/current/env && env']
+        proc = subprocess.Popen(command, stdout=subprocess.PIPE, universal_newlines=True)
+        for line in proc.stdout:
+            key, _, value = line.partition("=")
+            os.environ[key] = value[:-1]
+
+        proc.communicate()
+        print("on beanstalk so adding environment variables")
+
     assert update_status is not None
 
     timestamp = datetime.datetime.now().isoformat()
