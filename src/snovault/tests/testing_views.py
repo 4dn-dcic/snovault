@@ -46,6 +46,7 @@ def allowed(context, request):
 )
 class TestingDownload(ItemWithAttachment):
     item_type = 'testing_download'
+    embedded_full = ItemWithAttachment.embedded
     schema = {
         'type': 'object',
         'properties': {
@@ -76,6 +77,7 @@ class TestingDownload(ItemWithAttachment):
 @collection('testing-link-sources')
 class TestingLinkSource(Item):
     item_type = 'testing_link_source'
+    embedded_full = Item.embedded
     schema = {
         'type': 'object',
         'properties': {
@@ -124,6 +126,7 @@ class TestingLinkTarget(Item):
     embedded = [
         'reverse.*',
     ]
+    embedded_full = embedded
 
     @calculated_property(schema={
         "title": "Sources",
@@ -146,6 +149,7 @@ class TestingLinkTarget(Item):
 class TestingPostPutPatch(Item):
     item_type = 'testing_post_put_patch'
     embedded = ['protected_link.*']
+    embedded_full = embedded
     schema = {
         'required': ['required'],
         'type': 'object',
@@ -195,6 +199,7 @@ class TestingPostPutPatch(Item):
 @collection('testing-server-defaults')
 class TestingServerDefault(Item):
     item_type = 'testing_server_default'
+    embedded_full = Item.embedded
     schema = {
         'type': 'object',
         'properties': {
@@ -225,6 +230,7 @@ class TestingServerDefault(Item):
 @collection('testing-dependencies')
 class TestingDependencies(Item):
     item_type = 'testing_dependencies'
+    embedded_full = Item.embedded
     schema = {
         'type': 'object',
         'dependencies': {
