@@ -249,7 +249,7 @@ def item_view_audit(context, request):
 
     path = request.resource_path(context)
     properties = request.embed(path, '@@object')
-    audit = inherit_audits(request, properties, context.audit_inherit or context.embedded)
+    audit = inherit_audits(request, properties, context.audit_inherit or context.embedded_full)
     return {
         '@id': path,
         'audit': audit,
