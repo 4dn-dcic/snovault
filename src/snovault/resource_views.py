@@ -177,7 +177,7 @@ def item_view_object(context, request):
 def item_view_embedded(context, request):
     item_path = request.resource_path(context)
     properties = request.embed(item_path, '@@object', as_user=True)
-    for path in context.embedded:
+    for path in context.embedded_full:
         expand_path(request, properties, path)
     return properties
 

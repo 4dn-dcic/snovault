@@ -11,6 +11,7 @@ from pyramid.traversal import (
     find_root,
     traverse,
 )
+from pyramid.decorator import reify
 import snovault
 from snovault.fourfront_utils import add_default_embeds
 from ..schema_formats import is_accession
@@ -136,8 +137,13 @@ class Item(snovault.Item):
 
     def __init__(self, registry, models):
         super().__init__(registry, models)
-        self.update_embeds(registry[snovault.TYPES])
-        self.registry.embedded = self.embedded
+
+    @reify
+    def embedded_full(self):
+        embedded_res = self.update_embeds(self.registry[snovault.TYPES])
+        # update registry
+        self.registry.embedded_full = embedded_res
+        return embedded_res
 
     @property
     def __name__(self):
@@ -231,8 +237,7 @@ class Item(snovault.Item):
                     self.calc_props_schema[calc_props_key] = calc_props_val.schema
         total_schema.update(self.calc_props_schema)
         this_type = self.type_info.item_type
-        self.embedded = add_default_embeds(this_type, types, self.embedded, total_schema)
-
+        return add_default_embeds(this_type, types, self.embedded, total_schema)
 
 
 class SharedItem(Item):

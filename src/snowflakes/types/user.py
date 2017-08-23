@@ -121,7 +121,7 @@ def user_page_view(context, request):
     else:
         item_path = request.resource_path(context)
         properties = request.embed(item_path, '@@object')
-    for path in context.embedded:
+    for path in context.embedded_full:
         expand_path(request, properties, path)
     calculated = calculate_properties(context, request, properties, category='page')
     properties.update(calculated)
