@@ -11,6 +11,7 @@ from pyramid.traversal import (
     find_root,
     traverse,
 )
+from pyramid.decorator import reify
 import snovault
 from snovault.fourfront_utils import add_default_embeds
 from ..schema_formats import is_accession
