@@ -42,7 +42,7 @@ def mixinSchemas(schema, resolver, key_name = 'properties'):
         ref = mixin.get('$ref')
         if ref is not None:
             with resolver.resolving(ref) as resolved:
-                mixin = resolved
+                mixin = collections.OrderedDict(resolved)
         bases.append(mixin)
     for base in bases:
         for name, base_prop in base.items():
