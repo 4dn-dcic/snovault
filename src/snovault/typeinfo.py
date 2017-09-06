@@ -27,11 +27,11 @@ def extract_schema_links(schema):
 
 
 class AbstractTypeInfo(object):
-    factory = None
 
-    def __init__(self, registry, name):
+    def __init__(self, registry, name, factory):
         self.types = registry[TYPES]
         self.name = name
+        self.factory = factory
 
     @reify
     def subtypes(self):
@@ -42,16 +42,22 @@ class AbstractTypeInfo(object):
 
     @reify
     def schema(self):
+        # use the schema defined in the Item if possible
+        # this will preserve things like facet/column ordering
         subschemas = (self.types[name].schema for name in self.subtypes)
-        return reduce(combine_schemas, subschemas)
+        if self.factory and hasattr(self.factory, 'schema'):
+            reduced_subschemas = reduce(combine_schemas, subschemas)
+            final_schema = combine_schemas(self.factory.schema, reduced_subschemas)
+            return final_schema
+        else:
+            return reduce(combine_schemas, subschemas)
 
 
 class TypeInfo(AbstractTypeInfo):
     def __init__(self, registry, item_type, factory):
-        super(TypeInfo, self).__init__(registry, factory.__name__)
+        super(TypeInfo, self).__init__(registry, factory.__name__, factory)
         self.registry = registry
         self.item_type = item_type
-        self.factory = factory
         self.base_types = factory.base_types
         self.embedded_list = factory.embedded_list
 
@@ -131,7 +137,7 @@ class TypesTool(object):
         self.all[ti.name] = self.abstract[ti.name] = ti
         self.all[ti.factory] = ti
         for base in ti.base_types:
-            self.register_abstract(base)
+            self.register_abstract(base, None)
 
         # Calculate the reverse rev map
         for prop_name, spec in factory.rev.items():
@@ -141,10 +147,11 @@ class TypesTool(object):
 
         return ti
 
-    def register_abstract(self, name):
+    def register_abstract(self, name, factory):
         ti = self.abstract.get(name)
-        if ti is None:
-            ti = AbstractTypeInfo(self.registry, name)
+        # re-register if there is a factory that was previously registed w None
+        if ti is None or (ti.factory is None and factory is not None):
+            ti = AbstractTypeInfo(self.registry, name, factory)
             self.all[name] = self.abstract[name] = ti
         return ti
 
