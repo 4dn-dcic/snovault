@@ -134,9 +134,9 @@ class Connection(object):
             raise KeyError(uuid)
         return item
 
-    def create(self, type_, uuid):
+    def create(self, type_, uuid, parent_uuid=None, document_uuid=None):
         ti = self.types[type_]
-        return self.storage.create(ti.item_type, uuid)
+        return self.storage.create(ti.item_type, uuid, parent_uuid, document_uuid)
 
     def update(self, model, properties, sheets=None, unique_keys=None, links=None):
         self.storage.update(model, properties, sheets, unique_keys, links)

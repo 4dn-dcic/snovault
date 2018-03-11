@@ -44,7 +44,7 @@ def expand_embedded_list(item_type, types, embeds, schema, processed_embeds):
             # be cases of fields that are not valid for default embeds
             # but are still themselves valid fields
             processed_embeds.remove(embed_path)
-            print(error_message, file = sys.stderr)
+            print(error_message)
         else:
             embeds_to_add.extend(path_embeds_to_add)
     return embeds_to_add, processed_embeds

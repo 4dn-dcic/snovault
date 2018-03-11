@@ -204,6 +204,8 @@ class Item(Resource):
     name_key = None
     rev = {}
     embedded_list = []
+    #embed_parent = None
+    #embed_ancestor = None
     audit_inherit = None
     schema = None
     AbstractCollection = AbstractCollection
@@ -303,9 +305,10 @@ class Item(Resource):
         return None
 
     @classmethod
-    def create(cls, registry, uuid, properties, sheets=None):
-        model = registry[CONNECTION].create(cls.__name__, uuid)
+    def create(cls, registry, uuid, properties, sheets=None, parent=None, document=None):
+        model = registry[CONNECTION].create(cls.__name__, uuid, parent, document)
         self = cls(registry, model)
+        # self.parent = parent
         self._update(properties, sheets)
         return self
 

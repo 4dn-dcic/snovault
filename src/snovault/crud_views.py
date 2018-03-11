@@ -79,7 +79,8 @@ def update_children(context, request, propname_children):
                     if not request.has_permission('add', child_collection):
                         msg = u'edit forbidden to %s' % request.resource_path(child)
                         raise ValidationFailure('body', [propname, i], msg)
-                    child = create_item(child_collection.type_info, request, child_props)
+                    child = create_item(child_collection.type_info, request, child_props,
+                                        parent=context.uuid)
             found.add(child.uuid)
 
         # Remove existing children that are not in properties
@@ -99,7 +100,7 @@ def update_children(context, request, propname_children):
                 raise
 
 
-def create_item(type_info, request, properties, sheets=None):
+def create_item(type_info, request, properties, sheets=None, parent=None):
     registry = request.registry
     item_properties, propname_children = split_child_props(type_info, properties)
 
@@ -112,7 +113,7 @@ def create_item(type_info, request, properties, sheets=None):
     else:
         uuid = uuid4()
 
-    item = type_info.factory.create(registry, uuid, item_properties, sheets)
+    item = type_info.factory.create(registry, uuid, item_properties, sheets, parent)
     registry.notify(Created(item, request))
 
     if propname_children:

@@ -23,7 +23,7 @@ def initdb(datadir, prefix='', echo=False):
         print(output.decode('utf-8'))
 
 
-def server_process(datadir, prefix='', echo=False):
+def server_process(datadir, prefix='', echo=True):
     args = [
         os.path.join(prefix, 'postgres'),
         '-D', datadir,

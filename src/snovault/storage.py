@@ -14,6 +14,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.dialects.postgresql import JSONB as JSON
+from sqlalchemy.schema import PrimaryKeyConstraint
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext import baked
 from sqlalchemy.ext.declarative import declarative_base
@@ -145,8 +146,10 @@ class RDBStorage(object):
 
         return query.count()
 
-    def create(self, item_type, rid):
-        return Resource(item_type, rid=rid)
+    def create(self, item_type, rid, parent_rid, document_rid):
+        return Resource(item_type, rid=rid,
+                        parent_rid=parent_rid,
+                        document_rid=document_rid)
 
     def update(self, model, properties=None, sheets=None, unique_keys=None, links=None):
         session = self.DBSession()
@@ -158,6 +161,7 @@ class RDBStorage(object):
                 self._update_rels(model, links)
             if unique_keys is not None:
                 keys_add, keys_remove = self._update_keys(model, unique_keys)
+            # update closure table here
             sp.commit()
         except (IntegrityError, FlushError):
             sp.rollback()
@@ -445,20 +449,37 @@ class Resource(Base):
     '''
     __tablename__ = 'resources'
     rid = Column(UUID, primary_key=True)
+    parent_rid = Column(UUID, ForeignKey('resources.rid'))
+    document_rid = Column(UUID, ForeignKey('resources.rid'))
     item_type = Column(types.String, nullable=False)
     data = orm.relationship(
         'CurrentPropertySheet', cascade='all, delete-orphan',
         innerjoin=True, lazy='joined',
         collection_class=collections.attribute_mapped_collection('name'),
     )
+    children = orm.relationship('Resource',
+                                foreign_keys=[parent_rid],
+                                backref=backref('parent', remote_side=[rid]))
 
-    def __init__(self, item_type, data=None, rid=None):
+    descendents = orm.relationship('Resource',
+                                   foreign_keys=[document_rid],
+                                   backref=backref('ancestor', remote_side=[rid]))
+
+    def __init__(self, item_type, data=None, rid=None,
+                 parent_rid=None, document_rid=None):
         if rid is None:
             rid = uuid.uuid4()
-        super(Resource, self).__init__(item_type=item_type, rid=rid)
+        super(Resource, self).__init__(item_type=item_type, rid=rid,
+                                       parent_rid=parent_rid,
+                                       document_rid=document_rid)
         if data is not None:
             for k, v in data.items():
                 self.propsheets[k] = v
+        # update closures
+        # import pdb; pdb.set_trace()
+        if parent_rid:
+            pass
+        print(dir(self))
 
     def __getitem__(self, key):
         return self.data[key].propsheet.properties

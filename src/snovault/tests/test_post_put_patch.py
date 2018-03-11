@@ -235,6 +235,7 @@ def test_put_object_adding_child(content_with_child, testapp):
             }
         ]
     }
+    import pdb; pdb.set_trace()
     testapp.put_json(content_with_child['@id'], edit, status=200)
     res = testapp.get(content_with_child['@id'])
     assert len(res.json['reverse']) == 2
