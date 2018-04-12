@@ -40,8 +40,10 @@ def make_subrequest(request, path):
         query_string = ''
     env['PATH_INFO'] = path_info
     env['QUERY_STRING'] = query_string
-    subreq = request.__class__(env, method='GET', content_type=None,
-                               body=b'')
+    # lets pass on as much of the original request as feasible
+    subreq = request.__class__(env, method='GET',
+                               content_type=request.content_type,
+                               body=request.body)
     subreq.remove_conditional_headers()
     # XXX "This does not remove headers like If-Match"
     subreq.__parent__ = request

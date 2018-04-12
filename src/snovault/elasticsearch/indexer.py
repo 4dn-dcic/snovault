@@ -259,7 +259,9 @@ class Indexer(object):
         if not curr_time:
             curr_time = datetime.datetime.utcnow().isoformat()  # utc
         try:
-            result = request.embed('/%s/@@index-data' % uuid, as_user='INDEXER')
+            import pdb; pdb.set_trace()
+            request._json_body__set({'sid':sid})
+            result = request.embed('/%s/@@index-data?force_props' % uuid, as_user='INDEXER')
         except Exception as e:
             log.error('Error rendering /%s/@@index-data', uuid, exc_info=True)
             return {'error_message': repr(e), 'time': curr_time, 'uuid': str(uuid)}
