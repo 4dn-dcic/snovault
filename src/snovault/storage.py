@@ -150,6 +150,7 @@ class RDBStorage(object):
 
     def update(self, model, properties=None, sheets=None, unique_keys=None, links=None):
         session = self.DBSession()
+        #import pdb; pdb.set_trace()
         sp = session.begin_nested()
         try:
             session.add(model)
@@ -173,6 +174,7 @@ class RDBStorage(object):
             session.flush()
         except (IntegrityError, FlushError):
             msg = 'UUID conflict'
+            session.close()
             raise HTTPConflict(msg)
         assert unique_keys is not None
         conflicts = [pk for pk in keys_add if session.query(Key).get(pk) is not None]

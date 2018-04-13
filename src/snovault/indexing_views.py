@@ -17,12 +17,12 @@ def item_index_data(context, request):
     uuid = str(context.uuid)
     properties = context.upgrade_properties()
     # just overwrite properties here with what the indexer has, if supplied
-    import pdb; pdb.set_trace()
+    #import pdb; pdb.set_trace()
     # here if request.json_body... use it to overwrite properties
     # maybe also force using query param
-    if ('force_props' in request.params and request.json_body)
-         
-
+    if 'force_props' in request.params and request.json_body:
+        properties.update(request.json_body)
+        print("forcing propery overwrites with  %s for %s" % (request.json_body, uuid))
 
     # ES 2 and up don't allow dots in links. Update these to use ~s
     new_links = {}

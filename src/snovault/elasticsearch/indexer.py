@@ -168,6 +168,7 @@ class Indexer(object):
         """
         Used with the queue
         """
+        #import pdb; pdb.set_trace()
         errors = []
         # hold uuids that will be used to find secondary uuids
         non_strict_uuids = set()
@@ -259,9 +260,11 @@ class Indexer(object):
         if not curr_time:
             curr_time = datetime.datetime.utcnow().isoformat()  # utc
         try:
-            import pdb; pdb.set_trace()
-            request._json_body__set({'sid':sid})
-            result = request.embed('/%s/@@index-data?force_props' % uuid, as_user='INDEXER')
+            url = '/%s/@@index-data' % uuid
+            if sid and isinstance(sid, dict):
+                request._json_body__set(sid)
+                url += '?force_props'
+            result = request.embed(url, as_user='INDEXER')
         except Exception as e:
             log.error('Error rendering /%s/@@index-data', uuid, exc_info=True)
             return {'error_message': repr(e), 'time': curr_time, 'uuid': str(uuid)}

@@ -165,6 +165,15 @@ def app_version(config):
     config.registry.settings['snovault.app_version'] = version
 
 
+def activate_transaction(request):
+    import pdb; pdb.set_trace()
+    if request.path_info.startswith('/index'):
+        # Allow the long-poll class to manage its own connections to avoid
+        print(request)
+        # long-lived transactions.
+        return False
+    return True
+
 def main(global_config, **local_config):
     """ This function returns a Pyramid WSGI application.
     """
@@ -181,6 +190,8 @@ def main(global_config, **local_config):
         settings['persona.audiences'] += '\nhttp://%s' % hostname
         settings['persona.audiences'] += '\nhttp://%s:6543' % hostname
 
+
+    settings['tm.activate_hook'] = activate_transaction
     config = Configurator(settings=settings)
     from snovault.elasticsearch import APP_FACTORY
     config.registry[APP_FACTORY] = main  # used by mp_indexer

@@ -69,11 +69,20 @@ def includeme(config):
     config.include('.resource_views')
 
 
+def activate_transaction(request):
+    if request.path_info.startswith('/index'):
+        # Allow the long-poll class to manage its own connections to avoid
+        print(request)
+        # long-lived transactions.
+        return False
+    return True
+
 def main(global_config, **local_config):
     """ This function returns a Pyramid WSGI application.
     """
     settings = global_config
     settings.update(local_config)
+    settings['tm.activate_hook'] = activate_transaction
 
     # TODO - these need to be set for dummy app
     # settings['snovault.jsonld.namespaces'] = json_asset('snovault:schemas/namespaces.json')
@@ -84,6 +93,7 @@ def main(global_config, **local_config):
     from snovault.elasticsearch import APP_FACTORY
     config.registry[APP_FACTORY] = main  # used by mp_indexer
     config.include(app_version)
+
 
     config.include('pyramid_multiauth')  # must be before calling set_authorization_policy
     from pyramid_localroles import LocalRolesAuthorizationPolicy

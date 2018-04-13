@@ -92,6 +92,7 @@ def es_update_data(event):
     if record is None:
         return
 
+    return
     xid = record.xid
     if xid is None:
         return

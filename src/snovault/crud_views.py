@@ -30,7 +30,7 @@ from .validators import (
     validate_item_content_post,
     validate_item_content_put,
 )
-from .invalidation import add_to_indexing_queue
+from .invalidation import add_to_indexing_queue, es_update_data
 import transaction
 
 
@@ -117,6 +117,7 @@ def create_item(type_info, request, properties, sheets=None):
     item = type_info.factory.create(registry, uuid, item_properties, sheets)
     registry.notify(Created(item, request))
 
+    #es_update_data({'request': request})
     if propname_children:
         update_children(item, request, propname_children)
     return item
@@ -130,8 +131,9 @@ def update_item(context, request, properties, sheets=None):
     context.update(item_properties, sheets)
     registry.notify(AfterModified(context, request))
 
-    if propname_children:
-        update_children(context, request, propname_children)
+    #es_update_data({'request': request})
+    #if propname_children:
+    #    update_children(context, request, propname_children)
 
 
 def delete_item(context, request):
@@ -174,6 +176,7 @@ def collection_add(context, request, render=None):
     item = create_item(context.type_info, request, request.validated)
     # set up hook for queueing indexing
     to_queue = {'uuid': str(item.uuid), 'sid': item.sid}
+    # import pdb; pdb.set_trace()
     txn.addAfterCommitHook(add_to_indexing_queue, args=(request, to_queue, 'add',))
 
     rendered, item_uri = render_item(request, item, render, True)
