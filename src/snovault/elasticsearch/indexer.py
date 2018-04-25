@@ -246,6 +246,8 @@ class Indexer(object):
             if prev_target_queue != target_queue and to_delete:
                 self.queue.delete_messages(to_delete, target_queue=prev_target_queue)
                 to_delete = []
+            # refresh at the end of every batch
+            es.indices.refresh(index='_all')
         # we're done. delete any outstanding messages
         if to_delete:
             self.queue.delete_messages(to_delete, target_queue=target_queue)
@@ -264,6 +266,9 @@ class Indexer(object):
                 errors.append(error)
             elif counter:
                 counter[0] += 1
+            # call a refresh for every 20 items indexed
+            if (i + 1) % 10 == 0:
+                es.indices.refresh(index='_all')
         return errors
 
 
