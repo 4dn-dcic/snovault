@@ -68,10 +68,6 @@ def index(request):
         indexing_record['indexing_started'] = index_start_str
         indexing_counter = [0]  # do this so I can pass it as a reference
         # actually index
-        # try to ensure ES is reasonably up to date
-        es.indices.refresh(index='_all')
-        # prepare_for_indexing
-
         indexing_record['errors'] = indexer.update_objects(request, indexing_counter)
         index_finish_time = datetime.datetime.now()
         indexing_record['indexing_finished'] = index_finish_time.isoformat()
@@ -102,6 +98,8 @@ def index(request):
                     if 'error_message' in item:
                         log.error('Indexing error for {}, error message: {}'.format(item['uuid'], item['error_message']))
                         item['error_message'] = "Error occured during indexing, check the logs"
+    # refresh to make all changes available
+    es.indices.refresh(index='_all')
     return indexing_record
 
 
@@ -111,6 +109,7 @@ class Indexer(object):
         self.es = registry[ELASTIC_SEARCH]
         self.queue = registry[INDEXER_QUEUE]
 
+
     def update_objects(self, request, counter=None):
         """
         Top level update routing
@@ -119,13 +118,11 @@ class Indexer(object):
         # (which is synchronous) OR uuids from the queue
         sync_uuids = request.json.get('uuids', None)
         # actually index
-        self.es.indices.put_settings(index='_all', body={'index' : {'refresh_interval': '-1'}})
         if sync_uuids:
             errors = self.update_objects_sync(request, sync_uuids, counter)
         else:
             errors = self.update_objects_queue(request, counter)
 
-        self.es.indices.put_settings(index='_all', body={'index' : {'refresh_interval': None}})
 
     def get_messages_from_queue(self, skip_deferred=False):
         """

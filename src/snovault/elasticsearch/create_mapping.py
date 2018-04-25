@@ -235,6 +235,7 @@ def index_settings():
             'number_of_shards': NUM_SHARDS,
             'number_of_replicas': NUM_REPLICAS,
             'max_result_window': 100000,
+            'refresh_interval': -1,
             'mapping': {
                 'total_fields': {
                     'limit': 5000

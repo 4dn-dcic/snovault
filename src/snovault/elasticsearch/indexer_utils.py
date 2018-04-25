@@ -18,6 +18,8 @@ def find_uuids_for_indexing(registry, updated, log=None):
         return invalidated | updated
     for backoff in [0, 1, 2, 4, 6]:  # arbitrary times
         time.sleep(backoff)
+        # always refresh because this operation depends on ES
+        es.indices.refresh(index='_all')
         try:
             res = es.search(index='_all', size=SEARCH_MAX, body={
                 'query': {
@@ -41,7 +43,6 @@ def find_uuids_for_indexing(registry, updated, log=None):
         except Exception as e:
             if log:
                 log.warning('Retrying due to error with find_uuids_for_indexing: %s' % str(e))
-            es.indices.refresh(index='_all')
         else:
             if log:
                 log.debug("Found %s associated items for indexing" %
