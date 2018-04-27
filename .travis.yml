@@ -19,6 +19,8 @@ env:
   global:
   - JAVA_HOME=/usr/lib/jvm/java-8-oracle
   - PATH="/usr/share/elasticsearch/bin:/usr/lib/postgresql/9.4/bin:$PATH"
+  - ES_VERSION=5.4.1
+  - ES_DOWNLOAD_URL=https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-${ES_VERSION}.deb
   - secure: |-
       TcTEKSEjlu05k3azfO3LMc9NMiZMBqj1pOqg4FOxcprU3Bw7+k5aC/6wMUHI
       mAt0ivzTh1Wbmtirj/XhXArlSVECBQUk7qoEnCDdDr8nhBsHem+N8T/51xGS
@@ -60,6 +62,7 @@ before_install:
 - nvm install 4
 - node --version
 - npm config set python /usr/bin/python2.7
+- curl -O  ${ES_DOWNLOAD_URL} && sudo dpkg -i --force-confnew elasticsearch-${ES_VERSION}.deb && sudo service elasticsearch stop
 install:
 - pip install -U zc.buildout setuptools
 - buildout bootstrap
