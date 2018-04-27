@@ -61,8 +61,12 @@ before_install:
 - node --version
 - npm config set python /usr/bin/python2.7
 install:
-- python bootstrap.py --buildout-version 2.9.5 --setuptools-version 37.0.0
-- bin/buildout -c || (echo "Retrying buildout" && bin/buildout )
+- pip install -U zc.buildout setuptools
+- buildout bootstrap
+- bin/buildout || (echo "Retrying buildout" && bin/buildout )
+- pip show pytest
+- pip install pytest==2.9.1
+- pip show pytest
 - pip install coveralls
 - pip install codacy-coverage
 script:
