@@ -251,7 +251,7 @@ def index_settings():
                 'filter': {
                     'substring': {
                         'type': 'nGram',
-                        'min_gram': 4,
+                        'min_gram': 1,
                         'max_gram': 36
                     }
                 },
