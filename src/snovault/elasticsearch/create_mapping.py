@@ -83,7 +83,7 @@ def determine_if_is_date_field(field, schema):
     return is_date_field
 
 
-def schema_mapping(field, schema, top_level=False):
+def schema_mapping(field, schema, top_level=False, from_array=False):
     """
     Create the mapping for a given schema. Can handle using all fields for
     objects (*), but can handle specific fields using the field parameter.
@@ -96,7 +96,7 @@ def schema_mapping(field, schema, top_level=False):
 
     # Elasticsearch handles multiple values for a field
     if type_ == 'array' and schema['items']:
-        return schema_mapping(field, schema['items'])
+        return schema_mapping(field, schema['items'], from_array=True)
 
     if type_ == 'object':
         properties = {}
@@ -106,9 +106,13 @@ def schema_mapping(field, schema, top_level=False):
                 if field == '*' or k == field:
                     properties[k] = mapping
         if top_level:
-            # only include include_in_all: True in top level
             return {
-                'include_in_all': True,
+                'include_in_all': True, # Only include in top level
+                'properties': properties,
+            }
+        elif from_array:
+            return {
+                'type': 'nested',       # Allows us to aggregate over lists of dictionaries better.
                 'properties': properties,
             }
         else:
@@ -518,6 +522,9 @@ def type_mapping(types, item_type, embed=True):
             if not curr_s:
                 break
             curr_m = update_mapping_by_embed(curr_m, curr_e, curr_s)
+            if curr_e != 'update_items' and curr_m.get('properties') and curr_e in schema['properties'] and curr_e in mapping['properties'] and schema['properties'][curr_e]['type'] == 'array':
+                # If this is a list of linkTos and has properties to be embedded, make it 'nested' for more aggregations.
+                curr_m['type'] = "nested"
     return mapping
 
 
