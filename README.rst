@@ -92,7 +92,7 @@ Specific tests to run locally for schema changes::
 
 Run the Pyramid tests with::
 
-    $ bin/tes
+    $ bin/test
 
 Run the Javascript tests with::
 
