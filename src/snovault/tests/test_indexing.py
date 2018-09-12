@@ -802,3 +802,20 @@ def test_create_mapping_index_diff(app, testapp, indexer_testapp):
     time.sleep(4)
     third_count = es.count(index=TEST_TYPE, doc_type=TEST_TYPE).get('count')
     assert third_count == initial_count
+
+
+def test_assert_transactions_table_is_gone(app):
+    """
+    A bit of a strange location for this test, but we need the app and
+    serverfixtures to be established (used for indexing)
+    """
+    from sqlalchemy import MetaData
+    session = app.registry[DBSESSION]
+    connection = session.connection().connect()
+    meta = MetaData(bind=session.connection(), reflect=True)
+    assert 'transactions' not in meta.tables
+    # make sure tid column is removed
+    assert 'tid' not in meta.tables['propsheets'].columns
+    # make sure fkey constraint is also removed
+    constraints = [c.name for c in meta.tables['propsheets'].constraints]
+    assert 'propsheets_tid_fkey' not in constraints
