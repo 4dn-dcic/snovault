@@ -129,7 +129,7 @@ class Indexer(object):
             errors = self.update_objects_sync(request, sync_uuids, counter)
         else:
             errors = self.update_objects_queue(request, counter)
-        # resets the refresh_interval to the default value 
+        # resets the refresh_interval to the default value
         self.es.indices.put_settings(index='_all', body={'index' : {'refresh_interval': None}})
 
     def get_messages_from_queue(self, skip_deferred=False):
