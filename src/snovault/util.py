@@ -192,8 +192,8 @@ def build_embedded_model(fields_to_embed):
     for field in fields_to_embed:
         split_field = field.split('.')
         field_pointer = embedded_model
-        for subfield in split_field:
-            if subfield == split_field[-1]:
+        for idx, subfield in enumerate(split_field):
+            if idx == len(split_field) - 1:  # terminal field
                 if 'fields_to_use' in field_pointer:
                     field_pointer['fields_to_use'].append(subfield)
                 else:
