@@ -22,6 +22,7 @@ def includeme(config):
     config.add_request_method(lambda request: set(), '_linked_uuids', reify=True)
     config.add_request_method(lambda request: set(), '_audit_uuids', reify=True)
     config.add_request_method(lambda request: {}, '_rev_linked_uuids_by_item', reify=True)
+    config.add_request_method(lambda request: {}, '_badges', reify=True)
     config.add_request_method(lambda request: False, '_indexing_view', reify=True)
     config.add_request_method(lambda request: None, '__parent__', reify=True)
 

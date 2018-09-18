@@ -33,7 +33,7 @@ def item_index_data(context, request):
         if context.sid < sid_check:
             raise SidException('sid from the query (%s) is greater than that on context (%s). Bailing.' % (sid_check, context.sid))
 
-    # ES 2 and up don't allow dots in links. Update these to use ~s
+    # ES versions 2 and up don't allow dots in links. Update these to use ~s
     new_links = {}
     for key, val in context.links(properties).items():
         new_links['~'.join(key.split('.'))] = val
@@ -68,6 +68,7 @@ def item_index_data(context, request):
     request._linked_uuids = set()
     request._audit_uuids = set()
     request._rev_linked_uuids_by_item = {}
+    request._badges = {}
     # since request._indexing_view is set to True in indexer.py,
     # all embeds (including subrequests) below will use the embed cache
     embedded = request.invoke_view(path, '@@embedded')
@@ -76,12 +77,15 @@ def item_index_data(context, request):
     rev_linked_by_item = request._rev_linked_uuids_by_item.copy()
     # find uuids traversed that rev link to this item
     rev_linked_to_me = set([id for id in rev_linked_by_item if uuid in rev_linked_by_item[id]])
+    # get badges aggregated during the embedding process
+    badges = request._badges.copy()
     # set the uuids we want to audit on
     request._audit_uuids = linked_uuids
     audit = request.invoke_view(path, '@@audit')['audit']
     obj = request.invoke_view(path, '@@object')
     document = {
         'audit': audit,
+        'badges': badges,
         'embedded': embedded,
         'linked_uuids': sorted(linked_uuids),
         'item_type': context.type_info.item_type,

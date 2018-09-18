@@ -131,8 +131,9 @@ def item_view_object(context, request):
     Render json structure. This is the most basic view and contains the scope
     of only one item. The steps to generate it are:
     1. Fetch stored properties, possibly upgrading.
-    2. Link canonicalization (overwriting uuids.) with item_with_links
+    2. Link canonicalization (overwriting uuids with links)
        - adds uuid to request._linked_uuids if request._indexing_view
+       - adds badges to request._badges
     3. Calculated properties
     """
     properties = context.item_with_links(request)

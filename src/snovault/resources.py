@@ -313,7 +313,7 @@ class Item(Resource):
     def item_with_links(self, request):
         # This works from the schema rather than the links table
         # so that upgrade on GET can work.
-        ### context.__json__ CALLS THE UPGRADER ###
+        ### context.__json__ CALLS THE UPGRADER (upgrade_properties) ###
         properties = self.__json__(request)
         for path in self.type_info.schema_links:
             uuid_to_path(request, properties, path)
