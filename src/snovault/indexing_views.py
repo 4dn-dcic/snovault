@@ -68,7 +68,7 @@ def item_index_data(context, request):
     request._linked_uuids = set()
     request._audit_uuids = set()
     request._rev_linked_uuids_by_item = {}
-    request._badges = {}
+    request._aggregated_items = {}
     # since request._indexing_view is set to True in indexer.py,
     # all embeds (including subrequests) below will use the embed cache
     embedded = request.invoke_view(path, '@@embedded')
@@ -77,15 +77,14 @@ def item_index_data(context, request):
     rev_linked_by_item = request._rev_linked_uuids_by_item.copy()
     # find uuids traversed that rev link to this item
     rev_linked_to_me = set([id for id in rev_linked_by_item if uuid in rev_linked_by_item[id]])
-    # get badges aggregated during the embedding process
-    badges = request._badges.copy()
+    # get items aggregated during the embedding process
+    aggregated_items = request._aggregated_items.copy()
     # set the uuids we want to audit on
     request._audit_uuids = linked_uuids
     audit = request.invoke_view(path, '@@audit')['audit']
     obj = request.invoke_view(path, '@@object')
     document = {
         'audit': audit,
-        'badges': badges,
         'embedded': embedded,
         'linked_uuids': sorted(linked_uuids),
         'item_type': context.type_info.item_type,

@@ -204,6 +204,7 @@ class Item(Resource):
     base_types = ['Item']
     name_key = None
     rev = {}
+    aggregated_list = []
     embedded_list = []
     audit_inherit = None
     schema = None
