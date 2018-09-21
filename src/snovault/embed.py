@@ -95,6 +95,7 @@ def _embed(request, path, as_user='EMBED'):
     subreq = make_subrequest(request, path)
     subreq.override_renderer = 'null_renderer'
     subreq._indexing_view = request._indexing_view
+    subreq._aggregated_items = request._aggregated_items
     # pass the uuids we want to run audits on
     if '@@audit' in path:
         subreq._audit_uuids = request._audit_uuids

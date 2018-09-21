@@ -84,6 +84,17 @@ def secure_embed(request, item_path, addition='@@object'):
     return res
 
 
+def get_parent_request_uuid(request):
+    """
+    Returns the uuid of the context from the parent of the request
+    """
+    if request._is_indexing:
+        parent = request.__parent__.context
+        return context.uuid
+    else:
+        return None
+
+
 def expand_path(request, obj, path):
     if isinstance(path, basestring):
         path = path.split('.')
@@ -131,28 +142,36 @@ def expand_embedded_model(request, obj, model):
         obj_val = obj.get(to_embed)
         if obj_val is None:
             continue
-        obj_embedded = expand_val_for_embedded_model(request, obj_val, model[to_embed])
+        # pass to_embed as the last parameter to track aggregated_items
+        obj_embedded = expand_val_for_embedded_model(request, obj_val,
+                                                     model[to_embed], to_embed)
         if obj_embedded is not None:
             embedded_res[to_embed] = obj_embedded
     return embedded_res
 
 
-def expand_val_for_embedded_model(request, obj_val, downstream_model):
+def expand_val_for_embedded_model(request, obj_val, downstream_model, field_name=None):
     """
     Take a value from an object and the relevant piece of the embedded_model
     and perform embedding.
     We have to account for list, dictionaries, and strings.
+    field_name is optional and used to track aggregated_items
     """
-    #
     if isinstance(obj_val, list):
         obj_list = []
         for member in obj_val:
-            obj_embedded = expand_val_for_embedded_model(request, member, downstream_model)
+            # keep field_name here because lists retain it
+            obj_embedded = expand_val_for_embedded_model(request, member,
+                                                         downstream_model, field_name)
             if obj_embedded is not None:
                 obj_list.append(obj_embedded)
         return obj_list
     elif isinstance(obj_val, dict):
         obj_embedded = expand_embedded_model(request, obj_val, downstream_model)
+        if field_name is not None and field_name in request._aggregated_items:
+            import pdb; pdb.set_trace()
+            parent_uuid = get_parent_request_uuid(request)
+            request._aggregated_items[field_name].append(obj_embedded)
         return obj_embedded
     elif isinstance(obj_val, basestring):
         # get the @@object view of obj to embed
@@ -162,6 +181,10 @@ def expand_val_for_embedded_model(request, obj_val, downstream_model):
         obj_val = secure_embed(request, obj_val, '@@object')
         if not obj_val or obj_val == {'error': 'no view permissions'}:
             return obj_val
+        if field_name is not None and field_name in request._aggregated_items:
+                import pdb; pdb.set_trace()
+                parent_uuid = get_parent_request_uuid(request)
+                request._aggregated_items[field_name].append(obj_val)
         obj_embedded = expand_embedded_model(request, obj_val, downstream_model)
         return obj_embedded
     else:
