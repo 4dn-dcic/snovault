@@ -23,6 +23,7 @@ def includeme(config):
     config.add_request_method(lambda request: set(), '_audit_uuids', reify=True)
     config.add_request_method(lambda request: {}, '_rev_linked_uuids_by_item', reify=True)
     config.add_request_method(lambda request: {}, '_aggregated_items', reify=True)
+    config.add_request_method(lambda request: {}, '_aggregate_for', reify=True)
     config.add_request_method(lambda request: False, '_indexing_view', reify=True)
     config.add_request_method(lambda request: None, '__parent__', reify=True)
 
@@ -95,6 +96,7 @@ def _embed(request, path, as_user='EMBED'):
     subreq = make_subrequest(request, path)
     subreq.override_renderer = 'null_renderer'
     subreq._indexing_view = request._indexing_view
+    subreq._aggregate_for = request._aggregate_for
     subreq._aggregated_items = request._aggregated_items
     # pass the uuids we want to run audits on
     if '@@audit' in path:

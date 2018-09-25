@@ -84,17 +84,6 @@ def secure_embed(request, item_path, addition='@@object'):
     return res
 
 
-def get_parent_request_uuid(request):
-    """
-    Returns the uuid of the context from the parent of the request
-    """
-    if request._is_indexing:
-        parent = request.__parent__.context
-        return context.uuid
-    else:
-        return None
-
-
 def expand_path(request, obj, path):
     if isinstance(path, basestring):
         path = path.split('.')
@@ -118,7 +107,7 @@ def expand_path(request, obj, path):
         expand_path(request, value, remaining)
 
 
-def expand_embedded_model(request, obj, model):
+def expand_embedded_model(request, obj, model, parent_path=None):
     """
     A similar idea to expand_path, but takes in a model from build_embedded_model
     instead. Takes in the @@object view of the item (obj) and returns a
@@ -144,35 +133,43 @@ def expand_embedded_model(request, obj, model):
             continue
         # pass to_embed as the last parameter to track aggregated_items
         obj_embedded = expand_val_for_embedded_model(request, obj_val,
-                                                     model[to_embed], to_embed)
+                                                     model[to_embed],
+                                                     to_embed, parent_path)
         if obj_embedded is not None:
             embedded_res[to_embed] = obj_embedded
     return embedded_res
 
 
-def expand_val_for_embedded_model(request, obj_val, downstream_model, field_name=None):
+def expand_val_for_embedded_model(request, obj_val, downstream_model,
+                                  field_name=None, parent_path=None):
     """
     Take a value from an object and the relevant piece of the embedded_model
     and perform embedding.
     We have to account for list, dictionaries, and strings.
     field_name is optional and used to track aggregated_items
     """
+    agg_items = request._aggregated_items
     if isinstance(obj_val, list):
         obj_list = []
-        for member in obj_val:
-            # keep field_name here because lists retain it
+        for idx, member in enumerate(obj_val):
+            # lists conserve field name and their order
             obj_embedded = expand_val_for_embedded_model(request, member,
-                                                         downstream_model, field_name)
+                                                         downstream_model,
+                                                         field_name=field_name,
+                                                         parent_path=parent_path)
             if obj_embedded is not None:
                 obj_list.append(obj_embedded)
         return obj_list
+
     elif isinstance(obj_val, dict):
-        obj_embedded = expand_embedded_model(request, obj_val, downstream_model)
-        if field_name is not None and field_name in request._aggregated_items:
-            import pdb; pdb.set_trace()
-            parent_uuid = get_parent_request_uuid(request)
-            request._aggregated_items[field_name].append(obj_embedded)
+        obj_embedded = expand_embedded_model(request, obj_val, downstream_model,
+                                             parent_path=parent_path)
+        # aggregate the item if applicable
+        if field_name and parent_path and field_name in agg_items:
+            new_agg = {'parent': parent_path, 'item': obj_embedded}
+            agg_items[field_name]['items'].append(new_agg)
         return obj_embedded
+
     elif isinstance(obj_val, basestring):
         # get the @@object view of obj to embed
         # TODO: per-field invalidation by adding uuids to request._linked_uuids
@@ -181,15 +178,22 @@ def expand_val_for_embedded_model(request, obj_val, downstream_model, field_name
         obj_val = secure_embed(request, obj_val, '@@object')
         if not obj_val or obj_val == {'error': 'no view permissions'}:
             return obj_val
-        if field_name is not None and field_name in request._aggregated_items:
-                import pdb; pdb.set_trace()
-                parent_uuid = get_parent_request_uuid(request)
-                request._aggregated_items[field_name].append(obj_val)
-        obj_embedded = expand_embedded_model(request, obj_val, downstream_model)
+
+        # aggregate the item if applicable
+        if field_name and parent_path and field_name in agg_items:
+            # we may need to merge the values with existing ones
+            new_agg = {'parent': parent_path, 'item': obj_val}
+            agg_items[field_name]['items'].append(new_agg)
+
+        # track the new parent object if we are indexing
+        new_parent_path = obj_val.get('@id') if request._indexing_view else None
+        obj_embedded = expand_embedded_model(request, obj_val, downstream_model,
+                                             parent_path=new_parent_path)
         return obj_embedded
     else:
         # this means the object should be returned as-is
         return obj_val
+
 
 
 def build_embedded_model(fields_to_embed):
@@ -226,6 +230,50 @@ def build_embedded_model(fields_to_embed):
                 field_pointer[subfield] = {}
             field_pointer = field_pointer[subfield]
     return embedded_model
+
+
+def process_aggregated_items(request):
+    """
+    we have _fields and items
+    """
+    for agg_body in request._aggregated_items.values():
+        agg_fields = agg_body['_fields']
+        # automatically aggregate on uuid if no fields provided
+        # if you want to change this default, also change in create_mapping
+        if not agg_fields:
+            agg_fields = ['uuid']
+        # handle badly formatted agg_fields here (?)
+        if not isinstance(agg_fields, list):
+            agg_fields = [agg_fields]
+        for idx, agg_item in enumerate(agg_body['items']):
+            proc_item = {}
+            for field in agg_fields:
+                pointer = agg_item['item']
+                split_field = field.strip().split('.')
+                proc_item[field] = recursively_process_field(pointer, split_field)
+            # replace the aggregated items in place
+            agg_body['items'][idx]['item'] = proc_item
+
+
+def recursively_process_field(item, split_fields):
+    try:
+        next_level = item.get(split_fields[0])
+    except AttributeError:
+        # happens if a string/int is encountered at the top level
+        return item
+    if next_level is None:
+        return "No value"
+    if len(split_fields[1:]) == 0:
+        # we are at the end of the path
+        return next_level
+    elif isinstance(next_level, list):
+        return [recursively_process_field(entry, split_fields[1:]) for entry in next_level]
+    elif isinstance(next_level, dict):
+        # can't drill down anymore
+        return recursively_process_field(next_level, split_fields[1:])
+    else:
+        # can't drill down if not a list or dict. just return
+        return next_level
 
 
 def select_distinct_values(request, value_path, *from_paths):

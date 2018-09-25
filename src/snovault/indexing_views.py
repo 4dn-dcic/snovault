@@ -19,43 +19,6 @@ class SidException(Exception):
     pass
 
 
-def prepare_aggregated_items(agg_list):
-    # take the first element of each item in the agg_list, which should be an
-    # object, and add it to returned dict
-    agg_objects = [agg.split('.')[0] for agg in agg_list]
-    return {agg: [] for agg in agg_objects}
-
-
-def process_aggregated_items(agg_list, agg_items):
-    processed_aggs = {}
-    for agg_entry in agg_list:
-        aggregated_entry = {}
-        split_agg = agg_entry.strip().split('.')
-        # these are the items we've aggregated
-        for agg_item_idv in agg_items.get(split_agg[0]):
-            found_agg = agg_item_idv  # a pointer
-            failed = False
-            for agg_field in split_agg[1:]:
-                if not isinstance(found_agg, dict) or agg_field not in found_agg:
-                    failed = True
-                    break
-                found_agg = found_agg[agg_field]
-            # see if we haven't ended up with a string field.
-            # if not, attempt to use uuid. otherwise break
-            if not isinstance(found_agg, (str, u"".__class__)):
-                try:
-                    found_agg = found_agg['uuid']
-                except Exception:
-                    failed = True
-            if not failed:
-                if found_agg in aggregated_entry:
-                    aggregated_entry[found_agg] = [agg_item_idv]
-                else:
-                    aggregated_entry[found_agg].append(agg_item_idv)
-        processed_aggs[agg_entry] = aggregated_entry
-    return processed_aggs
-
-
 @view_config(context=Item, name='index-data', permission='index', request_method='GET')
 def item_index_data(context, request):
     uuid = str(context.uuid)
@@ -100,13 +63,15 @@ def item_index_data(context, request):
     path = path + '/'
     # setting _indexing_view enables the embed_cache and cause population of
     # request._linked_uuids and request._rev_linked_uuids_by_item
-
     request._indexing_view = True
     # reset these properties
     request._linked_uuids = set()
     request._audit_uuids = set()
     request._rev_linked_uuids_by_item = {}
-    request._aggregated_items = prepare_aggregated_items(context.aggregated_list)
+    request._aggregate_for['uuid'] = uuid
+    request._aggregated_items = {
+        agg: {'_fields': context.aggregated_items[agg], 'items': []} for agg in context.aggregated_items
+    }
     # since request._indexing_view is set to True in indexer.py,
     # all embeds (including subrequests) below will use the embed cache
     embedded = request.invoke_view(path, '@@embedded')
@@ -115,18 +80,18 @@ def item_index_data(context, request):
     rev_linked_by_item = request._rev_linked_uuids_by_item.copy()
     # find uuids traversed that rev link to this item
     rev_linked_to_me = set([id for id in rev_linked_by_item if uuid in rev_linked_by_item[id]])
-    # get items aggregated during the embedding and process them
-    aggregated_items = process_aggregated_items(context.aggregated_list, request._aggregated_items.copy())
-
+    # get the important information from the aggregated items
+    aggregated_items = {agg: res['items'] for agg, res in request._aggregated_items.items()}
     # set the uuids we want to audit on
     request._audit_uuids = linked_uuids
     audit = request.invoke_view(path, '@@audit')['audit']
     obj = request.invoke_view(path, '@@object')
     document = {
+        'aggregated': aggregated,
         'audit': audit,
         'embedded': embedded,
-        'linked_uuids': sorted(linked_uuids),
         'item_type': context.type_info.item_type,
+        'linked_uuids': sorted(linked_uuids),
         'links': links,
         'object': obj,
         'paths': sorted(paths),

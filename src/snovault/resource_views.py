@@ -22,7 +22,8 @@ from .resources import (
 from .util import (
     expand_path,
     build_embedded_model,
-    expand_embedded_model
+    expand_embedded_model,
+    process_aggregated_items
 )
 
 
@@ -145,10 +146,24 @@ def item_view_object(context, request):
 @view_config(context=Item, permission='view', request_method='GET',
              name='embedded')
 def item_view_embedded(context, request):
+    # set up _aggregated_items if we want to aggregate this target
+    will_aggregate = getattr(request, '_aggregate_for').get('uuid') == str(context.uuid)
+    if will_aggregate:
+        parent_path = request.resource_path(context)
+    else:
+        parent_path = None
+
     item_path = request.resource_path(context)
     properties = request.embed(item_path, '@@object', as_user=True)
     embedded_model = build_embedded_model(context.embedded)
-    embedded = expand_embedded_model(request, properties, embedded_model)
+    embedded = expand_embedded_model(request, properties, embedded_model,
+                                     parent_path=parent_path)
+    if will_aggregate:
+        process_aggregated_items(request)
+        # we don't want to aggregate this item again, such as if the same item
+        # is used in a frame=embedded calc property.
+        # use a list here so that the reference is maintained through subreq
+        request._aggregate_for['uuid'] = None
     return embedded
 
 
