@@ -87,7 +87,7 @@ def item_index_data(context, request):
     audit = request.invoke_view(path, '@@audit')['audit']
     obj = request.invoke_view(path, '@@object')
     document = {
-        'aggregated': aggregated,
+        'aggregated_items': aggregated_items,
         'audit': audit,
         'embedded': embedded,
         'item_type': context.type_info.item_type,
