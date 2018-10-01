@@ -2,6 +2,10 @@ from past.builtins import basestring
 from pyramid.threadlocal import manager as threadlocal_manager
 from pyramid.httpexceptions import HTTPForbidden
 from .interfaces import CONNECTION
+import structlog
+
+
+log = structlog.getLogger(__name__)
 
 
 def includeme(config):
@@ -236,7 +240,7 @@ def process_aggregated_items(request):
     """
     we have _fields and items
     """
-    for agg_body in request._aggregated_items.values():
+    for agg_on, agg_body in request._aggregated_items.items():
         agg_fields = agg_body['_fields']
         # automatically aggregate on uuid if no fields provided
         # if you want to change this default, also change in create_mapping
@@ -245,14 +249,25 @@ def process_aggregated_items(request):
         # handle badly formatted agg_fields here (?)
         if not isinstance(agg_fields, list):
             agg_fields = [agg_fields]
-        for idx, agg_item in enumerate(agg_body['items']):
+        for agg_idx, agg_item in enumerate(agg_body['items']):
             proc_item = {}
             for field in agg_fields:
                 pointer = agg_item['item']
                 split_field = field.strip().split('.')
-                proc_item[field] = recursively_process_field(pointer, split_field)
-            # replace the aggregated items in place
-            agg_body['items'][idx]['item'] = proc_item
+                found_value = recursively_process_field(pointer, split_field)
+                # terminal dicts will create issues with the mapping. Print a warning and skip
+                if isinstance(found_value, dict):
+                    log.error('ERROR. Found dictionary terminal value for field %s when aggregating %s items. Context is: %s' % (field, agg_on, str(request.context.uuid)))
+                    continue
+                proc_pointer = proc_item
+                for idx, split in enumerate(split_field):
+                    if idx == len(split_field) - 1:
+                        proc_pointer.update({split: found_value})
+                    else:
+                        if split not in proc_pointer:
+                            proc_pointer[split] = {}
+                        proc_pointer = proc_pointer[split]
+            agg_body['items'][agg_idx]['item'] = proc_item
 
 
 def recursively_process_field(item, split_fields):

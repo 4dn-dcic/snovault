@@ -360,7 +360,7 @@ def build_index_record(mapping, in_type):
     }
 
 
-def es_mapping(mapping):
+def es_mapping(mapping, agg_items_mapping):
     return {
         '_all': {
             'enabled': True,
@@ -438,10 +438,7 @@ def es_mapping(mapping):
                     }
                 }
             },
-            'aggregated_items': {
-                'type': 'object',
-                'include_in_all': False,
-            },
+            'aggregated_items': agg_items_mapping,
             'linked_uuids': {
                 'type': 'text',
                 'include_in_all': False
@@ -479,6 +476,70 @@ def es_mapping(mapping):
             }
         }
     }
+
+
+def aggregated_items_mapping(types, item_type):
+    """
+    Create the mapping for the aggregated items of the given type.
+    This is a simple mapping, since all values can be set as keywords
+    (only used for exact match search and not sorted)
+
+    Since the fields for each aggregated item are split by dots, we organize
+    these as the hierarchical objects for Elasticsearch
+    """
+    type_info = types[item_type]
+    aggregated_items = type_info.aggregated_items
+    mapping = {'include_in_all': False, 'type': 'object'}
+    if not aggregated_items:
+        return mapping
+    del mapping['type']
+    mapping['properties'] = aggs_mapping = {}
+    for agg_item, agg_fields in aggregated_items.items():
+        # include raw field name by convention, though both are keywords
+        aggs_mapping[agg_item] = {
+            'properties': {
+                'parent': {
+                    'type': 'text',
+                    'fields': {
+                        'raw': {
+                            'type': 'keyword'
+                        }
+                    }
+                },
+                'item': {
+                    'properties': {}
+                }
+            }
+        }
+        # if no agg fields are provided, default to uuid
+        if agg_fields == []:
+            agg_fields = ['uuid']
+        aggs_mapping[agg_item]['properties']['item']['properties'] = agg_fields_mapping = {}
+        for agg_field in agg_fields:
+            # elasticsearch models fields with dots as hierarchical objects
+            # must compose our mapping like that
+            split_field = agg_field.split('.')
+            ptr = agg_fields_mapping
+            for idx, split_part in enumerate(split_field):
+                if idx == len(split_field) - 1:
+                    mapping_val = {
+                        'type': 'keyword',
+                        'fields': {
+                            'raw': {
+                                'type': 'keyword'
+                            }
+                        }
+                    }
+                else:
+                    mapping_val = {'properties': {}}
+                if (split_part not in ptr or
+                    ('properties' in mapping_val and 'properties' not in ptr[split_part])):
+                    ptr[split_part] = mapping_val
+                if 'properties' in ptr[split_part]:
+                    ptr = ptr[split_part]['properties']
+                else:
+                    break
+    return mapping
 
 
 def type_mapping(types, item_type, embed=True):
@@ -583,8 +644,9 @@ def create_mapping_by_type(in_type, registry):
     # build a schema-based hierarchical mapping for embedded view
     collection = registry[COLLECTIONS].by_item_type[in_type]
     embed_mapping = type_mapping(registry[TYPES], collection.type_info.item_type)
+    agg_items_mapping = aggregated_items_mapping(registry[TYPES], collection.type_info.item_type)
     # finish up the mapping
-    return es_mapping(embed_mapping)
+    return es_mapping(embed_mapping, agg_items_mapping)
 
 
 def build_index(app, es, in_type, mapping, uuids_to_index, dry_run, check_first, index_diff=False,
