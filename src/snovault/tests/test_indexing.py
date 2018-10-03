@@ -295,6 +295,38 @@ def test_indexing_simple(app, testapp, indexer_testapp):
     assert testing_ppp_source['settings']['index']['number_of_shards'] == 1
 
 
+def test_indexing_logging(app, testapp, indexer_testapp, caplog):
+    from dcicutils.log_utils import calculate_log_index
+    log_index_name = calculate_log_index()
+    post_res = testapp.post_json(TEST_COLL, {'required': ''})
+    post_uuid = post_res.json['@graph'][0]['uuid']
+    res = indexer_testapp.post_json('/index', {'record': True})
+    assert res.json['indexing_count'] == 1
+    assert res.json['indexing_status'] == 'finished'
+    log_record = None
+    for record in caplog.records():
+        if not isinstance(record.__dict__.get('msg'), dict):
+            continue
+        if record.__dict__['msg'].get('item_uuid') == post_uuid:
+            log_record = record
+    print(log_record)
+    assert log_record is not None
+    log_msg = log_record.__dict__['msg']
+    assert log_msg['collection'] == TEST_TYPE
+    assert 'uo_start_time' in log_msg
+    assert isinstance(log_msg['sid'], int)
+    assert 'log_uuid' in log_msg
+    assert 'level' in log_msg
+    log_uuid = log_msg['log_uuid']
+    # now get the log from ES
+    es = app.registry[ELASTIC_SEARCH]
+    log_doc = es.get(index=log_index_name, doc_type='log', id=log_uuid)
+    log_source = log_doc['_source']
+    assert log_source['item_uuid'] == post_uuid
+    assert log_source['collection'] == TEST_TYPE
+    assert 'level' in log_source
+
+
 def test_indexing_queue_records(app, testapp, indexer_testapp):
     """
     Do a full test using different forms of create mapping and both sync
