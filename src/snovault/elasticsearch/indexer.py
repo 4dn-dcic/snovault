@@ -295,7 +295,7 @@ class Indexer(object):
         """
 
         # logging constant
-        cat = 'update object'
+        cat = 'index object'
 
         #timing stuff
         start = timer()
@@ -303,7 +303,7 @@ class Indexer(object):
             curr_time = datetime.datetime.utcnow().isoformat()  # utc
 
         # to add to each log message
-        log.bind(embed_uuid=uuid, sid=sid, uo_start_time=curr_time)
+        log.bind(item_uuid=uuid, sid=sid, uo_start_time=curr_time)
         if telemetry_id:
             log.bind(telemetry_id=telemetry_id)
 
@@ -317,7 +317,7 @@ class Indexer(object):
             result = request.embed(index_data_query, as_user='INDEXER')
             duration = timer() - start
             log.bind(collection=result.get('item_type'))
-            # log.info("time to embed", duration=duration, cat="embed time")
+            # log.info("Time to embed", duration=duration, cat="embed object")
         except SidException as e:
             duration = timer() - start
             log.warning('Invalid sid found', duration=duration, cat=cat)
@@ -369,7 +369,7 @@ class Indexer(object):
                 break
             else:
                 duration = timer() - start
-                # log.info('update object success', duration=duration, cat=cat)
+                log.info('Time to index', duration=duration, cat=cat)
                 return
 
         return {'error_message': last_exc, 'time': curr_time, 'uuid': str(uuid)}

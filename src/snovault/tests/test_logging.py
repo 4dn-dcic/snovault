@@ -69,13 +69,11 @@ def test_telemetry_id_carries_through_logging(testapp, external_tx):
 
 def test_log_to_file_and_ship(testapp, external_tx, capfd):
         '''
-        in prod we just want to log json to stdout and let the environment
-        do something with stdout... on beanstalk apache will pipe it to error_log
-        for example...
-        our local dev environment however uses structlog.ConsoleLogger and
-        those can be accessed in pytest through the `capfd` fixture, although
-        they would have color codes...
-        exteral_tx just for roll back..
+        in prod logging setup, an Elasticsearch server is provided. Logs will
+        be piped to the appropriate logs (e.g. httpd/error_log) and also sent
+        to Elasticsearch. That is tested here in snovault in test_indexing;
+        here, we configure the logs without the es_server to ensure that
+        the rest of it works
         '''
         from snovault import set_logging
         set_logging(in_prod=True)

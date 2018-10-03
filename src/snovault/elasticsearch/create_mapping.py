@@ -601,7 +601,7 @@ def build_index(app, es, in_type, mapping, uuids_to_index, dry_run, check_first,
     """
 
     if print_count_only:
-        log.warning('___PRINTING COUNTS___')
+        log.info('___PRINTING COUNTS___')
         check_and_reindex_existing(app, es, in_type, uuids_to_index, index_diff, True)
         return
 
@@ -620,7 +620,7 @@ def build_index(app, es, in_type, mapping, uuids_to_index, dry_run, check_first,
         if prev_index_record is not None and this_index_record == prev_index_record:
             if in_type != 'meta':
                 check_and_reindex_existing(app, es, in_type, uuids_to_index, index_diff)
-            log.warning('MAPPING: using existing index for collection %s' % (in_type), collection=in_type)
+            log.info('MAPPING: using existing index for collection %s' % (in_type), collection=in_type)
             return
 
     if dry_run or index_diff:
@@ -630,14 +630,14 @@ def build_index(app, es, in_type, mapping, uuids_to_index, dry_run, check_first,
     if this_index_exists:
         res = es_safe_execute(es.indices.delete, index=in_type, ignore=[400,404])
         if res:
-            log.warning('MAPPING: index successfully deleted for %s' % in_type, collection=in_type)
+            log.info('MAPPING: index successfully deleted for %s' % in_type, collection=in_type)
         else:
             log.error('MAPPING: could not delete index for %s' % in_type, collection=in_type)
 
     # first, create the mapping. adds settings and mappings in the body
     res = es_safe_execute(es.indices.create, index=in_type, body=this_index_record, ignore=[400])
     if res:
-        log.warning('MAPPING: new index created for %s' % (in_type), collection=in_type)
+        log.info('MAPPING: new index created for %s' % (in_type), collection=in_type)
     else:
         log.error('MAPPING: new index failed for %s' % (in_type), collection=in_type)
 
@@ -650,10 +650,10 @@ def build_index(app, es, in_type, mapping, uuids_to_index, dry_run, check_first,
     start = timer()
     coll_count, coll_uuids = get_collection_uuids_and_count(app, in_type)
     end = timer()
-    log.warning('Time to get collection uuids: %s' % str(end-start), cat='fetch time',
+    log.info('Time to get collection uuids: %s' % str(end-start), cat='fetch time',
                 duration=str(end-start), collection=in_type)
     uuids_to_index.update(coll_uuids)
-    log.warning('MAPPING: will queue all %s items in the new index %s for reindexing' %
+    log.info('MAPPING: will queue all %s items in the new index %s for reindexing' %
                 (str(coll_count), in_type), cat='items to queue', count=coll_count, collection=in_type)
 
     # put index_record in meta
@@ -663,10 +663,10 @@ def build_index(app, es, in_type, mapping, uuids_to_index, dry_run, check_first,
         start = timer()
         res = es_safe_execute(es.index, index='meta', doc_type='meta', body=this_index_record, id=in_type)
         end = timer()
-        log.warning("Time to update metadata document: %s" % str(end-start), duration=str(end-start),
+        log.info("Time to update metadata document: %s" % str(end-start), duration=str(end-start),
                     collection=in_type, cat='update meta')
         if res:
-            log.warning("MAPPING: index record created for %s" % (in_type), collection=in_type)
+            log.info("MAPPING: index record created for %s" % (in_type), collection=in_type)
         else:
             log.error("MAPPING: index record failed for %s" % (in_type), collection=in_type)
     else:
@@ -728,23 +728,23 @@ def check_and_reindex_existing(app, es, in_type, uuids_to_index, index_diff=Fals
     If index_diff, store uuids for reindexing that are in DB but not ES
     """
     db_count, es_count, db_uuids, diff_uuids = get_db_es_counts_and_db_uuids(app, es, in_type, index_diff)
-    log.warning("DB count is %s and ES count is %s for index: %s" %
+    log.info("DB count is %s and ES count is %s for index: %s" %
                 (str(db_count), str(es_count), in_type), collection=in_type,
                  db_count=str(db_count), cat='collection_counts', es_count=str(es_count))
     if print_counts:  # just display things, don't actually queue the uuids
         if index_diff and diff_uuids:
-            log.warning("The following UUIDs are found in the DB but not the ES index: %s"
+            log.info("The following UUIDs are found in the DB but not the ES index: %s"
                         % (in_type), collection=in_type)
             for uuid in diff_uuids:
-                log.warning(uuid)
+                log.info(uuid)
         return
     if es_count is None or es_count != db_count:
         if index_diff:
-            log.warning('MAPPING: queueing %s items found in DB but not ES in the index %s for reindexing'
+            log.info('MAPPING: queueing %s items found in DB but not ES in the index %s for reindexing'
                         % (str(len(diff_uuids)), in_type), items_queued=str(len(diff_uuids)), collection=in_type)
             uuids_to_index.update(diff_uuids)
         else:
-            log.warning('MAPPING: queueing %s items found in the existing index %s for reindexing'
+            log.info('MAPPING: queueing %s items found in the existing index %s for reindexing'
                         % (str(len(diff_uuids)), in_type), items_queued=str(len(diff_uuids)), collection=in_type)
             uuids_to_index.update(db_uuids)
 
@@ -837,20 +837,20 @@ def confirm_mapping(es, in_type, this_index_record):
             mapping_check = True
         else:
             count = es.count(index=in_type, doc_type=in_type).get('count', 0)
-            log.warning('___BAD MAPPING FOUND FOR %s. RETRYING___\nDocument count in that index is %s.'
+            log.info('___BAD MAPPING FOUND FOR %s. RETRYING___\nDocument count in that index is %s.'
                         % (in_type, count), collection=in_type, count=count, cat='bad mapping')
             es_safe_execute(es.indices.delete, index=in_type)
             # do not increment tries if an error arises from creating the index
             try:
                 es_safe_execute(es.indices.create, index=in_type, body=this_index_record)
             except (TransportError, RequestError) as e:
-                log.warning('___COULD NOT CREATE INDEX FOR %s AS IT ALREADY EXISTS.\nError: %s\nRETRYING___'
+                log.info('___COULD NOT CREATE INDEX FOR %s AS IT ALREADY EXISTS.\nError: %s\nRETRYING___'
                             % (in_type, str(e)), collection=in_type, cat='index already exists')
             else:
                 tries += 1
             time.sleep(2)
     if not mapping_check:
-        log.warning('___MAPPING CORRECTION FAILED FOR %s___' % in_type, cat='correction', collection=in_type)
+        log.info('___MAPPING CORRECTION FAILED FOR %s___' % in_type, cat='correction', collection=in_type)
     return tries
 
 
@@ -861,7 +861,7 @@ def es_safe_execute(function, **kwargs):
             function(**kwargs)
         except ConnectionTimeout:
             exec_count += 1
-            log.warning('ES connection issue! Retrying.')
+            log.info('ES connection issue! Retrying.')
         else:
             return True
     return False
@@ -919,12 +919,12 @@ def run(app, collections=None, dry_run=False, check_first=False, skip_indexing=F
     if not telemetry_id:
         telemetry_id='cm_run_' + datetime.datetime.now().isoformat()
         log = log.bind(telemetry_id=telemetry_id)
-    log.warning('\n___CREATE-MAPPING___:\ncollections: %s\ncheck_first %s\n index_diff %s\n' %
+    log.info('\n___CREATE-MAPPING___:\ncollections: %s\ncheck_first %s\n index_diff %s\n' %
                 (collections, check_first, index_diff), cat=cat)
-    log.warning('\n___ES___:\n %s\n' % (str(es.cat.client)), cat=cat)
-    log.warning('\n___ES NODES___:\n %s\n' % (str(es.cat.nodes())), cat=cat)
-    log.warning('\n___ES HEALTH___:\n %s\n' % (str(es.cat.health())), cat=cat)
-    log.warning('\n___ES INDICES (PRE-MAPPING)___:\n %s\n' % str(es.cat.indices()), cat=cat)
+    log.info('\n___ES___:\n %s\n' % (str(es.cat.client)), cat=cat)
+    log.info('\n___ES NODES___:\n %s\n' % (str(es.cat.nodes())), cat=cat)
+    log.info('\n___ES HEALTH___:\n %s\n' % (str(es.cat.health())), cat=cat)
+    log.info('\n___ES INDICES (PRE-MAPPING)___:\n %s\n' % str(es.cat.indices()), cat=cat)
     # keep a set of all uuids to be reindexed, which occurs after all indices
     # are created
     uuids_to_index = set()
@@ -947,7 +947,7 @@ def run(app, collections=None, dry_run=False, check_first=False, skip_indexing=F
 
     # clear the indexer queue on a total reindex
     if total_reindex or purge_queue:
-        log.warning('___PURGING THE QUEUE AND CLEARING INDEXING RECORDS BEFORE MAPPING___\n', cat=cat)
+        log.info('___PURGING THE QUEUE AND CLEARING INDEXING RECORDS BEFORE MAPPING___\n', cat=cat)
         indexer_queue.clear_queue()
         # we also want to remove the 'indexing' index, which stores old records
         # it's not guaranteed to be there, though
@@ -962,7 +962,7 @@ def run(app, collections=None, dry_run=False, check_first=False, skip_indexing=F
     greatest_mapping_time = {'collection': '', 'duration': 0}
     greatest_index_creation_time = {'collection': '', 'duration': 0}
     timings = {}
-    log.warning('\n___FOUND COLLECTIONS___:\n %s\n' % (str(collections)), cat=cat)
+    log.info('\n___FOUND COLLECTIONS___:\n %s\n' % (str(collections)), cat=cat)
     for collection_name in collections:
         if collection_name == 'meta':
             # meta mapping just contains settings
@@ -971,7 +971,7 @@ def run(app, collections=None, dry_run=False, check_first=False, skip_indexing=F
                         cached_indices, meta_bulk_actions)
             # bail if we fail to make meta
             if not check_if_index_exists(es, 'meta'):
-                log.warning('\n___META NOT CREATED; CREATE MAPPING ABORTED___\n', cat=cat)
+                log.info('\n___META NOT CREATED; CREATE MAPPING ABORTED___\n', cat=cat)
                 return timings
             # only update this for bulk_meta setting
             if cached_indices:
@@ -987,8 +987,8 @@ def run(app, collections=None, dry_run=False, check_first=False, skip_indexing=F
                         cached_indices, meta_bulk_actions)
             end = timer()
             index_time = end - start
-            log.warning('___FINISHED %s___\n' % (collection_name))
-            log.warning('___Mapping Time: %s  Index time %s ___\n' % (mapping_time, index_time),
+            log.info('___FINISHED %s___\n' % (collection_name))
+            log.info('___Mapping Time: %s  Index time %s ___\n' % (mapping_time, index_time),
                         cat='index mapping time', collection=collection_name, map_time=mapping_time,
                         index_time=index_time)
             if mapping_time > greatest_mapping_time['duration']:
@@ -1004,20 +1004,20 @@ def run(app, collections=None, dry_run=False, check_first=False, skip_indexing=F
         start = timer()
         bulk(es, meta_bulk_actions)
         end = timer()
-        log.warning("bulk update for meta took %s" % str(end-start), cat='bulk_meta time',
+        log.info("bulk update for meta took %s" % str(end-start), cat='bulk_meta time',
                     duration=str(end-start))
 
     overall_end = timer()
     cat = 'finished mapping'
-    log.warning('\n___ES INDICES (POST-MAPPING)___:\n %s\n' % (str(es.cat.indices())), cat=cat)
-    log.warning('\n___FINISHED CREATE-MAPPING___\n', cat=cat)
+    log.info('\n___ES INDICES (POST-MAPPING)___:\n %s\n' % (str(es.cat.indices())), cat=cat)
+    log.info('\n___FINISHED CREATE-MAPPING___\n', cat=cat)
 
 
-    log.warning('\n___GREATEST MAPPING TIME: %s\n' % str(greatest_mapping_time),
+    log.info('\n___GREATEST MAPPING TIME: %s\n' % str(greatest_mapping_time),
                 cat='max mapping time', **greatest_mapping_time)
-    log.warning('\n___GREATEST INDEX CREATION TIME: %s\n' % str(greatest_index_creation_time),
+    log.info('\n___GREATEST INDEX CREATION TIME: %s\n' % str(greatest_index_creation_time),
                 cat='max index create time', **greatest_index_creation_time)
-    log.warning('\n___TIME FOR ALL COLLECTIONS: %s\n' % str(overall_end - overall_start),
+    log.info('\n___TIME FOR ALL COLLECTIONS: %s\n' % str(overall_end - overall_start),
                 cat='overall mapping time', duration=str(overall_end - overall_start))
     if skip_indexing or print_count_only:
         return timings
@@ -1037,7 +1037,7 @@ def run(app, collections=None, dry_run=False, check_first=False, skip_indexing=F
                 else:
                     uuids_to_index = find_uuids_for_indexing(registry, uuids_to_index, log)
                 log.error('___SYNC INDEXING WITH STRICT=FALSE MAY CAUSE REV_LINK INCONSISTENCY___')
-            log.warning('\n___UUIDS TO INDEX (SYNC)___: %s\n' % len(uuids_to_index),
+            log.info('\n___UUIDS TO INDEX (SYNC)___: %s\n' % len(uuids_to_index),
                         cat='uuids to index', count=len(uuids_to_index))
             run_indexing(app, uuids_to_index)
         else:
@@ -1048,7 +1048,7 @@ def run(app, collections=None, dry_run=False, check_first=False, skip_indexing=F
                 log.error('___MAPPING ALL ITEMS WITH STRICT=TRUE TO SAVE TIME___')
                 uuids_to_index = set(get_uuids_for_types(registry))  # all uuids
                 use_strict = True
-            log.warning('\n___UUIDS TO INDEX (QUEUED)___: %s\n' % len(uuids_to_index),
+            log.info('\n___UUIDS TO INDEX (QUEUED)___: %s\n' % len(uuids_to_index),
                         cat='uuids to index', count=len(uuids_to_index))
             indexer_queue.add_uuids(app.registry, list(uuids_to_index), strict=use_strict,
                                     target_queue='secondary', telemetry_id=telemetry_id)
@@ -1115,7 +1115,8 @@ def main():
 
 
     # Loading app will have configured from config file. Reconfigure here:
-    set_logging(app.registry.settings.get('production'), level=logging.INFO)
+    set_logging(app.registry.settings.get('elasticsearch.server'),
+                app.registry.settings.get('production'), level=logging.INFO)
     #global log
     #log = structlog.get_logger(__name__)
 
