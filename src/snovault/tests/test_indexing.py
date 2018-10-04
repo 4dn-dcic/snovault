@@ -9,6 +9,7 @@ import pytest
 import time
 import json
 import uuid
+import yaml
 from datetime import datetime
 from snovault.elasticsearch.interfaces import (
     ELASTIC_SEARCH,
@@ -295,7 +296,7 @@ def test_indexing_simple(app, testapp, indexer_testapp):
     assert testing_ppp_source['settings']['index']['number_of_shards'] == 1
 
 
-def test_indexing_logging(app, testapp, indexer_testapp, caplog):
+def test_indexing_logging(app, testapp, indexer_testapp, capfd):
     from dcicutils.log_utils import calculate_log_index
     log_index_name = calculate_log_index()
     post_res = testapp.post_json(TEST_COLL, {'required': ''})
@@ -303,21 +304,24 @@ def test_indexing_logging(app, testapp, indexer_testapp, caplog):
     res = indexer_testapp.post_json('/index', {'record': True})
     assert res.json['indexing_count'] == 1
     assert res.json['indexing_status'] == 'finished'
+    check_logs = capfd.readouterr()[-1].split('\n')
     log_record = None
-    for record in caplog.records():
-        if not isinstance(record.__dict__.get('msg'), dict):
+    for record in check_logs:
+        if not record:
             continue
-        if record.__dict__['msg'].get('item_uuid') == post_uuid:
-            log_record = record
+        proc_record = yaml.load(record.strip())
+        if not isinstance(proc_record, dict):
+            continue
+        if proc_record.get('item_uuid') == post_uuid:
+            log_record = proc_record
     print(log_record)
     assert log_record is not None
-    log_msg = log_record.__dict__['msg']
-    assert log_msg['collection'] == TEST_TYPE
-    assert 'uo_start_time' in log_msg
-    assert isinstance(log_msg['sid'], int)
-    assert 'log_uuid' in log_msg
-    assert 'level' in log_msg
-    log_uuid = log_msg['log_uuid']
+    assert log_record['collection'] == TEST_TYPE
+    assert 'uo_start_time' in log_record
+    assert isinstance(log_record['sid'], int)
+    assert 'log_uuid' in log_record
+    assert 'level' in log_record
+    log_uuid = log_record['log_uuid']
     # now get the log from ES
     es = app.registry[ELASTIC_SEARCH]
     log_doc = es.get(index=log_index_name, doc_type='log', id=log_uuid)
