@@ -68,7 +68,7 @@ def test_telemetry_id_carries_through_logging(testapp, external_tx):
         assert logger._context.get('telemetry_id') == 'test'
         assert logger._context.get('log_action') == 'action_test'
 
-def test_log_to_file_and_ship(testapp, external_tx, capfd):
+def test_logging_basic(testapp, external_tx, capfd):
         '''
         in prod logging setup, an Elasticsearch server is provided. Logs will
         be piped to the appropriate logs (e.g. httpd/error_log) and also sent
@@ -83,10 +83,16 @@ def test_log_to_file_and_ship(testapp, external_tx, capfd):
         # add a telemetry id and some log contents using a query string
         res = testapp.post_json(COLLECTION_URL + "?telemetry_id=test&log_action=action_test", item_with_uuid[0], status=201)
         # multiple logs emitted in this process, must find the one we want
-        logs = capfd.readouterr()
-        assert logs[1]
-        log_msg = yaml.load(logs[1].strip())
-        assert log_msg['telemetry_id'] == 'test'
+        check_logs = capfd.readouterr()[-1].split('\n')
+        log_msg = None
+        for record in check_logs:
+            if not record:
+                continue
+            proc_record = yaml.load(record.strip())
+            if not isinstance(proc_record, dict):
+                continue
+            if proc_record.get('telemetry_id') == 'test':
+                log_msg = proc_record
         assert '@timestamp' in log_msg
         assert 'logger' in log_msg
         assert 'level' in log_msg
