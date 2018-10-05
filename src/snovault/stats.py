@@ -98,7 +98,7 @@ def stats_tween_factory(handler, registry):
             response.set_cookie('X-Stats', xs)
 
         # log all this stuff
-        log.bind(**stats).info("request timmings")
+        log.bind(**stats).info("Request timings")
 
         return response
 

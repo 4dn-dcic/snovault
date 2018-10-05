@@ -9,6 +9,7 @@ import pytest
 import time
 import json
 import uuid
+import yaml
 from datetime import datetime
 from snovault.elasticsearch.interfaces import (
     ELASTIC_SEARCH,
@@ -293,6 +294,41 @@ def test_indexing_simple(app, testapp, indexer_testapp):
     assert 'settings' in testing_ppp_source
     # ensure we only have 1 shard for tests
     assert testing_ppp_source['settings']['index']['number_of_shards'] == 1
+
+
+def test_indexing_logging(app, testapp, indexer_testapp, capfd):
+    from dcicutils.log_utils import calculate_log_index
+    log_index_name = calculate_log_index()
+    post_res = testapp.post_json(TEST_COLL, {'required': ''})
+    post_uuid = post_res.json['@graph'][0]['uuid']
+    res = indexer_testapp.post_json('/index', {'record': True})
+    assert res.json['indexing_count'] == 1
+    assert res.json['indexing_status'] == 'finished'
+    check_logs = capfd.readouterr()[-1].split('\n')
+    log_record = None
+    for record in check_logs:
+        if not record:
+            continue
+        proc_record = yaml.load(record.strip())
+        if not isinstance(proc_record, dict):
+            continue
+        if proc_record.get('item_uuid') == post_uuid:
+            log_record = proc_record
+    print(log_record)
+    assert log_record is not None
+    assert log_record['collection'] == TEST_TYPE
+    assert 'uo_start_time' in log_record
+    assert isinstance(log_record['sid'], int)
+    assert 'log_uuid' in log_record
+    assert 'level' in log_record
+    log_uuid = log_record['log_uuid']
+    # now get the log from ES
+    es = app.registry[ELASTIC_SEARCH]
+    log_doc = es.get(index=log_index_name, doc_type='log', id=log_uuid)
+    log_source = log_doc['_source']
+    assert log_source['item_uuid'] == post_uuid
+    assert log_source['collection'] == TEST_TYPE
+    assert 'level' in log_source
 
 
 def test_indexing_queue_records(app, testapp, indexer_testapp):

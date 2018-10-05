@@ -5,6 +5,7 @@ import pytest
 from snovault.tests.test_post_put_patch import COLLECTION_URL, item_with_uuid
 import structlog
 import json
+import yaml
 
 
 @pytest.fixture
@@ -67,35 +68,31 @@ def test_telemetry_id_carries_through_logging(testapp, external_tx):
         assert logger._context.get('telemetry_id') == 'test'
         assert logger._context.get('log_action') == 'action_test'
 
-def test_log_to_file_and_ship(testapp, external_tx, capfd):
+def test_logging_basic(testapp, external_tx, capfd):
         '''
-        in prod we just want to log json to stdout and let the environment
-        do something with stdout... on beanstalk apache will pipe it to error_log
-        for example...
-        our local dev environment however uses structlog.ConsoleLogger and
-        those can be accessed in pytest through the `capfd` fixture, although
-        they would have color codes...
-        exteral_tx just for roll back..
+        in prod logging setup, an Elasticsearch server is provided. Logs will
+        be piped to the appropriate logs (e.g. httpd/error_log) and also sent
+        to Elasticsearch. That is tested here in snovault in test_indexing;
+        here, we configure the logs without the es_server to ensure that
+        the rest of it works
         '''
         from snovault import set_logging
         set_logging(in_prod=True)
 
         # somethign that generates logs
+        # add a telemetry id and some log contents using a query string
         res = testapp.post_json(COLLECTION_URL + "?telemetry_id=test&log_action=action_test", item_with_uuid[0], status=201)
-        print(res)
-
-        # At this point we should have some simple logging write it to file and ship it..
-        logs = capfd.readouterr()
-        assert logs[1]
-        entries = logs[1].split('\n')
-        # check format of entries
-        for entry in entries:
-            if not entry:
+        # multiple logs emitted in this process, must find the one we want
+        check_logs = capfd.readouterr()[-1].split('\n')
+        log_msg = None
+        for record in check_logs:
+            if not record:
                 continue
-            # test logger adds like INFO:snovault.crud_views: to front of log file
-            log_entry = "{" + entry.split("{")[1]
-            entry_dict = json.loads(log_entry)
-            assert entry_dict
-            assert '@timestamp' in entry_dict
-            assert 'logger' in entry_dict
-            assert 'level' in entry_dict
+            proc_record = yaml.load(record.strip())
+            if not isinstance(proc_record, dict):
+                continue
+            if proc_record.get('telemetry_id') == 'test':
+                log_msg = proc_record
+        assert '@timestamp' in log_msg
+        assert 'logger' in log_msg
+        assert 'level' in log_msg
