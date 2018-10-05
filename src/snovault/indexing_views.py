@@ -21,6 +21,22 @@ class SidException(Exception):
 
 @view_config(context=Item, name='index-data', permission='index', request_method='GET')
 def item_index_data(context, request):
+    """
+    Very important view which is used to calculate all the data indexed in ES
+    for the given item. If an int sid is provided as a request parameter,
+    will raise an sid exception if the current item context is behind the
+    given sid.
+    Computationally intensive. Performs the full embedding and calculates
+    audits and aggregated_items, among other things.
+
+    Args:
+        context: current Item
+        request: current request
+
+    Returns:
+        A dictionary document representing the full data to index for the
+        given item
+    """
     uuid = str(context.uuid)
     properties = context.upgrade_properties()
 

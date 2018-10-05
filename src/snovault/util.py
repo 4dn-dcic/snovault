@@ -116,6 +116,7 @@ def expand_embedded_model(request, obj, model, parent_path=None):
     A similar idea to expand_path, but takes in a model from build_embedded_model
     instead. Takes in the @@object view of the item (obj) and returns a
     fully embedded result.
+    Parent path is passed in for aggregated_items tracking
     """
     embedded_res = {}
     # first take care of the fields_to_use at this level
@@ -150,7 +151,7 @@ def expand_val_for_embedded_model(request, obj_val, downstream_model,
     Take a value from an object and the relevant piece of the embedded_model
     and perform embedding.
     We have to account for list, dictionaries, and strings.
-    field_name is optional and used to track aggregated_items
+    field_name/parent_path are optional and used to track aggregated_items
     """
     agg_items = request._aggregated_items
     if isinstance(obj_val, list):
@@ -238,7 +239,14 @@ def build_embedded_model(fields_to_embed):
 
 def process_aggregated_items(request):
     """
-    we have _fields and items
+    After all aggregated items have been found, process them on the request
+    to narrow down to the fields we wish to aggregated on. This reduces the
+    amount of info carried on the request, which is important because it
+    will have to be carried through the subrequest chain.
+    Args:
+        request: the current request
+    Returns:
+        None
     """
     for agg_on, agg_body in request._aggregated_items.items():
         agg_fields = agg_body['_fields']
@@ -271,6 +279,16 @@ def process_aggregated_items(request):
 
 
 def recursively_process_field(item, split_fields):
+    """
+    Recursive function to pull out a field, in split-on-dot format, from
+    the given item. Example of split format is:
+        'subobject.value' --> ['subobject', 'value']
+    Args:
+        item: dictionary item to pull fields from
+        split_fields: list resulting from field.split('.')
+    Returns:
+        The found value
+    """
     try:
         next_level = item.get(split_fields[0])
     except AttributeError:

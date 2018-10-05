@@ -59,6 +59,7 @@ def includeme(config):
     config.include('.predicates')
     config.include('.invalidation')
     config.include('.upgrader')
+    config.include('.aggregated_items')
     config.include('.auditor')
     config.include('.storage')
     config.include('.typeinfo')

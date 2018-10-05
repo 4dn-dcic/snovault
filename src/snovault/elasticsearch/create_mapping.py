@@ -482,10 +482,14 @@ def aggregated_items_mapping(types, item_type):
     """
     Create the mapping for the aggregated items of the given type.
     This is a simple mapping, since all values can be set as keywords
-    (only used for exact match search and not sorted)
-
+    (only used for exact match search and not sorted).
     Since the fields for each aggregated item are split by dots, we organize
     these as the hierarchical objects for Elasticsearch
+    Args:
+        types: result of request.registry[TYPES]
+        item_type: string item type that we are creating the mapping for
+    Returns:
+        Dictionary mapping for the aggrated_items of the given item type
     """
     type_info = types[item_type]
     aggregated_items = type_info.aggregated_items
