@@ -62,12 +62,13 @@ def embed(request, *elements, **kw):
     # Cache cut response time from ~800ms to ~420ms.
     embed_cache = request.registry[CONNECTION].embed_cache
     as_user = kw.get('as_user')
+    index_uuid = kw.get('index_uuid')
     path = join(*elements)
     path = unquote_bytes_to_wsgi(native_(path))
     # as_user controls whether or not the embed_cache is used
     # if request._indexing_view is True, always use the cache
     if as_user is not None and not request._indexing_view:
-        result, linked_uuids, rev_linked_uuids_by_item = _embed(request, path, as_user)
+        result, linked_uuids, rev_linked_uuids_by_item, agg_items = _embed(request, path, as_user)
     else:
         cached = embed_cache.get(path, None)
         if cached is None:
@@ -76,8 +77,14 @@ def embed(request, *elements, **kw):
             cached = _embed(request, path, as_user=subreq_user)
             # caching audits is safe because they don't add to linked_uuids
             embed_cache[path] = cached
-        result, linked_uuids, rev_linked_uuids_by_item = cached
+        result, linked_uuids, rev_linked_uuids_by_item, agg_items = cached
         result = deepcopy(result)
+    # aggregated_items may be cached; if so, add them to the request
+    # these conditions only fulfilled when using @@embedded and aggregated
+    # items have NOT yet been processed (_aggregate_for is removed if so)
+    if index_uuid and getattr(request, '_aggregate_for').get('uuid') == index_uuid:
+        request._aggregated_items = agg_items
+        request._aggregate_for['uuid'] = None
     # hardcode this because audits can cause serious problems with frame=page
     if '@@audit' not in path:
         request._linked_uuids.update(linked_uuids)
@@ -110,7 +117,8 @@ def _embed(request, path, as_user='EMBED'):
         result = request.invoke_subrequest(subreq)
     except HTTPNotFound:
         raise KeyError(path)
-    return result, subreq._linked_uuids, subreq._rev_linked_uuids_by_item
+    return (result, subreq._linked_uuids,
+            subreq._rev_linked_uuids_by_item, subreq._aggregated_items)
 
 
 class NullRenderer:

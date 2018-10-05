@@ -90,7 +90,7 @@ def item_index_data(context, request):
     }
     # since request._indexing_view is set to True in indexer.py,
     # all embeds (including subrequests) below will use the embed cache
-    embedded = request.invoke_view(path, '@@embedded')
+    embedded = request.invoke_view(path, '@@embedded', index_uuid=uuid)
     # get _linked and _rev_linked uuids from the request before @@audit views add to them
     linked_uuids = request._linked_uuids.copy()
     rev_linked_by_item = request._rev_linked_uuids_by_item.copy()

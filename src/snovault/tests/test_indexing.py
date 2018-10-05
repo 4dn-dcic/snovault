@@ -377,7 +377,7 @@ def test_sync_and_queue_indexing(app, testapp, indexer_testapp):
 
 def test_queue_indexing_with_linked(app, testapp, indexer_testapp):
     """
-    Test a whole bumch of things here:
+    Test a whole bunch of things here:
     - posting/patching invalidates rev linked items
     - check linked_uuids/uuids_rev_linked_to_me fields in ES
     - test indexer_utils.find_uuids_for_indexing fxn
@@ -802,3 +802,55 @@ def test_create_mapping_index_diff(app, testapp, indexer_testapp):
     time.sleep(4)
     third_count = es.count(index=TEST_TYPE, doc_type=TEST_TYPE).get('count')
     assert third_count == initial_count
+
+
+def test_aggregated_items(app, testapp, indexer_testapp):
+    """
+    Test that the item aggregation works, which only occurs when indexing
+    is actually run
+    """
+    import webtest
+    es = app.registry[ELASTIC_SEARCH]
+    indexer_queue = app.registry[INDEXER_QUEUE]
+    # first, run create mapping with the indices we will use
+    create_mapping.run(
+        app,
+        collections=['testing_link_target_sno', 'testing_link_aggregated_sno'],
+        skip_indexing=True
+    )
+    target1  = {'name': 'one', 'uuid': '775795d3-4410-4114-836b-8eeecf1d0c2f'}
+    target2  = {'name': 'two', 'uuid': '775795d3-4410-4114-836b-8eeecf1daabc'}
+    aggregated = {
+        'name': 'A',
+        'targets': [
+            {
+                'test_description': 'target one',
+                'target': '775795d3-4410-4114-836b-8eeecf1d0c2f'
+            },
+            {
+                'test_description': 'target two',
+                'target': '775795d3-4410-4114-836b-8eeecf1daabc'
+            }
+        ],
+        'uuid': '16157204-8c8f-4672-a1a4-f22ab8021fcd',
+        'status': 'current',
+    }
+    target1_res = testapp.post_json('/testing-link-targets-sno/', target1, status=201)
+    target2_res = testapp.post_json('/testing-link-targets-sno/', target2, status=201)
+    agg_res = testapp.post_json('/testing-link-aggregateds-sno/', aggregated, status=201)
+    res = indexer_testapp.post_json('/index', {'record': True})
+    time.sleep(2)
+    # wait for the items to index
+    res = indexer_testapp.post_json('/index', {'record': True})
+    assert res.json['indexing_count'] == 3
+    time.sleep(2)
+    # wait for test-link-aggregated item to inde
+    doc_count = es.count(index='testing_link_aggregated_sno', doc_type='testing_link_aggregated_sno').get('count')
+    tries = 0
+    while doc_count < 1 and tries < 5:
+        time.sleep(4)
+        doc_count = es.count
+    assert doc_count == 1
+    es_agg_res = es.get(index='testing_link_aggregated_sno', doc_type='testing_link_aggregated_sno', id=agg_res['uuid'])
+    import pdb; pdb.set_trace()
+    assert 'aggregated_items' in agg_res

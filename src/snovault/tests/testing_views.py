@@ -103,6 +103,45 @@ class TestingLinkSourceSno(Item):
     }
 
 
+@collection('testing-link-aggregateds-sno')
+class TestingLinkAggregatedSno(Item):
+    item_type = 'testing_link_aggregated_sno'
+    schema = {
+        'type': 'object',
+        'properties': {
+            'name': {
+                'type': 'string',
+            },
+            'uuid': {
+                'type': 'string',
+            },
+            'targets': {
+                'type': 'array',
+                'items': {
+                    'type': 'object',
+                    'properties': {
+                        'test_description': {
+                            'type': 'string'
+                        },
+                        'target':{
+                            'type': 'string',
+                            'linkTo': 'TestingLinkTargetSno',
+                        }
+                    }
+                }
+            },
+            'status': {
+                'type': 'string',
+            },
+        },
+        'required': ['target'],
+        'additionalProperties': False,
+    }
+    aggregated_items = {
+        "targets": ['target.uuid', 'test_description']
+    }
+
+
 @collection('testing-link-targets-sno', unique_key='testing_link_target_sno:name')
 class TestingLinkTargetSno(Item):
     item_type = 'testing_link_target_sno'

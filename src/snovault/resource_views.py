@@ -164,6 +164,7 @@ def item_view_embedded(context, request):
         # is used in a frame=embedded calc property.
         # use a list here so that the reference is maintained through subreq
         request._aggregate_for['uuid'] = None
+
     return embedded
 
 
