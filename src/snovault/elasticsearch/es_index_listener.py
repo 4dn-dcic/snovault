@@ -234,7 +234,8 @@ def main():
     if args.verbose or args.dry_run:
         level = logging.DEBUG
 
-    set_logging(app.registry.settings.get('production'), level=level)
+    set_logging(app.registry.settings.get('elasticsearch.server'),
+                app.registry.settings.get('production'), level=level)
     #global log
     #log = structlog.get_logger(__name__)
 

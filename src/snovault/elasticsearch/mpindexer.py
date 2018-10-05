@@ -50,7 +50,8 @@ def initializer(app_factory, settings):
     atexit.register(clear_manager)
     app = app_factory(settings, indexer_worker=True, create_tables=False)
 
-    set_logging(app.registry.settings.get('production'), level=logging.INFO)
+    set_logging(app.registry.settings.get('elasticsearch.server'),
+                app.registry.settings.get('production'), level=logging.INFO)
     global log
     log = structlog.get_logger(__name__)
 
