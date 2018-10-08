@@ -103,9 +103,9 @@ class TestingLinkSourceSno(Item):
     }
 
 
-@collection('testing-link-aggregateds-sno')
-class TestingLinkAggregatedSno(Item):
-    item_type = 'testing_link_aggregated_sno'
+@collection('testing-link-aggregates-sno')
+class TestingLinkAggregateSno(Item):
+    item_type = 'testing_link_aggregate_sno'
     schema = {
         'type': 'object',
         'properties': {
@@ -125,16 +125,16 @@ class TestingLinkAggregatedSno(Item):
                         },
                         'target':{
                             'type': 'string',
-                            'linkTo': 'TestingLinkTargetSno',
+                            'linkTo': 'TestingLinkTargetSno'
                         }
                     }
                 }
             },
             'status': {
                 'type': 'string',
-            },
+            }
         },
-        'required': ['target'],
+        'required': ['targets'],
         'additionalProperties': False,
     }
     aggregated_items = {
