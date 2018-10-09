@@ -861,6 +861,8 @@ def test_aggregated_items(app, testapp, indexer_testapp):
         collections=['testing_link_target_sno', 'testing_link_aggregate_sno'],
         skip_indexing=True
     )
+    # generate a uuid for the aggregate item
+    agg_res_uuid = str(uuid.uuid4())
     target1  = {'name': 'one', 'uuid': '775795d3-4410-4114-836b-8eeecf1d0c2f'}
     target2  = {'name': 'two', 'uuid': '775795d3-4410-4114-836b-8eeecf1daabc'}
     aggregated = {
@@ -875,7 +877,7 @@ def test_aggregated_items(app, testapp, indexer_testapp):
                 'target': '775795d3-4410-4114-836b-8eeecf1daabc'
             }
         ],
-        'uuid': '16157204-8c8f-4672-a1a4-f22ab8021fcd',
+        'uuid': agg_res_uuid,
         'status': 'current'
     }
     # you can do stuff like this and it will take effect
@@ -883,7 +885,6 @@ def test_aggregated_items(app, testapp, indexer_testapp):
     target1_res = testapp.post_json('/testing-link-targets-sno/', target1, status=201)
     target2_res = testapp.post_json('/testing-link-targets-sno/', target2, status=201)
     agg_res = testapp.post_json('/testing-link-aggregates-sno/', aggregated, status=201)
-    agg_res_uuid = agg_res.json['@graph'][0]['uuid']
     agg_res_atid = agg_res.json['@graph'][0]['@id']
     # ensure that aggregated-items view shows nothing before indexing
     pre_agg_view = testapp.get(agg_res_atid + '@@aggregated-items', status=200).json
@@ -931,3 +932,5 @@ def test_aggregated_items(app, testapp, indexer_testapp):
     post_agg_view = testapp.get(agg_res_atid + '@@aggregated-items', status=200).json
     assert post_agg_view['@id'] == agg_res_atid
     assert post_agg_view['aggregated_items'] == es_agg_res['_source']['aggregated_items']
+    # clean up the testing_link_aggregate_sno index
+    es.delete(index='testing_link_aggregate_sno', doc_type='testing_link_aggregate_sno', id=agg_res_uuid)
