@@ -932,5 +932,7 @@ def test_aggregated_items(app, testapp, indexer_testapp):
     post_agg_view = testapp.get(agg_res_atid + '@@aggregated-items', status=200).json
     assert post_agg_view['@id'] == agg_res_atid
     assert post_agg_view['aggregated_items'] == es_agg_res['_source']['aggregated_items']
-    # clean up the testing_link_aggregate_sno index
-    es.delete(index='testing_link_aggregate_sno', doc_type='testing_link_aggregate_sno', id=agg_res_uuid)
+    # clean up the test items
+    testapp.patch_json('/testing-link-aggregates-sno/' + aggregated['uuid'],
+                       {'targets': []})
+    indexer_testapp.post_json('/index', {'record': True})
