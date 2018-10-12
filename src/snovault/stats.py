@@ -75,6 +75,10 @@ def stats_tween_factory(handler, registry):
         log_keys['url_path'] = request.path
         log_keys['url_qs'] = request.query_string
         log_keys['host'] = request.host.split(":")[0]
+        # segmentation faults were occuring, likely related to the ES
+        # logging when these stats were logged to ES as part of bin/commands,
+        # including load-data. Skip logging these to ES for now
+        log_keys['_skip_es'] = True
 
         log.bind(**log_keys)
         stats.update(log_keys)
