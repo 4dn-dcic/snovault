@@ -2,6 +2,7 @@ from past.builtins import basestring
 from pyramid.threadlocal import manager as threadlocal_manager
 from pyramid.httpexceptions import HTTPForbidden
 from .interfaces import CONNECTION
+import json
 import structlog
 
 
@@ -249,6 +250,8 @@ def process_aggregated_items(request):
         None
     """
     for agg_on, agg_body in request._aggregated_items.items():
+        covered_json_items = []  # compare agg items using json.dumps
+        item_idxs_to_remove = []  # remove these items after processing
         agg_fields = agg_body['_fields']
         # automatically aggregate on uuid if no fields provided
         # if you want to change this default, also change in create_mapping
@@ -258,6 +261,11 @@ def process_aggregated_items(request):
         if not isinstance(agg_fields, list):
             agg_fields = [agg_fields]
         for agg_idx, agg_item in enumerate(agg_body['items']):
+            # deduplicate aggregated items by comparing sorted json
+            if json.dumps(agg_item['item'], sort_keys=True) in covered_json_items:
+                item_idxs_to_remove.append(agg_idx)
+                continue
+            covered_json_items.append(json.dumps(agg_item['item'], sort_keys=True))
             proc_item = {}
             for field in agg_fields:
                 pointer = agg_item['item']
@@ -275,7 +283,11 @@ def process_aggregated_items(request):
                         if split not in proc_pointer:
                             proc_pointer[split] = {}
                         proc_pointer = proc_pointer[split]
+            # replace the unprocessed item with the processed one
             agg_body['items'][agg_idx]['item'] = proc_item
+        # remove deduplicated items by index in reverse order
+        for dedup_idx in reversed(item_idxs_to_remove):
+            del agg_body['items'][dedup_idx]
 
 
 def recursively_process_field(item, split_fields):

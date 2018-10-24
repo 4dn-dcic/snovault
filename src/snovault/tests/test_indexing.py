@@ -850,6 +850,7 @@ def test_aggregated_items(app, testapp, indexer_testapp):
     - Check that the aggregations worked correctly
     - Patch the TestingLinkAggregateSno to only 1 TestingLinkSourceSno, index
     - Ensure that the aggregated_items changed, checking ES
+    - Ensure that duplicate aggregated_items are deduplicated
     - Check aggregated-items view; should now match ES results
     """
     import webtest
@@ -915,10 +916,13 @@ def test_aggregated_items(app, testapp, indexer_testapp):
             assert target_agg['item']['test_description'] == 'target two'
             assert target_agg['item']['target']['uuid'] == target2['uuid']
     # now make sure they get updated on a patch
+    # use duplicate items, which should be deduplicated
     testapp.patch_json('/testing-link-aggregates-sno/' + aggregated['uuid'],
                        {'targets': [
                            {'test_description': 'target one revised',
-                            'target': '775795d3-4410-4114-836b-8eeecf1d0c2f'}
+                            'target': '775795d3-4410-4114-836b-8eeecf1d0c2f'},
+                           {'test_description': 'target one revised',
+                            'target': '775795d3-4410-4114-836b-8eeecf1d0c2f'},
                         ]})
     indexer_testapp.post_json('/index', {'record': True})
     time.sleep(10)  # be lazy and just wait a bit
