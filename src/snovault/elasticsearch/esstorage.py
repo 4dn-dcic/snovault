@@ -229,8 +229,10 @@ class ElasticSearchStorage(object):
     def get_rev_links(self, model, rel, *item_types):
         search = Search(using=self.es)
         search = search.extra(size=SEARCH_MAX)
+        # rel links use '~' instead of '.' due to ES field restraints
+        proc_rel = rel.replace('.', '~')
         # had to use ** kw notation because of variable in field name
-        search = search.filter('term', **{'links.' + rel: str(model.uuid)})
+        search = search.filter('term', **{'links.' + proc_rel: str(model.uuid)})
         if item_types:
             search = search.filter('terms', item_type=item_types)
         hits = search.execute()
