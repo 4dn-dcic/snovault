@@ -70,7 +70,6 @@ def test_crawl_schema(registry):
     assert res['type'] == 'string'
 
     # test some bad cases.
-    # test some bad cases. In this one, we drill down too far
     with pytest.raises(Exception) as exec_info:
         crawl_schema(registry[TYPES], field_path, 'not_a_schema')
     # different error, since it attempts to find the file locally
