@@ -2,7 +2,8 @@ import pytest
 from snovault.fourfront_utils import (
     build_default_embeds,
     find_default_embeds_for_schema,
-    expand_embedded_list
+    expand_embedded_list,
+    crawl_schema
 )
 
 def test_get_jsonld_types_from_collection_type(app):
@@ -57,3 +58,13 @@ def test_find_default_embeds_and_expand_emb_list(registry):
                       'snowset.uuid', 'snowset.award.link_id', 'snowset.award.display_title', 'snowset.award.@id',
                       'snowset.award.principals_allowed.*', 'snowset.award.uuid']
     assert set(expected_built) == set(build_default_embeds(embs_to_add2, set()))
+
+
+def test_crawl_schema(registry):
+    from snovault import TYPES
+    field_path = 'lab.awards.title'
+    type_info = registry[TYPES].by_item_type['snowflake']
+    snowflake_schema = type_info.schema
+    res = fourfront_utils.crawl_schema(registry[TYPES], field_path, snowflake_schema)
+    assert isinstance(res, dict)
+    assert res['type'] == 'string'

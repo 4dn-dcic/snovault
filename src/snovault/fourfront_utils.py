@@ -187,6 +187,57 @@ def crawl_schemas_by_embeds(item_type, types, split_path, schema):
     return error_message, embeds_to_add
 
 
+def crawl_schema(types, field_path, schema_cursor, split_path=None):
+    """
+    Given a field_path that is a sequence of fields joined by '.' and a starting
+    schema, will recursively drill down into the schema to find the schema value
+    of the terminal field. Will raise an Exception if the field cannot be found
+
+    Args:
+        types: Result of registry[TYPES].
+        field_path: string field path, joined by '.'
+        schema_cursor: dictionary schema starting point
+        split_path: array of remaining fields to traverse. Used internally
+
+    Returns:
+        Dictionary schema for the terminal field in field_path
+    """
+    if split_path is None:
+        split_path = field_path.split('.')
+
+    curr_field = split_path[0]
+    # schema_cursor should always be a dictionary if we have more split_fields
+    if not isinstance(schema_cursor, dict):
+        raise Exception('Could not find schema field for: %s. Invalid schema. Failed at: %s' % (full_path, curr_field))
+
+    schema_cursor = schema_cursor.get(curr_field)
+    if not schema_cursor:
+        raise Exception('Could not find schema field for: %s. Field not found. Failed at: %s' % (full_path, curr_field))
+
+    ## base case. We have found the desired schema
+    if len(split_field) == 1:
+        return schema_cursor
+
+    # drill into 'items' or 'properties'. always check 'items' before 'properties'
+    # check if an array + drill into if so
+    if schema_cursor.get('type') == 'array' and 'items' in schema_cursor:
+        schema_cursor = schema_cursor['items']
+    # check if an object + drill into if so
+    if schema_cursor.get('type') == 'object' and 'properties' in schema_cursor:
+        schema_cursor = schema_cursor['properties']
+    # if we hit a linkTo, pull in the new schema of the linkTo type
+    if 'linkTo' in schema_cursor:
+        linkTo = schema_cursor['linkTo']
+        try:
+            linkTo_type = types.all[linkTo]
+        except KeyError:
+            raise Exception('Could not find schema field for: %s. Invalid linkTo. Failed at: %s' % (full_path, curr_field))
+        linkTo_schema = linkTo_type.schema
+        schema_cursor = linkTo_schema['properties'] if 'properties' in linkTo_schema else linkTo_schema
+
+    return crawl_schema(types, full_path, schema_cursor, split_path[1:])
+
+
 def get_jsonld_types_from_collection_type(request, doc_type, types_covered=[]):
     """
     Recursively find item types using a given type registry
