@@ -202,20 +202,28 @@ def crawl_schema(types, field_path, schema_cursor, split_path=None):
     Returns:
         Dictionary schema for the terminal field in field_path
     """
+    # true if we are just starting up
     if split_path is None:
+        # ensure input schema is a dictionary
+        if not isinstance(schema_cursor, dict):
+            raise Exception('Could not find schema field for: %s. Invalid starting schema.' % field_path)
+
+        # drill into 'properties' of initial schema
+        if 'properties' in schema_cursor:
+            schema_cursor = schema_cursor['properties']
         split_path = field_path.split('.')
 
     curr_field = split_path[0]
-    # schema_cursor should always be a dictionary if we have more split_fields
-    if not isinstance(schema_cursor, dict):
-        raise Exception('Could not find schema field for: %s. Invalid schema. Failed at: %s' % (full_path, curr_field))
-
     schema_cursor = schema_cursor.get(curr_field)
     if not schema_cursor:
-        raise Exception('Could not find schema field for: %s. Field not found. Failed at: %s' % (full_path, curr_field))
+        raise Exception('Could not find schema field for: %s. Field not found. Failed at: %s' % (field_path, curr_field))
+
+    # schema_cursor should always be a dictionary
+    if not isinstance(schema_cursor, dict):
+        raise Exception('Could not find schema field for: %s. Non-dictionary schema. Failed at: %s' % (field_path, curr_field))
 
     ## base case. We have found the desired schema
-    if len(split_field) == 1:
+    if len(split_path) == 1:
         return schema_cursor
 
     # drill into 'items' or 'properties'. always check 'items' before 'properties'
@@ -231,11 +239,11 @@ def crawl_schema(types, field_path, schema_cursor, split_path=None):
         try:
             linkTo_type = types.all[linkTo]
         except KeyError:
-            raise Exception('Could not find schema field for: %s. Invalid linkTo. Failed at: %s' % (full_path, curr_field))
+            raise Exception('Could not find schema field for: %s. Invalid linkTo. Failed at: %s' % (field_path, curr_field))
         linkTo_schema = linkTo_type.schema
         schema_cursor = linkTo_schema['properties'] if 'properties' in linkTo_schema else linkTo_schema
 
-    return crawl_schema(types, full_path, schema_cursor, split_path[1:])
+    return crawl_schema(types, field_path, schema_cursor, split_path[1:])
 
 
 def get_jsonld_types_from_collection_type(request, doc_type, types_covered=[]):
