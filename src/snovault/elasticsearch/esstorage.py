@@ -81,7 +81,7 @@ class CachedModel(object):
 
     @property
     def sid(self):
-        return self.source.get('sid')
+        return self.source['sid']
 
     def used_for(self, item):
         alsoProvides(item, ICachedItem)
@@ -101,11 +101,20 @@ class PickStorage(object):
 
     def get_by_uuid(self, uuid):
         storage = self.storage()
-        model = storage.get_by_uuid(uuid)
+        # always try elasticsearch to see if that result is up-to-date
+        es_model = self.read.get_by_uuid(uuid)
+
         if storage is self.read:
-            if model is None:
+            if es_model is None:
                 return self.write.get_by_uuid(uuid)
-        return model
+        else:
+            es_sid = es_model.sid
+            db_model = self.write.get_by_uuid(uuid)
+            if db_model.sid > es_model.sid:
+                print('USE DB')
+                return db_model
+        print('USE ES')
+        return es_model
 
     def get_by_unique_key(self, unique_key, name):
         storage = self.storage()
