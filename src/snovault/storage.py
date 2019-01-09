@@ -35,6 +35,7 @@ from .interfaces import (
 import boto3
 import transaction
 import uuid
+import time
 
 
 _DBSESSION = None
@@ -84,8 +85,10 @@ class RDBStorage(object):
         return self
 
     def get_by_uuid(self, rid, default=None):
+        t0 = time.time()
         session = self.DBSession()
         model = baked_query_resource(session).get(uuid.UUID(rid))
+        print('ELAPSED: %s' % (time.time() - t0))
         if model is None:
             return default
         return model

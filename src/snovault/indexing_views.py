@@ -7,7 +7,8 @@ from pyramid.traversal import resource_path
 from pyramid.view import view_config
 from .resources import Item
 from .authentication import calc_principals
-
+from .elasticsearch.indexer_utils import find_rev_linked_uuids
+from .interfaces import STORAGE
 
 def includeme(config):
     config.scan(__name__)
@@ -16,6 +17,24 @@ def includeme(config):
 # really simple exception to know when the sid check fails
 class SidException(Exception):
     pass
+
+
+def cache_linked_sids_from_db(context, request):
+    """
+    Key dict by uuid, find all linked_uuids from es if available
+    """
+    sid_uuids = set()
+    # first, find any linked_uuids from this item if it is already in ES
+    es_res = request.registry[STORAGE].read.get_by_uuid(str(context.uuid))
+    if es_res:
+        es_linked_uuids = es_res.source.get('linked_uuids', [])
+        sid_uuids |= set(es_linked_uuids)
+    # add any items that are rev_linked (may or may not already be found)
+    rev_linked = find_rev_linked_uuids(request.registry, str(context.uuid))
+    for uuid in sid_uuids:
+        db_res = request.registry[STORAGE].write.get_by_uuid(uuid)
+        if db_res:
+            request._sid_cache[uuid] = db_res.sid
 
 
 @view_config(context=Item, name='index-data', permission='index', request_method='GET')
@@ -68,8 +87,11 @@ def item_index_data(context, request):
     request._linked_uuids = set()
     request._audit_uuids = set()
     request._rev_linked_uuids_by_item = {}
+    request._sid_cache = {}
+    cache_linked_sids_from_db(context, request)
     # since request._indexing_view is set to True in indexer.py,
     # all embeds (including subrequests) below will use the embed cache
+
     embedded = request.invoke_view(path, '@@embedded')
     # get _linked and _rev_linked uuids from the request before @@audit views add to them
     linked_uuids = request._linked_uuids.copy()
