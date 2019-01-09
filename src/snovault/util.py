@@ -307,7 +307,7 @@ def recursively_process_field(item, split_fields):
         # happens if a string/int is encountered at the top level
         return item
     if next_level is None:
-        return "No value"
+        return None
     if len(split_fields[1:]) == 0:
         # we are at the end of the path
         return next_level
