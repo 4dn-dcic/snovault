@@ -1,6 +1,7 @@
 from .calculated import calculated_property
 from .resources import Item
 from pyramid.view import view_config
+from pyramid.httpexceptions import HTTPForbidden
 
 
 def includeme(config):
@@ -31,8 +32,7 @@ def item_view_aggregated_items(context, request):
             'aggregated_items': {},
         }
     source = context.model.source
-    # use audit permissions for now
-    allowed = set(source['principals_allowed']['audit'])
+    allowed = set(source['principals_allowed']['view'])  # use view permissions
     if allowed.isdisjoint(request.effective_principals):
         raise HTTPForbidden()
     return {

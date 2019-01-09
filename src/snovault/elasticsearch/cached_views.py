@@ -76,17 +76,3 @@ def cached_view_audit_self(context, request):
         '@id': path,
         'audit': [a for a in chain(*source['audit'].values()) if a['path'] == path],
     }
-
-
-@view_config(context=ICachedItem, request_method='GET', name='aggregrated-items')
-def cached_view_aggregated_items(context, request):
-    import pdb; pdb.set_trace()
-    source = context.model.source
-    # use audit permissions for now
-    allowed = set(source['principals_allowed']['audit'])
-    if allowed.isdisjoint(request.effective_principals):
-        raise HTTPForbidden()
-    return {
-        '@id': source['object']['@id'],
-        'audit': source['aggregated_items'],
-    }
