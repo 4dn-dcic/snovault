@@ -37,7 +37,7 @@ def item_view_aggregated_items(context, request):
         raise HTTPForbidden()
     return {
         '@id': source['object']['@id'],
-        'aggregated_items': source['aggregated_items'],
+        'aggregated_items': source.get('aggregated_items', {})
     }
 
 
