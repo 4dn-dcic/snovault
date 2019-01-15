@@ -22,7 +22,8 @@ from .resources import (
 from .util import (
     expand_path,
     build_embedded_model,
-    expand_embedded_model
+    expand_embedded_model,
+    process_aggregated_items
 )
 
 
@@ -131,8 +132,9 @@ def item_view_object(context, request):
     Render json structure. This is the most basic view and contains the scope
     of only one item. The steps to generate it are:
     1. Fetch stored properties, possibly upgrading.
-    2. Link canonicalization (overwriting uuids.) with item_with_links
+    2. Link canonicalization (overwriting uuids with links)
        - adds uuid to request._linked_uuids if request._indexing_view
+       - adds badges to request._badges
     3. Calculated properties
     """
     properties = context.item_with_links(request)
@@ -144,10 +146,25 @@ def item_view_object(context, request):
 @view_config(context=Item, permission='view', request_method='GET',
              name='embedded')
 def item_view_embedded(context, request):
+    # set up _aggregated_items if we want to aggregate this target
+    will_aggregate = getattr(request, '_aggregate_for').get('uuid') == str(context.uuid)
+    if will_aggregate:
+        parent_path = request.resource_path(context)
+    else:
+        parent_path = None
+
     item_path = request.resource_path(context)
     properties = request.embed(item_path, '@@object', as_user=True)
     embedded_model = build_embedded_model(context.embedded)
-    embedded = expand_embedded_model(request, properties, embedded_model)
+    embedded = expand_embedded_model(request, properties, embedded_model,
+                                     parent_path=parent_path)
+    if will_aggregate:
+        process_aggregated_items(request)
+        # we don't want to aggregate this item again, such as if the same item
+        # is used in a frame=embedded calc property.
+        # use a list here so that the reference is maintained through subreq
+        request._aggregate_for['uuid'] = None
+
     return embedded
 
 
