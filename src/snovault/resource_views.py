@@ -134,7 +134,6 @@ def item_view_object(context, request):
     1. Fetch stored properties, possibly upgrading.
     2. Link canonicalization (overwriting uuids with links)
        - adds uuid to request._linked_uuids if request._indexing_view
-       - adds badges to request._badges
     3. Calculated properties
     """
     properties = context.item_with_links(request)
