@@ -53,6 +53,7 @@ class TypeInfo(AbstractTypeInfo):
         self.item_type = item_type
         self.factory = factory
         self.base_types = factory.base_types
+        self.aggregated_items = factory.aggregated_items
         self.embedded_list = factory.embedded_list
 
     @reify
