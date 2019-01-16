@@ -31,7 +31,11 @@ def cache_linked_sids_from_db(context, request):
         es_linked_uuids = es_res.source.get('linked_uuids', [])
         sid_uuids |= set(es_linked_uuids)
     # add any items that are rev_linked (may or may not already be found)
-    rev_linked = find_rev_linked_uuids(request.registry, str(context.uuid))
+    rev_linked_uuids = find_rev_linked_uuids(request.registry, str(context.uuid))
+    sid_uuids |= rev_linked_uuids
+
+    res = request.registry[STORAGE].write.get_sids_by_uuids(list(sid_uuids))
+
     for uuid in sid_uuids:
         db_res = request.registry[STORAGE].write.get_by_uuid(uuid)
         if db_res:
@@ -100,15 +104,14 @@ def item_index_data(context, request):
     # request._linked_uuids and request._rev_linked_uuids_by_item
     request._indexing_view = True
     # reset these properties
-    request._linked_uuids = set()
     request._audit_uuids = set()
+    request._linked_uuids = {}
     request._rev_linked_uuids_by_item = {}
     request._aggregate_for['uuid'] = uuid
     request._aggregated_items = {
         agg: {'_fields': context.aggregated_items[agg], 'items': []} for agg in context.aggregated_items
     }
-
-    # move to indexer ??
+    # attempt to cache database sids related to indexing this item
     cache_linked_sids_from_db(context, request)
 
     # since request._indexing_view is set to True in indexer.py,

@@ -439,19 +439,21 @@ def es_mapping(mapping, agg_items_mapping):
                 }
             },
             'aggregated_items': agg_items_mapping,
-            'linked_uuids': {
-                'type': 'text',
-                'include_in_all': False
-            },
+            # 'linked_uuids': {
+            #     'type': 'object',
+            #     'include_in_all': False
+            # },
             'uuids_rev_linked_to_me': {
                 'type': 'text',
                 'include_in_all': False
             },
             'unique_keys': {
-                'type': 'object'
+                'type': 'object',
+                'include_in_all': False
             },
             'links': {
-                'type': 'object'
+                'type': 'object',
+                'include_in_all': False
             },
             'paths': {
                 'type': 'text',

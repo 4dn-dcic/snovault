@@ -121,6 +121,8 @@ class Indexer(object):
         # indexing is either run with sync uuids passed through the request
         # (which is synchronous) OR uuids from the queue
         sync_uuids = request.json.get('uuids', None)
+        # reset the sid cache for each run of update_objects, due to transaction scope
+        request._sid_cache = {}
         # actually index
         # TODO: these provides large speed increases... need to test with live data more to see
         # if it produces correct resutls

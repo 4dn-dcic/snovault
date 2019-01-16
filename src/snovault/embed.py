@@ -19,7 +19,7 @@ def includeme(config):
     config.add_renderer('null_renderer', NullRenderer)
     config.add_request_method(embed, 'embed')
     config.add_request_method(embed, 'invoke_view')
-    config.add_request_method(lambda request: set(), '_linked_uuids', reify=True)
+    config.add_request_method(lambda request: {}, '_linked_uuids', reify=True)
     config.add_request_method(lambda request: set(), '_audit_uuids', reify=True)
     config.add_request_method(lambda request: {}, '_sid_cache', reify=True)
     config.add_request_method(lambda request: {}, '_rev_linked_uuids_by_item', reify=True)
@@ -88,7 +88,10 @@ def embed(request, *elements, **kw):
         request._aggregate_for['uuid'] = None
     # hardcode this because audits can cause serious problems with frame=page
     if '@@audit' not in path:
-        request._linked_uuids.update(linked_uuids)
+        try:
+            request._linked_uuids.update(linked_uuids)
+        except ValueError:
+            import pdb; pdb.set_trace()
         # this is required because rev_linked_uuids_by_item is formatted as
         # a dict keyed by item with value of set of uuids rev linking to that item
         for item, rev_links in rev_linked_uuids_by_item.items():

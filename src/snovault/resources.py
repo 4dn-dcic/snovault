@@ -321,7 +321,7 @@ class Item(Resource):
 
         # if indexing, add the uuid of this object to request._linked_uuids
         if getattr(request, '_indexing_view', False) is True:
-            request._linked_uuids.add(str(self.uuid))
+            request._linked_uuids[str(self.uuid)] = self.sid
         return properties
 
     def __resource_url__(self, request, info):

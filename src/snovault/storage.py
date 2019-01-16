@@ -68,6 +68,10 @@ baked_query_unique_key = bakery(
         ),
     ).filter(Key.name == bindparam('name'), Key.value == bindparam('value'))
 )
+# Baked queries can be used with expanding params (lists)
+# https://docs.sqlalchemy.org/en/latest/orm/extensions/baked.html#baked-in
+baked_query_sids = bakery(lambda session: session.query(CurrentPropertySheet))
+baked_query_sids += lambda q: q.filter(CurrentPropertySheet.rid.in_(bindparam('rids', expanding=True)))
 
 
 class RDBStorage(object):
@@ -85,10 +89,8 @@ class RDBStorage(object):
         return self
 
     def get_by_uuid(self, rid, default=None):
-        t0 = time.time()
         session = self.DBSession()
         model = baked_query_resource(session).get(uuid.UUID(rid))
-        print('ELAPSED: %s' % (time.time() - t0))
         if model is None:
             return default
         return model
@@ -124,6 +126,43 @@ class RDBStorage(object):
                 if link.rel == rel and link.source.item_type in item_types]
         else:
             return [link.source_rid for link in model.revs if link.rel == rel]
+
+
+    def get_sids_by_uuids(self, rids, default=None):
+        """
+        rids is a list of uuids
+        """
+        if not rids:
+            return []
+        session = self.DBSession()
+        # default implementation
+        t0 = time.time()
+        sids = {}
+        for rid in rids:
+            model = baked_query_resource(session).get(uuid.UUID(rid))
+            if model:
+                sids[rid] = model.sid
+        res0 = time.time() - t0
+        # hopefully faster implementation
+        t1 = time.time()
+        query = session.query(CurrentPropertySheet).filter(CurrentPropertySheet.rid.in_(rids))
+        data = [res.sid for res in query.all()]
+        res1 = time.time() - t1
+
+        t1 = time.time()
+        import pdb; pdb.set_trace()
+        results = baked_query_sids(session).params(rids=rids).all()
+        data2 = [res.sid for res in results]
+        res1 = time.time() - t1
+
+        if res0 == 0.0:
+            print('\nQUERIES: for %s sids, old faster than new (zero div)\n' % (len(rids)))
+        elif res0 < res1:
+            print('\nQUERIES: for %s sids, old faster than new by %s\n' % (len(rids), res1/res0))
+        else:
+            print('\nQUERIES: for %s sids, new faster than old by %s\n' % (len(rids), res0/res1))
+        return data
+
 
     def __iter__(self, *item_types):
         session = self.DBSession()
