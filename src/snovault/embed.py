@@ -88,10 +88,7 @@ def embed(request, *elements, **kw):
         request._aggregate_for['uuid'] = None
     # hardcode this because audits can cause serious problems with frame=page
     if '@@audit' not in path:
-        try:
-            request._linked_uuids.update(linked_uuids)
-        except ValueError:
-            import pdb; pdb.set_trace()
+        request._linked_uuids.update(linked_uuids)
         # this is required because rev_linked_uuids_by_item is formatted as
         # a dict keyed by item with value of set of uuids rev linking to that item
         for item, rev_links in rev_linked_uuids_by_item.items():

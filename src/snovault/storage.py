@@ -150,7 +150,7 @@ class RDBStorage(object):
         res1 = time.time() - t1
 
         t1 = time.time()
-        import pdb; pdb.set_trace()
+        # import pdb; pdb.set_trace()
         results = baked_query_sids(session).params(rids=rids).all()
         data2 = [res.sid for res in results]
         res1 = time.time() - t1
