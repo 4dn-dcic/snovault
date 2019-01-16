@@ -136,7 +136,6 @@ def item_view_object(context, request):
        - adds uuid to request._linked_uuids if request._indexing_view
     3. Calculated properties
     """
-    print('@@object --> %s' % context.uuid)
     properties = context.item_with_links(request)
     calculated = calculate_properties(context, request, properties)
     properties.update(calculated)

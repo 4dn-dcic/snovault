@@ -56,6 +56,7 @@ def includeme(config):
 
 Base = declarative_base()
 
+# baked queries allow for caching of query construction to save Python overhead
 bakery = baked.bakery()
 baked_query_resource = bakery(lambda session: session.query(Resource))
 baked_query_unique_key = bakery(
@@ -136,21 +137,21 @@ class RDBStorage(object):
             return []
         session = self.DBSession()
         # default implementation
-        t0 = time.time()
-        sids = {}
-        for rid in rids:
-            model = baked_query_resource(session).get(uuid.UUID(rid))
-            if model:
-                sids[rid] = model.sid
-        res0 = time.time() - t0
+        # t0 = time.time()
+        # sids = {}
+        # for rid in rids:
+        #     model = baked_query_resource(session).get(uuid.UUID(rid))
+        #     if model:
+        #         sids[rid] = model.sid
+        # res0 = time.time() - t0
+
         # hopefully faster implementation
-        t1 = time.time()
+        t0 = time.time()
         query = session.query(CurrentPropertySheet).filter(CurrentPropertySheet.rid.in_(rids))
         data = [res.sid for res in query.all()]
-        res1 = time.time() - t1
+        res0 = time.time() - t0
 
         t1 = time.time()
-        # import pdb; pdb.set_trace()
         results = baked_query_sids(session).params(rids=rids).all()
         data2 = [res.sid for res in results]
         res1 = time.time() - t1
