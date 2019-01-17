@@ -14,6 +14,10 @@ from .interfaces import (
     TYPES,
 )
 from .resources import Item
+from .util import (
+    cache_linked_sids_from_db,
+    validate_es_db_sids
+)
 
 logger = logging.getLogger(__name__)
 
@@ -249,6 +253,16 @@ def item_view_audit(context, request):
     request._linked_uuids or request._rev_linked_uuids_by_item
     """
     path = request.resource_path(context)
+    if request.datastore != 'elasticsearch':
+        es_res = cache_linked_sids_from_db(context, request, 'embedded')
+        if es_res and validate_es_db_sids(request, es_res, 'embedded'):
+            print('--> ES FOR AUDIT %s' % context.uuid)
+            # handle linked_uuids and uuids_rev_linked_to_me
+            if getattr(request, '_indexing_view', False) is True:
+                request._linked_uuids = [link['uuid'] for link in es_res['linked_uuids_object']]
+            return {'@id': path, 'audit': es_res['audit']}
+    print('--> DB FOR AUDIT %s' % context.uuid)
+
     audit_uuids = request._audit_uuids.copy()
     audit = inherit_audits(request, audit_uuids)
     return {

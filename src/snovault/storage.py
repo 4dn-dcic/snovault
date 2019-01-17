@@ -136,28 +136,29 @@ class RDBStorage(object):
         if not rids:
             return []
         session = self.DBSession()
-        # default implementation
-        # t0 = time.time()
-        # sids = {}
-        # for rid in rids:
-        #     model = baked_query_resource(session).get(uuid.UUID(rid))
-        #     if model:
-        #         sids[rid] = model.sid
-        # res0 = time.time() - t0
 
-        # hopefully faster implementation
+        # IMPLEMENTATION ONE: get sids from resource iteratively
         t0 = time.time()
-        query = session.query(CurrentPropertySheet).filter(CurrentPropertySheet.rid.in_(rids))
-        data = [res.sid for res in query.all()]
+        sids = {}
+        for rid in rids:
+            model = baked_query_resource(session).get(uuid.UUID(rid))
+            if model:
+                sids[rid] = model.sid
         res0 = time.time() - t0
 
+        # IMPLEMENTATION TWO: get all sids in one trip
+        # query = session.query(CurrentPropertySheet).filter(CurrentPropertySheet.rid.in_(rids))
+        # data = [res.sid for res in query.all()]
+
+        # IMPLEMENTATION THREE: get all sids in one trip with baked query
         t1 = time.time()
         results = baked_query_sids(session).params(rids=rids).all()
-        data2 = [res.sid for res in results]
+        # check res.name to skip sids for supplementary rows, like 'downloads'
+        data = {str(res.rid): res.sid for res in results if res.name == ''}
         res1 = time.time() - t1
 
-        if res0 == 0.0:
-            print('\nQUERIES: for %s sids, old faster than new (zero div)\n' % (len(rids)))
+        if res0 == 0.0 or res1 == 0.0:
+            print('\nQUERIES: for %s sids. ZERO DIV! old: %s new: %s\n' % (len(rids), res0, res1))
         elif res0 < res1:
             print('\nQUERIES: for %s sids, old faster than new by %s\n' % (len(rids), res1/res0))
         else:
@@ -687,15 +688,11 @@ def record_transaction_data(session):
 
     record = data['_snovault_transaction_record']
 
-    # txn.note(text)
     if txn.description:
         data['description'] = txn.description
 
-    # txn.setUser(user_name, path='/') -> '/ user_name'
-    # Set by pyramid_tm as (userid, '')
     if txn.user:
-        user_path, userid = txn.user.split(' ', 1)
-        data['userid'] = userid
+        data['userid'] = txn.user
 
     record.data = {k: v for k, v in data.items() if not k.startswith('_')}
     session.add(record)

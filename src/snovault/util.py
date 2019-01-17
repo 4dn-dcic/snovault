@@ -1,7 +1,7 @@
 from past.builtins import basestring
 from pyramid.threadlocal import manager as threadlocal_manager
 from pyramid.httpexceptions import HTTPForbidden
-from .interfaces import CONNECTION
+from .interfaces import CONNECTION, STORAGE
 import json
 import structlog
 
@@ -319,6 +319,55 @@ def recursively_process_field(item, split_fields):
     else:
         # can't drill down if not a list or dict. just return
         return next_level
+
+
+def cache_linked_sids_from_db(context, request, frame='embedded'):
+    """
+    Key dict by uuid, find all linked_uuids from es if available
+    Return ES result if it is found, else None
+    """
+    # first, find any linked_uuids from this item if it's in ES
+    es_model = request.registry[STORAGE].read.get_by_uuid(str(context.uuid))
+    es_res = getattr(es_model, 'source', None)
+    es_links_field = 'linked_uuids_object' if frame == 'object' else 'linked_uuids_embedded'
+    if es_res and es_res.get(es_links_field):
+        linked_uuids = [link['uuid'] for link in es_res[es_links_field]
+                        if link['uuid'] not in request._sid_cache]
+        to_cache = request.registry[STORAGE].write.get_sids_by_uuids(linked_uuids)
+        request._sid_cache.update(to_cache)
+        return es_res
+    return None
+
+
+def validate_es_db_sids(request, es_res, frame='embedded'):
+    """
+    Compare sids in the request._sid_cache to the es_res to see if we can use
+    the ES result. Only currently works for object and embedded frames
+    """
+    if frame not in ['object', 'embedded']:
+        return False
+    es_links_field = 'linked_uuids_object' if frame == 'object' else 'linked_uuids_embedded'
+    linked_es_sids = es_res[es_links_field]
+    if not linked_es_sids:  # there should always be context.uuid here. abort
+        return False
+    use_es_result = True
+    for linked in linked_es_sids:
+        # infrequently, may need to add sids from the db to the _sid_cache
+        if linked['uuid'] not in request._sid_cache:
+            # compare timing
+            # METHOD ONE:
+            db_res = request.registry[STORAGE].write.get_by_uuid(linked['uuid'])
+            if db_res:
+                request._sid_cache[linked['uuid']] = db_res.sid
+            # METHOD TWO
+            # to_cache = request.registry[STORAGE].write.get_sids_by_uuids([linked['uuid']])
+            # request._sid_cache.update(to_cache)
+        found_sid = request._sid_cache.get(linked['uuid'])
+        if found_sid is None or linked['sid'] < found_sid:
+            use_es_result = False
+            print('\n===> FAILED SID! %s, %s (DB) vs %s (ES)' % (linked['uuid'], found_sid, linked['sid']))
+            break
+    return use_es_result
 
 
 def select_distinct_values(request, value_path, *from_paths):

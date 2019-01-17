@@ -21,7 +21,7 @@ def find_uuids_for_indexing(registry, updated, log=None):
                         'should': [
                             {
                                 'terms': {
-                                    'linked_uuids': list(updated),
+                                    'linked_uuids_embedded.uuid': list(updated),
                                     '_cache': False,
                                 }
                             }
@@ -35,38 +35,6 @@ def find_uuids_for_indexing(registry, updated, log=None):
     results = scan(es, index='_all', query=scan_query)
     invalidated = {res['_id'] for res in results}
     return invalidated | updated
-
-
-def find_rev_linked_uuids(registry, uuid):
-    """
-    Run a search to find uuids of objects that are rev_linked to the object
-    with given uuid
-    Uses elasticsearch.helpers.scan to iterate through ES results.
-    Returns:
-        set containing found uuids
-    """
-    es = registry[ELASTIC_SEARCH]
-    scan_query = {
-        'query': {
-            'bool': {
-                'filter': {
-                    'bool': {
-                        'should': [
-                            {
-                                'terms': {
-                                    'uuids_rev_linked_to_me': [uuid],
-                                    '_cache': False,
-                                }
-                            }
-                        ]
-                    }
-                }
-            }
-        },
-        '_source': False
-    }
-    results = scan(es, index='_all', query=scan_query)
-    return {res['_id'] for res in results}
 
 
 def get_uuids_for_types(registry, types=None):

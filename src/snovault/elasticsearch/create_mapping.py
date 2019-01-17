@@ -439,11 +439,33 @@ def es_mapping(mapping, agg_items_mapping):
                 }
             },
             'aggregated_items': agg_items_mapping,
-            # 'linked_uuids': {
-            #     'type': 'object',
-            #     'include_in_all': False
-            # },
-            'uuids_rev_linked_to_me': {
+            'linked_uuids_embedded': {
+                'properties': {
+                    'uuid': {
+                        'type': 'keyword'
+                    },
+                    'sid': {
+                        'type': 'keyword'
+                    }
+                },
+                'include_in_all': False
+            },
+            'linked_uuids_object': {
+                'properties': {
+                    'uuid': {
+                        'type': 'keyword'
+                    },
+                    'sid': {
+                        'type': 'keyword'
+                    }
+                },
+                'include_in_all': False
+            },
+            'uuids_rev_linked_to_me_embedded': {
+                'type': 'text',
+                'include_in_all': False
+            },
+            'uuids_rev_linked_to_me_object': {
                 'type': 'text',
                 'include_in_all': False
             },

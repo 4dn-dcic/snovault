@@ -19,7 +19,7 @@ def includeme(config):
     config.add_renderer('null_renderer', NullRenderer)
     config.add_request_method(embed, 'embed')
     config.add_request_method(embed, 'invoke_view')
-    config.add_request_method(lambda request: {}, '_linked_uuids', reify=True)
+    config.add_request_method(lambda request: set(), '_linked_uuids', reify=True)
     config.add_request_method(lambda request: set(), '_audit_uuids', reify=True)
     config.add_request_method(lambda request: {}, '_sid_cache', reify=True)
     config.add_request_method(lambda request: {}, '_rev_linked_uuids_by_item', reify=True)
@@ -69,7 +69,7 @@ def embed(request, *elements, **kw):
     # as_user controls whether or not the embed_cache is used
     # if request._indexing_view is True, always use the cache
     if as_user is not None and not request._indexing_view:
-        result, linked_uuids, rev_linked_uuids_by_item, agg_items = _embed(request, path, as_user)
+        cached = _embed(request, path, as_user)
     else:
         cached = embed_cache.get(path, None)
         if cached is None:
@@ -78,20 +78,24 @@ def embed(request, *elements, **kw):
             cached = _embed(request, path, as_user=subreq_user)
             # caching audits is safe because they don't add to linked_uuids
             embed_cache[path] = cached
-        result, linked_uuids, rev_linked_uuids_by_item, agg_items = cached
-        result = deepcopy(result)
+
+    # NOTE: if result was retrieved from ES, the following cached attrs will be
+    # empty: _aggregated_items, _linked_uuids, _rev_linked_by_item
+    result = deepcopy(cached['result'])
+
     # aggregated_items may be cached; if so, add them to the request
     # these conditions only fulfilled when using @@embedded and aggregated
     # items have NOT yet been processed (_aggregate_for is removed if so)
     if index_uuid and getattr(request, '_aggregate_for').get('uuid') == index_uuid:
-        request._aggregated_items = agg_items
+        request._aggregated_items = cached['_aggregated_items']
         request._aggregate_for['uuid'] = None
     # hardcode this because audits can cause serious problems with frame=page
     if '@@audit' not in path:
-        request._linked_uuids.update(linked_uuids)
+        request._linked_uuids.update(cached['_linked_uuids'])
+        request._sid_cache.update(cached['_sid_cache'])
         # this is required because rev_linked_uuids_by_item is formatted as
         # a dict keyed by item with value of set of uuids rev linking to that item
-        for item, rev_links in rev_linked_uuids_by_item.items():
+        for item, rev_links in cached['_rev_linked_by_item'].items():
             if item in request._rev_linked_uuids_by_item:
                 request._rev_linked_uuids_by_item[item].update(rev_links)
             else:
@@ -106,6 +110,7 @@ def _embed(request, path, as_user='EMBED'):
     subreq._indexing_view = request._indexing_view
     subreq._aggregate_for = request._aggregate_for
     subreq._aggregated_items = request._aggregated_items
+    subreq._sid_cache = request._sid_cache
     # pass the uuids we want to run audits on
     if '@@audit' in path:
         subreq._audit_uuids = request._audit_uuids
@@ -118,8 +123,10 @@ def _embed(request, path, as_user='EMBED'):
         result = request.invoke_subrequest(subreq)
     except HTTPNotFound:
         raise KeyError(path)
-    return (result, subreq._linked_uuids,
-            subreq._rev_linked_uuids_by_item, subreq._aggregated_items)
+    return {'result': result, '_linked_uuids': subreq._linked_uuids,
+            '_rev_linked_by_item': subreq._rev_linked_uuids_by_item,
+            '_aggregated_items': subreq._aggregated_items,
+            '_sid_cache': subreq._sid_cache}
 
 
 class NullRenderer:

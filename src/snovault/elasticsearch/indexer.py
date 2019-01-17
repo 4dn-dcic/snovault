@@ -121,8 +121,6 @@ class Indexer(object):
         # indexing is either run with sync uuids passed through the request
         # (which is synchronous) OR uuids from the queue
         sync_uuids = request.json.get('uuids', None)
-        # reset the sid cache for each run of update_objects, due to transaction scope
-        request._sid_cache = {}
         # actually index
         # TODO: these provides large speed increases... need to test with live data more to see
         # if it produces correct resutls
@@ -133,6 +131,7 @@ class Indexer(object):
             errors = self.update_objects_queue(request, counter)
         # resets the refresh_interval to the default value
         self.es.indices.put_settings(index='_all', body={'index' : {'refresh_interval': None}})
+
 
     def get_messages_from_queue(self, skip_deferred=False):
         """
@@ -295,7 +294,6 @@ class Indexer(object):
         target_queue is an optional string queue name:
             'primary', 'secondary', or 'deferred'
         """
-
         # logging constant
         cat = 'index object'
 
