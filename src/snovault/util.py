@@ -321,14 +321,17 @@ def recursively_process_field(item, split_fields):
         return next_level
 
 
-def cache_linked_sids_from_db(context, request, frame='embedded'):
+def check_es_and_cache_linked_sids(context, request, frame='embedded'):
     """
     Key dict by uuid, find all linked_uuids from es if available
     Return ES result if it is found, else None
     """
-    # first, find any linked_uuids from this item if it's in ES
-    es_model = request.registry[STORAGE].read.get_by_uuid(str(context.uuid))
-    es_res = getattr(es_model, 'source', None)
+    print('== SIDs ==> %s' % len(request._sid_cache))
+    # es_model = request.registry[STORAGE].read.get_by_uuid(str(context.uuid))
+    es_model = request.registry[STORAGE].read.get_by_uuid_direct(str(context.uuid), context.item_type)
+    if es_model is None:
+        return None
+    es_res = es_model.get('_source')
     es_links_field = 'linked_uuids_object' if frame == 'object' else 'linked_uuids_embedded'
     if es_res and es_res.get(es_links_field):
         linked_uuids = [link['uuid'] for link in es_res[es_links_field]

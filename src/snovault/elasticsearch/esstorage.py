@@ -220,10 +220,29 @@ class ElasticSearchStorage(object):
         return model
 
     def get_by_uuid(self, uuid):
+        """
+        This calls a search, and index/doc_type does not need to be provided
+        """
         search = Search(using=self.es)
         id_query = Q('ids', values=[str(uuid)])
         search = search.query(id_query)
         return self._one(search)
+
+    def get_by_uuid_direct(self, uuid, item_type):
+        """
+        See if a document exists under the index/doc_type given by item_type.
+        self.es.get calls a GET request, which will refresh the given
+        document (and all other docs) in realtime, if necessary
+
+        Returns:
+            The _source value from the document, if it exists
+        """
+        try:
+            res = self.es.get(index=item_type, doc_type=item_type, id=uuid,
+                              _source=True, realtime=True)
+        except elasticsearch.exceptions.NotFoundError:
+            res = None
+        return res
 
     def get_by_json(self, key, value, item_type, default=None):
         # find the term with the specific type
@@ -232,7 +251,6 @@ class ElasticSearchStorage(object):
         search = search.filter('term', **{term: value})
         search = search.filter('type', value=item_type)
         return self._one(search)
-
 
     def get_by_unique_key(self, unique_key, name):
         term = 'unique_keys.' + unique_key

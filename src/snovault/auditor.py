@@ -15,7 +15,7 @@ from .interfaces import (
 )
 from .resources import Item
 from .util import (
-    cache_linked_sids_from_db,
+    check_es_and_cache_linked_sids,
     validate_es_db_sids
 )
 
@@ -254,7 +254,7 @@ def item_view_audit(context, request):
     """
     path = request.resource_path(context)
     if request.datastore != 'elasticsearch':
-        es_res = cache_linked_sids_from_db(context, request, 'embedded')
+        es_res = check_es_and_cache_linked_sids(context, request, 'embedded')
         if es_res and validate_es_db_sids(request, es_res, 'embedded'):
             print('--> ES FOR AUDIT %s' % context.uuid)
             # handle linked_uuids and uuids_rev_linked_to_me

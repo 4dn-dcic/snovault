@@ -9,7 +9,6 @@ from pyramid.view import view_config
 from .resources import Item
 from .authentication import calc_principals
 from .interfaces import STORAGE
-from .util import cache_linked_sids_from_db
 
 def includeme(config):
     config.scan(__name__)
@@ -24,6 +23,12 @@ def join_linked_uuids_sids(request, uuids):
     """
     Simply iterate through the uuids and return an array of dicts containing
     uuid and sid (from request._sid_cache)
+
+    Args:
+        request: current Request object
+        uuids: list of string uuids
+    Returns:
+        A list of dictionaries containing uuid and up-to-date db sid
     """
     return [{'uuid': uuid, 'sid': request._sid_cache[uuid]} for uuid in uuids]
 
@@ -48,6 +53,8 @@ def item_index_data(context, request):
     """
     uuid = str(context.uuid)
     properties = context.upgrade_properties()
+
+    print('=== SID CACHE: %s ===' % len(request._sid_cache))
 
     # if we want to check an sid, it should be set as a query param
     sid_check = request.params.get('sid', None)
@@ -93,12 +100,6 @@ def item_index_data(context, request):
     request._linked_uuids = set()
     request._audit_uuids = set()
     request._rev_linked_uuids_by_item = {}
-
-    # TEMPORARY -- figure out how to better cache sids between indexing
-    request._sid_cache = {}
-    # attempt to cache database sids related to indexing this item
-    cache_linked_sids_from_db(context, request)
-
     request._aggregate_for['uuid'] = uuid
     request._aggregated_items = {
         agg: {'_fields': context.aggregated_items[agg], 'items': []} for agg in context.aggregated_items
@@ -113,8 +114,8 @@ def item_index_data(context, request):
     # find uuids traversed that rev link to this item
     rev_linked_to_me_emb = set([id for id in rev_linked_by_item_emb
                                 if uuid in rev_linked_by_item_emb[id]])
-    # get the important information from the aggregated items
     aggregated_items = {agg: res['items'] for agg, res in request._aggregated_items.items()}
+
     # set the uuids we want to audit on
     request._audit_uuids = list(linked_uuids_embedded)
     audit = request.invoke_view(path, '@@audit')['audit']
