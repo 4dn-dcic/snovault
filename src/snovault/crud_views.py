@@ -230,9 +230,7 @@ def item_delete_full(context, request, render=None):
     if hasattr(request, 'user_info'):
         user_details = request.user_info.get('details', {})
     else:
-        from pyramid.security import effective_principals
-        principals = effective_principals(request)
-        if 'group.admin' in principals:
+        if 'group.admin' in request.effective_principals:
             user_details = {'groups': 'admin'}  # you can do it
         else:
             user_details = {}  # you cannot

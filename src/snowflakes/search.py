@@ -11,7 +11,6 @@ from snovault.fourfront_utils import get_jsonld_types_from_collection_type
 from elasticsearch.helpers import scan
 from elasticsearch_dsl import Search
 from pyramid.httpexceptions import HTTPBadRequest
-from pyramid.security import effective_principals
 from urllib.parse import urlencode
 from collections import OrderedDict
 from copy import deepcopy
@@ -44,7 +43,7 @@ def search(context, request, search_type=None, return_generator=False, forced_ty
         'notification': '',
         'sort': {}
     }
-    principals = effective_principals(request)
+    principals = request.effective_principals
 
     es = request.registry[ELASTIC_SEARCH]
     search_audit = request.has_permission('search_audit')
@@ -181,9 +180,8 @@ def get_available_facets(context, request, search_type=None):
     types = request.registry[TYPES]
     doc_types = set_doc_types(request, types, search_type)
     schemas = (types[item_type].schema for item_type in doc_types)
-    principals = effective_principals(request)
     prepared_terms = prepare_search_term(request)
-    facets = initialize_facets(types, doc_types, request.has_permission('search_audit'), principals, prepared_terms, schemas)
+    facets = initialize_facets(types, doc_types, request.has_permission('search_audit'), request.effective_principals, prepared_terms, schemas)
 
     ### Mini version of format_facets
     result = []
