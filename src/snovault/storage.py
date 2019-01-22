@@ -96,6 +96,13 @@ class RDBStorage(object):
             return default
         return model
 
+    def get_by_uuid_direct(self, rid, item_type, default=None):
+        """
+        This method is meant to only work with ES, so return None (default)
+        for the DB implementation
+        """
+        return default
+
     def get_by_unique_key(self, unique_key, name, default=None):
         session = self.DBSession()
         try:
