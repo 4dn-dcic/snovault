@@ -10,7 +10,7 @@ CHANGES = open(os.path.join(here, 'CHANGES.rst')).read()
 requires = [
     'Pillow',
     'PyBrowserID',
-    'SQLAlchemy>=1.2.16,
+    'SQLAlchemy>=1.2.16',
     'WSGIProxy2',
     'WebTest',
     'botocore',
