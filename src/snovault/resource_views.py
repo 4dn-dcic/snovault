@@ -138,7 +138,7 @@ def item_view_object(context, request):
        - adds uuid to request._linked_uuids if request._indexing_view
     3. Calculated properties
     """
-    if request.datastore != 'elasticsearch':
+    if hasattr(request, 'datastore') and request.datastore != 'elasticsearch':
         es_res = check_es_and_cache_linked_sids(context, request, 'object')
         if es_res and validate_es_db_sids(request, es_res, 'object'):
             print('--> ES FOR OBJECT %s' % context.uuid)
@@ -159,7 +159,7 @@ def item_view_object(context, request):
 @view_config(context=Item, permission='view', request_method='GET',
              name='embedded')
 def item_view_embedded(context, request):
-    if request.datastore != 'elasticsearch':
+    if hasattr(request, 'datastore') and request.datastore != 'elasticsearch':
         es_res = check_es_and_cache_linked_sids(context, request, 'embedded')
         if es_res and validate_es_db_sids(request, es_res, 'embedded'):
             print('--> ES FOR EMBEDDED %s' % context.uuid)
