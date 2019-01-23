@@ -96,6 +96,16 @@ def item_index_data(context, request):
     # setting _indexing_view enables the embed_cache and cause population of
     # request._linked_uuids and request._rev_linked_uuids_by_item
     request._indexing_view = True
+
+    # do the object view first
+    request._linked_uuids = set()
+    request._rev_linked_uuids_by_item = {}
+    object_view = request.invoke_view(path, '@@object')
+    linked_uuids_object = request._linked_uuids.copy()
+    rev_linked_by_item_obj = request._rev_linked_uuids_by_item.copy()
+    rev_linked_to_me_obj = set([id for id in rev_linked_by_item_obj
+                                if uuid in rev_linked_by_item_obj[id]])
+
     # reset these properties
     request._linked_uuids = set()
     request._audit_uuids = set()
@@ -107,7 +117,7 @@ def item_index_data(context, request):
 
     # since request._indexing_view is set to True in indexer.py,
     # all embeds (including subrequests) below will use the embed cache
-    embedded = request.invoke_view(path, '@@embedded', index_uuid=uuid)
+    embedded_view = request.invoke_view(path, '@@embedded', index_uuid=uuid)
     # get _linked and _rev_linked uuids from the request before @@audit views add to them
     linked_uuids_embedded = request._linked_uuids.copy()
     rev_linked_by_item_emb = request._rev_linked_uuids_by_item.copy()
@@ -118,25 +128,17 @@ def item_index_data(context, request):
 
     # set the uuids we want to audit on
     request._audit_uuids = list(linked_uuids_embedded)
-    audit = request.invoke_view(path, '@@audit')['audit']
-
-    request._linked_uuids = set()
-    request._rev_linked_uuids_by_item = {}
-    obj = request.invoke_view(path, '@@object')
-    linked_uuids_object = request._linked_uuids.copy()
-    rev_linked_by_item_obj = request._rev_linked_uuids_by_item.copy()
-    rev_linked_to_me_obj = set([id for id in rev_linked_by_item_obj
-                                if uuid in rev_linked_by_item_obj[id]])
+    audit_view = request.invoke_view(path, '@@audit')['audit']
 
     document = {
         'aggregated_items': aggregated_items,
-        'audit': audit,
-        'embedded': embedded,
+        'audit': audit_view,
+        'embedded': embedded_view,
         'item_type': context.type_info.item_type,
         'linked_uuids_embedded': join_linked_uuids_sids(request, linked_uuids_embedded),
         'linked_uuids_object': join_linked_uuids_sids(request, linked_uuids_object),
         'links': links,
-        'object': obj,
+        'object': object_view,
         'paths': sorted(paths),
         'principals_allowed': principals_allowed,
         'properties': properties,
