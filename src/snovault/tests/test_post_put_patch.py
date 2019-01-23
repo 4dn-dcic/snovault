@@ -249,6 +249,6 @@ def test_put_object_editing_child(content_with_child, testapp):
 def test_retry(testapp):
     res = testapp.post_json(COLLECTION_URL, {'required': ''})
     url = res.location
-    res = testapp.get(url + '/@@testing-retry?datstore=database')
+    res = testapp.get(url + '/@@testing-retry?datastore=database')
     assert res.json['attempt'] == 2
     assert not res.json['detached']

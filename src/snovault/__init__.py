@@ -46,6 +46,7 @@ from dcicutils.log_utils import set_logging
 
 
 def includeme(config):
+    config.include('pyramid_retry')
     config.include('pyramid_tm')
     config.include('.util')
     config.include('.stats')
@@ -97,9 +98,6 @@ def main(global_config, **local_config):
     # Override default authz policy set by pyramid_multiauth
     config.set_authorization_policy(LocalRolesAuthorizationPolicy())
     config.include(session)
-
-    # must include, as tm.attempts was removed from pyramid_tm
-    config.include('pyramid_retry')
 
     config.include(configure_dbsession)
     config.include('snovault')
