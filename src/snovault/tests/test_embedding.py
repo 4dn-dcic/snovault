@@ -107,9 +107,9 @@ def test_linked_uuids_index_data(content, dummy_request, threadlocals):
 
     # embedded view linked uuids are unchanged; none are added from the audits
     assert set([l['uuid'] for l in res['linked_uuids_embedded']]) == dummy_request._linked_uuids
-    assert set(res['uuids_rev_linked_to_me_embedded']) == {'775795d3-4410-4114-836b-8eeecf1d0c2f'}
+    assert set(res['rev_linked_to_me']) == {'775795d3-4410-4114-836b-8eeecf1d0c2f'}
 
     # object view linked uuids are contained within the embedded linked uuids
     assert set([l['uuid'] for l in res['linked_uuids_object']]) <= dummy_request._linked_uuids
     # no rev links are created for the object version
-    assert res['uuids_rev_linked_to_me_object'] == []
+    assert res['rev_linked_to_me'] == []

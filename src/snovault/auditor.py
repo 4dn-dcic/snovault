@@ -255,9 +255,9 @@ def item_view_audit(context, request):
     path = request.resource_path(context)
     if hasattr(request, 'datastore') and request.datastore != 'elasticsearch':
         es_res = check_es_and_cache_linked_sids(context, request, 'embedded')
-        if es_res and validate_es_db_sids(request, es_res, 'embedded'):
+        if es_res and validate_es_db_sids(context, request, es_res, 'embedded'):
             print('--> ES FOR AUDIT %s' % context.uuid)
-            # handle linked_uuids and uuids_rev_linked_to_me
+            # handle linked_uuids and rev_linked_to_me
             if getattr(request, '_indexing_view', False) is True:
                 request._linked_uuids = [link['uuid'] for link in es_res['linked_uuids_object']]
             return {'@id': path, 'audit': es_res['audit']}

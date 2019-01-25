@@ -5,10 +5,7 @@ from snovault import (
     load_schema,
 )
 from pyramid.traversal import find_root
-from .base import (
-    Item,
-    paths_filtered_by_status,
-)
+from .base import Item
 
 
 def includeme(config):

@@ -181,12 +181,13 @@ class PickStorage(object):
             raise HTTPLocked(detail="Cannot purge item as other items still link to it",
                              comment=uuids_linking_to_item)
         log.error('PURGE: purging %s' % rid)
+
         # delete the item from DB
         self.write.purge_uuid(rid)
         # delete the item from ES and also the mirrored ES if present
         self.read.purge_uuid(rid, item_type, self.registry)
         # queue related items for reindexing
-        self.registry[INDEXER].find_and_queue_secondary_items(set(rid), set())
+        self.registry[INDEXER].find_and_queue_secondary_items(set([rid]), set())
 
     def get_rev_links(self, model, rel, *item_types):
         return self.storage().get_rev_links(model, rel, *item_types)

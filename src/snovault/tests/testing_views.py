@@ -7,7 +7,6 @@ from snovault import (
     calculated_property,
     collection,
 )
-from snowflakes.types.base import paths_filtered_by_status
 from snovault.attachment import ItemWithAttachment
 from snovault.interfaces import CONNECTION
 
@@ -162,6 +161,7 @@ class TestingLinkTargetSno(Item):
     rev = {
         'reverse': ('TestingLinkSourceSno', 'target'),
     }
+    filtered_rev_statuses = ('deleted', 'replaced')
     embedded_list = [
         'reverse.*',
     ]
@@ -169,7 +169,7 @@ class TestingLinkTargetSno(Item):
     def rev_link_atids(self, request, rev_name):
         conn = request.registry[CONNECTION]
         return [request.resource_path(conn[uuid]) for uuid in
-                paths_filtered_by_status(request, self.get_rev_links(request, rev_name))]
+                self.get_filtered_rev_links(request, rev_name)]
 
     @calculated_property(schema={
         "title": "Sources",

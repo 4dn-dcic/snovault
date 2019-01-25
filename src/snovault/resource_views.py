@@ -140,13 +140,12 @@ def item_view_object(context, request):
     """
     if hasattr(request, 'datastore') and request.datastore != 'elasticsearch':
         es_res = check_es_and_cache_linked_sids(context, request, 'object')
-        if es_res and validate_es_db_sids(request, es_res, 'object'):
+        # validate_es_db_sids also checks/updates rev links
+        if es_res and validate_es_db_sids(context, request, es_res, 'object'):
             print('--> ES FOR OBJECT %s' % context.uuid)
-            # handle aggregated_items, linked_uuids and uuids_rev_linked_to_me
+            # if indexing, handle linked_uuids
             if getattr(request, '_indexing_view', False) is True:
                 request._linked_uuids = [link['uuid'] for link in es_res['linked_uuids_object']]
-                request._rev_linked_uuids_by_item = {rev: [str(context.uuid)] for rev
-                                                     in es_res['uuids_rev_linked_to_me_object']}
             return es_res['object']
     print('--> DB FOR OBJECT %s' % context.uuid)
 
@@ -161,13 +160,12 @@ def item_view_object(context, request):
 def item_view_embedded(context, request):
     if hasattr(request, 'datastore') and request.datastore != 'elasticsearch':
         es_res = check_es_and_cache_linked_sids(context, request, 'embedded')
-        if es_res and validate_es_db_sids(request, es_res, 'embedded'):
+        # validate_es_db_sids also checks/updates rev links
+        if es_res and validate_es_db_sids(context, request, es_res, 'embedded'):
             print('--> ES FOR EMBEDDED %s' % context.uuid)
-            # handle aggregated_items, linked_uuids and uuids_rev_linked_to_me
+            # if indexing, handle aggregated_items and linked_uuids
             if getattr(request, '_indexing_view', False) is True:
                 request._linked_uuids = [link['uuid'] for link in es_res['linked_uuids_embedded']]
-                request._rev_linked_uuids_by_item = {rev: [str(context.uuid)] for rev
-                                                     in es_res['uuids_rev_linked_to_me_embedded']}
             if getattr(request, '_aggregate_for').get('uuid') == str(context.uuid):
                 # format this in a specific way to work with further processing
                 request._aggregated_items = {agg: {'items': val} for agg, val in

@@ -321,7 +321,7 @@ def recursively_process_field(item, split_fields):
         return next_level
 
 
-def check_es_and_cache_linked_sids(context, request, frame='embedded'):
+def check_es_and_cache_linked_sids(context, request, view='embedded'):
     """
     Key dict by uuid, find all linked_uuids from es if available
     Return ES result if it is found, else None
@@ -332,7 +332,7 @@ def check_es_and_cache_linked_sids(context, request, frame='embedded'):
     if es_model is None:
         return None
     es_res = es_model.get('_source')
-    es_links_field = 'linked_uuids_object' if frame == 'object' else 'linked_uuids_embedded'
+    es_links_field = 'linked_uuids_object' if view == 'object' else 'linked_uuids_embedded'
     if es_res and es_res.get(es_links_field):
         linked_uuids = [link['uuid'] for link in es_res[es_links_field]
                         if link['uuid'] not in request._sid_cache]
@@ -342,29 +342,30 @@ def check_es_and_cache_linked_sids(context, request, frame='embedded'):
     return None
 
 
-def validate_es_db_sids(request, es_res, frame='embedded'):
+def validate_es_db_sids(context, request, es_res, view='embedded'):
     """
     Compare sids in the request._sid_cache to the es_res to see if we can use
-    the ES result. Only currently works for object and embedded frames
+    the ES result. Only currently works for object and embedded views
     """
-    if frame not in ['object', 'embedded']:
+    if view not in ['object', 'embedded']:
         return False
-    es_links_field = 'linked_uuids_object' if frame == 'object' else 'linked_uuids_embedded'
+    es_links_field = 'linked_uuids_object' if view == 'object' else 'linked_uuids_embedded'
     linked_es_sids = es_res[es_links_field]
     if not linked_es_sids:  # there should always be context.uuid here. abort
         return False
     use_es_result = True
+    # check to see if there are any new rev links from the item
+    for rev_name, rev_uuids in es_res['rev_link_names'].items():
+        # the call below updates request._rev_linked_uuids_by_item.
+        db_rev_uuids = context.get_filtered_rev_links(request, rev_name)
+        if set(db_rev_uuids) != set(rev_uuids):
+            return False
     for linked in linked_es_sids:
         # infrequently, may need to add sids from the db to the _sid_cache
         if linked['uuid'] not in request._sid_cache:
-            # compare timing
-            # METHOD ONE:
             db_res = request.registry[STORAGE].write.get_by_uuid(linked['uuid'])
             if db_res:
                 request._sid_cache[linked['uuid']] = db_res.sid
-            # METHOD TWO
-            # to_cache = request.registry[STORAGE].write.get_sids_by_uuids([linked['uuid']])
-            # request._sid_cache.update(to_cache)
         found_sid = request._sid_cache.get(linked['uuid'])
         if found_sid is None or linked['sid'] < found_sid:
             use_es_result = False

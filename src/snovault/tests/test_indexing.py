@@ -415,7 +415,7 @@ def test_queue_indexing_with_linked(app, testapp, indexer_testapp):
     """
     Test a whole bunch of things here:
     - posting/patching invalidates rev linked items
-    - check linked_uuids/uuids_rev_linked_to_me fields in ES
+    - check linked_uuids/rev_link_names/rev_linked_to_me fields in ES
     - test indexer_utils.find_uuids_for_indexing fxn
     - test purge functionality before and after removing links to an item
     """
@@ -474,12 +474,23 @@ def test_queue_indexing_with_linked(app, testapp, indexer_testapp):
     assert res.json['indexing_count'] == 2
 
     time.sleep(3)
-    # test linked_uuids and uuids_rev_linked_to_me manually
+    # check some stuff on the es results for source and target
     es_source = es.get(index='testing_link_source_sno', doc_type='testing_link_source_sno', id=source['uuid'])
-    assert set(es_source['_source']['linked_uuids']) == {target['uuid'], source['uuid'], ppp_uuid}
-    assert set(es_source['_source']['uuids_rev_linked_to_me']) == {target['uuid']}
+    uuids_linked_emb = [link['uuid'] for link in es_source['_source']['linked_uuids_embedded']]
+    uuids_linked_obj = [link['uuid'] for link in es_source['_source']['linked_uuids_object']]
+    assert set(uuids_linked_emb) == {target['uuid'], source['uuid'], ppp_uuid}
+    assert uuids_linked_obj == [source['uuid']]
+    assert es_source['_source']['rev_link_names'] == {}
+    assert es_source['_source']['rev_linked_to_me'] == [target['uuid']]
+
     es_target = es.get(index='testing_link_target_sno', doc_type='testing_link_target_sno', id=target['uuid'])
-    assert source['uuid'] in es_target['_source']['linked_uuids']
+    # just the source uuid itself in the linked uuids for the object view
+    uuids_linked_emb2 = [link['uuid'] for link in es_target['_source']['linked_uuids_embedded']]
+    uuids_linked_obj2 = [link['uuid'] for link in es_target['_source']['linked_uuids_object']]
+    assert set(uuids_linked_emb2) == {target['uuid'], source['uuid']}
+    assert uuids_linked_obj2 == [target['uuid']]
+    assert es_target['_source']['rev_link_names'] == {'reverse': [source['uuid']]}
+    assert es_target['_source']['rev_linked_to_me'] == []
 
     # test find_uuids_for_indexing
     to_index = indexer_utils.find_uuids_for_indexing(app.registry, {target['uuid']})
@@ -519,9 +530,11 @@ def test_queue_indexing_with_linked(app, testapp, indexer_testapp):
     check_es_source = es.get(index='testing_link_source_sno', doc_type='testing_link_source_sno',
                              id=source['uuid'], ignore=[404])
     assert check_es_source['found'] == False
+    # source uuid removed from the target uuid
     check_es_target = es.get(index='testing_link_target_sno', doc_type='testing_link_target_sno',
                              id=target['uuid'])
-    assert source['uuid'] not in check_es_target['_source']['linked_uuids']
+    uuids_linked_emb2 = [link['uuid'] for link in check_es_target['_source']['linked_uuids_embedded']]
+    assert source['uuid'] not in uuids_linked_emb2
     # the source is now deleted
     testapp.get('/' + source['uuid'], status=404)
 

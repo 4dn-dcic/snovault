@@ -295,7 +295,7 @@ class Indexer(object):
                       curr_time=None, target_queue=None, telemetry_id=None):
         """
         Actually index the uuid using the index-data view.
-        add_to_secondary is a set that gets the uuids_rev_linked_to_me
+        add_to_secondary is a set that gets the rev_linked_to_me
         from the request.embed(/<uuid>/@@index-data)
         target_queue is an optional string queue name:
             'primary', 'secondary', or 'deferred'
@@ -347,7 +347,7 @@ class Indexer(object):
         # find_and_queue_secondary_items() serves to find rev_linking items that
         # are currently in ES; this will pick up new rev links as well
         if add_to_secondary is not None:
-            add_to_secondary.update(result['uuids_rev_linked_to_me_embedded'])
+            add_to_secondary.update(result['rev_linked_to_me'])
 
         last_exc = None
         for backoff in [0, 1, 2]:

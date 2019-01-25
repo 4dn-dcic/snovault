@@ -461,11 +461,18 @@ def es_mapping(mapping, agg_items_mapping):
                 },
                 'include_in_all': False
             },
-            'uuids_rev_linked_to_me_embedded': {
-                'type': 'text',
+            'rev_link_names': {
+                'properties': {
+                    'name': {
+                        'type': 'keyword'
+                    },
+                    'uuids': {
+                        'type': 'keyword'
+                    }
+                },
                 'include_in_all': False
             },
-            'uuids_rev_linked_to_me_object': {
+            'rev_linked_to_me': {
                 'type': 'text',
                 'include_in_all': False
             },

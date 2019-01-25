@@ -97,16 +97,14 @@ def item_index_data(context, request):
     # request._linked_uuids and request._rev_linked_uuids_by_item
     request._indexing_view = True
 
-    # do the object view first
+    # run the object view first
     request._linked_uuids = set()
-    request._rev_linked_uuids_by_item = {}
+    request._rev_link_names = {}
     object_view = request.invoke_view(path, '@@object')
     linked_uuids_object = request._linked_uuids.copy()
-    rev_linked_by_item_obj = request._rev_linked_uuids_by_item.copy()
-    rev_linked_to_me_obj = set([id for id in rev_linked_by_item_obj
-                                if uuid in rev_linked_by_item_obj[id]])
+    rev_link_names = request._rev_link_names.copy()
 
-    # reset these properties
+    # reset these properties, then run embedded view
     request._linked_uuids = set()
     request._audit_uuids = set()
     request._rev_linked_uuids_by_item = {}
@@ -114,19 +112,17 @@ def item_index_data(context, request):
     request._aggregated_items = {
         agg: {'_fields': context.aggregated_items[agg], 'items': []} for agg in context.aggregated_items
     }
-
     # since request._indexing_view is set to True in indexer.py,
     # all embeds (including subrequests) below will use the embed cache
     embedded_view = request.invoke_view(path, '@@embedded', index_uuid=uuid)
     # get _linked and _rev_linked uuids from the request before @@audit views add to them
     linked_uuids_embedded = request._linked_uuids.copy()
-    rev_linked_by_item_emb = request._rev_linked_uuids_by_item.copy()
+    rev_linked_by_item = request._rev_linked_uuids_by_item.copy()
     # find uuids traversed that rev link to this item
-    rev_linked_to_me_emb = set([id for id in rev_linked_by_item_emb
-                                if uuid in rev_linked_by_item_emb[id]])
+    rev_linked_to_me = set([id for id in rev_linked_by_item if uuid in rev_linked_by_item[id]])
     aggregated_items = {agg: res['items'] for agg, res in request._aggregated_items.items()}
 
-    # set the uuids we want to audit on
+    # lastly, run the audit view. Set the uuids we want to audit on
     request._audit_uuids = list(linked_uuids_embedded)
     audit_view = request.invoke_view(path, '@@audit')['audit']
 
@@ -146,11 +142,11 @@ def item_index_data(context, request):
             name: context.propsheets[name]
             for name in context.propsheets.keys() if name != ''
         },
+        'rev_link_names': rev_link_names,
         'sid': context.sid,
         'unique_keys': unique_keys,
         'uuid': uuid,
-        'uuids_rev_linked_to_me_embedded': sorted(rev_linked_to_me_emb),
-        'uuids_rev_linked_to_me_object': sorted(rev_linked_to_me_obj)
+        'rev_linked_to_me': sorted(rev_linked_to_me)
     }
 
     return document

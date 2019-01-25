@@ -4,12 +4,7 @@ from snovault import (
     collection,
     load_schema,
 )
-from .base import (
-    Item,
-    paths_filtered_by_status,
-)
-
-
+from .base import Item
 import datetime
 
 

@@ -21,6 +21,7 @@ def includeme(config):
     config.add_request_method(embed, 'invoke_view')
     config.add_request_method(lambda request: set(), '_linked_uuids', reify=True)
     config.add_request_method(lambda request: set(), '_audit_uuids', reify=True)
+    config.add_request_method(lambda request: {}, '_rev_link_names', reify=True)
     config.add_request_method(lambda request: {}, '_sid_cache', reify=True)
     config.add_request_method(lambda request: {}, '_rev_linked_uuids_by_item', reify=True)
     config.add_request_method(lambda request: {}, '_aggregated_items', reify=True)
@@ -93,6 +94,9 @@ def embed(request, *elements, **kw):
     if '@@audit' not in path:
         request._linked_uuids.update(cached['_linked_uuids'])
         request._sid_cache.update(cached['_sid_cache'])
+        # direct rev links are only need to be found for object view
+        if '@@object' in path:
+            request._rev_link_names = cached['_rev_link_names']
         # this is required because rev_linked_uuids_by_item is formatted as
         # a dict keyed by item with value of set of uuids rev linking to that item
         for item, rev_links in cached['_rev_linked_by_item'].items():
@@ -106,6 +110,7 @@ def embed(request, *elements, **kw):
 def _embed(request, path, as_user='EMBED'):
     # Carl: the subrequest is 'built' here, but not actually invoked
     subreq = make_subrequest(request, path)
+    # these attributes are propogated across the subrequest
     subreq.override_renderer = 'null_renderer'
     subreq._indexing_view = request._indexing_view
     subreq._aggregate_for = request._aggregate_for
@@ -124,6 +129,7 @@ def _embed(request, path, as_user='EMBED'):
     except HTTPNotFound:
         raise KeyError(path)
     return {'result': result, '_linked_uuids': subreq._linked_uuids,
+            '_rev_link_names': subreq._rev_link_names,
             '_rev_linked_by_item': subreq._rev_linked_uuids_by_item,
             '_aggregated_items': subreq._aggregated_items,
             '_sid_cache': subreq._sid_cache}
