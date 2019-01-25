@@ -317,7 +317,7 @@ def prepare_search_term(request):
     prepared_terms = {}
     prepared_vals = []
     for field, val in request.params.iteritems():
-        if field.startswith('audit'):
+        if field.startswith('audit') or field.startswith('aggregated_items'):
             continue
         elif field == 'q': # searched string has field 'q'
             # people shouldn't provide multiple queries, but if they do,
@@ -327,30 +327,11 @@ def prepare_search_term(request):
                 prepared_terms['q'] = ' AND '.join(join_list)
             else:
                 prepared_terms['q'] = val
-        elif field not in ['type', 'frame', 'format', 'limit', 'sort', 'from', 'field', 'before', 'after']:
+        elif field not in COMMON_EXCLUDED_URI_PARAMS + ['type']:
             if 'embedded.' + field not in prepared_terms.keys():
                 prepared_terms['embedded.' + field] = []
             prepared_terms['embedded.' + field].append(val)
-    if 'q' in prepared_terms:
-        prepared_terms['q'] = process_query_string(prepared_terms['q'])
     return prepared_terms
-
-
-def process_query_string(search_query):
-    from antlr4 import IllegalStateException
-    from lucenequery.prefixfields import prefixfields
-    from lucenequery import dialects
-    if search_query == '*':
-        return search_query
-    # avoid interpreting slashes as regular expressions
-    search_query = search_query.replace('/', r'\/')
-    try:
-        query = prefixfields('embedded.', search_query, dialects.elasticsearch)
-    except (IllegalStateException):
-        msg = "Invalid query: {}".format(search_query)
-        raise HTTPBadRequest(explanation=msg)
-    else:
-        return query.getText()
 
 
 def set_doc_types(request, types, search_type):
