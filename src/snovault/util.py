@@ -342,7 +342,7 @@ def check_es_and_cache_linked_sids(context, request, view='embedded'):
     return None
 
 
-def validate_es_db_sids(context, request, es_res, view='embedded'):
+def validate_es_content(context, request, es_res, view='embedded'):
     """
     Compare sids in the request._sid_cache to the es_res to see if we can use
     the ES result. Only currently works for object and embedded views

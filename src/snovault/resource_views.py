@@ -25,7 +25,7 @@ from .util import (
     expand_embedded_model,
     process_aggregated_items,
     check_es_and_cache_linked_sids,
-    validate_es_db_sids
+    validate_es_content
 )
 
 
@@ -140,8 +140,8 @@ def item_view_object(context, request):
     """
     if hasattr(request, 'datastore') and request.datastore != 'elasticsearch':
         es_res = check_es_and_cache_linked_sids(context, request, 'object')
-        # validate_es_db_sids also checks/updates rev links
-        if es_res and validate_es_db_sids(context, request, es_res, 'object'):
+        # validate_es_content also checks/updates rev links
+        if es_res and validate_es_content(context, request, es_res, 'object'):
             print('--> ES FOR OBJECT %s' % context.uuid)
             # if indexing, handle linked_uuids
             if getattr(request, '_indexing_view', False) is True:
@@ -160,8 +160,8 @@ def item_view_object(context, request):
 def item_view_embedded(context, request):
     if hasattr(request, 'datastore') and request.datastore != 'elasticsearch':
         es_res = check_es_and_cache_linked_sids(context, request, 'embedded')
-        # validate_es_db_sids also checks/updates rev links
-        if es_res and validate_es_db_sids(context, request, es_res, 'embedded'):
+        # validate_es_content also checks/updates rev links
+        if es_res and validate_es_content(context, request, es_res, 'embedded'):
             print('--> ES FOR EMBEDDED %s' % context.uuid)
             # if indexing, handle aggregated_items and linked_uuids
             if getattr(request, '_indexing_view', False) is True:

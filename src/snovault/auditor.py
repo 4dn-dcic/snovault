@@ -16,7 +16,7 @@ from .interfaces import (
 from .resources import Item
 from .util import (
     check_es_and_cache_linked_sids,
-    validate_es_db_sids
+    validate_es_content
 )
 
 logger = logging.getLogger(__name__)
@@ -255,7 +255,7 @@ def item_view_audit(context, request):
     path = request.resource_path(context)
     if hasattr(request, 'datastore') and request.datastore != 'elasticsearch':
         es_res = check_es_and_cache_linked_sids(context, request, 'embedded')
-        if es_res and validate_es_db_sids(context, request, es_res, 'embedded'):
+        if es_res and validate_es_content(context, request, es_res, 'embedded'):
             print('--> ES FOR AUDIT %s' % context.uuid)
             # handle linked_uuids and rev_linked_to_me
             if getattr(request, '_indexing_view', False) is True:

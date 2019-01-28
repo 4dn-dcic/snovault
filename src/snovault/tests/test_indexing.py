@@ -31,8 +31,6 @@ from snovault.elasticsearch.create_mapping import (
     build_index_record,
     check_if_index_exists
 )
-
-
 from pyramid.paster import get_appsettings
 
 pytestmark = [pytest.mark.indexing]
@@ -411,15 +409,19 @@ def test_sync_and_queue_indexing(app, testapp, indexer_testapp):
     assert doc_count == 2
 
 
-def test_queue_indexing_with_linked(app, testapp, indexer_testapp):
+def test_queue_indexing_with_linked(app, testapp, indexer_testapp, dummy_request):
     """
     Test a whole bunch of things here:
     - posting/patching invalidates rev linked items
     - check linked_uuids/rev_link_names/rev_linked_to_me fields in ES
     - test indexer_utils.find_uuids_for_indexing fxn
+    - test check_es_and_cache_linked_sids & validate_es_content
     - test purge functionality before and after removing links to an item
     """
     import webtest
+    from snovault import util
+    from pyramid.traversal import traverse
+    from snovault.tests.testing_views import TestingLinkSourceSno
     es = app.registry[ELASTIC_SEARCH]
     indexer_queue = app.registry[INDEXER_QUEUE]
     # first, run create mapping with the indices we will use
@@ -511,6 +513,28 @@ def test_queue_indexing_with_linked(app, testapp, indexer_testapp):
     assert linking_uuids and len(linking_uuids) == 1
     assert linking_uuids[0]['uuid'] == target['uuid']  # rev_link from target
 
+    # test check_es_and_cache_linked_sids and validate_es_content
+    # must get the context object through request traversal
+    dummy_request.datastore = 'database'
+    assert dummy_request._sid_cache == {}
+    source_ctxt = traverse(dummy_request.root, source_res.json['@graph'][0]['@id'])['context']
+    target_ctxt = traverse(dummy_request.root, target_res.json['@graph'][0]['@id'])['context']
+    # first check frame=object for target
+    tar_es_res_obj = util.check_es_and_cache_linked_sids(target_ctxt, dummy_request, 'object')
+    assert tar_es_res_obj['uuid'] == target['uuid']
+    assert set(uuids_linked_obj2) == set(dummy_request._sid_cache)
+    # frame=embedded for source
+    src_es_res_emb = util.check_es_and_cache_linked_sids(source_ctxt, dummy_request, 'embedded')
+    assert src_es_res_emb['uuid'] == source['uuid']
+    assert set(uuids_linked_emb) == set(dummy_request._sid_cache)
+    # make everything in _sid_cache is present and up to date
+    for rid in dummy_request._sid_cache:
+        found_sid = dummy_request.registry['storage'].write.get_by_uuid(rid).sid
+        assert dummy_request._sid_cache.get(rid) == found_sid
+    # test validate_es_content with the correct sids and then an incorrect one
+    valid = util.validate_es_content(source_ctxt, dummy_request, src_es_res_emb, 'embedded')
+    assert valid is True
+
     # lastly, test purge_uuid and delete functionality
     with pytest.raises(webtest.AppError) as excinfo:
         del_res0 = testapp.delete_json('/' + source['uuid'] + '/?purge=True')
@@ -521,6 +545,17 @@ def test_queue_indexing_with_linked(app, testapp, indexer_testapp):
     with pytest.raises(webtest.AppError) as excinfo:
         del_res2 = testapp.delete_json('/' + source['uuid'] + '/?purge=True')
     assert 'Cannot purge item as other items still link to it' in str(excinfo.value)
+    # the source should fail due to outdated sids
+    # must manually update _sid_cache on dummy_request for source
+    src_sid = dummy_request.registry['storage'].write.get_by_uuid(source['uuid']).sid
+    dummy_request._sid_cache[source['uuid']] = src_sid
+    valid2 = util.validate_es_content(source_ctxt, dummy_request, src_es_res_emb, 'embedded')
+    assert valid2 is False
+    # the target should fail due to outdated rev_links (at least frame=object)
+    # need to get a new the target context again, otherwise get a sqlalchemy error
+    target_ctxt2 = traverse(dummy_request.root, target_res.json['@graph'][0]['@id'])['context']
+    valid3 = util.validate_es_content(target_ctxt2, dummy_request, tar_es_res_obj, 'object')
+    assert valid3 is False
     res = indexer_testapp.post_json('/index', {'record': True})
     del_res3 = testapp.delete_json('/' + source['uuid'] + '/?purge=True')
     assert del_res3.json['status'] == 'success'
@@ -535,8 +570,11 @@ def test_queue_indexing_with_linked(app, testapp, indexer_testapp):
                              id=target['uuid'])
     uuids_linked_emb2 = [link['uuid'] for link in check_es_target['_source']['linked_uuids_embedded']]
     assert source['uuid'] not in uuids_linked_emb2
-    # the source is now deleted
+    # the source is now purged
     testapp.get('/' + source['uuid'], status=404)
+    # make sure check_es_and_cache_linked_sids fails for the purged item
+    es_res_emb2 = util.check_es_and_cache_linked_sids(source_ctxt, dummy_request, 'embedded')
+    assert es_res_emb2 is None
 
 
 def test_indexing_invalid_sid(app, testapp, indexer_testapp):
