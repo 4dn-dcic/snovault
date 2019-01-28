@@ -24,6 +24,13 @@ def includeme(config):
 
 sanitize_search_string_re = re.compile(r'[\\\+\-\&\|\!\(\)\{\}\[\]\^\~\:\/\\\*\?]')
 
+COMMON_EXCLUDED_URI_PARAMS = [
+    'frame', 'format', 'limit', 'sort', 'from', 'field',
+    'mode', 'redirected_from', 'datastore', 'referrer',
+    'currentAction'
+]
+
+
 @view_config(route_name='search', request_method='GET', permission='search')
 def search(context, request, search_type=None, return_generator=False, forced_type='Search'):
     """
