@@ -261,7 +261,7 @@ def test_get_sids_by_uuids(session, storage):
     session.flush()
     resource = session.query(Resource).one()
     sids = storage.get_sids_by_uuids([str(resource.rid)])
-    assert str(resource.rid) in sids
+    assert set(sids) == {str(resource.rid)}
 
 
 def test_S3BlobStorage():
