@@ -126,7 +126,6 @@ class RDBStorage(object):
         except (NoResultFound, MultipleResultsFound):
             return default
 
-
     def get_rev_links(self, model, rel, *item_types):
         if item_types:
             return [
@@ -135,7 +134,6 @@ class RDBStorage(object):
         else:
             return [link.source_rid for link in model.revs if link.rel == rel]
 
-
     def get_sids_by_uuids(self, rids, default=None):
         """
         rids is a list of uuids
@@ -143,35 +141,10 @@ class RDBStorage(object):
         if not rids:
             return []
         session = self.DBSession()
-
-        # IMPLEMENTATION ONE: get sids from resource iteratively
-        t0 = time.time()
-        sids = {}
-        for rid in rids:
-            model = baked_query_resource(session).get(uuid.UUID(rid))
-            if model:
-                sids[rid] = model.sid
-        res0 = time.time() - t0
-
-        # IMPLEMENTATION TWO: get all sids in one trip
-        # query = session.query(CurrentPropertySheet).filter(CurrentPropertySheet.rid.in_(rids))
-        # data = [res.sid for res in query.all()]
-
-        # IMPLEMENTATION THREE: get all sids in one trip with baked query
-        t1 = time.time()
         results = baked_query_sids(session).params(rids=rids).all()
         # check res.name to skip sids for supplementary rows, like 'downloads'
         data = {str(res.rid): res.sid for res in results if res.name == ''}
-        res1 = time.time() - t1
-
-        if res0 == 0.0 or res1 == 0.0:
-            print('\nQUERIES: for %s sids. ZERO DIV! old: %s new: %s\n' % (len(rids), res0, res1))
-        elif res0 < res1:
-            print('\nQUERIES: for %s sids, old faster than new by %s\n' % (len(rids), res1/res0))
-        else:
-            print('\nQUERIES: for %s sids, new faster than old by %s\n' % (len(rids), res0/res1))
         return data
-
 
     def __iter__(self, *item_types):
         session = self.DBSession()

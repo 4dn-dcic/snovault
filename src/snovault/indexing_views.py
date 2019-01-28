@@ -54,8 +54,6 @@ def item_index_data(context, request):
     uuid = str(context.uuid)
     properties = context.upgrade_properties()
 
-    print('=== SID CACHE: %s ===' % len(request._sid_cache))
-
     # if we want to check an sid, it should be set as a query param
     sid_check = request.params.get('sid', None)
     if sid_check:

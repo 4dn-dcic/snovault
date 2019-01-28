@@ -256,12 +256,10 @@ def item_view_audit(context, request):
     if hasattr(request, 'datastore') and request.datastore != 'elasticsearch':
         es_res = check_es_and_cache_linked_sids(context, request, 'embedded')
         if es_res and validate_es_content(context, request, es_res, 'embedded'):
-            print('--> ES FOR AUDIT %s' % context.uuid)
             # handle linked_uuids and rev_linked_to_me
             if getattr(request, '_indexing_view', False) is True:
                 request._linked_uuids = [link['uuid'] for link in es_res['linked_uuids_object']]
             return {'@id': path, 'audit': es_res['audit']}
-    print('--> DB FOR AUDIT %s' % context.uuid)
 
     audit_uuids = request._audit_uuids.copy()
     audit = inherit_audits(request, audit_uuids)

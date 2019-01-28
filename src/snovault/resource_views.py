@@ -142,12 +142,10 @@ def item_view_object(context, request):
         es_res = check_es_and_cache_linked_sids(context, request, 'object')
         # validate_es_content also checks/updates rev links
         if es_res and validate_es_content(context, request, es_res, 'object'):
-            print('--> ES FOR OBJECT %s' % context.uuid)
             # if indexing, handle linked_uuids
             if getattr(request, '_indexing_view', False) is True:
                 request._linked_uuids = [link['uuid'] for link in es_res['linked_uuids_object']]
             return es_res['object']
-    print('--> DB FOR OBJECT %s' % context.uuid)
 
     properties = context.item_with_links(request)
     calculated = calculate_properties(context, request, properties)
@@ -162,7 +160,6 @@ def item_view_embedded(context, request):
         es_res = check_es_and_cache_linked_sids(context, request, 'embedded')
         # validate_es_content also checks/updates rev links
         if es_res and validate_es_content(context, request, es_res, 'embedded'):
-            print('--> ES FOR EMBEDDED %s' % context.uuid)
             # if indexing, handle aggregated_items and linked_uuids
             if getattr(request, '_indexing_view', False) is True:
                 request._linked_uuids = [link['uuid'] for link in es_res['linked_uuids_embedded']]
@@ -172,7 +169,6 @@ def item_view_embedded(context, request):
                                              es_res['aggregated_items'].items()}
                 request._aggregate_for['uuid'] = None
             return es_res['embedded']
-    print('--> DB FOR EMBEDDED %s' % context.uuid)
 
     # set up _aggregated_items if we want to aggregate this target
     will_aggregate = getattr(request, '_aggregate_for').get('uuid') == str(context.uuid)

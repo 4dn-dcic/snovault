@@ -326,8 +326,6 @@ def check_es_and_cache_linked_sids(context, request, view='embedded'):
     Key dict by uuid, find all linked_uuids from es if available
     Return ES result if it is found, else None
     """
-    print('== SIDs ==> %s' % len(request._sid_cache))
-    # es_model = request.registry[STORAGE].read.get_by_uuid(str(context.uuid))
     es_model = request.registry[STORAGE].read.get_by_uuid_direct(str(context.uuid), context.item_type)
     if es_model is None:
         return None
@@ -369,7 +367,6 @@ def validate_es_content(context, request, es_res, view='embedded'):
         found_sid = request._sid_cache.get(linked['uuid'])
         if found_sid is None or linked['sid'] < found_sid:
             use_es_result = False
-            print('\n===> FAILED SID! %s, %s (DB) vs %s (ES)' % (linked['uuid'], found_sid, linked['sid']))
             break
     return use_es_result
 

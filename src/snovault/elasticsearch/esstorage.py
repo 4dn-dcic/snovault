@@ -107,22 +107,6 @@ class PickStorage(object):
                 return self.write.get_by_uuid(uuid)
         return model
 
-        # storage = self.storage()
-        # # always try elasticsearch to see if that result is up-to-date
-        # es_model = self.read.get_by_uuid(uuid)
-        #
-        # if storage is self.read:
-        #     if es_model is None:
-        #         return self.write.get_by_uuid(uuid)
-        # else:
-        #     es_sid = es_model.sid
-        #     db_model = self.write.get_by_uuid(uuid)
-        #     if db_model.sid > es_model.sid:
-        #         print('USE DB')
-        #         return db_model
-        # print('USE ES')
-        # return es_model
-
     def get_by_unique_key(self, unique_key, name):
         storage = self.storage()
         model = storage.get_by_unique_key(unique_key, name)
@@ -131,7 +115,6 @@ class PickStorage(object):
                 return self.write.get_by_unique_key(unique_key, name)
         return model
 
-
     def get_by_json(self, key, value, item_type, default=None):
         storage = self.storage()
         model = storage.get_by_json(key, value, item_type)
@@ -139,7 +122,6 @@ class PickStorage(object):
             if model is None:
                 return self.write.get_by_json(key, value, item_type)
         return model
-
 
     def find_uuids_linked_to_item(self, rid):
         """
@@ -166,7 +148,6 @@ class PickStorage(object):
                     'field' : linking_property or "Not Embedded"
                 })
         return linked_info
-
 
     def purge_uuid(self, rid, item_type=None):
         """
