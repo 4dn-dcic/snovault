@@ -97,10 +97,9 @@ def item_index_data(context, request):
 
     # run the object view first
     request._linked_uuids = set()
-    request._rev_link_names = {}
     object_view = request.invoke_view(path, '@@object')
     linked_uuids_object = request._linked_uuids.copy()
-    rev_link_names = request._rev_link_names.copy()
+    rev_link_names = request._rev_linked_uuids_by_item.get(uuid, {}).copy()
 
     # reset these properties, then run embedded view
     request._linked_uuids = set()
@@ -115,9 +114,13 @@ def item_index_data(context, request):
     embedded_view = request.invoke_view(path, '@@embedded', index_uuid=uuid)
     # get _linked and _rev_linked uuids from the request before @@audit views add to them
     linked_uuids_embedded = request._linked_uuids.copy()
-    rev_linked_by_item = request._rev_linked_uuids_by_item.copy()
+
     # find uuids traversed that rev link to this item
-    rev_linked_to_me = set([id for id in rev_linked_by_item if uuid in rev_linked_by_item[id]])
+    rev_linked_to_me = set()
+    for rev_id, rev_names in request._rev_linked_uuids_by_item.items():
+        if any([uuid in rev_names[name] for name in rev_names]):
+            rev_linked_to_me.add(rev_id)
+            continue
     aggregated_items = {agg: res['items'] for agg, res in request._aggregated_items.items()}
 
     # lastly, run the audit view. Set the uuids we want to audit on

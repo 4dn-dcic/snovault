@@ -277,8 +277,7 @@ class Item(Resource):
         """
         Run get_rev_links, but only return items that do not have a status
         in self.filtered_rev_statuses
-        If we are indexing, add the rev_link information to _rev_link_names
-        and _rev_linked_uuids_by_item
+        If we are indexing, add the rev_link information to _rev_linked_uuids_by_item
         """
         # Consider caching rev links on the request? Would save DB requests
         # May not be worth it because they are quite fast
@@ -289,11 +288,11 @@ class Item(Resource):
             not in self.filtered_rev_statuses
         ]
         if getattr(request, '_indexing_view', False) is True:
-            request._rev_link_names[name] = filtered_uuids
+            to_update = {name: filtered_uuids}
             if str(self.uuid) in request._rev_linked_uuids_by_item:
-                request._rev_linked_uuids_by_item[str(self.uuid)].update(filtered_uuids)
+                request._rev_linked_uuids_by_item[str(self.uuid)].update(to_update)
             else:
-                request._rev_linked_uuids_by_item[str(self.uuid)] = set(filtered_uuids)
+                request._rev_linked_uuids_by_item[str(self.uuid)] = to_update
         return filtered_uuids
 
     def unique_keys(self, properties):

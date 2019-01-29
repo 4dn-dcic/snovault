@@ -353,10 +353,11 @@ def validate_es_content(context, request, es_res, view='embedded'):
         return False
     use_es_result = True
     # check to see if there are any new rev links from the item
-    for rev_name, rev_uuids in es_res['rev_link_names'].items():
+    for rev_name in context.rev:
         # the call below updates request._rev_linked_uuids_by_item.
         db_rev_uuids = context.get_filtered_rev_links(request, rev_name)
-        if set(db_rev_uuids) != set(rev_uuids):
+        es_rev_uuids = es_res['rev_link_names'].get(rev_name, [])
+        if set(db_rev_uuids) != set(es_rev_uuids):
             return False
     for linked in linked_es_sids:
         # infrequently, may need to add sids from the db to the _sid_cache
