@@ -246,6 +246,7 @@ def process_aggregated_items(request):
     will have to be carried through the subrequest chain.
     Args:
         request: the current request
+        
     Returns:
         None
     """
@@ -298,6 +299,7 @@ def recursively_process_field(item, split_fields):
     Args:
         item: dictionary item to pull fields from
         split_fields: list resulting from field.split('.')
+
     Returns:
         The found value
     """
@@ -323,8 +325,17 @@ def recursively_process_field(item, split_fields):
 
 def check_es_and_cache_linked_sids(context, request, view='embedded'):
     """
-    Key dict by uuid, find all linked_uuids from es if available
-    Return ES result if it is found, else None
+    For the given context and request, see if the desired item is present in
+    Elasticsearch and, if so, retrieve it cache all sids of the linked objects
+    that correspond to the given view. Store these in request._sid_cacheself.
+
+    Args:
+        context: current Item
+        request: current Request
+        view (str): 'embedded' or 'object', depending on the desired view
+
+    Returns:
+        The _source of the Elasticsearch result, if found. None otherwise
     """
     es_model = request.registry[STORAGE].read.get_by_uuid_direct(str(context.uuid), context.item_type)
     if es_model is None:
@@ -342,8 +353,22 @@ def check_es_and_cache_linked_sids(context, request, view='embedded'):
 
 def validate_es_content(context, request, es_res, view='embedded'):
     """
-    Compare sids in the request._sid_cache to the es_res to see if we can use
-    the ES result. Only currently works for object and embedded views
+    For the given context, request, and found Elasticsearch result, determine
+    whether that result is valid. This depends on the view (either 'embedded' or
+    'object'). This is based off of the following:
+        1. All sids from the ES result must match those in request._sid_cache
+        2. All rev_links from the ES result must be up-to-date
+    This function will automatically add sids to _sid_cache from the DB if
+    they are not already present.
+
+    Args:
+        context: current Item
+        request: current Request
+        es_res (dict): dictionary Elasticsearch result
+        view (str): 'embedded' or 'object', depending on the desired view
+
+    Returns:
+        True if es_res is valid, otherwise False
     """
     if view not in ['object', 'embedded']:
         return False

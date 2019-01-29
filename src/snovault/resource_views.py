@@ -137,6 +137,16 @@ def item_view_object(context, request):
     2. Link canonicalization (overwriting uuids with links)
        - adds uuid to request._linked_uuids if request._indexing_view
     3. Calculated properties
+
+    On a DB request, will use the Elasticsearch result for the view if the ES
+    result passes `validate_es_content` (has valid sids and rev_links)
+
+    Args:
+        context: current Item
+        request: current Request
+
+    Returns:
+        Dictionary item properties
     """
     if hasattr(request, 'datastore') and request.datastore != 'elasticsearch':
         es_res = check_es_and_cache_linked_sids(context, request, 'object')
@@ -156,6 +166,24 @@ def item_view_object(context, request):
 @view_config(context=Item, permission='view', request_method='GET',
              name='embedded')
 def item_view_embedded(context, request):
+    """
+    Calculate and return the embedded view for an item. This is an intensive
+    process that requires an embedded model to be created from the
+    context.embedded_list and then build from traversal of individual object
+    views from the items needed.
+    This function also takes care of processing aggregated_items, which are
+    held on the request object (and transferred to subrequests in embed.py)
+
+    On a DB request, will use the Elasticsearch result for the view if the ES
+    result passes `validate_es_content` (has valid sids and rev_links)
+
+    Args:
+        context: current Item
+        request: current Request
+        
+    Returns:
+        Dictionary item properties
+    """
     if hasattr(request, 'datastore') and request.datastore != 'elasticsearch':
         es_res = check_es_and_cache_linked_sids(context, request, 'embedded')
         # validate_es_content also checks/updates rev links

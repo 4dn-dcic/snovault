@@ -27,8 +27,9 @@ def join_linked_uuids_sids(request, uuids):
     Args:
         request: current Request object
         uuids: list of string uuids
+
     Returns:
-        A list of dictionaries containing uuid and up-to-date db sid
+        A list of dicts containing uuid and up-to-date db sid
     """
     return [{'uuid': uuid, 'sid': request._sid_cache[uuid]} for uuid in uuids]
 
@@ -40,16 +41,16 @@ def item_index_data(context, request):
     for the given item. If an int sid is provided as a request parameter,
     will raise an sid exception if the current item context is behind the
     given sid.
-    Computationally intensive. Performs the full embedding and calculates
-    audits and aggregated_items, among other things.
+    Computationally intensive. Calculates the object, embedded, and audit views
+    for the given item, using ES results where possible for speed. Leverages
+    a number of attributes on the request to get information indexing needs.
 
     Args:
         context: current Item
-        request: current request
+        request: current Request
 
     Returns:
-        A dictionary document representing the full data to index for the
-        given item
+        A dict document representing the full data to index for the given item
     """
     uuid = str(context.uuid)
     properties = context.upgrade_properties()

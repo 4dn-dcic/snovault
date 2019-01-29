@@ -19,8 +19,9 @@ from snovault.elasticsearch.interfaces import (
 from snovault import (
     COLLECTIONS,
     TYPES,
+    DBSESSION,
+    STORAGE
 )
-from snovault import DBSESSION, STORAGE
 from snovault.commands.es_index_data import run as run_index_data
 from snovault.elasticsearch import create_mapping, indexer_utils
 from elasticsearch.exceptions import NotFoundError
@@ -529,7 +530,7 @@ def test_queue_indexing_with_linked(app, testapp, indexer_testapp, dummy_request
     assert set(uuids_linked_emb) == set(dummy_request._sid_cache)
     # make everything in _sid_cache is present and up to date
     for rid in dummy_request._sid_cache:
-        found_sid = dummy_request.registry['storage'].write.get_by_uuid(rid).sid
+        found_sid = dummy_request.registry[STORAGE].write.get_by_uuid(rid).sid
         assert dummy_request._sid_cache.get(rid) == found_sid
     # test validate_es_content with the correct sids and then an incorrect one
     valid = util.validate_es_content(source_ctxt, dummy_request, src_es_res_emb, 'embedded')
@@ -547,7 +548,7 @@ def test_queue_indexing_with_linked(app, testapp, indexer_testapp, dummy_request
     assert 'Cannot purge item as other items still link to it' in str(excinfo.value)
     # the source should fail due to outdated sids
     # must manually update _sid_cache on dummy_request for source
-    src_sid = dummy_request.registry['storage'].write.get_by_uuid(source['uuid']).sid
+    src_sid = dummy_request.registry[STORAGE].write.get_by_uuid(source['uuid']).sid
     dummy_request._sid_cache[source['uuid']] = src_sid
     valid2 = util.validate_es_content(source_ctxt, dummy_request, src_es_res_emb, 'embedded')
     assert valid2 is False
@@ -889,6 +890,32 @@ def test_create_mapping_index_diff(app, testapp, indexer_testapp):
     time.sleep(4)
     third_count = es.count(index=TEST_TYPE, doc_type=TEST_TYPE).get('count')
     assert third_count == initial_count
+
+
+def test_indexing_esstorage(app, testapp, indexer_testapp):
+    """
+    Test some esstorage methods (a.k.a. registry[STORAGE].read)
+    """
+    indexer_queue = app.registry[INDEXER_QUEUE]
+    es = app.registry[ELASTIC_SEARCH]
+    esstorage = app.registry[STORAGE].read
+    # post an item, index, then find verion (sid)
+    res = testapp.post_json(TEST_COLL, {'required': 'some_value'})
+    test_uuid = res.json['@graph'][0]['uuid']
+    res = indexer_testapp.post_json('/index', {'record': True})
+    assert res.json['indexing_count'] == 1
+    time.sleep(4)
+    es_res = es.get(index=TEST_TYPE, doc_type=TEST_TYPE, id=test_uuid)['_source']
+    # test the following methods:
+    es_res_by_uuid = esstorage.get_by_uuid(test_uuid)
+    es_res_by_json = esstorage.get_by_json('required', 'some_value', TEST_TYPE)
+    es_res_direct = esstorage.get_by_uuid_direct(test_uuid, TEST_TYPE)
+    assert es_res == es_res_by_uuid.source
+    assert es_res == es_res_by_json.source
+    assert es_res == es_res_direct['_source']
+    # db get_by_uuid direct returns None by design
+    db_res_direct = app.registry[STORAGE].write.get_by_uuid_direct(test_uuid, TEST_TYPE)
+    assert db_res_direct == None
 
 
 def test_aggregated_items(app, testapp, indexer_testapp):

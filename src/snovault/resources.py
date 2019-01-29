@@ -265,7 +265,15 @@ class Item(Resource):
 
     def get_rev_links(self, request, name):
         """
-        Return all rev links for this item under field with <name>
+        Return a list of uuid rev_links for the given rev name (in self.rev)
+        from the given item.
+
+        Args:
+            request: current Request
+            name (str): name of the rev (must be in self.rev)
+
+        Returns:
+            list of str uuids of the given rev_link
         """
         types = self.registry[TYPES]
         type_name, rel = self.rev[name]
@@ -276,8 +284,15 @@ class Item(Resource):
     def get_filtered_rev_links(self, request, name):
         """
         Run get_rev_links, but only return items that do not have a status
-        in self.filtered_rev_statuses
-        If we are indexing, add the rev_link information to _rev_linked_uuids_by_item
+        in self.filtered_rev_statuses (a tuple defined on the Item)
+        If we are indexing, add rev_link info to _rev_linked_uuids_by_item.
+
+        Args:
+            request: current Request
+            name (str): name of the rev (must be in self.rev)
+
+        Returns:
+            list of str uuids of the given rev_link, filtered by status
         """
         # Consider caching rev links on the request? Would save DB requests
         # May not be worth it because they are quite fast

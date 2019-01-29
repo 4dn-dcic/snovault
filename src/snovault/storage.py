@@ -100,6 +100,14 @@ class RDBStorage(object):
         """
         This method is meant to only work with ES, so return None (default)
         for the DB implementation
+
+        Args:
+            rid (str): item rid (uuid)
+            item_type (str): item_type of the target resource (Item.item_type)
+            default: View to return on a failure. Defaults to None.
+
+        Returns:
+            default
         """
         return default
 
@@ -134,9 +142,17 @@ class RDBStorage(object):
         else:
             return [link.source_rid for link in model.revs if link.rel == rel]
 
-    def get_sids_by_uuids(self, rids, default=None):
+    def get_sids_by_uuids(self, rids):
         """
-        rids is a list of uuids
+        Take a list of rids and return the sids from all of them using the
+        CurrentPropertySheet table. This follows the convention of only using
+        Resources with the default '' name.
+
+        Args:
+            rids (list): list of string rids (uuids)
+
+        Returns:
+            dict keyed by rid with integer sid values
         """
         if not rids:
             return []

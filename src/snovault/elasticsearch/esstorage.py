@@ -204,6 +204,13 @@ class ElasticSearchStorage(object):
     def get_by_uuid(self, uuid):
         """
         This calls a search, and index/doc_type does not need to be provided
+        Returns a CachedModel built with the es hit, or None if it is not found
+
+        Args:
+            uuid (str): uuid of the item to find
+
+        Returns:
+            CachedModel of the hit or None
         """
         search = Search(using=self.es)
         id_query = Q('ids', values=[str(uuid)])
@@ -216,9 +223,29 @@ class ElasticSearchStorage(object):
         self.es.get calls a GET request, which will refresh the given
         document (and all other docs) in realtime, if necessary
 
+        NOTE: this function DOES NOT use CachedModel, as it is used for direct
+              querying of ES items during indexing only. It might be performant
+              to set the CachedModel from these results; see commented code
+              below. Right now, I'm not doing it because get_by_uuid_direct
+              is possibly called very often during indexing.
+
+        Args:
+            uuid (str): uuid of the item to GET
+            item_type (str): item_type of the item to GET
+
         Returns:
             The _source value from the document, if it exists
         """
+        # use the CachedModel. Would need to change usage of get_by_uuid_direct
+        # in snovault to res.source from res['_source']
+        # try:
+        #     res = self.es.get(index=item_type, doc_type=item_type, id=uuid,
+        #                       _source=True, realtime=True)
+        # except elasticsearch.exceptions.NotFoundError:
+        #     model = None
+        # else:
+        #     model = CachedModel(res)
+        # return model
         try:
             res = self.es.get(index=item_type, doc_type=item_type, id=uuid,
                               _source=True, realtime=True)
@@ -253,6 +280,18 @@ class ElasticSearchStorage(object):
             search = search.filter('terms', item_type=item_types)
         hits = search.execute()
         return [hit.to_dict().get('uuid', hit.to_dict().get('_id')) for hit in hits]
+
+    def get_sids_by_uuids(self, rids):
+        """
+        Currently not implemented. Just return an empty dict
+
+        Args:
+            rids (list): list of string rids (uuids)
+
+        Returns:
+            dict keyed by rid with integer sid values
+        """
+        return {}
 
     def purge_uuid(self, rid, item_type=None, registry=None):
         """

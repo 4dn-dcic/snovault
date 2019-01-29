@@ -56,8 +56,26 @@ def make_subrequest(request, path):
 
 def embed(request, *elements, **kw):
     """
-    as_user=True for current user
-    Pass in fields_to_embed as a keyword arg
+    Incredibly important function that is central to getting views in snovault.
+    Since it is a reified method on Request, you can call it like:
+    `request.embed(<elements to be joined in path>)`
+    This function handles propogation of important request attrs to subrequests,
+    as well as caching of requests and grabbing attrs from the subreq result.
+
+    Check connection.py and cache.py for details on the embed_cache
+
+    NOTES:
+        path is formed by joining all positional args
+        as_user=True for current user
+        Pass in fields_to_embed as a keyword arg
+
+    Args:
+        request: Request calling this method
+        *elements: variable length positional args used to make path
+        **kw: arbitrary keyword arguments
+
+    Returns:
+        result of the invoked request
     """
     # Should really be more careful about what gets included instead.
     # Cache cut response time from ~800ms to ~420ms.
@@ -104,6 +122,20 @@ def embed(request, *elements, **kw):
 
 
 def _embed(request, path, as_user='EMBED'):
+    """
+    Helper function used in embed() that creates the subrequest and actually
+    invokes it. Sets a number of attributes from the parent request and
+    returns a dictionary containing the result and a number of attributes
+    from the invoked subreq.
+
+    Args:
+        request: Request object
+        path (str): subrequest path to invoke
+        as_user (str/bool): involved in setting subreq.remote_user
+
+    Returns:
+        dict containing the result and a number of subrequest attributes
+    """
     # Carl: the subrequest is 'built' here, but not actually invoked
     subreq = make_subrequest(request, path)
     # these attributes are propogated across the subrequest
