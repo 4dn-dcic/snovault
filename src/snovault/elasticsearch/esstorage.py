@@ -221,7 +221,8 @@ class ElasticSearchStorage(object):
         """
         See if a document exists under the index/doc_type given by item_type.
         self.es.get calls a GET request, which will refresh the given
-        document (and all other docs) in realtime, if necessary
+        document (and all other docs) in realtime, if necessary. Explicitly
+        ignore 404 responses from elasticsearch to reduce logging.
 
         NOTE: this function DOES NOT use CachedModel, as it is used for direct
               querying of ES items during indexing only. It might be performant
@@ -240,7 +241,7 @@ class ElasticSearchStorage(object):
         # in snovault to res.source from res['_source']
         # try:
         #     res = self.es.get(index=item_type, doc_type=item_type, id=uuid,
-        #                       _source=True, realtime=True)
+        #                       _source=True, realtime=True, ignore=404)
         # except elasticsearch.exceptions.NotFoundError:
         #     model = None
         # else:
@@ -248,7 +249,7 @@ class ElasticSearchStorage(object):
         # return model
         try:
             res = self.es.get(index=item_type, doc_type=item_type, id=uuid,
-                              _source=True, realtime=True)
+                              _source=True, realtime=True, ignore=404)
         except elasticsearch.exceptions.NotFoundError:
             res = None
         return res
