@@ -58,7 +58,7 @@ META_MAPPING = {
 
 PATH_FIELDS = ['submitted_file_name']
 NON_SUBSTRING_FIELDS = ['uuid', '@id', 'submitted_by', 'md5sum', 'references', 'submitted_file_name']
-NUM_SHARDS = 3
+NUM_SHARDS = 1
 NUM_REPLICAS = 1
 
 
@@ -439,19 +439,50 @@ def es_mapping(mapping, agg_items_mapping):
                 }
             },
             'aggregated_items': agg_items_mapping,
-            'linked_uuids': {
-                'type': 'text',
+            'linked_uuids_embedded': {
+                'properties': {
+                    'uuid': {
+                        'type': 'keyword'
+                    },
+                    'sid': {
+                        'type': 'keyword'
+                    }
+                },
                 'include_in_all': False
             },
-            'uuids_rev_linked_to_me': {
+            'linked_uuids_object': {
+                'properties': {
+                    'uuid': {
+                        'type': 'keyword'
+                    },
+                    'sid': {
+                        'type': 'keyword'
+                    }
+                },
+                'include_in_all': False
+            },
+            'rev_link_names': {
+                'properties': {
+                    'name': {
+                        'type': 'keyword'
+                    },
+                    'uuids': {
+                        'type': 'keyword'
+                    }
+                },
+                'include_in_all': False
+            },
+            'rev_linked_to_me': {
                 'type': 'text',
                 'include_in_all': False
             },
             'unique_keys': {
-                'type': 'object'
+                'type': 'object',
+                'include_in_all': False
             },
             'links': {
-                'type': 'object'
+                'type': 'object',
+                'include_in_all': False
             },
             'paths': {
                 'type': 'text',

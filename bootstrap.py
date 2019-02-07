@@ -19,7 +19,7 @@ use the -c option to specify an alternate configuration file.
 """
 
 import sys
-import pip
+import subprocess
 from optparse import OptionParser
 
 __version__ = '4dn-custom'
@@ -55,16 +55,20 @@ if options.version:
 ######################################################################
 # load/install setuptools
 if options.setuptools_version is not None:
-    pip.main(['install', 'setuptools==%s' % options.setuptools_version])
+    subprocess.check_call([sys.executable, '-m', 'pip', 'install', 'setuptools==%s' %
+                           options.setuptools_version])
 else:
-    pip.main(['install', 'setuptools'])
+    subprocess.check_call([sys.executable, '-m', 'pip', 'install', 'setuptools'])
+
 
 ######################################################################
 # Install buildout
 if options.buildout_version is not None:
-    pip.main(['install', '--no-deps', '--upgrade', 'zc.buildout==%s' % options.buildout_version])
+    subprocess.check_call([sys.executable, '-m', 'pip', 'install', '--no-deps', '--upgrade',
+                           'zc.buildout==%s' % options.buildout_version])
 else:
-    pip.main(['install', '--no-deps', '--upgrade', 'zc.buildout'])
+    subprocess.check_call([sys.executable, '-m', 'pip', 'install', '--no-deps', '--upgrade',
+                           'zc.buildout'])
 
 ######################################################################
 # Import and run buildout

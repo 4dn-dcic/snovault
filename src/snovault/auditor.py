@@ -14,6 +14,10 @@ from .interfaces import (
     TYPES,
 )
 from .resources import Item
+from .util import (
+    check_es_and_cache_linked_sids,
+    validate_es_content
+)
 
 logger = logging.getLogger(__name__)
 
@@ -244,11 +248,28 @@ def item_view_audit(context, request):
     request._audit_uuids, which is the actual view that runs the audits.
     _audit_uuids is populated from the @@index-data view, or can be set
     manually from tests
-
-    Check embed.py but requests to @@audit do NOT add uuids to the set of
+    Check embed.py -- requests to @@audit do NOT add uuids to the set of
     request._linked_uuids or request._rev_linked_uuids_by_item
+
+    On a DB request, will use the Elasticsearch result for the view if the ES
+    result passes `validate_es_content` (has valid sids and rev_links)
+
+    Args:
+        context: current Item
+        request: current Request
+        
+    Returns:
+        Dictionary containing @id and audit view
     """
     path = request.resource_path(context)
+    if hasattr(request, 'datastore') and request.datastore != 'elasticsearch':
+        es_res = check_es_and_cache_linked_sids(context, request, 'embedded')
+        if es_res and validate_es_content(context, request, es_res, 'embedded'):
+            # handle linked_uuids and rev_linked_to_me
+            if getattr(request, '_indexing_view', False) is True:
+                request._linked_uuids = [link['uuid'] for link in es_res['linked_uuids_object']]
+            return {'@id': path, 'audit': es_res['audit']}
+
     audit_uuids = request._audit_uuids.copy()
     audit = inherit_audits(request, audit_uuids)
     return {

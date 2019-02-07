@@ -7,7 +7,6 @@ from snovault import (
     calculated_property,
     collection,
 )
-from snowflakes.types.base import paths_filtered_by_status
 from snovault.attachment import ItemWithAttachment
 from snovault.interfaces import CONNECTION
 
@@ -27,13 +26,10 @@ def user(request):
 
 @view_config(name='testing-allowed', request_method='GET')
 def allowed(context, request):
-    from pyramid.security import (
-        has_permission,
-        principals_allowed_by_permission,
-    )
+    from pyramid.security import principals_allowed_by_permission
     permission = request.params.get('permission', 'view')
     return {
-        'has_permission': bool(has_permission(permission, context, request)),
+        'has_permission': bool(request.has_permission(permission, context)),
         'principals_allowed_by_permission': principals_allowed_by_permission(context, permission),
     }
 
@@ -165,6 +161,7 @@ class TestingLinkTargetSno(Item):
     rev = {
         'reverse': ('TestingLinkSourceSno', 'target'),
     }
+    filtered_rev_statuses = ('deleted', 'replaced')
     embedded_list = [
         'reverse.*',
     ]
@@ -172,7 +169,7 @@ class TestingLinkTargetSno(Item):
     def rev_link_atids(self, request, rev_name):
         conn = request.registry[CONNECTION]
         return [request.resource_path(conn[uuid]) for uuid in
-                paths_filtered_by_status(request, self.get_rev_links(request, rev_name))]
+                self.get_filtered_rev_links(request, rev_name)]
 
     @calculated_property(schema={
         "title": "Sources",
@@ -320,12 +317,12 @@ def testing_retry(context, request):
     from transaction.interfaces import TransientError
 
     model = context.model
-    request._attempt = getattr(request, '_attempt', 0) + 1
+    request.environ['_attempt'] = request.environ.get('_attempt', 0) + 1
 
-    if request._attempt == 1:
+    if request.environ['_attempt'] == 1:
         raise TransientError()
 
     return {
-        'attempt': request._attempt,
+        'attempt': request.environ['_attempt'],
         'detached': inspect(model).detached,
     }

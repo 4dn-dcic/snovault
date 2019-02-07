@@ -114,7 +114,7 @@ class User(Item):
         # need to handle both esstorage and db storage results
         uuids = [str(uuid) for uuid in key_coll]
         acc_keys = [request.embed('/', uuid, '@@object')
-                for uuid in paths_filtered_by_status(request, uuids)]
+                    for uuid in paths_filtered_by_status(request, uuids)]
         my_keys = [acc_key for acc_key in acc_keys if acc_key['user'] == request.path]
         if my_keys:
             return [key for key in my_keys if key['status'] not in ('deleted', 'replaced')]

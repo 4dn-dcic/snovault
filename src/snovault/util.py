@@ -1,7 +1,7 @@
 from past.builtins import basestring
 from pyramid.threadlocal import manager as threadlocal_manager
 from pyramid.httpexceptions import HTTPForbidden
-from .interfaces import CONNECTION
+from .interfaces import CONNECTION, STORAGE
 import json
 import structlog
 
@@ -246,6 +246,7 @@ def process_aggregated_items(request):
     will have to be carried through the subrequest chain.
     Args:
         request: the current request
+        
     Returns:
         None
     """
@@ -298,6 +299,7 @@ def recursively_process_field(item, split_fields):
     Args:
         item: dictionary item to pull fields from
         split_fields: list resulting from field.split('.')
+
     Returns:
         The found value
     """
@@ -319,6 +321,80 @@ def recursively_process_field(item, split_fields):
     else:
         # can't drill down if not a list or dict. just return
         return next_level
+
+
+def check_es_and_cache_linked_sids(context, request, view='embedded'):
+    """
+    For the given context and request, see if the desired item is present in
+    Elasticsearch and, if so, retrieve it cache all sids of the linked objects
+    that correspond to the given view. Store these in request._sid_cacheself.
+
+    Args:
+        context: current Item
+        request: current Request
+        view (str): 'embedded' or 'object', depending on the desired view
+
+    Returns:
+        The _source of the Elasticsearch result, if found. None otherwise
+    """
+    es_model = request.registry[STORAGE].read.get_by_uuid_direct(str(context.uuid), context.item_type)
+    if es_model is None:
+        return None
+    es_res = es_model.get('_source')
+    es_links_field = 'linked_uuids_object' if view == 'object' else 'linked_uuids_embedded'
+    if es_res and es_res.get(es_links_field):
+        linked_uuids = [link['uuid'] for link in es_res[es_links_field]
+                        if link['uuid'] not in request._sid_cache]
+        to_cache = request.registry[STORAGE].write.get_sids_by_uuids(linked_uuids)
+        request._sid_cache.update(to_cache)
+        return es_res
+    return None
+
+
+def validate_es_content(context, request, es_res, view='embedded'):
+    """
+    For the given context, request, and found Elasticsearch result, determine
+    whether that result is valid. This depends on the view (either 'embedded' or
+    'object'). This is based off of the following:
+        1. All sids from the ES result must match those in request._sid_cache
+        2. All rev_links from the ES result must be up-to-date
+    This function will automatically add sids to _sid_cache from the DB if
+    they are not already present.
+
+    Args:
+        context: current Item
+        request: current Request
+        es_res (dict): dictionary Elasticsearch result
+        view (str): 'embedded' or 'object', depending on the desired view
+
+    Returns:
+        True if es_res is valid, otherwise False
+    """
+    if view not in ['object', 'embedded']:
+        return False
+    es_links_field = 'linked_uuids_object' if view == 'object' else 'linked_uuids_embedded'
+    linked_es_sids = es_res[es_links_field]
+    if not linked_es_sids:  # there should always be context.uuid here. abort
+        return False
+    use_es_result = True
+    # check to see if there are any new rev links from the item
+    for rev_name in context.rev:
+        # the call below updates request._rev_linked_uuids_by_item.
+        db_rev_uuids = context.get_filtered_rev_links(request, rev_name)
+        es_rev_uuids = es_res['rev_link_names'].get(rev_name, [])
+        if set(db_rev_uuids) != set(es_rev_uuids):
+            return False
+    for linked in linked_es_sids:
+        # infrequently, may need to add sids from the db to the _sid_cache
+        if linked['uuid'] not in request._sid_cache:
+            db_res = request.registry[STORAGE].write.get_by_uuid(linked['uuid'])
+            if db_res:
+                request._sid_cache[linked['uuid']] = db_res.sid
+        found_sid = request._sid_cache.get(linked['uuid'])
+        if found_sid is None or linked['sid'] < found_sid:
+            use_es_result = False
+            break
+    return use_es_result
 
 
 def select_distinct_values(request, value_path, *from_paths):

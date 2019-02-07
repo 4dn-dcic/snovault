@@ -21,6 +21,7 @@ def includeme(config):
     config.add_request_method(embed, 'invoke_view')
     config.add_request_method(lambda request: set(), '_linked_uuids', reify=True)
     config.add_request_method(lambda request: set(), '_audit_uuids', reify=True)
+    config.add_request_method(lambda request: {}, '_sid_cache', reify=True)
     config.add_request_method(lambda request: {}, '_rev_linked_uuids_by_item', reify=True)
     config.add_request_method(lambda request: {}, '_aggregated_items', reify=True)
     config.add_request_method(lambda request: {}, '_aggregate_for', reify=True)
@@ -55,8 +56,26 @@ def make_subrequest(request, path):
 
 def embed(request, *elements, **kw):
     """
-    as_user=True for current user
-    Pass in fields_to_embed as a keyword arg
+    Incredibly important function that is central to getting views in snovault.
+    Since it is a reified method on Request, you can call it like:
+    `request.embed(<elements to be joined in path>)`
+    This function handles propogation of important request attrs to subrequests,
+    as well as caching of requests and grabbing attrs from the subreq result.
+
+    Check connection.py and cache.py for details on the embed_cache
+
+    NOTES:
+        path is formed by joining all positional args
+        as_user=True for current user
+        Pass in fields_to_embed as a keyword arg
+
+    Args:
+        request: Request calling this method
+        *elements: variable length positional args used to make path
+        **kw: arbitrary keyword arguments
+
+    Returns:
+        result of the invoked request
     """
     # Should really be more careful about what gets included instead.
     # Cache cut response time from ~800ms to ~420ms.
@@ -68,7 +87,7 @@ def embed(request, *elements, **kw):
     # as_user controls whether or not the embed_cache is used
     # if request._indexing_view is True, always use the cache
     if as_user is not None and not request._indexing_view:
-        result, linked_uuids, rev_linked_uuids_by_item, agg_items = _embed(request, path, as_user)
+        cached = _embed(request, path, as_user)
     else:
         cached = embed_cache.get(path, None)
         if cached is None:
@@ -77,20 +96,24 @@ def embed(request, *elements, **kw):
             cached = _embed(request, path, as_user=subreq_user)
             # caching audits is safe because they don't add to linked_uuids
             embed_cache[path] = cached
-        result, linked_uuids, rev_linked_uuids_by_item, agg_items = cached
-        result = deepcopy(result)
+
+    # NOTE: if result was retrieved from ES, the following cached attrs will be
+    # empty: _aggregated_items, _linked_uuids, _rev_linked_by_item
+    result = deepcopy(cached['result'])
+
     # aggregated_items may be cached; if so, add them to the request
     # these conditions only fulfilled when using @@embedded and aggregated
     # items have NOT yet been processed (_aggregate_for is removed if so)
     if index_uuid and getattr(request, '_aggregate_for').get('uuid') == index_uuid:
-        request._aggregated_items = agg_items
+        request._aggregated_items = cached['_aggregated_items']
         request._aggregate_for['uuid'] = None
     # hardcode this because audits can cause serious problems with frame=page
     if '@@audit' not in path:
-        request._linked_uuids.update(linked_uuids)
+        request._linked_uuids.update(cached['_linked_uuids'])
+        request._sid_cache.update(cached['_sid_cache'])
         # this is required because rev_linked_uuids_by_item is formatted as
         # a dict keyed by item with value of set of uuids rev linking to that item
-        for item, rev_links in rev_linked_uuids_by_item.items():
+        for item, rev_links in cached['_rev_linked_by_item'].items():
             if item in request._rev_linked_uuids_by_item:
                 request._rev_linked_uuids_by_item[item].update(rev_links)
             else:
@@ -99,12 +122,28 @@ def embed(request, *elements, **kw):
 
 
 def _embed(request, path, as_user='EMBED'):
+    """
+    Helper function used in embed() that creates the subrequest and actually
+    invokes it. Sets a number of attributes from the parent request and
+    returns a dictionary containing the result and a number of attributes
+    from the invoked subreq.
+
+    Args:
+        request: Request object
+        path (str): subrequest path to invoke
+        as_user (str/bool): involved in setting subreq.remote_user
+
+    Returns:
+        dict containing the result and a number of subrequest attributes
+    """
     # Carl: the subrequest is 'built' here, but not actually invoked
     subreq = make_subrequest(request, path)
+    # these attributes are propogated across the subrequest
     subreq.override_renderer = 'null_renderer'
     subreq._indexing_view = request._indexing_view
     subreq._aggregate_for = request._aggregate_for
     subreq._aggregated_items = request._aggregated_items
+    subreq._sid_cache = request._sid_cache
     # pass the uuids we want to run audits on
     if '@@audit' in path:
         subreq._audit_uuids = request._audit_uuids
@@ -117,8 +156,10 @@ def _embed(request, path, as_user='EMBED'):
         result = request.invoke_subrequest(subreq)
     except HTTPNotFound:
         raise KeyError(path)
-    return (result, subreq._linked_uuids,
-            subreq._rev_linked_uuids_by_item, subreq._aggregated_items)
+    return {'result': result, '_linked_uuids': subreq._linked_uuids,
+            '_rev_linked_by_item': subreq._rev_linked_uuids_by_item,
+            '_aggregated_items': subreq._aggregated_items,
+            '_sid_cache': subreq._sid_cache}
 
 
 class NullRenderer:

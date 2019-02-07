@@ -71,8 +71,15 @@ def index(request):
         # actually index
         # try to ensure ES is reasonably up to date
         es.indices.refresh(index='_all')
-        # prepare_for_indexing
 
+        # NOTE: the refresh interval is left as default because it doesn't seem
+        # to help performance much.
+        # However, disabling it is okay, since check_es_and_cache_linked_sids
+        # uses a GET, which will call a refresh if needed
+        # Enabling the line below adds ~1.5 second overhead before and after indexing
+        # es.indices.put_settings(index='_all', body={'index' : {'refresh_interval': '-1'}})
+
+        # prepare_for_indexing
         indexing_record['errors'] = indexer.update_objects(request, indexing_counter)
         index_finish_time = datetime.datetime.now()
         indexing_record['indexing_finished'] = index_finish_time.isoformat()
@@ -103,8 +110,11 @@ def index(request):
                     if 'error_message' in item:
                         log.error('Indexing error', **item)
                         item['error_message'] = "Error occured during indexing, check the logs"
-    # this will make documents in all lucene buffers available to search
-    es.indices.refresh(index='_all')
+
+        # this will make documents in all lucene buffers available to search
+        es.indices.refresh(index='_all')
+        # resets the refresh_interval to the default value (must reset if disabled earlier)
+        # es.indices.put_settings(index='_all', body={'index' : {'refresh_interval': '1s'}})
     return indexing_record
 
 
@@ -121,16 +131,13 @@ class Indexer(object):
         # indexing is either run with sync uuids passed through the request
         # (which is synchronous) OR uuids from the queue
         sync_uuids = request.json.get('uuids', None)
+
         # actually index
-        # TODO: these provides large speed increases... need to test with live data more to see
-        # if it produces correct resutls
-        # self.es.indices.put_settings(index='_all', body={'index' : {'refresh_interval': '-1'}})
         if sync_uuids:
             errors = self.update_objects_sync(request, sync_uuids, counter)
         else:
             errors = self.update_objects_queue(request, counter)
-        # resets the refresh_interval to the default value
-        self.es.indices.put_settings(index='_all', body={'index' : {'refresh_interval': None}})
+
 
     def get_messages_from_queue(self, skip_deferred=False):
         """
@@ -288,12 +295,11 @@ class Indexer(object):
                       curr_time=None, target_queue=None, telemetry_id=None):
         """
         Actually index the uuid using the index-data view.
-        add_to_secondary is a set that gets the uuids_rev_linked_to_me
+        add_to_secondary is a set that gets the rev_linked_to_me
         from the request.embed(/<uuid>/@@index-data)
         target_queue is an optional string queue name:
             'primary', 'secondary', or 'deferred'
         """
-
         # logging constant
         cat = 'index object'
 
@@ -341,7 +347,7 @@ class Indexer(object):
         # find_and_queue_secondary_items() serves to find rev_linking items that
         # are currently in ES; this will pick up new rev links as well
         if add_to_secondary is not None:
-            add_to_secondary.update(result['uuids_rev_linked_to_me'])
+            add_to_secondary.update(result['rev_linked_to_me'])
 
         last_exc = None
         for backoff in [0, 1, 2]:

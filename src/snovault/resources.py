@@ -8,7 +8,10 @@ from pyramid.security import (
     Allow,
     Everyone,
 )
-from pyramid.traversal import resource_path
+from pyramid.traversal import (
+    resource_path,
+    traverse,
+)
 from .calculated import (
     calculate_properties,
     calculated_property,
@@ -206,6 +209,7 @@ class Item(Resource):
     rev = {}
     aggregated_items = {}
     embedded_list = []
+    filtered_rev_statuses = ()
     audit_inherit = None
     schema = None
     AbstractCollection = AbstractCollection
@@ -261,23 +265,50 @@ class Item(Resource):
 
     def get_rev_links(self, request, name):
         """
-        Return all rev links for this item under field with <name>
-        Requires a request; if request._indexing view, add these uuids
-        to request._rev_linked_uuids_by_item, which controls invalidation of
-        newly created rev links.
-        _rev_linked_uuids_by_item is a list of dictionaries in form:
-        {<item uuid originating rev link>: <item uuid that is rev linked to>}
+        Return a list of uuid rev_links for the given rev name (in self.rev)
+        from the given item.
+
+        Args:
+            request: current Request
+            name (str): name of the rev (must be in self.rev)
+
+        Returns:
+            list of str uuids of the given rev_link
         """
         types = self.registry[TYPES]
         type_name, rel = self.rev[name]
         types = types[type_name].subtypes
-        uuids = self.registry[CONNECTION].get_rev_links(self.model, rel, *types)
+        # if we are indexing, update the following request attributes
+        return self.registry[CONNECTION].get_rev_links(self.model, rel, *types)
+
+    def get_filtered_rev_links(self, request, name):
+        """
+        Run get_rev_links, but only return items that do not have a status
+        in self.filtered_rev_statuses (a tuple defined on the Item)
+        If we are indexing, add rev_link info to _rev_linked_uuids_by_item.
+
+        Args:
+            request: current Request
+            name (str): name of the rev (must be in self.rev)
+
+        Returns:
+            list of str uuids of the given rev_link, filtered by status
+        """
+        # Consider caching rev links on the request? Would save DB requests
+        # May not be worth it because they are quite fast
+        rev_uuids = self.get_rev_links(request, name)
+        filtered_uuids = [
+            str(rev_id) for rev_id in rev_uuids
+            if traverse(request.root, str(rev_id))['context'].__json__(request).get('status')
+            not in self.filtered_rev_statuses
+        ]
         if getattr(request, '_indexing_view', False) is True:
+            to_update = {name: filtered_uuids}
             if str(self.uuid) in request._rev_linked_uuids_by_item:
-                request._rev_linked_uuids_by_item[str(self.uuid)].update([str(id) for id in uuids])
+                request._rev_linked_uuids_by_item[str(self.uuid)].update(to_update)
             else:
-                request._rev_linked_uuids_by_item[str(self.uuid)] = set([str(id) for id in uuids])
-        return uuids
+                request._rev_linked_uuids_by_item[str(self.uuid)] = to_update
+        return filtered_uuids
 
     def unique_keys(self, properties):
         return {
@@ -320,8 +351,12 @@ class Item(Resource):
             uuid_to_path(request, properties, path)
 
         # if indexing, add the uuid of this object to request._linked_uuids
+        # and add the sid to _sid_cache if not already present
         if getattr(request, '_indexing_view', False) is True:
             request._linked_uuids.add(str(self.uuid))
+            if str(self.uuid) not in request._sid_cache:
+                request._sid_cache[str(self.uuid)] = self.sid
+
         return properties
 
     def __resource_url__(self, request, info):

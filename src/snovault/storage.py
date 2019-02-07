@@ -35,6 +35,7 @@ from .interfaces import (
 import boto3
 import transaction
 import uuid
+import time
 
 
 _DBSESSION = None
@@ -55,6 +56,7 @@ def includeme(config):
 
 Base = declarative_base()
 
+# baked queries allow for caching of query construction to save Python overhead
 bakery = baked.bakery()
 baked_query_resource = bakery(lambda session: session.query(Resource))
 baked_query_unique_key = bakery(
@@ -67,6 +69,10 @@ baked_query_unique_key = bakery(
         ),
     ).filter(Key.name == bindparam('name'), Key.value == bindparam('value'))
 )
+# Baked queries can be used with expanding params (lists)
+# https://docs.sqlalchemy.org/en/latest/orm/extensions/baked.html#baked-in
+baked_query_sids = bakery(lambda session: session.query(CurrentPropertySheet))
+baked_query_sids += lambda q: q.filter(CurrentPropertySheet.rid.in_(bindparam('rids', expanding=True)))
 
 
 class RDBStorage(object):
@@ -89,6 +95,21 @@ class RDBStorage(object):
         if model is None:
             return default
         return model
+
+    def get_by_uuid_direct(self, rid, item_type, default=None):
+        """
+        This method is meant to only work with ES, so return None (default)
+        for the DB implementation
+
+        Args:
+            rid (str): item rid (uuid)
+            item_type (str): item_type of the target resource (Item.item_type)
+            default: View to return on a failure. Defaults to None.
+
+        Returns:
+            default
+        """
+        return default
 
     def get_by_unique_key(self, unique_key, name, default=None):
         session = self.DBSession()
@@ -113,7 +134,6 @@ class RDBStorage(object):
         except (NoResultFound, MultipleResultsFound):
             return default
 
-
     def get_rev_links(self, model, rel, *item_types):
         if item_types:
             return [
@@ -121,6 +141,26 @@ class RDBStorage(object):
                 if link.rel == rel and link.source.item_type in item_types]
         else:
             return [link.source_rid for link in model.revs if link.rel == rel]
+
+    def get_sids_by_uuids(self, rids):
+        """
+        Take a list of rids and return the sids from all of them using the
+        CurrentPropertySheet table. This follows the convention of only using
+        Resources with the default '' name.
+
+        Args:
+            rids (list): list of string rids (uuids)
+
+        Returns:
+            dict keyed by rid with integer sid values
+        """
+        if not rids:
+            return []
+        session = self.DBSession()
+        results = baked_query_sids(session).params(rids=rids).all()
+        # check res.name to skip sids for supplementary rows, like 'downloads'
+        data = {str(res.rid): res.sid for res in results if res.name == ''}
+        return data
 
     def __iter__(self, *item_types):
         session = self.DBSession()
@@ -644,15 +684,11 @@ def record_transaction_data(session):
 
     record = data['_snovault_transaction_record']
 
-    # txn.note(text)
     if txn.description:
         data['description'] = txn.description
 
-    # txn.setUser(user_name, path='/') -> '/ user_name'
-    # Set by pyramid_tm as (userid, '')
     if txn.user:
-        user_path, userid = txn.user.split(' ', 1)
-        data['userid'] = userid
+        data['userid'] = txn.user
 
     record.data = {k: v for k, v in data.items() if not k.startswith('_')}
     session.add(record)

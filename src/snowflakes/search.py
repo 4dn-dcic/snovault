@@ -11,7 +11,6 @@ from snovault.fourfront_utils import get_jsonld_types_from_collection_type
 from elasticsearch.helpers import scan
 from elasticsearch_dsl import Search
 from pyramid.httpexceptions import HTTPBadRequest
-from pyramid.security import effective_principals
 from urllib.parse import urlencode
 from collections import OrderedDict
 from copy import deepcopy
@@ -24,6 +23,13 @@ def includeme(config):
     config.scan(__name__)
 
 sanitize_search_string_re = re.compile(r'[\\\+\-\&\|\!\(\)\{\}\[\]\^\~\:\/\\\*\?]')
+
+COMMON_EXCLUDED_URI_PARAMS = [
+    'frame', 'format', 'limit', 'sort', 'from', 'field',
+    'mode', 'redirected_from', 'datastore', 'referrer',
+    'currentAction'
+]
+
 
 @view_config(route_name='search', request_method='GET', permission='search')
 def search(context, request, search_type=None, return_generator=False, forced_type='Search'):
@@ -44,7 +50,7 @@ def search(context, request, search_type=None, return_generator=False, forced_ty
         'notification': '',
         'sort': {}
     }
-    principals = effective_principals(request)
+    principals = request.effective_principals
 
     es = request.registry[ELASTIC_SEARCH]
     search_audit = request.has_permission('search_audit')
@@ -181,9 +187,8 @@ def get_available_facets(context, request, search_type=None):
     types = request.registry[TYPES]
     doc_types = set_doc_types(request, types, search_type)
     schemas = (types[item_type].schema for item_type in doc_types)
-    principals = effective_principals(request)
     prepared_terms = prepare_search_term(request)
-    facets = initialize_facets(types, doc_types, request.has_permission('search_audit'), principals, prepared_terms, schemas)
+    facets = initialize_facets(types, doc_types, request.has_permission('search_audit'), request.effective_principals, prepared_terms, schemas)
 
     ### Mini version of format_facets
     result = []
@@ -319,7 +324,7 @@ def prepare_search_term(request):
     prepared_terms = {}
     prepared_vals = []
     for field, val in request.params.iteritems():
-        if field.startswith('audit'):
+        if field.startswith('audit') or field.startswith('aggregated_items'):
             continue
         elif field == 'q': # searched string has field 'q'
             # people shouldn't provide multiple queries, but if they do,
@@ -329,30 +334,11 @@ def prepare_search_term(request):
                 prepared_terms['q'] = ' AND '.join(join_list)
             else:
                 prepared_terms['q'] = val
-        elif field not in ['type', 'frame', 'format', 'limit', 'sort', 'from', 'field', 'before', 'after']:
+        elif field not in COMMON_EXCLUDED_URI_PARAMS + ['type']:
             if 'embedded.' + field not in prepared_terms.keys():
                 prepared_terms['embedded.' + field] = []
             prepared_terms['embedded.' + field].append(val)
-    if 'q' in prepared_terms:
-        prepared_terms['q'] = process_query_string(prepared_terms['q'])
     return prepared_terms
-
-
-def process_query_string(search_query):
-    from antlr4 import IllegalStateException
-    from lucenequery.prefixfields import prefixfields
-    from lucenequery import dialects
-    if search_query == '*':
-        return search_query
-    # avoid interpreting slashes as regular expressions
-    search_query = search_query.replace('/', r'\/')
-    try:
-        query = prefixfields('embedded.', search_query, dialects.elasticsearch)
-    except (IllegalStateException):
-        msg = "Invalid query: {}".format(search_query)
-        raise HTTPBadRequest(explanation=msg)
-    else:
-        return query.getText()
 
 
 def set_doc_types(request, types, search_type):

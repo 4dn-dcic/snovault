@@ -86,7 +86,7 @@ def test_linked_uuids_real(workbook, testapp, app):
     test_case = res['@graph'][0]
     test_uuids = recursively_find_uuids(test_case, set())
     test_doc = es.get(index='snowflake', doc_type='snowflake', id=test_case['uuid'])
-    linked_uuids = set(test_doc['_source']['linked_uuids'])
+    linked_uuids = [link['uuid'] for link in test_doc['_source']['linked_uuids_embedded']]
     # uuids in the doc are a subset of total linked_uuids, which include
     # uuids embedded and referenced in embedded calc properties
     assert set(test_uuids) <= set(linked_uuids)

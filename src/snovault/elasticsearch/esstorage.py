@@ -81,7 +81,7 @@ class CachedModel(object):
 
     @property
     def sid(self):
-        return self.source.get('sid')
+        return self.source['sid']
 
     def used_for(self, item):
         alsoProvides(item, ICachedItem)
@@ -115,7 +115,6 @@ class PickStorage(object):
                 return self.write.get_by_unique_key(unique_key, name)
         return model
 
-
     def get_by_json(self, key, value, item_type, default=None):
         storage = self.storage()
         model = storage.get_by_json(key, value, item_type)
@@ -123,7 +122,6 @@ class PickStorage(object):
             if model is None:
                 return self.write.get_by_json(key, value, item_type)
         return model
-
 
     def find_uuids_linked_to_item(self, rid):
         """
@@ -151,7 +149,6 @@ class PickStorage(object):
                 })
         return linked_info
 
-
     def purge_uuid(self, rid, item_type=None):
         """
         Attempt to purge an item by given resource id (rid), completely
@@ -165,12 +162,13 @@ class PickStorage(object):
             raise HTTPLocked(detail="Cannot purge item as other items still link to it",
                              comment=uuids_linking_to_item)
         log.error('PURGE: purging %s' % rid)
+
         # delete the item from DB
         self.write.purge_uuid(rid)
         # delete the item from ES and also the mirrored ES if present
         self.read.purge_uuid(rid, item_type, self.registry)
         # queue related items for reindexing
-        self.registry[INDEXER].find_and_queue_secondary_items(set(rid), set())
+        self.registry[INDEXER].find_and_queue_secondary_items(set([rid]), set())
 
     def get_rev_links(self, model, rel, *item_types):
         return self.storage().get_rev_links(model, rel, *item_types)
@@ -204,10 +202,57 @@ class ElasticSearchStorage(object):
         return model
 
     def get_by_uuid(self, uuid):
+        """
+        This calls a search, and index/doc_type does not need to be provided
+        Returns a CachedModel built with the es hit, or None if it is not found
+
+        Args:
+            uuid (str): uuid of the item to find
+
+        Returns:
+            CachedModel of the hit or None
+        """
         search = Search(using=self.es)
         id_query = Q('ids', values=[str(uuid)])
         search = search.query(id_query)
         return self._one(search)
+
+    def get_by_uuid_direct(self, uuid, item_type):
+        """
+        See if a document exists under the index/doc_type given by item_type.
+        self.es.get calls a GET request, which will refresh the given
+        document (and all other docs) in realtime, if necessary. Explicitly
+        ignore 404 responses from elasticsearch to reduce logging.
+
+        NOTE: this function DOES NOT use CachedModel, as it is used for direct
+              querying of ES items during indexing only. It might be performant
+              to set the CachedModel from these results; see commented code
+              below. Right now, I'm not doing it because get_by_uuid_direct
+              is possibly called very often during indexing.
+
+        Args:
+            uuid (str): uuid of the item to GET
+            item_type (str): item_type of the item to GET
+
+        Returns:
+            The _source value from the document, if it exists
+        """
+        # use the CachedModel. Would need to change usage of get_by_uuid_direct
+        # in snovault to res.source from res['_source']
+        # try:
+        #     res = self.es.get(index=item_type, doc_type=item_type, id=uuid,
+        #                       _source=True, realtime=True, ignore=404)
+        # except elasticsearch.exceptions.NotFoundError:
+        #     model = None
+        # else:
+        #     model = CachedModel(res)
+        # return model
+        try:
+            res = self.es.get(index=item_type, doc_type=item_type, id=uuid,
+                              _source=True, realtime=True, ignore=404)
+        except elasticsearch.exceptions.NotFoundError:
+            res = None
+        return res
 
     def get_by_json(self, key, value, item_type, default=None):
         # find the term with the specific type
@@ -216,7 +261,6 @@ class ElasticSearchStorage(object):
         search = search.filter('term', **{term: value})
         search = search.filter('type', value=item_type)
         return self._one(search)
-
 
     def get_by_unique_key(self, unique_key, name):
         term = 'unique_keys.' + unique_key
@@ -237,6 +281,18 @@ class ElasticSearchStorage(object):
             search = search.filter('terms', item_type=item_types)
         hits = search.execute()
         return [hit.to_dict().get('uuid', hit.to_dict().get('_id')) for hit in hits]
+
+    def get_sids_by_uuids(self, rids):
+        """
+        Currently not implemented. Just return an empty dict
+
+        Args:
+            rids (list): list of string rids (uuids)
+
+        Returns:
+            dict keyed by rid with integer sid values
+        """
+        return {}
 
     def purge_uuid(self, rid, item_type=None, registry=None):
         """

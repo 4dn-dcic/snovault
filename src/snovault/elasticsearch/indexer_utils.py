@@ -21,7 +21,7 @@ def find_uuids_for_indexing(registry, updated, log=None):
                         'should': [
                             {
                                 'terms': {
-                                    'linked_uuids': list(updated),
+                                    'linked_uuids_embedded.uuid': list(updated),
                                     '_cache': False,
                                 }
                             }

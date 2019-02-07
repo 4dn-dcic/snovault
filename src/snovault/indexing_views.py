@@ -8,7 +8,7 @@ from pyramid.traversal import resource_path
 from pyramid.view import view_config
 from .resources import Item
 from .authentication import calc_principals
-
+from .interfaces import STORAGE
 
 def includeme(config):
     config.scan(__name__)
@@ -19,6 +19,21 @@ class SidException(Exception):
     pass
 
 
+def join_linked_uuids_sids(request, uuids):
+    """
+    Simply iterate through the uuids and return an array of dicts containing
+    uuid and sid (from request._sid_cache)
+
+    Args:
+        request: current Request object
+        uuids: list of string uuids
+
+    Returns:
+        A list of dicts containing uuid and up-to-date db sid
+    """
+    return [{'uuid': uuid, 'sid': request._sid_cache[uuid]} for uuid in uuids]
+
+
 @view_config(context=Item, name='index-data', permission='index', request_method='GET')
 def item_index_data(context, request):
     """
@@ -26,16 +41,16 @@ def item_index_data(context, request):
     for the given item. If an int sid is provided as a request parameter,
     will raise an sid exception if the current item context is behind the
     given sid.
-    Computationally intensive. Performs the full embedding and calculates
-    audits and aggregated_items, among other things.
+    Computationally intensive. Calculates the object, embedded, and audit views
+    for the given item, using ES results where possible for speed. Leverages
+    a number of attributes on the request to get information indexing needs.
 
     Args:
         context: current Item
-        request: current request
+        request: current Request
 
     Returns:
-        A dictionary document representing the full data to index for the
-        given item
+        A dict document representing the full data to index for the given item
     """
     uuid = str(context.uuid)
     properties = context.upgrade_properties()
@@ -80,7 +95,14 @@ def item_index_data(context, request):
     # setting _indexing_view enables the embed_cache and cause population of
     # request._linked_uuids and request._rev_linked_uuids_by_item
     request._indexing_view = True
-    # reset these properties
+
+    # run the object view first
+    request._linked_uuids = set()
+    object_view = request.invoke_view(path, '@@object')
+    linked_uuids_object = request._linked_uuids.copy()
+    rev_link_names = request._rev_linked_uuids_by_item.get(uuid, {}).copy()
+
+    # reset these properties, then run embedded view
     request._linked_uuids = set()
     request._audit_uuids = set()
     request._rev_linked_uuids_by_item = {}
@@ -90,26 +112,31 @@ def item_index_data(context, request):
     }
     # since request._indexing_view is set to True in indexer.py,
     # all embeds (including subrequests) below will use the embed cache
-    embedded = request.invoke_view(path, '@@embedded', index_uuid=uuid)
+    embedded_view = request.invoke_view(path, '@@embedded', index_uuid=uuid)
     # get _linked and _rev_linked uuids from the request before @@audit views add to them
-    linked_uuids = request._linked_uuids.copy()
-    rev_linked_by_item = request._rev_linked_uuids_by_item.copy()
+    linked_uuids_embedded = request._linked_uuids.copy()
+
     # find uuids traversed that rev link to this item
-    rev_linked_to_me = set([id for id in rev_linked_by_item if uuid in rev_linked_by_item[id]])
-    # get the important information from the aggregated items
+    rev_linked_to_me = set()
+    for rev_id, rev_names in request._rev_linked_uuids_by_item.items():
+        if any([uuid in rev_names[name] for name in rev_names]):
+            rev_linked_to_me.add(rev_id)
+            continue
     aggregated_items = {agg: res['items'] for agg, res in request._aggregated_items.items()}
-    # set the uuids we want to audit on
-    request._audit_uuids = linked_uuids
-    audit = request.invoke_view(path, '@@audit')['audit']
-    obj = request.invoke_view(path, '@@object')
+
+    # lastly, run the audit view. Set the uuids we want to audit on
+    request._audit_uuids = list(linked_uuids_embedded)
+    audit_view = request.invoke_view(path, '@@audit')['audit']
+
     document = {
         'aggregated_items': aggregated_items,
-        'audit': audit,
-        'embedded': embedded,
+        'audit': audit_view,
+        'embedded': embedded_view,
         'item_type': context.type_info.item_type,
-        'linked_uuids': sorted(linked_uuids),
+        'linked_uuids_embedded': join_linked_uuids_sids(request, linked_uuids_embedded),
+        'linked_uuids_object': join_linked_uuids_sids(request, linked_uuids_object),
         'links': links,
-        'object': obj,
+        'object': object_view,
         'paths': sorted(paths),
         'principals_allowed': principals_allowed,
         'properties': properties,
@@ -117,10 +144,11 @@ def item_index_data(context, request):
             name: context.propsheets[name]
             for name in context.propsheets.keys() if name != ''
         },
+        'rev_link_names': rev_link_names,
         'sid': context.sid,
         'unique_keys': unique_keys,
         'uuid': uuid,
-        'uuids_rev_linked_to_me': sorted(rev_linked_to_me)
+        'rev_linked_to_me': sorted(rev_linked_to_me)
     }
 
     return document

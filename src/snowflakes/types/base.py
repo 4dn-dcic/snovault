@@ -67,8 +67,12 @@ ALLOW_SUBMITTER_ADD = [
 
 
 def paths_filtered_by_status(request, paths, exclude=('deleted', 'replaced'), include=None):
-    """filter out status that shouldn't be visible.
-    Also convert path to str as functions like rev_links return uuids"""
+    """
+    This function has been deprecated in Fourfront, but is still used by
+    access_keys calc property in types/user.py (only for snowflakes)
+    filter out status that shouldn't be visible.
+    Also convert path to str as functions like rev_links return uuids
+    """
     if include is not None:
         return [
             path for path in paths
@@ -134,6 +138,7 @@ class Item(snovault.Item):
         'active': ALLOW_CURRENT,
         'archived': ALLOW_CURRENT,
     }
+    filtered_rev_statuses = ('deleted', 'replaced')
 
     @property
     def __name__(self):
