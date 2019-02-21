@@ -70,7 +70,7 @@ class TestingDownload(ItemWithAttachment):
     }
 
 
-@collection('testing-link-sources-sno')
+@collection('testing-link-sources-sno', unique_key='testing_link_sources-sno:name')
 class TestingLinkSourceSno(Item):
     item_type = 'testing_link_source_sno'
     schema = {
@@ -78,6 +78,7 @@ class TestingLinkSourceSno(Item):
         'properties': {
             'name': {
                 'type': 'string',
+                'uniqueKey': True,
             },
             'uuid': {
                 'type': 'string',

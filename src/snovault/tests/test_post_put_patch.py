@@ -245,11 +245,20 @@ def test_put_object_editing_child(content_with_child, testapp):
     assert res.json['description'] == 'Failed validation'
 
 
-def test_name_key_validation(testapp):
-    from snovault.validation import ValidationFailure
-    target_data = {'name': 'one#?name'}
-    with pytest.raises(ValidationFailure):
-        res = testapp.post_json(COLLECTION_URL, target_data)
+def test_name_key_validation(link_targets, testapp):
+    # name_key
+    target_data = {'name': 'one#name'}
+    res = testapp.post_json('/testing-link-targets-sno/', target_data, status=422)
+    assert res.json['description'] == 'Failed validation'
+    res_error = res.json['errors'][0]
+    assert "Forbidden character(s) {'#'}" in res_error['description']
+
+    # unique_key
+    source_data = {'name': 'two@*name', 'target': targets[0]['uuid']}
+    res = testapp.post_json('/testing-link-sources-sno/', source_data, status=422)
+    assert res.json['description'] == 'Failed validation'
+    res_error = res.json['errors'][0]
+    assert "Forbidden character(s) {'*'}" in res_error['description']
 
 
 def test_retry(testapp):

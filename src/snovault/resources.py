@@ -384,14 +384,14 @@ class Item(Resource):
         that interfere with the resource_path. Currently, we allow all
         alphanumeric characters and few others
         """
-        also_allowed = ['_', '-', ':', ',', '@']
+        also_allowed = ['_', '-', ':', ',', '.', ' ', '@']
         if not isinstance(value, basestring):
             raise ValueError('Identifying property %s must be a string. Value: %s' % (field, value))
         forbidden = [char for char in value
                      if (not char.isalnum() and char not in also_allowed)]
         if any(forbidden):
             msg = ("Forbidden character(s) %s are not allowed in field: %s. Value: %s"
-                   % (forbidden, field, value))
+                   % (set(forbidden), field, value))
             raise ValidationFailure('body', [], msg)
 
     def update(self, properties, sheets=None):
