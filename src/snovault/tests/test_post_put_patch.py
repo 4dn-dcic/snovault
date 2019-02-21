@@ -245,6 +245,12 @@ def test_put_object_editing_child(content_with_child, testapp):
     assert res.json['description'] == 'Failed validation'
 
 
+def test_name_key_validation(testapp):
+    from snovault.validation import ValidationFailure
+    target_data = {'name': 'one#?name'}
+    with pytest.raises(ValidationFailure):
+        res = testapp.post_json(COLLECTION_URL, target_data)
+
 
 def test_retry(testapp):
     res = testapp.post_json(COLLECTION_URL, {'required': ''})

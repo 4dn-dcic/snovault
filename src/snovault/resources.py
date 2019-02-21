@@ -29,7 +29,7 @@ from .util import (
     simple_path_ids,
     uuid_to_path
 )
-
+from past.builtins import basestring
 from .fourfront_utils import add_default_embeds
 
 logger = logging.getLogger(__name__)
@@ -237,6 +237,7 @@ class Item(Resource):
 
     @property
     def __name__(self):
+
         if self.name_key is None:
             return str(self.uuid)
         return self.properties.get(self.name_key, None) or str(self.uuid)
@@ -317,6 +318,9 @@ class Item(Resource):
         }
 
     def upgrade_properties(self):
+        """
+        Calls the upgrader on the Item if properties.schema_version is not current
+        """
         try:
             properties = deepcopy(self.properties)
         except KeyError:
@@ -345,7 +349,7 @@ class Item(Resource):
     def item_with_links(self, request):
         # This works from the schema rather than the links table
         # so that upgrade on GET can work.
-        ### context.__json__ CALLS THE UPGRADER (upgrade_properties) ###
+        # context.__json__ CALLS THE UPGRADER (upgrade_properties)
         properties = self.__json__(request)
         for path in self.type_info.schema_links:
             uuid_to_path(request, properties, path)
@@ -356,7 +360,6 @@ class Item(Resource):
             request._linked_uuids.add(str(self.uuid))
             if str(self.uuid) not in request._sid_cache:
                 request._sid_cache[str(self.uuid)] = self.sid
-
         return properties
 
     def __resource_url__(self, request, info):
@@ -374,6 +377,22 @@ class Item(Resource):
         item_instance = cls(registry, model)
         item_instance._update(properties, sheets)
         return item_instance
+
+    def validate_path_characters(self, field, value):
+        """
+        Check that the field with given value does not contain any characters
+        that interfere with the resource_path. Currently, we allow all
+        alphanumeric characters and few others
+        """
+        also_allowed = ['_', '-', ':', ',', '@']
+        if not isinstance(value, basestring):
+            raise ValueError('Identifying property %s must be a string. Value: %s' % (field, value))
+        forbidden = [char for char in value
+                     if (not char.isalnum() and char not in also_allowed)]
+        if any(forbidden):
+            msg = ("Forbidden character(s) %s are not allowed in field: %s. Value: %s"
+                   % (forbidden, field, value))
+            raise ValidationFailure('body', [], msg)
 
     def update(self, properties, sheets=None):
         '''Alias of _update, called in crud_views.py - `update_item` (method)'''
@@ -394,14 +413,21 @@ class Item(Resource):
                 properties = properties.copy()
                 del properties['uuid']
 
+            # validation on name key and unique keys
+            nk_val = properties.get(self.name_key, '')
+            self.validate_path_characters(self.name_key, nk_val)
+
             unique_keys = self.unique_keys(properties)
             for k, values in unique_keys.items():
                 if len(set(values)) != len(values):
                     msg = "Duplicate keys for %r: %r" % (k, values)
                     raise ValidationFailure('body', [], msg)
+                for uk_val in values:
+                    self.validate_path_characters(k, uk_val)
 
             links = self.links(properties)
 
+        # actually propogate the update to the DB
         connection = self.registry[CONNECTION]
         connection.update(self.model, properties, sheets, unique_keys, links)
 

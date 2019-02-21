@@ -53,6 +53,7 @@ def item_index_data(context, request):
         A dict document representing the full data to index for the given item
     """
     uuid = str(context.uuid)
+    # upgrade_properties calls necessary upgraders based on schema_version
     properties = context.upgrade_properties()
 
     # if we want to check an sid, it should be set as a query param
