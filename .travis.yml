@@ -4,7 +4,8 @@ cache:
   pip: true
   directories:
   - eggs
-  - ".npm"
+  - .npm
+  - ~/.npm
   - node_modules
 addons:
   apt:

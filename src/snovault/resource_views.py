@@ -180,7 +180,7 @@ def item_view_embedded(context, request):
     Args:
         context: current Item
         request: current Request
-        
+
     Returns:
         Dictionary item properties
     """
