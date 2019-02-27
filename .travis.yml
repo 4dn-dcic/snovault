@@ -4,7 +4,8 @@ cache:
   pip: true
   directories:
   - eggs
-  - ".npm"
+  - .npm
+  - ~/.npm
   - node_modules
 addons:
   apt:
@@ -59,7 +60,7 @@ notifications:
 before_install:
 - postgres --version
 - initdb --version
-- nvm install 4
+- nvm install 10
 - node --version
 - npm config set python /usr/bin/python2.7
 install:

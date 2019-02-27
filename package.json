@@ -1,26 +1,20 @@
 {
-  "name": "snowflakes",
+  "name": "4DN",
   "version": "0.0.0",
   "description": "domready held back.",
   "scripts": {
     "test": "jest",
-    "build": "gulp build",
+    "build": "gulp --max-old-space-size=4096 build",
     "dev": "gulp dev"
   },
   "author": "",
   "license": "MIT",
   "files": [],
-  "repository": "ENCODE-DCC/encoded",
+  "repository": "4dn-dcic/snovault",
   "jest": {
-    "rootDir": "src/snowflakes/static",
+    "rootDir": "src/encoded/static",
     "setupFiles": [
       "../../../jest/environment.js"
-    ],
-    "unmockedModulePathPatterns": [
-      "node_modules/react",
-      "node_modules/underscore",
-      "libs/react-patches",
-      "jsdom"
     ]
   },
   "devDependencies": {
@@ -30,13 +24,13 @@
     "babel-plugin-transform-object-rest-spread": "^6.6.5",
     "babel-preset-es2015": "^6.6.0",
     "babel-preset-react": "^6.5.0",
-    "gulp": "^3.9.1",
-    "gulp-util": "^3.0.7",
+    "gulp": "^4.0.0",
     "jest-cli": "^12.0.1",
     "jsdom": "^8.4.0",
     "json-loader": "^0.5.4",
     "string-replace-loader": "^1.0.0",
-    "webpack": "^1.13.0"
+    "webpack": "^1.13.0",
+    "plugin-error": "^1.0.1"
   },
   "dependencies": {
     "babel-polyfill": "^6.7.4",
