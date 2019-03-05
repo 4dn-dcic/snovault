@@ -4,6 +4,7 @@ from elasticsearch.exceptions import (
     TransportError,
 )
 from ..indexing_views import SidException
+from ..embed import MissingIndexItemException
 from pyramid.view import view_config
 from urllib3.exceptions import ReadTimeoutError
 from .interfaces import (
@@ -324,6 +325,11 @@ class Indexer(object):
             duration = timer() - start
             log.bind(collection=result.get('item_type'))
             # log.info("Time to embed", duration=duration, cat="embed object")
+        except MissingIndexItemException as e:
+            # the item is likely purged. Bail and do not try to index again
+            duration = timer() - start
+            log.warning('Missing resource when indexing. Skipping', duration=duration, cat=cat)
+            return
         except SidException as e:
             duration = timer() - start
             log.warning('Invalid sid found', duration=duration, cat=cat)
