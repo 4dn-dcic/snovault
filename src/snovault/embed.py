@@ -29,6 +29,11 @@ def includeme(config):
     config.add_request_method(lambda request: None, '__parent__', reify=True)
 
 
+# really simple exception for when a primary indexed item gets HTTPNotFound
+class MissingIndexItemException(Exception):
+    pass
+
+
 def make_subrequest(request, path):
     """ Make a subrequest
 
@@ -128,6 +133,11 @@ def _embed(request, path, as_user='EMBED'):
     returns a dictionary containing the result and a number of attributes
     from the invoked subreq.
 
+    Another consideration, now that we're purging items from the DB, is that
+    primarily indexed items may be purged by the time they make it to _embed.
+    Check if @@index-data is in the request path to ensure this is the case,
+    and gracefully exit with MissingIndexItemException on HTTPNotFound if so.
+
     Args:
         request: Request object
         path (str): subrequest path to invoke
@@ -155,7 +165,12 @@ def _embed(request, path, as_user='EMBED'):
     try:
         result = request.invoke_subrequest(subreq)
     except HTTPNotFound:
-        raise KeyError(path)
+        if '@@index-data' in path:
+            # the resource to index is missing; likely purged
+            raise MissingIndexItemException(path)
+        else:
+            # the resource is unexpectedly missing
+            raise KeyError(path)
     return {'result': result, '_linked_uuids': subreq._linked_uuids,
             '_rev_linked_by_item': subreq._rev_linked_uuids_by_item,
             '_aggregated_items': subreq._aggregated_items,
