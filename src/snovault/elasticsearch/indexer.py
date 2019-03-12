@@ -328,7 +328,7 @@ class Indexer(object):
         except MissingIndexItemException as e:
             # the item is likely purged. Bail and do not try to index again
             duration = timer() - start
-            log.warning('Missing resource when indexing. Skipping', duration=duration, cat=cat)
+            log.error('Missing resource when indexing. Skipping', duration=duration, cat=cat)
             return
         except SidException as e:
             duration = timer() - start
