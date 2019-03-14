@@ -15,7 +15,7 @@ from .interfaces import (
 )
 from ..storage import RDBStorage
 from .indexer_utils import find_uuids_for_indexing
-from dcicutils import ff_utils, es_utils
+from dcicutils import es_utils
 import structlog
 
 log = structlog.getLogger(__name__)
@@ -313,16 +313,9 @@ class ElasticSearchStorage(object):
         if not registry:
             log.error('PURGE: Registry not available for ESStorage purge_uuid')
             return
-        # for data/staging, delete the item from the mirrored ES as well
-        if (registry[INDEXER_QUEUE_MIRROR] and
-            getattr(registry[INDEXER_QUEUE_MIRROR], 'env_name', None) != 'fourfront-backup'):
-            # get es information about the mirror env
-            mirror_env = registry[INDEXER_QUEUE_MIRROR].env_name
-            health_res = ff_utils.get_health_page(ff_env=mirror_env)
-            mirror_es = health_res.get('elasticsearch')
-            if not mirror_es:  # bail if we can't find elasticsearch address
-                log.error('PURGE: Couldn\'t read the health page for mirrored env %s' % mirror_env)
-                return
+        # if configured, delete the item from the mirrored ES as well
+        if registry.settings.get('mirror.env.es'):
+            mirror_es = registry.settings['mirror.env.es']
             use_aws_auth = registry.settings.get('elasticsearch.aws_auth')
             # make sure use_aws_auth is bool
             if not isinstance(use_aws_auth, bool):
@@ -332,9 +325,9 @@ class ElasticSearchStorage(object):
                 mirror_client.delete(id=rid, index=item_type, doc_type=item_type)
             except elasticsearch.exceptions.NotFoundError:
                 # Case: Not yet indexed
-                log.error('PURGE: Couldn\'t find %s in mirrored ElasticSearch (%s). Continuing.' % (rid, mirror_env))
+                log.error('PURGE: Couldn\'t find %s in mirrored ElasticSearch (%s). Continuing.' % (rid, mirror_es))
             except Exception as exc:
-                log.error('PURGE: Cannot delete %s in mirrored ElasticSearch (%s). Error: %s Continuing.' % (item_type, mirror_env, str(exc)))
+                log.error('PURGE: Cannot delete %s in mirrored ElasticSearch (%s). Error: %s Continuing.' % (item_type, mirror_es, str(exc)))
 
     def __iter__(self, *item_types):
         query = {'query': {
