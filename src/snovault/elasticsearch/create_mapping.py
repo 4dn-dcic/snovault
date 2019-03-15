@@ -1014,12 +1014,10 @@ def run(app, collections=None, dry_run=False, check_first=False, skip_indexing=F
     indexer_queue = registry[INDEXER_QUEUE]
     cat = 'start create mapping'
 
-    # we shouldn't have telemetry id here but just double check and set if not set
+    # always overwrite telemetry id
     global log
-    telemetry_id = log._context.get('telemetry_id', None)
-    if not telemetry_id:
-        telemetry_id='cm_run_' + datetime.datetime.now().isoformat()
-        log = log.bind(telemetry_id=telemetry_id)
+    telemetry_id='cm_run_' + datetime.datetime.now().isoformat()
+    log = log.bind(telemetry_id=telemetry_id)
     log.info('\n___CREATE-MAPPING___:\ncollections: %s\ncheck_first %s\n index_diff %s\n' %
                 (collections, check_first, index_diff), cat=cat)
     log.info('\n___ES___:\n %s\n' % (str(es.cat.client)), cat=cat)
