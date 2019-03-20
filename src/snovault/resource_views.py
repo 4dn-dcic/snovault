@@ -12,7 +12,9 @@ from pyramid.view import (
     render_view_to_response,
     view_config,
 )
+from pyramid.threadlocal import manager, get_current_request
 from urllib.parse import urlencode
+from timeit import default_timer as timer
 from .calculated import calculate_properties
 from .resources import (
     AbstractCollection,
@@ -27,9 +29,13 @@ from .util import (
     check_es_and_cache_linked_sids,
     validate_es_content
 )
+from .interfaces import STORAGE
+from .indexing_views import get_rev_linked_items
+from .elasticsearch.indexer_utils import find_uuids_for_indexing
 
 
 def includeme(config):
+    config.add_route('indexing-info', '/indexing-info')
     config.scan(__name__)
 
 
@@ -163,8 +169,8 @@ def item_view_object(context, request):
     return properties
 
 
-@view_config(context=Item, permission='view', request_method='GET',
-             name='embedded')
+@view_config(context=Item, permission='index', request_method='GET', name='force-embedded')
+@view_config(context=Item, permission='view', request_method='GET', name='embedded')
 def item_view_embedded(context, request):
     """
     Calculate and return the embedded view for an item. This is an intensive
@@ -295,8 +301,53 @@ def item_view_columns(context, request):
              name='raw')
 def item_view_raw(context, request):
     props = context.properties
+    # only upgrade properties if explicitly requested
     if asbool(request.params.get('upgrade', True)):
         props =  context.upgrade_properties()
     # add uuid to raw view
     props['uuid'] = str(context.uuid)
     return props
+
+
+@view_config(route_name='indexing-info', permission='index', request_method='GET')
+def indexing_info(request):
+    """
+    Endpoint to check some indexing-related properties of a given uuid, which
+    is provided using the `uuid=` query parameter. This route cannot be defined
+    with the context of a specific Item because that will cause the underlying
+    request to use a cached view from Elasticsearch and not properly run
+    the @@embedded view from the database.
+
+    If you do not want to calculate the embedded object, use `run=False`
+
+    Args:
+        request: current Request object
+
+    Returns:
+        dict response
+    """
+    uuid = request.params.get('uuid')
+    if not uuid:
+        return {'status': 'error', 'title': 'Error', 'message': 'ERROR! Provide a uuid to the query.'}
+
+    db_sid = request.registry[STORAGE].write.get_by_uuid(uuid).sid
+    es_sid = request.registry[STORAGE].read.get_by_uuid(uuid).sid
+    response = {'sid_db': db_sid, 'sid_es': es_sid, 'title': 'Indexing Info for %s' % uuid}
+    if asbool(request.params.get('run', True)):
+        request._indexing_view = True
+        request.datastore = 'database'
+        path = '/' + uuid + '/@@embedded'
+        start = timer()
+        embedded_view = request.invoke_view(path, index_uuid=uuid, as_user='INDEXER')
+        end = timer()
+        response['embedded_seconds'] = end - start
+        find_uuids = get_rev_linked_items(request, uuid)
+        response['uuids_rev_linked_to_this'] = list(find_uuids)
+        find_uuids.add(uuid)
+        assc_uuids = find_uuids_for_indexing(request.registry, find_uuids)
+        response['uuids_invalidated_by_this'] = list(assc_uuids)
+        response['description'] = 'Using live results for embedded view of %s. Query with run=False to skip this.' % uuid
+    else:
+        response['description'] = 'Query with run=True to calculate live information on invalidation and embedding time.'
+    response['status'] = 'success'
+    return response

@@ -34,6 +34,28 @@ def join_linked_uuids_sids(request, uuids):
     return [{'uuid': uuid, 'sid': request._sid_cache[uuid]} for uuid in uuids]
 
 
+def get_rev_linked_items(request, uuid):
+    """
+    Iterate through request._rev_linked_uuids_by_item, which is populated
+    during the embedding traversal process, to find the items that are reverse
+    linked to the given uuid
+
+    Args:
+        request: current Request object
+        uuid (str): uuid of the object in question
+
+    Returns:
+        A set of string uuids
+    """
+    # find uuids traversed that rev link to this item
+    rev_linked_to_me = set()
+    for rev_id, rev_names in request._rev_linked_uuids_by_item.items():
+        if any([uuid in rev_names[name] for name in rev_names]):
+            rev_linked_to_me.add(rev_id)
+            continue
+    return rev_linked_to_me
+
+
 @view_config(context=Item, name='index-data', permission='index', request_method='GET')
 def item_index_data(context, request):
     """
@@ -118,11 +140,7 @@ def item_index_data(context, request):
     linked_uuids_embedded = request._linked_uuids.copy()
 
     # find uuids traversed that rev link to this item
-    rev_linked_to_me = set()
-    for rev_id, rev_names in request._rev_linked_uuids_by_item.items():
-        if any([uuid in rev_names[name] for name in rev_names]):
-            rev_linked_to_me.add(rev_id)
-            continue
+    rev_linked_to_me = get_rev_linked_items(request, uuid)
     aggregated_items = {agg: res['items'] for agg, res in request._aggregated_items.items()}
 
     # lastly, run the audit view. Set the uuids we want to audit on
