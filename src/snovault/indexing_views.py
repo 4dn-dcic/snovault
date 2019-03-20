@@ -6,10 +6,12 @@ from pyramid.security import (
 )
 from pyramid.traversal import resource_path
 from pyramid.view import view_config
+from pyramid.settings import asbool
 from timeit import default_timer as timer
 from .resources import Item
 from .authentication import calc_principals
 from .interfaces import STORAGE
+from .elasticsearch.indexer_utils import find_uuids_for_indexing
 
 def includeme(config):
     config.add_route('indexing-info', '/indexing-info')
@@ -208,10 +210,9 @@ def indexing_info(request):
         end = timer()
         response['embedded_seconds'] = end - start
         find_uuids = get_rev_linked_items(request, uuid)
-        response['uuids_rev_linked_to_this'] = list(find_uuids)
         find_uuids.add(uuid)
         assc_uuids = find_uuids_for_indexing(request.registry, find_uuids)
-        response['uuids_invalidated_by_this'] = list(assc_uuids)
+        response['uuids_invalidated'] = list(assc_uuids)
         response['description'] = 'Using live results for embedded view of %s. Query with run=False to skip this.' % uuid
     else:
         response['description'] = 'Query with run=True to calculate live information on invalidation and embedding time.'
