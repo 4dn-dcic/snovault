@@ -1025,6 +1025,12 @@ def test_indexing_info(app, testapp, indexer_testapp):
     Test the information on indexing-info for a given uuid and make sure that
     it updates properly following indexing
     """
+    # first, run create mapping with the indices we will use
+    create_mapping.run(
+        app,
+        collections=['testing_link_target_sno', 'testing_link_source_sno'],
+        skip_indexing=True
+    )
     target1 = {'name': 't_one', 'uuid': str(uuid.uuid4())}
     target2 = {'name': 't_two', 'uuid': str(uuid.uuid4())}
     source = {
@@ -1033,14 +1039,37 @@ def test_indexing_info(app, testapp, indexer_testapp):
         'uuid': str(uuid.uuid4()),
         'status': 'current',
     }
-    target1_res = testapp.post_json('/testing-link-targets-sno/', target1, status=201)
-    target2_res = testapp.post_json('/testing-link-targets-sno/', target2, status=201)
-    source_res = testapp.post_json('/testing-link-sources-sno/', source, status=201)
-    res = indexer_testapp.post_json('/index', {'record': True})
+    testapp.post_json('/testing-link-targets-sno/', target1, status=201)
+    testapp.post_json('/testing-link-targets-sno/', target2, status=201)
+    testapp.post_json('/testing-link-sources-sno/', source, status=201)
+    indexer_testapp.post_json('/index', {'record': True})
     time.sleep(2)
     # indexing-info fails without uuid query param
-    import pdb; pdb.set_trace()
-    idx_info_err = testapp.get('indexing-info')
+    idx_info_err = testapp.get('/indexing-info')
     assert idx_info_err.json['status'] == 'error'
-    source_idx_info = testapp.get('indexing-info?uuid=%s' % source['uuid'])
-    assert source_idx_info.json['status'] == 'success'
+    src_idx_info = testapp.get('/indexing-info?uuid=%s' % source['uuid'])
+    assert src_idx_info.json['status'] == 'success'
+    # up to date
+    assert src_idx_info.json['sid_es'] == src_idx_info.json['sid_db']
+    assert set(src_idx_info.json['uuids_invalidated']) == set([target1['uuid'], source['uuid']])
+    # update without indexing; view should capture the changes but sid_es will not change
+    testapp.patch_json('/testing-link-sources-sno/' + source['uuid'], {'target': target2['uuid']})
+    src_idx_info2 = testapp.get('/indexing-info?uuid=%s' % source['uuid'])
+    assert src_idx_info2.json['status'] == 'success'
+    # es is now out of date, since not indexed yet
+    assert src_idx_info2.json['sid_es'] < src_idx_info2.json['sid_db']
+    # target1 will still be in invalidated uuids, since es has not updated
+    assert set(src_idx_info2.json['uuids_invalidated']) == set([target1['uuid'], target2['uuid'], source['uuid']])
+    indexer_testapp.post_json('/index', {'record': True})
+    time.sleep(2)
+    # after indexing, make sure sid_es is updated
+    src_idx_info3 = testapp.get('/indexing-info?uuid=%s' % source['uuid'])
+    assert src_idx_info3.json['status'] == 'success'
+    assert src_idx_info3.json['sid_es'] == src_idx_info3.json['sid_db']
+    # target1 has now been updated and removed from invalidated uuids
+    assert set(src_idx_info3.json['uuids_invalidated']) == set([target2['uuid'], source['uuid']])
+    # try the view without calculated embedded view
+    src_idx_info4 = testapp.get('/indexing-info?uuid=%s&run=False' % source['uuid'])
+    assert src_idx_info4.json['status'] == 'success'
+    assert 'uuids_invalidated' not in src_idx_info4.json
+    assert 'embedded_seconds' not in src_idx_info4.json
