@@ -209,10 +209,10 @@ def indexing_info(request):
         embedded_view = request.invoke_view(path, index_uuid=uuid, as_user='INDEXER')
         end = timer()
         response['embedded_seconds'] = end - start
-        find_uuids = get_rev_linked_items(request, uuid)
-        find_uuids.add(uuid)
-        assc_uuids = find_uuids_for_indexing(request.registry, find_uuids)
-        response['uuids_invalidated'] = list(assc_uuids)
+        es_assc_uuids = find_uuids_for_indexing(request.registry, set([uuid]))
+        new_rev_link_uuids = get_rev_linked_items(request, uuid)
+        # invalidated: items linking to this in es + newly rev linked items
+        response['uuids_invalidated'] = list(es_assc_uuids | new_rev_link_uuids)
         response['description'] = 'Using live results for embedded view of %s. Query with run=False to skip this.' % uuid
     else:
         response['description'] = 'Query with run=True to calculate live information on invalidation and embedding time.'
