@@ -1018,3 +1018,29 @@ def test_aggregated_items(app, testapp, indexer_testapp):
     testapp.patch_json('/testing-link-aggregates-sno/' + aggregated['uuid'],
                        {'targets': []})
     indexer_testapp.post_json('/index', {'record': True})
+
+
+def test_indexing_info(app, testapp, indexer_testapp):
+    """
+    Test the information on indexing-info for a given uuid and make sure that
+    it updates properly following indexing
+    """
+    target1 = {'name': 't_one', 'uuid': str(uuid.uuid4())}
+    target2 = {'name': 't_two', 'uuid': str(uuid.uuid4())}
+    source = {
+        'name': 'idx_source',
+        'target': target1['uuid'],
+        'uuid': str(uuid.uuid4()),
+        'status': 'current',
+    }
+    target1_res = testapp.post_json('/testing-link-targets-sno/', target1, status=201)
+    target2_res = testapp.post_json('/testing-link-targets-sno/', target2, status=201)
+    source_res = testapp.post_json('/testing-link-sources-sno/', source, status=201)
+    res = indexer_testapp.post_json('/index', {'record': True})
+    time.sleep(2)
+    # indexing-info fails without uuid query param
+    import pdb; pdb.set_trace()
+    idx_info_err = testapp.get('indexing-info')
+    assert idx_info_err.json['status'] == 'error'
+    source_idx_info = testapp.get('indexing-info?uuid=%s' % source['uuid'])
+    assert source_idx_info.json['status'] == 'success'
