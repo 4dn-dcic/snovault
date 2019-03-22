@@ -213,8 +213,6 @@ class Indexer(object):
                     self.queue.send_messages([msg_body], target_queue=target_queue)
                     to_delete.append(msg)
                     continue
-                if msg_body['strict'] is False:
-                    non_strict_uuids.add(msg_uuid)
                 # build the object and index into ES
                 # if strict==True, do not add uuids rev_linking to item to queue
                 if msg_body['strict'] is True:
@@ -241,6 +239,9 @@ class Indexer(object):
                         self.queue.replace_messages([msg], target_queue=target_queue, vis_timeout=180)
                         errors.append(error)
                 else:
+                    # if non-strict, adding will queue associated items to secondary
+                    if msg_body['strict'] is False:
+                        non_strict_uuids.add(msg_uuid)
                     if counter: counter[0] += 1  # do not increment on error
                     to_delete.append(msg)
                 # delete messages when we have the right number
