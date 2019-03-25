@@ -163,7 +163,6 @@ def item_view_object(context, request):
     return properties
 
 
-@view_config(context=Item, permission='index', request_method='GET', name='force-embedded')
 @view_config(context=Item, permission='view', request_method='GET', name='embedded')
 def item_view_embedded(context, request):
     """

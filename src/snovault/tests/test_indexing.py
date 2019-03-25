@@ -602,7 +602,7 @@ def test_indexing_invalid_sid(app, testapp, indexer_testapp):
     assert es_item['_version'] == inital_version + 1
 
     # now try to manually bump an invalid version for the queued item
-    # expect it to be sent to the deferred queue
+    # expect it to be sent to the deferred queue.
     to_queue = {
         'uuid': test_uuid,
         'sid': inital_version + 2,
@@ -613,6 +613,56 @@ def test_indexing_invalid_sid(app, testapp, indexer_testapp):
     res = indexer_testapp.post_json('/index', {'record': True})
     time.sleep(4)
     assert res.json['indexing_count'] == 0
+    received_deferred = indexer_queue.receive_messages(target_queue='deferred')
+    assert len(received_deferred) == 1
+    indexer_queue.delete_messages(received_deferred, target_queue='deferred')
+
+
+def test_indexing_invalid_sid_linked_items(app, testapp, indexer_testapp):
+    """
+    Make sure that items sent to the deferred queue do not trigger indexing
+    of secondary items
+    """
+    indexer_queue = app.registry[INDEXER_QUEUE]
+    es = app.registry[ELASTIC_SEARCH]
+    create_mapping.run(
+        app,
+        collections=['testing_link_target_sno', 'testing_link_source_sno'],
+        skip_indexing=True
+    )
+    target1 = {'name': 't_one', 'uuid': str(uuid.uuid4())}
+    source = {
+        'name': 'idx_source',
+        'target': target1['uuid'],
+        'uuid': str(uuid.uuid4()),
+        'status': 'current',
+    }
+    testapp.post_json('/testing-link-targets-sno/', target1, status=201)
+    testapp.post_json('/testing-link-sources-sno/', source, status=201)
+    indexer_testapp.post_json('/index', {'record': True})
+    time.sleep(2)
+    es_item = es.get(index='testing_link_target_sno', doc_type='testing_link_target_sno',
+                     id=target1['uuid'])
+    inital_version = es_item['_version']
+
+    # now try to manually bump an invalid version for the queued item
+    # expect it to be sent to the deferred queue.
+    to_queue = {
+        'uuid': target1['uuid'],
+        'sid': inital_version + 2,
+        'strict': False,
+        'timestamp': datetime.utcnow().isoformat()
+    }
+    indexer_queue.send_messages([to_queue], target_queue='primary')
+    # make sure nothing is in secondary queue after calling /index
+    received_secondary = indexer_queue.receive_messages(target_queue='secondary')
+    assert len(received_secondary) == 0
+    res = indexer_testapp.post_json('/index', {'record': True})
+    time.sleep(4)
+    assert res.json['indexing_count'] == 0
+    # make sure nothing is in secondary queue after calling /index
+    received_secondary = indexer_queue.receive_messages(target_queue='secondary')
+    assert len(received_secondary) == 0
     received_deferred = indexer_queue.receive_messages(target_queue='deferred')
     assert len(received_deferred) == 1
     indexer_queue.delete_messages(received_deferred, target_queue='deferred')
