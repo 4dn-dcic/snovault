@@ -12,7 +12,6 @@ from pyramid.view import (
     render_view_to_response,
     view_config,
 )
-from pyramid.threadlocal import manager, get_current_request
 from urllib.parse import urlencode
 from .calculated import calculate_properties
 from .resources import (
