@@ -6,11 +6,15 @@ from pyramid.security import (
 )
 from pyramid.traversal import resource_path
 from pyramid.view import view_config
+from pyramid.settings import asbool
+from timeit import default_timer as timer
 from .resources import Item
 from .authentication import calc_principals
 from .interfaces import STORAGE
+from .elasticsearch.indexer_utils import find_uuids_for_indexing
 
 def includeme(config):
+    config.add_route('indexing-info', '/indexing-info')
     config.scan(__name__)
 
 
@@ -32,6 +36,28 @@ def join_linked_uuids_sids(request, uuids):
         A list of dicts containing uuid and up-to-date db sid
     """
     return [{'uuid': uuid, 'sid': request._sid_cache[uuid]} for uuid in uuids]
+
+
+def get_rev_linked_items(request, uuid):
+    """
+    Iterate through request._rev_linked_uuids_by_item, which is populated
+    during the embedding traversal process, to find the items that are reverse
+    linked to the given uuid
+
+    Args:
+        request: current Request object
+        uuid (str): uuid of the object in question
+
+    Returns:
+        A set of string uuids
+    """
+    # find uuids traversed that rev link to this item
+    rev_linked_to_me = set()
+    for rev_id, rev_names in request._rev_linked_uuids_by_item.items():
+        if any([uuid in rev_names[name] for name in rev_names]):
+            rev_linked_to_me.add(rev_id)
+            continue
+    return rev_linked_to_me
 
 
 @view_config(context=Item, name='index-data', permission='index', request_method='GET')
@@ -118,11 +144,7 @@ def item_index_data(context, request):
     linked_uuids_embedded = request._linked_uuids.copy()
 
     # find uuids traversed that rev link to this item
-    rev_linked_to_me = set()
-    for rev_id, rev_names in request._rev_linked_uuids_by_item.items():
-        if any([uuid in rev_names[name] for name in rev_names]):
-            rev_linked_to_me.add(rev_id)
-            continue
+    rev_linked_to_me = get_rev_linked_items(request, uuid)
     aggregated_items = {agg: res['items'] for agg, res in request._aggregated_items.items()}
 
     # lastly, run the audit view. Set the uuids we want to audit on
@@ -153,3 +175,46 @@ def item_index_data(context, request):
     }
 
     return document
+
+
+@view_config(route_name='indexing-info', permission='index', request_method='GET')
+def indexing_info(request):
+    """
+    Endpoint to check some indexing-related properties of a given uuid, which
+    is provided using the `uuid=` query parameter. This route cannot be defined
+    with the context of a specific Item because that will cause the underlying
+    request to use a cached view from Elasticsearch and not properly run
+    the @@embedded view from the database.
+
+    If you do not want to calculate the embedded object, use `run=False`
+
+    Args:
+        request: current Request object
+
+    Returns:
+        dict response
+    """
+    uuid = request.params.get('uuid')
+    if not uuid:
+        return {'status': 'error', 'title': 'Error', 'message': 'ERROR! Provide a uuid to the query.'}
+
+    db_sid = request.registry[STORAGE].write.get_by_uuid(uuid).sid
+    es_sid = request.registry[STORAGE].read.get_by_uuid(uuid).sid
+    response = {'sid_db': db_sid, 'sid_es': es_sid, 'title': 'Indexing Info for %s' % uuid}
+    if asbool(request.params.get('run', True)):
+        request._indexing_view = True
+        request.datastore = 'database'
+        path = '/' + uuid + '/@@embedded'
+        start = timer()
+        embedded_view = request.invoke_view(path, index_uuid=uuid, as_user='INDEXER')
+        end = timer()
+        response['embedded_seconds'] = end - start
+        es_assc_uuids = find_uuids_for_indexing(request.registry, set([uuid]))
+        new_rev_link_uuids = get_rev_linked_items(request, uuid)
+        # invalidated: items linking to this in es + newly rev linked items
+        response['uuids_invalidated'] = list(es_assc_uuids | new_rev_link_uuids)
+        response['description'] = 'Using live results for embedded view of %s. Query with run=False to skip this.' % uuid
+    else:
+        response['description'] = 'Query with run=True to calculate live information on invalidation and embedding time.'
+    response['status'] = 'success'
+    return response

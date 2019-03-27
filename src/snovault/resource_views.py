@@ -28,7 +28,6 @@ from .util import (
     validate_es_content
 )
 
-
 def includeme(config):
     config.scan(__name__)
 
@@ -163,8 +162,7 @@ def item_view_object(context, request):
     return properties
 
 
-@view_config(context=Item, permission='view', request_method='GET',
-             name='embedded')
+@view_config(context=Item, permission='view', request_method='GET', name='embedded')
 def item_view_embedded(context, request):
     """
     Calculate and return the embedded view for an item. This is an intensive
@@ -295,6 +293,7 @@ def item_view_columns(context, request):
              name='raw')
 def item_view_raw(context, request):
     props = context.properties
+    # only upgrade properties if explicitly requested
     if asbool(request.params.get('upgrade', True)):
         props =  context.upgrade_properties()
     # add uuid to raw view
