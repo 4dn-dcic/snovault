@@ -27,7 +27,7 @@ def no_validate_item_content_patch(context, request):
     data.update(request.json)
     schema = context.type_info.schema
     # this will raise a validation error if delete_fields param provided
-    delete_fields(request, data)
+    delete_fields(request, data, schema)
     if 'uuid' in data:
         if UUID(data['uuid']) != context.uuid:
             msg = 'uuid may not be changed'
@@ -35,15 +35,15 @@ def no_validate_item_content_patch(context, request):
     request.validated.update(data)
 
 
-def delete_fields(request, data):
+def delete_fields(request, data, schema):
     """
     Delete fields from data in the delete_fields param of the request.
-    Do not do any special validation here, since that is handled in the
-    validate function that runs this. Modified the input data in place
+    Validate to catch any permission errors. Modified the input data in place
 
     Args:
         request: current Request object
         data: dict item metadata
+        schema: dict item schema
 
     Returns:
         None
@@ -59,6 +59,17 @@ def delete_fields(request, data):
     if request.params.get('validate') == 'false':
         err_msg = 'Cannot delete fields on request with with validate=false'
         raise ValidationFailure('body', ['?delete_fields'], err_msg)
+
+    # permission validation
+    validated, errors = validate(schema, data)
+    if errors:
+        for error in errors:
+            if isinstance(error, IgnoreUnchanged):
+                if error.validator != 'permission':
+                    continue
+            request.errors.add('body', list(error.path), error.message)
+    if request.errors:
+        raise ValidationFailure('body', ['?delete_fields'], 'error deleting fields')
 
     for dfield in request.params['delete_fields'].split(','):
         dfield = dfield.strip()
@@ -89,7 +100,7 @@ def validate_item_content_patch(context, request):
         del data['schema_version']
     data.update(request.json)
     schema = context.type_info.schema
-    delete_fields(request, data)
+    delete_fields(request, data, schema)
     if 'uuid' in data and UUID(data['uuid']) != context.uuid:
         msg = 'uuid may not be changed'
         raise ValidationFailure('body', ['uuid'], msg)
