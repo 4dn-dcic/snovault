@@ -27,7 +27,7 @@ def no_validate_item_content_patch(context, request):
     data.update(request.json)
     schema = context.type_info.schema
     # this will raise a validation error if delete_fields param provided
-    delete_fields(request, data, schema)
+    data = delete_fields(request, data, schema)
     if 'uuid' in data:
         if UUID(data['uuid']) != context.uuid:
             msg = 'uuid may not be changed'
@@ -38,21 +38,21 @@ def no_validate_item_content_patch(context, request):
 def delete_fields(request, data, schema):
     """
     Delete fields from data in the delete_fields param of the request.
-    Validate to catch any permission errors. Modified the input data in place
+    Validate to catch any permission errors and return the validated data
 
     Args:
         request: current Request object
-        data: dict item metadata
+        data: dict item contents
         schema: dict item schema
 
     Returns:
-        None
+        dict validated contents
 
     Raises:
         ValidationFailure if validate=false in request params
     """
     if not request.params.get('delete_fields'):
-        return
+        return data
 
     # do not allow validate=false with delete_fields, since it skips schema
     # validation, which does things like adding defaults
@@ -60,8 +60,17 @@ def delete_fields(request, data, schema):
         err_msg = 'Cannot delete fields on request with with validate=false'
         raise ValidationFailure('body', ['?delete_fields'], err_msg)
 
-    # permission validation
-    validated, errors = validate(schema, data)
+    # make a copy of data after removing fields and validate
+    to_validate = data.copy()
+    for dfield in request.params['delete_fields'].split(','):
+        dfield = dfield.strip()
+        if dfield in data:
+            del to_validate[dfield]
+    # permission validation, comparing data with deleted values to the previous
+    # data. If validated, return that validated value
+    # Note: a deleted field with a default will replaced with that value;
+    #       if same value was already in data, allow regardless of permission
+    validated, errors = validate(schema, to_validate, current=data, validate_current=True)
     if errors:
         for error in errors:
             if isinstance(error, IgnoreUnchanged):
@@ -70,11 +79,12 @@ def delete_fields(request, data, schema):
             request.errors.add('body', list(error.path), error.message)
     if request.errors:
         raise ValidationFailure('body', ['?delete_fields'], 'error deleting fields')
-
-    for dfield in request.params['delete_fields'].split(','):
-        dfield = dfield.strip()
-        if dfield in data:
-            del data[dfield]
+    # validate() may add fields, such as uuid and schema_version
+    for orig_field in [k for k in validated]:
+        if orig_field not in to_validate:
+            del validated[orig_field]
+    # finally, return the validated contents with deleted fields
+    return validated
 
 
 # Schema checking validators
@@ -100,7 +110,7 @@ def validate_item_content_patch(context, request):
         del data['schema_version']
     data.update(request.json)
     schema = context.type_info.schema
-    delete_fields(request, data, schema)
+    data = delete_fields(request, data, schema)
     if 'uuid' in data and UUID(data['uuid']) != context.uuid:
         msg = 'uuid may not be changed'
         raise ValidationFailure('body', ['uuid'], msg)

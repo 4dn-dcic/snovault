@@ -326,11 +326,38 @@ def load_schema(filename):
     return schema
 
 
-def validate(schema, data, current=None):
+def validate(schema, data, current=None, validate_current=False):
+    """
+    Validate the given data using a schema. Optionally provide current data
+    to allow IgnoreUnchanged validation errors. If validate_current is set,
+    will attempt to validate against current as well as data.
+    current and validate_current should be used together if data is expected
+    to have deleted fields that should be validated against.
+
+    Args:
+        schema (dict): item schema
+        data (dict): new item contents
+        current (dict): existing item contents
+        validate_current (bool): whether to validate against current
+
+    Returns:
+        dict validated contents, list of errors
+    """
     resolver = NoRemoteResolver.from_schema(schema)
     sv = SchemaValidator(schema, resolver=resolver, serialize=True, format_checker=format_checker)
     validated, errors = sv.serialize(data)
-
+    # validate against current contents if validate_current is set
+    if current and validate_current:
+        validated_curr, errors_curr = sv.serialize(current)
+        data_errors_detail = {str(err.path): err.message for err in errors}
+        # add errors from validation of current if they are not in existing
+        # error paths or already exist but have a different message
+        for err in errors_curr:
+            err_path = str(err.path)
+            if err_path not in data_errors_detail:
+                errors.append(err)
+            elif data_errors_detail[err_path] != err.message:
+                errors.append(err)
     filtered_errors = []
     for error in errors:
         # Possibly ignore validation if it results in no change to data
@@ -340,13 +367,16 @@ def validate(schema, data, current=None):
                 for key in error.path:
                     current_value = current_value[key]
             except Exception:
-                pass
+                current_value = None  # not found
             else:
                 validated_value = validated
-                for key in error.path:
-                    validated_value = validated_value[key]
+                try:
+                    for key in error.path:
+                        validated_value = validated_value[key]
+                except Exception:
+                    validate_value = None  # not found
                 if validated_value == current_value:
-                    continue
+                    continue  # value is unchanged between data/curret; ignore
         filtered_errors.append(error)
 
     return validated, filtered_errors
