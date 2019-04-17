@@ -112,13 +112,14 @@ def expand_path(request, obj, path):
         expand_path(request, value, remaining)
 
 
-def expand_embedded_model(request, obj, model, parent_path=None):
+def expand_embedded_model(request, obj, model, parent_path=None, embedded_path=[]):
     """
     A similar idea to expand_path, but takes in a model from build_embedded_model
     instead. Takes in the @@object view of the item (obj) and returns a
     fully embedded result.
-    Parent path is passed in for aggregated_items tracking
+    parent_path and embedded_path are passed in for aggregated_items tracking
     """
+    import pdb; pdb.set_trace()
     embedded_res = {}
     # first take care of the fields_to_use at this level
     fields_to_use = model.get('fields_to_use')
@@ -140,14 +141,15 @@ def expand_embedded_model(request, obj, model, parent_path=None):
         # pass to_embed as the last parameter to track aggregated_items
         obj_embedded = expand_val_for_embedded_model(request, obj_val,
                                                      model[to_embed],
-                                                     to_embed, parent_path)
+                                                     to_embed, parent_path,
+                                                     embedded_path)
         if obj_embedded is not None:
             embedded_res[to_embed] = obj_embedded
     return embedded_res
 
 
-def expand_val_for_embedded_model(request, obj_val, downstream_model,
-                                  field_name=None, parent_path=None):
+def expand_val_for_embedded_model(request, obj_val, downstream_model, field_name=None,
+                                  parent_path=None, embedded_path=[]):
     """
     Take a value from an object and the relevant piece of the embedded_model
     and perform embedding.
@@ -172,7 +174,7 @@ def expand_val_for_embedded_model(request, obj_val, downstream_model,
                                              parent_path=parent_path)
         # aggregate the item if applicable
         if field_name and parent_path and field_name in agg_items:
-            new_agg = {'parent': parent_path, 'item': obj_embedded}
+            new_agg = {'parent': parent_path, 'embedded_path': [], 'item': obj_embedded}
             agg_items[field_name]['items'].append(new_agg)
         return obj_embedded
 
@@ -188,7 +190,7 @@ def expand_val_for_embedded_model(request, obj_val, downstream_model,
         # aggregate the item if applicable
         if field_name and parent_path and field_name in agg_items:
             # we may need to merge the values with existing ones
-            new_agg = {'parent': parent_path, 'item': obj_val}
+            new_agg = {'parent': parent_path, 'embedded_path': '', 'item': obj_val}
             agg_items[field_name]['items'].append(new_agg)
 
         # track the new parent object if we are indexing
@@ -244,9 +246,10 @@ def process_aggregated_items(request):
     to narrow down to the fields we wish to aggregated on. This reduces the
     amount of info carried on the request, which is important because it
     will have to be carried through the subrequest chain.
+
     Args:
         request: the current request
-        
+
     Returns:
         None
     """
@@ -274,7 +277,8 @@ def process_aggregated_items(request):
                 found_value = recursively_process_field(pointer, split_field)
                 # terminal dicts will create issues with the mapping. Print a warning and skip
                 if isinstance(found_value, dict):
-                    log.error('ERROR. Found dictionary terminal value for field %s when aggregating %s items. Context is: %s' % (field, agg_on, str(request.context.uuid)))
+                    log.error('ERROR. Found dictionary terminal value for field %s when aggregating %s items. Context is: %s'
+                              % (field, agg_on, str(request.context.uuid)))
                     continue
                 proc_pointer = proc_item
                 for idx, split in enumerate(split_field):
