@@ -112,16 +112,30 @@ def expand_path(request, obj, path):
         expand_path(request, value, remaining)
 
 
-def expand_embedded_model(request, obj, model, parent_path=None, embedded_path=[]):
+def expand_embedded_model(request, obj, model, parent_path='', embedded_path=[]):
     """
-    A similar idea to expand_path, but takes in a model from build_embedded_model
+    A similar idea to expand_path, but takes in model from build_embedded_model
     instead. Takes in the @@object view of the item (obj) and returns a
     fully embedded result.
-    parent_path and embedded_path are passed in for aggregated_items tracking
+    This is also used recursively to handle dictionaries encountered during
+    this process.
+    parent_path and embedded_path are passed in for aggregated_items tracking.
+
+    Args:
+        request: current Request
+        obj (dict): item to expand the embedded model on
+        model (dict): model for embedding from build_embedded_model
+        parent_path (str): resource path of the parent linkTo item encountered
+            while embedding. If no external items embedded, is an empty string
+            Used for aggregated items
+        embedded_path (list): field names of all embedded fields traversed so
+            so far in the model. Used for aggregated_items
+
+    Returns:
+        dict: embedded result
     """
-    import pdb; pdb.set_trace()
     embedded_res = {}
-    # first take care of the fields_to_use at this level
+    # first take care of the fields_to_use at this level; get them from obj
     fields_to_use = model.get('fields_to_use')
     if fields_to_use:
         if '*' in fields_to_use:
@@ -138,46 +152,80 @@ def expand_embedded_model(request, obj, model, parent_path=None, embedded_path=[
         obj_val = obj.get(to_embed)
         if obj_val is None:
             continue
-        # pass to_embed as the last parameter to track aggregated_items
+        this_embedded_path = embedded_path.copy()
+        # pass to_embed (field name) to track aggregated_items
         obj_embedded = expand_val_for_embedded_model(request, obj_val,
                                                      model[to_embed],
                                                      to_embed, parent_path,
-                                                     embedded_path)
+                                                     this_embedded_path)
         if obj_embedded is not None:
             embedded_res[to_embed] = obj_embedded
     return embedded_res
 
 
-def expand_val_for_embedded_model(request, obj_val, downstream_model, field_name=None,
-                                  parent_path=None, embedded_path=[]):
+def expand_val_for_embedded_model(request, obj_val, downstream_model, field_name='',
+                                  parent_path='', embedded_path=[]):
     """
     Take a value from an object and the relevant piece of the embedded_model
     and perform embedding.
-    We have to account for list, dictionaries, and strings.
-    field_name/parent_path are optional and used to track aggregated_items
+    We have to account for lists, dictionaries, linkTos, and other values:
+        - lists: process each entry separately and join them. embedded_path
+            is branched for each entry
+        - dicts: run expand_embedded_model on the dict using the downstream
+            embedded model. Record in aggregated_items if necessary
+        - linkTo: attempt to get frame=object for item, taking permissions into
+            account. Record in aggregated_items if necessary
+        - other values: return them
+    field_name/parent_path are optional and used to track aggregated_items.
+    embedded_path is used to track the levels of embedding we've traversed
+    and is updated whenever a dict/linkTo is encountered
+
+    Args:
+        request: current Request
+        obj_val: value of the embedded field from the previous model
+        downstream_model (dict): model for downstream embedding, originally
+            from build_embedded_model
+        field_name (str): name of the current field being embedded. Used for
+            aggregated items
+        parent_path (str): resource path of the parent linkTo item encountered
+            while embedding. If no external items embedded, is an empty string
+            Used for aggregated items
+        embedded_path (list): field names of all embedded fields traversed so
+            so far in the model. Used for aggregated_items
+
+    Returns:
+        The processed embed from the given obj_val and downstream_model
     """
     agg_items = request._aggregated_items
+    # if the value is a list, process each value sequentially
+    # we are not actually progressing down the embedded model yet
     if isinstance(obj_val, list):
         obj_list = []
         for idx, member in enumerate(obj_val):
+            # branch embedded_path for each item in list
+            this_embedded_path = embedded_path.copy()
             # lists conserve field name and their order
             obj_embedded = expand_val_for_embedded_model(request, member,
                                                          downstream_model,
                                                          field_name=field_name,
-                                                         parent_path=parent_path)
+                                                         parent_path=parent_path,
+                                                         embedded_path=this_embedded_path)
             if obj_embedded is not None:
                 obj_list.append(obj_embedded)
         return obj_list
+    else:
+        # for dict/linkTo/other values, we are progressing down the embed
+        embedded_path.append(field_name)
 
-    elif isinstance(obj_val, dict):
+    if isinstance(obj_val, dict):
         obj_embedded = expand_embedded_model(request, obj_val, downstream_model,
-                                             parent_path=parent_path)
+                                             parent_path=parent_path, embedded_path=embedded_path)
         # aggregate the item if applicable
         if field_name and parent_path and field_name in agg_items:
-            new_agg = {'parent': parent_path, 'embedded_path': [], 'item': obj_embedded}
+            agg_emb_path = '.'.join(embedded_path)
+            new_agg = {'parent': parent_path, 'embedded_path': agg_emb_path, 'item': obj_embedded}
             agg_items[field_name]['items'].append(new_agg)
         return obj_embedded
-
     elif isinstance(obj_val, basestring):
         # get the @@object view of obj to embed
         # TODO: per-field invalidation by adding uuids to request._linked_uuids
@@ -189,14 +237,16 @@ def expand_val_for_embedded_model(request, obj_val, downstream_model, field_name
 
         # aggregate the item if applicable
         if field_name and parent_path and field_name in agg_items:
+            agg_emb_path = '.'.join(embedded_path)
             # we may need to merge the values with existing ones
-            new_agg = {'parent': parent_path, 'embedded_path': '', 'item': obj_val}
+            new_agg = {'parent': parent_path, 'embedded_path': agg_emb_path, 'item': obj_val}
             agg_items[field_name]['items'].append(new_agg)
 
         # track the new parent object if we are indexing
         new_parent_path = obj_val.get('@id') if request._indexing_view else None
         obj_embedded = expand_embedded_model(request, obj_val, downstream_model,
-                                             parent_path=new_parent_path)
+                                             parent_path=new_parent_path,
+                                             embedded_path=embedded_path)
         return obj_embedded
     else:
         # this means the object should be returned as-is
@@ -372,7 +422,7 @@ def validate_es_content(context, request, es_res, view='embedded'):
         view (str): 'embedded' or 'object', depending on the desired view
 
     Returns:
-        True if es_res is valid, otherwise False
+        bool: True if es_res is valid, otherwise False
     """
     if view not in ['object', 'embedded']:
         return False

@@ -1026,8 +1026,9 @@ def test_aggregated_items(app, testapp, indexer_testapp):
     doc_count = es.count(index='testing_link_aggregate_sno', doc_type='testing_link_aggregate_sno').get('count')
     tries = 0
     while doc_count < 1 and tries < 5:
-        time.sleep(4)
-        doc_count = es.count
+        time.sleep(2)
+        doc_count = es.count(index='testing_link_aggregate_sno', doc_type='testing_link_aggregate_sno').get('count')
+        tries += 1
     assert doc_count == 1
     es_agg_res = es.get(index='testing_link_aggregate_sno', doc_type='testing_link_aggregate_sno', id=agg_res_uuid)
     assert 'aggregated_items' in es_agg_res['_source']
@@ -1037,6 +1038,7 @@ def test_aggregated_items(app, testapp, indexer_testapp):
     for idx, target_agg in enumerate(es_agg_items['targets']):
         # order of targets should be maintained
         assert target_agg['parent'] == agg_res.json['@graph'][0]['@id']
+        assert target_agg['embedded_path'] == 'targets'
         if idx == 0:
             assert target_agg['item']['test_description'] == 'target one'
             assert target_agg['item']['target']['uuid'] == target1['uuid']
