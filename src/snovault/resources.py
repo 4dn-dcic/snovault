@@ -31,7 +31,6 @@ from .util import (
 )
 from past.builtins import basestring
 from .util import add_default_embeds
-from .authentication import calc_principals
 
 logger = logging.getLogger(__name__)
 
@@ -181,6 +180,14 @@ class AbstractCollection(Resource, Mapping):
                     return default
                 return resource
         return default
+
+    def iter_no_subtypes(self):
+        """
+        Make a generator that yields all items in the collection, but not
+        subtypes
+        """
+        for uuid in self.connection.__iter__(self.type_info.item_type):
+            yield uuid
 
     def __json__(self, request):
         return self.properties.copy()
@@ -463,7 +470,7 @@ class Item(Resource):
     def prop_uuid(self):
         return str(self.uuid)
 
-    @snovault.calculated_property(schema={
+    @calculated_property(schema={
         "title": "principals_allowed",
         "description": "Calculated permissions used for ES filtering",
         "type": "object",
@@ -480,10 +487,12 @@ class Item(Resource):
         }
     })
     def principals_allowed(self):
+        # importing at top of file requires many more relative imports
+        from .authentication import calc_principals
         principals = calc_principals(self)
         return principals
 
-    @snovault.calculated_property(schema={
+    @calculated_property(schema={
         "title": "Display Title",
         "description": "A calculated title",
         "type": "string"

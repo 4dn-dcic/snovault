@@ -1,7 +1,7 @@
 from past.builtins import basestring
 from pyramid.threadlocal import manager as threadlocal_manager
 from pyramid.httpexceptions import HTTPForbidden
-from .interfaces import CONNECTION, STORAGE, COLLECTIONS
+from .interfaces import CONNECTION, STORAGE, TYPES
 from copy import deepcopy
 import json
 import structlog
@@ -117,21 +117,31 @@ def expand_path(request, obj, path):
 
 def find_collection_subtypes(registry, item_type, types_covered=[]):
     """
-    Recursively find item types using a given type registry
-    Request may also be app (just needs to have registry)
+    Given an item type (or item class name), find all subtypes for that type
+    and return a list containing all of them. types_covered is meant to be
+    used internally, but adding a item type to it will cause it to be removed
+    from the returned output
+
+    Args:
+        registry: the current Registry
+        item_type (str): item type (or item class name) to find subtypes for
+        types_covered (list): used internally to track covered types
+
+    Returns:
+        list: all item types found when traversing substypes
     """
     types_found = []
     try:
         # this works for item name (MyItem) and item type (my_name)
-        registry_type = registry[COLLECTIONS][item_type]
+        registry_type = registry[TYPES][item_type]
     except KeyError:
         return [] # no types found
     # add the item_type of this collection if applicable
     if hasattr(registry_type, 'item_type'):
-        if registry_type.item_type not in types_covered:
+        if registry_type.name not in types_covered:
             types_found.append(registry_type.item_type)
-        types_covered.append(registry_type.item_type)
-    # see if we're dealing with an abstract type
+        types_covered.append(registry_type.name)
+    # subtypes are given by name and include the registry_type.name itself
     if hasattr(registry_type, 'subtypes'):
         subtypes = registry_type.subtypes
         for subtype in subtypes:
@@ -140,6 +150,64 @@ def find_collection_subtypes(registry, item_type, types_covered=[]):
                     find_collection_subtypes(registry, subtype, types_covered)
                 )
     return types_found
+
+
+def crawl_schema(types, field_path, schema_cursor, split_path=None):
+    """
+    Given a field_path that is a sequence of fields joined by '.' and a starting
+    schema, will recursively drill down into the schema to find the schema value
+    of the terminal field. Will raise an Exception if the field cannot be found
+    Args:
+        types: Result of registry[TYPES].
+        field_path: string field path, joined by '.'
+        schema_cursor: dictionary schema starting point
+        split_path: array of remaining fields to traverse. Used internally
+
+    Returns:
+        Dictionary schema for the terminal field in field_path
+    """
+    # true if we are just starting up
+    if split_path is None:
+        # ensure input schema is a dictionary
+        if not isinstance(schema_cursor, dict):
+            raise Exception('Could not find schema field for: %s. Invalid starting schema.' % field_path)
+
+        # drill into 'properties' of initial schema
+        if 'properties' in schema_cursor:
+            schema_cursor = schema_cursor['properties']
+        split_path = field_path.split('.')
+
+    curr_field = split_path[0]
+    schema_cursor = schema_cursor.get(curr_field)
+    if not schema_cursor:
+        raise Exception('Could not find schema field for: %s. Field not found. Failed at: %s' % (field_path, curr_field))
+
+    # schema_cursor should always be a dictionary
+    if not isinstance(schema_cursor, dict):
+        raise Exception('Could not find schema field for: %s. Non-dictionary schema. Failed at: %s' % (field_path, curr_field))
+
+    ## base case. We have found the desired schema
+    if len(split_path) == 1:
+        return schema_cursor
+
+    # drill into 'items' or 'properties'. always check 'items' before 'properties'
+    # check if an array + drill into if so
+    if schema_cursor.get('type') == 'array' and 'items' in schema_cursor:
+        schema_cursor = schema_cursor['items']
+    # check if an object + drill into if so
+    if schema_cursor.get('type') == 'object' and 'properties' in schema_cursor:
+        schema_cursor = schema_cursor['properties']
+    # if we hit a linkTo, pull in the new schema of the linkTo type
+    if 'linkTo' in schema_cursor:
+        linkTo = schema_cursor['linkTo']
+        try:
+            linkTo_type = types.all[linkTo]
+        except KeyError:
+            raise Exception('Could not find schema field for: %s. Invalid linkTo. Failed at: %s' % (field_path, curr_field))
+        linkTo_schema = linkTo_type.schema
+        schema_cursor = linkTo_schema['properties'] if 'properties' in linkTo_schema else linkTo_schema
+
+    return crawl_schema(types, field_path, schema_cursor, split_path[1:])
 
 
 ##########################################

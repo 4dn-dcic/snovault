@@ -50,7 +50,8 @@ def test_selective_embedding(workbook, testapp):
     assert isinstance(test_json[0]['award'], dict)
     # default embeds
     assert 'uuid' in test_json[0]['award']
-    assert 'link_id' in test_json[0]['award']
+    assert '@id' in test_json[0]['award']
+    assert 'principals_allowed' in test_json[0]['award']
     assert 'display_title' in test_json[0]['award']
     # since award.pi was not specifically embedded, pi field should not exist
     # (removed @id-like field)

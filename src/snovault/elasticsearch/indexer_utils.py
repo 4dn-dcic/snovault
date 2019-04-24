@@ -2,9 +2,11 @@ from .interfaces import ELASTIC_SEARCH
 from elasticsearch.exceptions import ConnectionTimeout
 from elasticsearch.helpers import scan
 import time
+from snovault import COLLECTIONS, STORAGE
+from snovault.util import find_collection_subtypes
 
 
-def find_uuids_for_indexing(registry, updated, log=None):
+def find_uuids_for_indexing(registry, updated, find_index='_all', log=None):
     """
     Run a search to find uuids of objects with that contain the given set of
     updated uuids in their linked_uuids.
@@ -32,32 +34,32 @@ def find_uuids_for_indexing(registry, updated, log=None):
         },
         '_source': False
     }
-    results = scan(es, index='_all', query=scan_query)
+    results = scan(es, index=find_index, query=scan_query)
     invalidated = {res['_id'] for res in results}
     return invalidated | updated
 
 
-def get_uuids_for_types(registry, types=None):
-    from snovault import COLLECTIONS
+def get_uuids_for_types(registry, types=[]):
     """
+    WARNING! This makes lots of DB requests and should be used carefully.
+
     Generator function to return uuids for all the given types. If no
-    types provided, uses all types (get all uuids).
+    types provided, uses all types (get all uuids). Because of inheritance
+    between item classes, do not iterate over all subtypes (as is done with
+    `for uuid in collection`; instead, leverage `collection.iter_no_subtypes`)
+
+    Args:
+        registry: the current Registry
+        types (list): string item types to specifcally use to find collections.
+            Default is empty list, which means all collections are used
+
+    Yields:
+        str: uuid of item in collections
     """
-    # First index user and access_key so people can log in
     collections = registry[COLLECTIONS]
-    initial = ['user', 'access_key']
-    for collection_name in initial:
-        collection = collections.by_item_type.get(collection_name, [])
-        # for snovault test application, there are no users or keys
-        if types is not None and collection_name not in types:
+    # might as well sort collections alphatbetically, as this was done earlier
+    for coll_name in sorted(collections.by_item_type):
+        if types and coll_name not in types:
             continue
-        for uuid in collection:
-            yield str(uuid)
-    for collection_name in sorted(collections.by_item_type):
-        if collection_name in initial:
-            continue
-        if types is not None and collection_name not in types:
-            continue
-        collection = collections.by_item_type[collection_name]
-        for uuid in collection:
+        for uuid in collections.by_item_type[coll_name].iter_no_subtypes():
             yield str(uuid)

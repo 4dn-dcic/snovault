@@ -52,7 +52,7 @@ def embedded_2nd():
     return {'lab': {'fax': '000-000-0000', 'city': 'Boston', 'name': 'test-4dn-lab',
                     'state': 'MA', '@type': ['Lab', 'Item'],
                     'uuid': '828cd4fe-ebb0-4b22-a94a-d2e3a36cc988',
-                    'display_title': '4DN Testing Lab', 'link_id': '~labs~test-4dn-lab~',
+                    'display_title': '4DN Testing Lab',
                     'principals_allowed': {'view': ['system.Everyone']},
                     'award': {'name': 'test_award',
                               'principals_allowed': {'view': ['group.admin']}
@@ -131,7 +131,6 @@ def embedded_3rd_array():
         ],
         'uuid': '686b362f-4eb6-4a9c-8173-3ab267307e3b',
         'display_title': 'TreatmentRnai from 2017-07-31',
-        'link_id': '~treatments-rnai~686b362f-4eb6-4a9c-8173-3ab267307e3b~',
         'principals_allowed': {
             'view': [
                 'award.b0b9c607-f8b4-4f02-93f4-9895b461334b',
@@ -170,7 +169,6 @@ def embedded_3rd_array():
         ],
         'uuid': '686b362f-4eb6-4a9c-8173-3ab267307a8d',
         'display_title': 'TreatmentRnai from 2017-07-31',
-        'link_id': '~treatments-rnai~686b362f-4eb6-4a9c-8173-3ab267307a8d~',
         'principals_allowed': {
             'view': [
                 'award.b0b9c607-f8b4-4f02-93f4-9895b461334b',
@@ -208,7 +206,6 @@ def embedded_3rd_array():
         ],
         'uuid': '431106bc-8535-4448-903e-854af460b265',
         'display_title': 'Stable Transfection for Gene:PARK2, FMR1',
-        'link_id': '~modifications~431106bc-8535-4448-903e-854af460b265~',
         'principals_allowed': {
             'view': [
                 'award.b0b9c607-f8b4-4f02-93f4-9895b461334b',
@@ -243,7 +240,6 @@ def embedded_3rd_array():
         ],
         'uuid': '431106bc-8535-4448-903e-854af460b276',
         'display_title': 'Other',
-        'link_id': '~modifications~431106bc-8535-4448-903e-854af460b276~',
         'principals_allowed': {
             'view': [
                 'group.admin',
@@ -272,7 +268,6 @@ def embedded_3rd_array():
 ],
 'uuid': '231111bc-8535-4448-903e-854af460b242',
 'display_title': '4DNBS2548734',
-'link_id': '~biosamples~4DNBS2548734~',
 'principals_allowed': {
     'view': [
         'group.admin',
@@ -286,7 +281,7 @@ def embedded_3rd_array():
 
 @pytest.fixture()
 def embedded_lab():
-    return {'lab': {'fax': '000-000-0000', 'city': 'Boston', 'name': 'test-4dn-lab', 'state': 'MA', 'title': '4DN Testing Lab', 'status': 'current', 'country': 'USA', 'address1': 'Biomedical Bioinfomatics', 'address2': '10 Schattuck Street', 'postal_code': '02115', 'date_created': '2017-07-31T14:31:13.532200+00:00', 'institute_name': 'Harvard Medical School', 'schema_version': '1', 'institute_label': 'HMS', '@id': '/labs/test-4dn-lab/', '@type': ['Lab', 'Item'], 'uuid': '828cd4fe-ebb0-4b22-a94a-d2e3a36cc988', 'display_title': '4DN Testing Lab', 'link_id': '~labs~test-4dn-lab~', 'principals_allowed': {'view': ['system.Everyone'], 'edit': ['group.admin', 'submits_for.828cd4fe-ebb0-4b22-a94a-d2e3a36cc988'], 'audit': ['system.Everyone']}}}
+    return {'lab': {'fax': '000-000-0000', 'city': 'Boston', 'name': 'test-4dn-lab', 'state': 'MA', 'title': '4DN Testing Lab', 'status': 'current', 'country': 'USA', 'address1': 'Biomedical Bioinfomatics', 'address2': '10 Schattuck Street', 'postal_code': '02115', 'date_created': '2017-07-31T14:31:13.532200+00:00', 'institute_name': 'Harvard Medical School', 'schema_version': '1', 'institute_label': 'HMS', '@id': '/labs/test-4dn-lab/', '@type': ['Lab', 'Item'], 'uuid': '828cd4fe-ebb0-4b22-a94a-d2e3a36cc988', 'display_title': '4DN Testing Lab', 'principals_allowed': {'view': ['system.Everyone'], 'edit': ['group.admin', 'submits_for.828cd4fe-ebb0-4b22-a94a-d2e3a36cc988'], 'audit': ['system.Everyone']}}}
 
 
 @pytest.fixture()

@@ -205,19 +205,6 @@ class Item(snovault.Item):
             return self.properties.get('uuid', None)
 
     @snovault.calculated_property(schema={
-        "title": "link_id",
-        "description": "A copy of @id that can be embedded. Uses ~ instead of /",
-        "type": "string"
-    },)
-    def link_id(self, request):
-        """create the link_id field, which is a copy of @id using ~ instead of /"""
-        id_str = str(self).split(' at ')
-        path_str = id_str[-1].strip('>')
-        path_split = path_str.split('/')
-        path_str = '~'.join(path_split) + '~'
-        return path_str
-
-    @snovault.calculated_property(schema={
         "title": "principals_allowed",
         "description": "calced perms for ES filtering",
         "type": "object",

@@ -7,7 +7,7 @@ from snovault import (
 )
 from snovault.elasticsearch import ELASTIC_SEARCH
 from snovault.resource_views import collection_view_listing_db
-from snovault.fourfront_utils import get_jsonld_types_from_collection_type
+from snovault.util import find_collection_subtypes
 from elasticsearch.helpers import scan
 from elasticsearch_dsl import Search
 from pyramid.httpexceptions import HTTPBadRequest
@@ -794,7 +794,7 @@ def find_index_by_doc_types(request, doc_types, ignore):
         if doc_type in ignore:
             continue
         else:
-            result = get_jsonld_types_from_collection_type(request, doc_type)
+            result = find_collection_subtypes(request.registry, doc_type)
             indexes.extend(result)
     # remove any duplicates
     indexes = list(set(indexes))

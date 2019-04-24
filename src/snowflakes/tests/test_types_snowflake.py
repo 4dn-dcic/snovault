@@ -21,4 +21,5 @@ def test_snowflake_embedded_list(registry):
     if 'lab.awards.project' in embedded_list:
         assert 'lab.awards.uuid' in embedded
         assert 'lab.awards.display_title' in embedded
-        assert 'lab.awards.link_id' in embedded
+        assert 'lab.awards.@id' in embedded
+        assert 'lab.awards.principals_allowed' in embedded
