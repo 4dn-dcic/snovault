@@ -30,7 +30,8 @@ from .util import (
     uuid_to_path
 )
 from past.builtins import basestring
-from .fourfront_utils import add_default_embeds
+from .util import add_default_embeds
+from .authentication import calc_principals
 
 logger = logging.getLogger(__name__)
 
@@ -460,4 +461,32 @@ class Item(Resource):
 
     @calculated_property(name='uuid')
     def prop_uuid(self):
+        return str(self.uuid)
+
+    @snovault.calculated_property(schema={
+        "title": "principals_allowed",
+        "description": "Calculated permissions used for ES filtering",
+        "type": "object",
+        'properties': {
+            'view': {
+                'type': 'string'
+            },
+            'edit': {
+                'type': 'string'
+            },
+            'audit': {
+                'type': 'string'
+            }
+        }
+    })
+    def principals_allowed(self):
+        principals = calc_principals(self)
+        return principals
+
+    @snovault.calculated_property(schema={
+        "title": "Display Title",
+        "description": "A calculated title",
+        "type": "string"
+    })
+    def display_title(self):
         return str(self.uuid)
