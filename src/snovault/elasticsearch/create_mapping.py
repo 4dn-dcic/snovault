@@ -25,9 +25,10 @@ from snovault import (
     TYPES,
 )
 from snovault.schema_utils import combine_schemas
-from snovault.fourfront_utils import add_default_embeds, get_jsonld_types_from_collection_type
+from snovault.util import add_default_embeds, find_collection_subtypes
 from .interfaces import ELASTIC_SEARCH, INDEXER_QUEUE
-import collections
+from collections import OrderedDict
+from itertools import chain
 import json
 import structlog
 import time
@@ -63,11 +64,12 @@ NUM_REPLICAS = 1
 
 
 def sorted_pairs_hook(pairs):
-    return collections.OrderedDict(sorted(pairs))
+    return OrderedDict(sorted(pairs))
 
 
 def sorted_dict(d):
     return json.loads(json.dumps(d), object_pairs_hook=sorted_pairs_hook)
+
 
 def determine_if_is_date_field(field, schema):
     is_date_field = False
@@ -700,7 +702,7 @@ def build_index(app, es, in_type, mapping, uuids_to_index, dry_run, check_first,
     then update meta index once with `elasticsearch.helpers.bulk(es, meta_bulk_actions)`
     passing in `cached_meta` can also save on calls to check if index exists...
     """
-
+    uuids_to_index[in_type] = set()
     if print_count_only:
         log.info('___PRINTING COUNTS___')
         check_and_reindex_existing(app, es, in_type, uuids_to_index, index_diff, True)
@@ -749,11 +751,13 @@ def build_index(app, es, in_type, mapping, uuids_to_index, dry_run, check_first,
     # if check_first and we've made it here, nothing has been queued yet
     # for this collection
     start = timer()
-    coll_count, coll_uuids = get_collection_uuids_and_count(app, in_type)
+    log.error('====> STORAGE IS: %s' % app.registry['connection'].storage.storage())
+    coll_uuids = set(get_uuids_for_types(app.registry, types=[in_type]))
+    coll_count = len(coll_uuids)
     end = timer()
     log.info('Time to get collection uuids: %s' % str(end-start), cat='fetch time',
                 duration=str(end-start), collection=in_type)
-    uuids_to_index.update(coll_uuids)
+    uuids_to_index[in_type] = coll_uuids
     log.info('MAPPING: will queue all %s items in the new index %s for reindexing' %
                 (str(coll_count), in_type), cat='items to queue', count=coll_count, collection=in_type)
 
@@ -834,20 +838,18 @@ def check_and_reindex_existing(app, es, in_type, uuids_to_index, index_diff=Fals
                  db_count=str(db_count), cat='collection_counts', es_count=str(es_count))
     if print_counts:  # just display things, don't actually queue the uuids
         if index_diff and diff_uuids:
-            log.info("The following UUIDs are found in the DB but not the ES index: %s"
-                        % (in_type), collection=in_type)
-            for uuid in diff_uuids:
-                log.info(uuid)
+            log.info("The following UUIDs are found in the DB but not the ES index: %s\n%s"
+                        % (in_type, diff_uuids), collection=in_type)
         return
     if es_count is None or es_count != db_count:
         if index_diff:
             log.info('MAPPING: queueing %s items found in DB but not ES in the index %s for reindexing'
                         % (str(len(diff_uuids)), in_type), items_queued=str(len(diff_uuids)), collection=in_type)
-            uuids_to_index.update(diff_uuids)
+            uuids_to_index[in_type] = diff_uuids
         else:
             log.info('MAPPING: queueing %s items found in the existing index %s for reindexing'
-                        % (str(len(diff_uuids)), in_type), items_queued=str(len(diff_uuids)), collection=in_type)
-            uuids_to_index.update(db_uuids)
+                        % (str(len(db_uuids)), in_type), items_queued=str(len(db_uuids)), collection=in_type)
+            uuids_to_index[in_type] = db_uuids
 
 
 def get_db_es_counts_and_db_uuids(app, es, in_type, index_diff=False):
@@ -860,62 +862,24 @@ def get_db_es_counts_and_db_uuids(app, es, in_type, index_diff=False):
         if index_diff:
             search = Search(using=es, index=in_type, doc_type=in_type)
             search_source = search.source([])
-            es_uuids = [h.meta.id for h in search_source.scan()]
+            es_uuids = set([h.meta.id for h in search_source.scan()])
             es_count = len(es_uuids)
         else:
             count_res = es.count(index=in_type, doc_type=in_type)
             es_count = count_res.get('count')
-            es_uuids = []
+            es_uuids = set()
     else:
         es_count = 0
-        es_uuids = []
-    db_count, db_uuids = get_collection_uuids_and_count(app, in_type)
-    # find db uuids not in es uuids
-    # maybe save time by skipping set operation if we don't need it
+        es_uuids = set()
+    log.error('====> STORAGE IS: %s' % app.registry['connection'].storage.storage())
+    db_uuids = set(get_uuids_for_types(app.registry, types=[in_type]))
+    db_count = len(db_uuids)
+    # find uuids in the DB but not ES (set operations)
     if index_diff:
-        diff_uuids = list(set(db_uuids) - set(es_uuids))
+        diff_uuids = db_uuids - es_uuids
     else:
-        diff_uuids = []
+        diff_uuids = set()
     return db_count, es_count, db_uuids, diff_uuids
-
-
-def get_collection_uuids_and_count(app, in_type):
-    """
-    Return a count of items in a collection and a list of the uuids of those
-    items. Returns only the items of the exact type specified, and not types
-    that inherit from it (for example, experiment_set_replicate count will
-    be subtracted from experiment_set count)
-    """
-    # logic for datastore
-    datastore = None
-    try:
-        datastore = app.datastore
-    except AttributeError:
-        pass
-    else:
-        if datastore == 'elasticsearch':
-            app.datastore = 'database'
-    # must handle collections that have children inheriting from them
-    # use specific collections and adjust if necessary
-    db_count = 0
-    coll_uuids = []
-    non_coll_uuids = []
-    check_collections = get_jsonld_types_from_collection_type(app, in_type, [in_type])
-    for coll_type in check_collections:
-        collection = app.registry[COLLECTIONS].get(coll_type)
-        coll_count = len(collection) if collection is not None else 0
-        if coll_type == in_type:
-            db_count += coll_count
-            coll_uuids.extend([str(uuid) for uuid in collection])
-        else:
-            db_count -= coll_count
-            non_coll_uuids.extend([str(uuid) for uuid in collection])
-    # remove uuids that aren't from the set we need
-    final_uuids = [uuid for uuid in coll_uuids if uuid not in non_coll_uuids]
-    # reset datastore
-    if datastore:
-        app.datastore = datastore
-    return db_count, final_uuids
 
 
 def confirm_mapping(es, in_type, this_index_record):
@@ -968,6 +932,50 @@ def es_safe_execute(function, **kwargs):
     return False
 
 
+def flatten_and_sort_uuids(registry, uuids_to_index, item_order):
+    """
+    Flatten the input dict of sets (uuids_to_index) into a list that is ordered
+    based off of item type, which is provided through item_order.
+    item_order may be a list of item types (e.g. my_type) or item names
+    (e.g. MyType)
+
+    Args:
+        reigstry: current Pyramid Registry
+        uuids_to_index (set): keys are item_type and values are set of uuids
+        item_order (list): string item types / item names to order by
+
+    Returns:
+        list: ordered uuids to index synchronously or queue for indexing
+    """
+    # process item_order to turn item names to item types
+    proc_item_order = []
+    for name_or_type in item_order:
+        try:
+            i_type = registry[COLLECTIONS][name_or_type].type_info.item_type
+        except KeyError:
+            # not an item name or type. Log error and exclude
+            log.error('___Entry %s is not valid in mapping item_order. Skipping___' % name_or_type)
+        else:
+            proc_item_order.append(i_type)
+    to_index_list = []
+
+    def type_sort_key(i_type):
+        """
+        Simple helper fxn to sort collections by their index in item_order.
+        If not in item_order, preserve order as-is
+        """
+        try:
+            res = proc_item_order.index(i_type)
+        except ValueError:
+            res = 999
+        return res
+
+    # use type_sort_key fxn to sort + flatten uuids_to_index
+    for itype in sorted(uuids_to_index.keys(), key=type_sort_key):
+        to_index_list.extend(uuids_to_index[itype])
+    return to_index_list
+
+
 def run_indexing(app, indexing_uuids):
     """
     indexing_uuids is a set of uuids that should be reindexed. If global args
@@ -979,7 +987,7 @@ def run_indexing(app, indexing_uuids):
 
 def run(app, collections=None, dry_run=False, check_first=False, skip_indexing=False,
         index_diff=False, strict=False, sync_index=False, no_meta=False, print_count_only=False,
-        purge_queue=False, bulk_meta=True):
+        purge_queue=False, bulk_meta=True, item_order=[]):
     """
     Run create_mapping. Has the following options:
     collections: run create mapping for the given list of item types only.
@@ -1006,6 +1014,9 @@ def run(app, collections=None, dry_run=False, check_first=False, skip_indexing=F
         or collections).
     bulk_meta: caches meta at the start of create_mapping and never queries or
         updates it again, until the end when all mappings are bulk loaded into meta
+    item_order: provide a list of item types (e.g. my_type) or item names
+        (e.g. MyType). Indexing/queueing order will be dictated by index in the
+        list, such that the items at the front are indexed first.
     """
     from timeit import default_timer as timer
     overall_start = timer()
@@ -1024,12 +1035,13 @@ def run(app, collections=None, dry_run=False, check_first=False, skip_indexing=F
     log.info('\n___ES NODES___:\n %s\n' % (str(es.cat.nodes())), cat=cat)
     log.info('\n___ES HEALTH___:\n %s\n' % (str(es.cat.health())), cat=cat)
     log.info('\n___ES INDICES (PRE-MAPPING)___:\n %s\n' % str(es.cat.indices()), cat=cat)
-    # keep a set of all uuids to be reindexed, which occurs after all indices
-    # are created
-    uuids_to_index = set()
+    # keep track of uuids to be indexed after mapping is done.
+    # Set of uuids for each item type; keyed by item type. Order for python < 3.6
+    uuids_to_index = OrderedDict()
     total_reindex = (collections == None and not dry_run and not check_first and not index_diff and not print_count_only)
+
     if not collections:
-        collections = list(registry[COLLECTIONS].by_item_type.keys())
+        collections = list(registry[COLLECTIONS].by_item_type)
         # automatically add meta to start when going through all collections
         if not no_meta:
             collections = ['meta'] + collections
@@ -1052,7 +1064,7 @@ def run(app, collections=None, dry_run=False, check_first=False, skip_indexing=F
         # it's not guaranteed to be there, though
         es_safe_execute(es.indices.delete, index='indexing', ignore=[400,404])
 
-    # if indexing doesn't exist, initialize it with some basic settings
+    # if 'indexing' index doesn't exist, initialize it with some basic settings
     # but no mapping. this is where indexing_records go
     if not check_if_index_exists(es, 'indexing'):
         idx_settings = {'settings': index_settings()}
@@ -1120,9 +1132,9 @@ def run(app, collections=None, dry_run=False, check_first=False, skip_indexing=F
                 cat='overall mapping time', duration=str(overall_end - overall_start))
     if skip_indexing or print_count_only:
         return timings
-
     # now, queue items for indexing in the secondary queue
-    # TODO: maybe put items on primary/secondary by type
+    # get a total list of all uuids to index among types for invalidation checking
+    len_all_uuids = sum([len(uuids_to_index[i_type]) for i_type in uuids_to_index])
     if uuids_to_index:
         # only index (synchronously) if --sync-index option is used
         if sync_index:
@@ -1131,25 +1143,43 @@ def run(app, collections=None, dry_run=False, check_first=False, skip_indexing=F
             # for now
             if not strict:
                  # arbitrary large number, that hopefully is within ES limits
-                if len(uuids_to_index) > 30000 or total_reindex:
-                    uuids_to_index = set(get_uuids_for_types(registry))  # all uuids
+                if len_all_uuids > 30000 or total_reindex:
+                    # get all the uuids from EVERY item type
+                    for i_type in registry[COLLECTIONS].by_item_type:
+                        uuids_to_index[i_type] = set(get_uuids_for_types(registry, types=[i_type]))
                 else:
-                    uuids_to_index = find_uuids_for_indexing(registry, uuids_to_index, log)
+                    # find invalidated uuids for each index. Must concat all
+                    # uuids over all types in uuids_to_index to do this
+                    all_uuids_to_index = set(chain.from_iterable(uuids_to_index.values()))
+                    for i_type in registry[COLLECTIONS].by_item_type:
+                        # must subtract the input uuids that are not of the given type
+                        to_subtract = set(chain.from_iterable(
+                            [v for k, v in uuids_to_index.items() if k != i_type]
+                        ))
+                        all_assc_uuids = find_uuids_for_indexing(registry, all_uuids_to_index, i_type, log)
+                        uuids_to_index[i_type] = all_assc_uuids - to_subtract
                 log.error('___SYNC INDEXING WITH STRICT=FALSE MAY CAUSE REV_LINK INCONSISTENCY___')
-            log.info('\n___UUIDS TO INDEX (SYNC)___: %s\n' % len(uuids_to_index),
-                        cat='uuids to index', count=len(uuids_to_index))
-            run_indexing(app, uuids_to_index)
+            # sort by-type uuids into one list and index synchronously
+            to_index_list = flatten_and_sort_uuids(app.registry, uuids_to_index, item_order)
+            log.info('\n___UUIDS TO INDEX (SYNC)___: %s\n' % len(to_index_list),
+                        cat='uuids to index', count=len(to_index_list))
+            run_indexing(app, to_index_list)
         else:
             # if non-strict and attempting to reindex a ton, it is faster
             # just to strictly reindex all items
             use_strict = strict or total_reindex
-            if len(uuids_to_index) > 30000 and not use_strict:
+            if len_all_uuids > 30000 and not use_strict:
                 log.error('___MAPPING ALL ITEMS WITH STRICT=TRUE TO SAVE TIME___')
-                uuids_to_index = set(get_uuids_for_types(registry))  # all uuids
+                # get all the uuids from EVERY item type
+                for i_type in registry[COLLECTIONS].by_item_type:
+                    uuids_to_index[i_type] = set(get_uuids_for_types(registry, types=[i_type]))
                 use_strict = True
-            log.info('\n___UUIDS TO INDEX (QUEUED)___: %s\n' % len(uuids_to_index),
-                        cat='uuids to index', count=len(uuids_to_index))
-            indexer_queue.add_uuids(app.registry, list(uuids_to_index), strict=use_strict,
+            # sort by-type uuids into one list and queue for indexing
+            to_index_list = flatten_and_sort_uuids(app.registry, uuids_to_index, item_order)
+            log.info('\n___UUIDS TO INDEX (QUEUED)___: %s\n' % len(to_index_list),
+                        cat='uuids to index', count=len(to_index_list))
+            import pdb; pdb.set_trace()
+            indexer_queue.add_uuids(app.registry, to_index_list, strict=use_strict,
                                     target_queue='secondary', telemetry_id=telemetry_id)
     return timings
 
@@ -1221,7 +1251,7 @@ def main():
 
     uuids = run(app, args.item_type, args.dry_run, args.check_first, args.skip_indexing,
                 args.index_diff, args.strict, args.sync_index, args.no_meta,
-               args.print_count_only, args.purge_queue)
+                args.print_count_only, args.purge_queue)
     return
 
 
