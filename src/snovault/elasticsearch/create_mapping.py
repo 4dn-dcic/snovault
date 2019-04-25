@@ -1178,7 +1178,6 @@ def run(app, collections=None, dry_run=False, check_first=False, skip_indexing=F
             to_index_list = flatten_and_sort_uuids(app.registry, uuids_to_index, item_order)
             log.info('\n___UUIDS TO INDEX (QUEUED)___: %s\n' % len(to_index_list),
                         cat='uuids to index', count=len(to_index_list))
-            import pdb; pdb.set_trace()
             indexer_queue.add_uuids(app.registry, to_index_list, strict=use_strict,
                                     target_queue='secondary', telemetry_id=telemetry_id)
     return timings
