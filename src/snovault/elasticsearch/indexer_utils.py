@@ -6,13 +6,21 @@ from snovault import COLLECTIONS, STORAGE
 from snovault.util import find_collection_subtypes
 
 
-def find_uuids_for_indexing(registry, updated, find_index='_all', log=None):
+def find_uuids_for_indexing(registry, updated, find_index='_all'):
     """
     Run a search to find uuids of objects with that contain the given set of
     updated uuids in their linked_uuids.
     Uses elasticsearch.helpers.scan to iterate through ES results.
     Returns a set containing original uuids and the found uuids (INCLUDING
     uuids that were passed into this function)
+
+    Args:
+        registry: the current Registry
+        updated (set): uuids to use as basis for finding associated items
+        find_index (str): index to search in. Default to '_all' (all indices)
+
+    Return:
+        set: of uuids, including associated uuids found AND `updated` uuids
     """
     es = registry[ELASTIC_SEARCH]
     scan_query = {

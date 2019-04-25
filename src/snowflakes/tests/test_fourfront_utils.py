@@ -22,6 +22,7 @@ def test_build_default_embeds():
     expected_embeds = [
         'obj1.obj2.display_title',
         'obj1.obj2.@id',
+        'obj1.obj2.@type',
         'obj1.obj2.uuid',
         'obj1.obj2.principals_allowed.*',
         'obj1.*',
@@ -53,8 +54,8 @@ def test_find_default_embeds_and_expand_emb_list(registry):
     expected_to_add2 = ['snowset', 'snowset.award']
     assert(set(embs_to_add2) == set(expected_to_add2))
     # lastly check the built embeds
-    expected_built = ['snowset.display_title', 'snowset.@id', 'snowset.principals_allowed.*',
-                      'snowset.uuid', 'snowset.award.display_title', 'snowset.award.@id',
+    expected_built = ['snowset.display_title', 'snowset.@id', 'snowset.@type','snowset.principals_allowed.*',
+                      'snowset.uuid', 'snowset.award.display_title', 'snowset.award.@id', 'snowset.award.@type',
                       'snowset.award.principals_allowed.*', 'snowset.award.uuid']
     assert set(expected_built) == set(build_default_embeds(embs_to_add2, set()))
 

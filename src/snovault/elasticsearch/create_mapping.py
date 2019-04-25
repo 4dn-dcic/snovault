@@ -751,15 +751,13 @@ def build_index(app, es, in_type, mapping, uuids_to_index, dry_run, check_first,
     # if check_first and we've made it here, nothing has been queued yet
     # for this collection
     start = timer()
-    log.error('====> STORAGE IS: %s' % app.registry['connection'].storage.storage())
     coll_uuids = set(get_uuids_for_types(app.registry, types=[in_type]))
-    coll_count = len(coll_uuids)
     end = timer()
     log.info('Time to get collection uuids: %s' % str(end-start), cat='fetch time',
                 duration=str(end-start), collection=in_type)
     uuids_to_index[in_type] = coll_uuids
     log.info('MAPPING: will queue all %s items in the new index %s for reindexing' %
-                (str(coll_count), in_type), cat='items to queue', count=coll_count, collection=in_type)
+             (len(coll_uuids), in_type), cat='items to queue', count=len(coll_uuids), collection=in_type)
 
     # put index_record in meta
     if meta_bulk_actions is None:
@@ -871,7 +869,6 @@ def get_db_es_counts_and_db_uuids(app, es, in_type, index_diff=False):
     else:
         es_count = 0
         es_uuids = set()
-    log.error('====> STORAGE IS: %s' % app.registry['connection'].storage.storage())
     db_uuids = set(get_uuids_for_types(app.registry, types=[in_type]))
     db_count = len(db_uuids)
     # find uuids in the DB but not ES (set operations)
@@ -1152,11 +1149,13 @@ def run(app, collections=None, dry_run=False, check_first=False, skip_indexing=F
                     # uuids over all types in uuids_to_index to do this
                     all_uuids_to_index = set(chain.from_iterable(uuids_to_index.values()))
                     for i_type in registry[COLLECTIONS].by_item_type:
+                        if not check_if_index_exists(es, i_type):
+                            continue
                         # must subtract the input uuids that are not of the given type
                         to_subtract = set(chain.from_iterable(
                             [v for k, v in uuids_to_index.items() if k != i_type]
                         ))
-                        all_assc_uuids = find_uuids_for_indexing(registry, all_uuids_to_index, i_type, log)
+                        all_assc_uuids = find_uuids_for_indexing(registry, all_uuids_to_index, i_type)
                         uuids_to_index[i_type] = all_assc_uuids - to_subtract
                 log.error('___SYNC INDEXING WITH STRICT=FALSE MAY CAUSE REV_LINK INCONSISTENCY___')
             # sort by-type uuids into one list and index synchronously

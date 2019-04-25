@@ -428,7 +428,7 @@ def test_queue_indexing_with_linked(app, testapp, indexer_testapp, dummy_request
     # first, run create mapping with the indices we will use
     create_mapping.run(
         app,
-        collections=['testing_link_target_sno', 'testing_link_source_sno'],
+        collections=[TEST_TYPE, 'testing_link_target_sno', 'testing_link_source_sno'],
         skip_indexing=True
     )
     ppp_res = testapp.post_json(TEST_COLL, {'required': ''})
@@ -455,7 +455,7 @@ def test_queue_indexing_with_linked(app, testapp, indexer_testapp, dummy_request
         tries += 1
     assert doc_count_target == 1
     assert doc_count_ppp == 1
-    # indexing the source will also reindex the target, since it has a reverse link
+    # indexing the source will also reindex the target and ppp, due to rev links
     source_res = testapp.post_json('/testing-link-sources-sno/', source, status=201)
     source_uuid = source_res.json['@graph'][0]['uuid']
     time.sleep(2)
@@ -471,7 +471,8 @@ def test_queue_indexing_with_linked(app, testapp, indexer_testapp, dummy_request
     assert doc_count == 1
     # patching json will not queue the embedded ppp
     # the target will be indexed though, since it has a linkTo back to the source
-    testapp.patch_json('/testing-link-sources-sno/' + source_uuid, {'name': 'ABC'})
+    patch_source_name = 'ABC'
+    testapp.patch_json('/testing-link-sources-sno/' + source_uuid, {'name': patch_source_name})
     time.sleep(2)
     res = indexer_testapp.post_json('/index', {'record': True})
     assert res.json['indexing_count'] == 2
@@ -494,6 +495,8 @@ def test_queue_indexing_with_linked(app, testapp, indexer_testapp, dummy_request
     assert uuids_linked_obj2 == [target['uuid']]
     assert es_target['_source']['rev_link_names'] == {'reverse': [source['uuid']]}
     assert es_target['_source']['rev_linked_to_me'] == []
+    # this specific field was embedded from the rev link
+    assert es_target['_source']['embedded']['reverse'][0]['name'] == patch_source_name
 
     # test find_uuids_for_indexing
     to_index = indexer_utils.find_uuids_for_indexing(app.registry, {target['uuid']})
@@ -827,7 +830,7 @@ def test_check_and_reindex_existing(app, testapp):
     doc_count = es.count(index=TEST_TYPE, doc_type=TEST_TYPE).get('count')
     # doc_count has not yet updated
     assert doc_count == 0
-    test_uuids = set()
+    test_uuids = {TEST_TYPE: set()}
     check_and_reindex_existing(app, es, TEST_TYPE, test_uuids)
     assert(len(test_uuids)) == 1
 

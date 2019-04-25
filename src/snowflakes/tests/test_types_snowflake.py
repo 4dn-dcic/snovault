@@ -23,4 +23,4 @@ def test_snowflake_embedded_list(registry):
         assert 'lab.awards.display_title' in embedded
         assert 'lab.awards.@id' in embedded
         assert 'lab.awards.@type' in embedded
-        assert 'lab.awards.principals_allowed' in embedded
+        assert 'lab.awards.principals_allowed.*' in embedded
