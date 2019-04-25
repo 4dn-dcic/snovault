@@ -215,6 +215,10 @@ def crawl_schema(types, field_path, schema_cursor, split_path=None):
 ##########################################
 
 
+# Terminal fields that are added to the embedded list for every embedded item
+DEFAULT_EMBEDS = ['.@id', '.@type', '.display_title', '.uuid', '.principals_allowed.*']
+
+
 def secure_embed(request, item_path, addition='@@object'):
     """
     Make a call to embed() with the given item path and user status
@@ -440,8 +444,7 @@ def add_default_embeds(item_type, types, embeds, schema={}):
 def expand_embedded_list(item_type, types, embeds, schema, processed_embeds):
     """
     Takes the embedded_list (as defined in types/ file for an item) and finds
-    all items that should have the automatic embeds added to them (namely,
-    display_title, @id, uuid, and principals_allowed).
+    all items that should have the default embeds added to them
     """
     embeds_to_add = []
     # Handles the use of a terminal '*' in the embeds
@@ -474,10 +477,8 @@ def build_default_embeds(embeds_to_add, processed_embeds):
             check_wildcard = add_embed + '.*'
             if check_wildcard not in processed_embeds and check_wildcard not in embeds_to_add:
                 # default embeds to add
-                processed_embeds.add(add_embed + '.@id')
-                processed_embeds.add(add_embed + '.display_title')
-                processed_embeds.add(add_embed + '.uuid')
-                processed_embeds.add(add_embed + '.principals_allowed.*')
+                for default_emb in DEFAULT_EMBEDS:
+                    processed_embeds.add(add_embed + default_emb)
     return list(processed_embeds)
 
 
