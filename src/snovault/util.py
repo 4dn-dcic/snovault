@@ -115,7 +115,7 @@ def expand_path(request, obj, path):
         expand_path(request, value, remaining)
 
 
-def find_collection_subtypes(registry, item_type, types_covered=[]):
+def find_collection_subtypes(registry, item_type, types_covered=None):
     """
     Given an item type (or item class name), find all subtypes for that type
     and return a list containing all of them. types_covered is meant to be
@@ -131,6 +131,8 @@ def find_collection_subtypes(registry, item_type, types_covered=[]):
         list: all item types found when traversing substypes
     """
     types_found = []
+    if types_covered is None:
+        types_covered = []  # initialize
     try:
         # this works for item name (MyItem) and item type (my_name)
         registry_type = registry[TYPES][item_type]
@@ -239,7 +241,7 @@ def secure_embed(request, item_path, addition='@@object'):
     return res
 
 
-def expand_embedded_model(request, obj, model, parent_path='', embedded_path=[]):
+def expand_embedded_model(request, obj, model, parent_path='', embedded_path=None):
     """
     A similar idea to expand_path, but takes in model from build_embedded_model
     instead. Takes in the @@object view of the item (obj) and returns a
@@ -262,6 +264,8 @@ def expand_embedded_model(request, obj, model, parent_path='', embedded_path=[])
         dict: embedded result
     """
     embedded_res = {}
+    if embedded_path is None:
+        embedded_path = []  # initialize
     # first take care of the fields_to_use at this level; get them from obj
     fields_to_use = model.get('fields_to_use')
     if fields_to_use:
@@ -279,6 +283,7 @@ def expand_embedded_model(request, obj, model, parent_path='', embedded_path=[])
         obj_val = obj.get(to_embed)
         if obj_val is None:
             continue
+        # branch embedded path for each field to embed
         this_embedded_path = embedded_path.copy()
         # pass to_embed (field name) to track aggregated_items
         obj_embedded = expand_val_for_embedded_model(request, obj_val,
@@ -291,7 +296,7 @@ def expand_embedded_model(request, obj, model, parent_path='', embedded_path=[])
 
 
 def expand_val_for_embedded_model(request, obj_val, downstream_model, field_name='',
-                                  parent_path='', embedded_path=[]):
+                                  parent_path='', embedded_path=None):
     """
     Take a value from an object and the relevant piece of the embedded_model
     and perform embedding.
