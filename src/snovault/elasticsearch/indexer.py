@@ -175,7 +175,7 @@ class Indexer(object):
         """
         # find_uuids_for_indexing() will return items linking to and items
         # rev_linking to this item currently in ES (find old rev_links)
-        associated_uuids = find_uuids_for_indexing(self.registry, source_uuids, log)
+        associated_uuids = find_uuids_for_indexing(self.registry, source_uuids)
         # update this with rev_links found from @@indexing-view (includes new rev_links)
         associated_uuids |= rev_linked_uuids
         # remove already indexed primary uuids used to find them

@@ -30,7 +30,7 @@ from .util import (
     uuid_to_path
 )
 from past.builtins import basestring
-from .fourfront_utils import add_default_embeds
+from .util import add_default_embeds
 
 logger = logging.getLogger(__name__)
 
@@ -180,6 +180,14 @@ class AbstractCollection(Resource, Mapping):
                     return default
                 return resource
         return default
+
+    def iter_no_subtypes(self):
+        """
+        Make a generator that yields all items in the collection, but not
+        subtypes
+        """
+        for uuid in self.connection.__iter__(self.type_info.item_type):
+            yield uuid
 
     def __json__(self, request):
         return self.properties.copy()
@@ -460,4 +468,34 @@ class Item(Resource):
 
     @calculated_property(name='uuid')
     def prop_uuid(self):
+        return str(self.uuid)
+
+    @calculated_property(schema={
+        "title": "principals_allowed",
+        "description": "Calculated permissions used for ES filtering",
+        "type": "object",
+        'properties': {
+            'view': {
+                'type': 'string'
+            },
+            'edit': {
+                'type': 'string'
+            },
+            'audit': {
+                'type': 'string'
+            }
+        }
+    })
+    def principals_allowed(self):
+        # importing at top of file requires many more relative imports
+        from .authentication import calc_principals
+        principals = calc_principals(self)
+        return principals
+
+    @calculated_property(schema={
+        "title": "Display Title",
+        "description": "A calculated title",
+        "type": "string"
+    })
+    def display_title(self):
         return str(self.uuid)

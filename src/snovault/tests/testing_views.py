@@ -164,7 +164,7 @@ class TestingLinkTargetSno(Item):
     }
     filtered_rev_statuses = ('deleted', 'replaced')
     embedded_list = [
-        'reverse.*',
+        'reverse.name',
     ]
 
     def rev_link_atids(self, request, rev_name):

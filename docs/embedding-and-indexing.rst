@@ -14,7 +14,7 @@ embedded_list = [
     submitted_by
 ]
 
-Since lab, award, and submitted by are all linkTo's, default embeds will be added for each of these (this code is housed in src/fourfront_utils.py).
+Since lab, award, and submitted by are all linkTo's, default embeds will be added for each of these (this code is housed in src/util.py).
 
 Starting with 'lab.*', the '*' means we add all fields for the lab as well as link_id, display_title, and uuid to any linkTo's within the lab. Let's say that lab has the following fields: title, @id, principals_allowed, link_id, display_title, and uuid. It also has the following linkTo: pi. Effectively, 'lab.*' would expand to the following given the default embedding:
 
@@ -45,9 +45,9 @@ The next embed, 'award.title', has a terminal field. This means we are only inte
     award.principals_allowed.*
 ]
 
-The last embed is 'submitted_by'. This will actually throw a warning from the tests written around fourfront_utils, since this embed is completely unnecessary. Since submitted_by is a top-level linkTo in our object, there is no reason to add it to the embedded_list; it will already get link_id, display_title, and uuid added. So let's change this embed to submitted_by.some_object (where some_object is a fictional linkTo). This would automatically add @id, principals_allowed, link_id, display_title, and uuid for some_object.
+The last embed is 'submitted_by'. This will actually throw a warning from the tests written around embedded_list, since this embed is completely unnecessary. Since submitted_by is a top-level linkTo in our object, there is no reason to add it to the embedded_list; it will already get link_id, display_title, and uuid added. So let's change this embed to submitted_by.some_object (where some_object is a fictional linkTo). This would automatically add @id, principals_allowed, link_id, display_title, and uuid for some_object.
 
-Since embedding directly affects the elasticsearch (ES) mapping and indexing, it is important to discuss the role of embedding in the mapping process. In create_mapping.py, the embedded_list for the object to be mapped is obtained and run through the fourfront_utils embedding process. These embeds are then used to create a mapping that is fitted exactly to the data that we want to embed in our object.
+Since embedding directly affects the elasticsearch (ES) mapping and indexing, it is important to discuss the role of embedding in the mapping process. In create_mapping.py, the embedded_list for the object to be mapped is obtained and run through the embedding process. These embeds are then used to create a mapping that is fitted exactly to the data that we want to embed in our object.
 
 Similarly, the embedded fields are passed into the embed.py code to trim the result to the specific fields we desire. A cache is used during embedding to speed up the embedding process (see embed_cache.py). It caches the calculated results for view of a given item, keyed by path. For example, <my-item>/@@embedded and <my-item>/@@object would be separate entries in the cache.
 
