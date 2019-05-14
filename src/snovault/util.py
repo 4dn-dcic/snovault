@@ -626,10 +626,11 @@ def process_aggregated_items(request):
             agg_fields = [agg_fields]
         for agg_idx, agg_item in enumerate(agg_body['items']):
             # deduplicate aggregated items by comparing sorted json
-            if json.dumps(agg_item['item'], sort_keys=True) in covered_json_items:
+            # use whole agg_item (w/ 'parent' and 'embedded_path') for dedup
+            if json.dumps(agg_item, sort_keys=True) in covered_json_items:
                 item_idxs_to_remove.append(agg_idx)
                 continue
-            covered_json_items.append(json.dumps(agg_item['item'], sort_keys=True))
+            covered_json_items.append(json.dumps(agg_item, sort_keys=True))
             proc_item = {}
             for field in agg_fields:
                 pointer = agg_item['item']
