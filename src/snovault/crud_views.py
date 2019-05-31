@@ -144,6 +144,14 @@ def render_item(request, context, render, return_uri_also=False):
              request_param=['validate=false'])
 def collection_add(context, request, render=None):
     '''Endpoint for adding a new Item.'''
+
+    check_only = request.params.get('check_only', False)
+    if check_only:
+        return {
+            'status': "success",
+            '@type': ['result'],
+        }
+
     if render is None:
         render = request.params.get('render', True)
 
@@ -180,6 +188,13 @@ def item_edit(context, request, render=None):
     Note validators will handle the PATH ?delete_fields parameter if you want
     field to be deleted
     '''
+    check_only = request.params.get('check_only', False)
+    if check_only:
+        return {
+            'status': "success",
+            '@type': ['result'],
+        }
+
     if render is None:
         render = request.params.get('render', True)
 

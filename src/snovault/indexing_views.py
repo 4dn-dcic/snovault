@@ -11,6 +11,8 @@ from timeit import default_timer as timer
 from .resources import Item
 from .authentication import calc_principals
 from .interfaces import STORAGE
+from .embed import make_subrequest
+from .validation import ValidationFailure
 from .elasticsearch.indexer_utils import find_uuids_for_indexing
 
 def includeme(config):
@@ -147,6 +149,15 @@ def item_index_data(context, request):
     rev_linked_to_me = get_rev_linked_items(request, uuid)
     aggregated_items = {agg: res['items'] for agg, res in request._aggregated_items.items()}
 
+    # run validators for the item by PATCHing with check_only=True
+    validate_path = path + '?check_only=True'
+    validate_req = make_subrequest(request, validate_path, method='PATCH',
+                                   json_body=context.properties)
+    try:
+        request.invoke_subrequest(validate_req)
+    except ValidationFailure:
+        pass
+
     # lastly, run the audit view. Set the uuids we want to audit on
     request._audit_uuids = list(linked_uuids_embedded)
     audit_view = request.invoke_view(path, '@@audit')['audit']
@@ -168,10 +179,11 @@ def item_index_data(context, request):
             for name in context.propsheets.keys() if name != ''
         },
         'rev_link_names': rev_link_names,
+        'rev_linked_to_me': sorted(rev_linked_to_me),
         'sid': context.sid,
         'unique_keys': unique_keys,
         'uuid': uuid,
-        'rev_linked_to_me': sorted(rev_linked_to_me)
+        'validation_errors': validate_req.errors
     }
 
     return document

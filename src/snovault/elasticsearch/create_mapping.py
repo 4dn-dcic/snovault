@@ -478,6 +478,10 @@ def es_mapping(mapping, agg_items_mapping):
                 'type': 'text',
                 'include_in_all': False
             },
+            'validation_errors': {
+                'type': 'object',
+                'include_in_all': False
+            },
             'unique_keys': {
                 'type': 'object',
                 'include_in_all': False

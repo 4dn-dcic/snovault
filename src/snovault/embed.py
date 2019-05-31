@@ -34,7 +34,7 @@ class MissingIndexItemException(Exception):
     pass
 
 
-def make_subrequest(request, path):
+def make_subrequest(request, path, method='GET', json_body=None):
     """ Make a subrequest
 
     Copies request environ data for authentication.
@@ -51,8 +51,11 @@ def make_subrequest(request, path):
         query_string = ''
     env['PATH_INFO'] = path_info
     env['QUERY_STRING'] = query_string
-    subreq = request.__class__(env, method='GET', content_type=None,
-                               body=b'')
+    subreq = request.__class__(env, method=method, content_type=None)
+    if json_body:
+        subreq.json = json_body
+    else:
+        subreq.body = b''
     subreq.remove_conditional_headers()
     # XXX "This does not remove headers like If-Match"
     subreq.__parent__ = request
