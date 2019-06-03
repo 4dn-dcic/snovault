@@ -271,3 +271,33 @@ def test_retry(testapp):
     res = testapp.get(url + '/@@testing-retry?datastore=database')
     assert res.json['attempt'] == 2
     assert not res.json['detached']
+
+
+def test_check_only(content, testapp):
+    url = content['@id']
+    # PATCH
+    res = testapp.patch_json(url + '?check_only=True',
+                             {'simple1': 'supplied simple1'}, status=200)
+    assert res.json['status'] == 'success'
+    assert res.json['@type'] == ['result']
+    # item did not change
+    res = testapp.get(url)
+    assert res.json['simple1'] == 'simple1 default'
+
+    # PUT
+    altered_item = item_with_uuid[0].copy()
+    altered_item['simple1'] = 'supplied simple1'
+    res = testapp.put_json(url+ '?check_only=True', item_with_uuid[0], status=200)
+    assert res.json['status'] == 'success'
+    assert res.json['@type'] == ['result']
+    # item did not change
+    res = testapp.get(url)
+    assert res.json['simple1'] == 'simple1 default'
+
+    # POST
+    res = testapp.post_json(COLLECTION_URL + '?check_only=True', {'required': ''})
+    assert res.json['status'] == 'success'
+    assert res.json['@type'] == ['result']
+
+    # check_only raises validation errors
+    res = testapp.patch_json(url + "?check_only=True&delete_fields=required", {}, status=422)
