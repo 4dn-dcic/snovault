@@ -145,7 +145,7 @@ def render_item(request, context, render, return_uri_also=False):
 def collection_add(context, request, render=None):
     '''Endpoint for adding a new Item.'''
 
-    check_only = request.params.get('check_only', False)
+    check_only = asbool(request.params.get('check_only', False))
     if check_only:
         return {
             'status': "success",
@@ -188,7 +188,7 @@ def item_edit(context, request, render=None):
     Note validators will handle the PATH ?delete_fields parameter if you want
     field to be deleted
     '''
-    check_only = request.params.get('check_only', False)
+    check_only = asbool(request.params.get('check_only', False))
     if check_only:
         return {
             'status': "success",
@@ -209,6 +209,23 @@ def item_edit(context, request, render=None):
         '@graph': [rendered],
     }
     return result
+
+
+@view_config(context=Item, permission='view', request_method='PUT',
+             validators=[validate_item_content_put],
+             request_param=['check_only=true'])
+@view_config(context=Item, permission='view', request_method='PATCH',
+             validators=[validate_item_content_patch],
+             request_param=['check_only=true'])
+def item_edit_check_only(context, request, render=None):
+    """
+    Unlike with collection_add, break out new permissions so that the indexer
+    may run validators with only view permissions
+    """
+    return {
+        'status': "success",
+        '@type': ['result']
+    }
 
 
 @view_config(context=Item, permission='view', request_method='GET',
