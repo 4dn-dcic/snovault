@@ -1135,3 +1135,11 @@ def test_indexing_info(app, testapp, indexer_testapp):
     assert src_idx_info4.json['status'] == 'success'
     assert 'uuids_invalidated' not in src_idx_info4.json
     assert 'embedded_seconds' not in src_idx_info4.json
+
+
+def test_validators_on_indexing():
+    """
+    We now run PATCH validators for an indexed item using check_only=True
+    query param (so data isn't actually changed)
+    """
+    pass
