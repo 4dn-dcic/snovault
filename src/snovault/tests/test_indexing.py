@@ -1137,9 +1137,17 @@ def test_indexing_info(app, testapp, indexer_testapp):
     assert 'embedded_seconds' not in src_idx_info4.json
 
 
-def test_validators_on_indexing():
+def test_validators_on_indexing(app, testapp, indexer_testapp):
     """
     We now run PATCH validators for an indexed item using check_only=True
     query param (so data isn't actually changed)
     """
-    pass
+    es = app.registry[ELASTIC_SEARCH]
+    # make an item with a validation error (`simple1` should be str)
+    res = testapp.post_json(TEST_COLL + '?validate=false&upgrade=False',
+                            {'required': '', 'simple1': 1}, status=201)
+    indexer_testapp.post_json('/index', {'record': True})
+    time.sleep(2)
+    es_res = es.get(index=TEST_TYPE, doc_type=TEST_TYPE, id=res.json['@graph'][0]['uuid'])
+    assert len(es_res['_source'].get('validation_errors', [])) == 1
+    assert es_res['_source']['validation_errors'][0]['name'] == ['simple1']
