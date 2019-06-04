@@ -20,6 +20,7 @@ from .resources import (
     Collection,
     Item,
 )
+from .calculated import calculated_property
 from .validation import ValidationFailure
 from .validators import (
     no_validate_item_content_patch,
@@ -37,6 +38,7 @@ log = get_logger(__name__)
 
 
 def includeme(config):
+    config.include('.calculated')
     config.scan(__name__)
 
 
@@ -290,3 +292,50 @@ def item_delete_full(context, request, render=None):
         'notification' : 'Deletion failed',
         '@graph': [uuid]
     }
+
+
+@view_config(context=Item, permission='view', request_method='GET',
+             name='validation-errors')
+def item_view_validation_errors(context, request):
+    """
+    View config for validation_errors. If the current model does not have
+    `source`, it means we are using write (RDS) storage and not ES. In that
+    case, do not calculate the validation errors as it would require an extra
+    request and some tricky permission handling.
+
+    Args:
+        context: current Item
+        request: current request
+
+    Returns:
+        A dictionary including item path and validation errors from ES
+    """
+    if not hasattr(context.model, 'source'):
+        return {
+            '@id': request.resource_path(context),
+            'validation_errors': [],
+        }
+    source = context.model.source
+    allowed = set(source['principals_allowed']['view'])  # use view permissions
+    if allowed.isdisjoint(request.effective_principals):
+        raise HTTPForbidden()
+    return {
+        '@id': source['object']['@id'],
+        'validation_errors': source.get('validation_errors', [])
+    }
+
+
+@calculated_property(context=Item, category='page', name='validation-errors',
+                     condition=lambda request: request.has_permission('view'))
+def validation_errors_property(context, request):
+    """
+    Frame=page calculated property to add validation_errors to response.
+    The request.embed calls item_view_validation_errors
+    Args:
+        context: current Item
+        request: current Request
+    Returns:
+        List result of validation errors
+    """
+    path = request.resource_path(context)
+    return request.embed(path, '@@validation-errors')['validation_errors']

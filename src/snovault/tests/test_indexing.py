@@ -1146,8 +1146,18 @@ def test_validators_on_indexing(app, testapp, indexer_testapp):
     # make an item with a validation error (`simple1` should be str)
     res = testapp.post_json(TEST_COLL + '?validate=false&upgrade=False',
                             {'required': '', 'simple1': 1}, status=201)
+    ppp_id = res.json['@graph'][0]['@id']
+    # validation-errors view should be empty before indexing
+    val_err_view = testapp.get(ppp_id + '@@validation-errors', status=200).json
+    assert val_err_view['@id'] == ppp_id
+    assert val_err_view['validation_errors'] == []
+
     indexer_testapp.post_json('/index', {'record': True})
     time.sleep(2)
     es_res = es.get(index=TEST_TYPE, doc_type=TEST_TYPE, id=res.json['@graph'][0]['uuid'])
     assert len(es_res['_source'].get('validation_errors', [])) == 1
     assert es_res['_source']['validation_errors'][0]['name'] == ['simple1']
+    # check that validation-errors view works
+    val_err_view = testapp.get(ppp_id + '@@validation-errors', status=200).json
+    assert val_err_view['@id'] == ppp_id
+    assert val_err_view['aggregated_items'] == es_res['_source']['validation_errors']
