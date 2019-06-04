@@ -1160,4 +1160,4 @@ def test_validators_on_indexing(app, testapp, indexer_testapp):
     # check that validation-errors view works
     val_err_view = testapp.get(ppp_id + '@@validation-errors', status=200).json
     assert val_err_view['@id'] == ppp_id
-    assert val_err_view['aggregated_items'] == es_res['_source']['validation_errors']
+    assert val_err_view['validation_errors'] == es_res['_source']['validation_errors']
