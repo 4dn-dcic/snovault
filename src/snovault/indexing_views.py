@@ -152,8 +152,7 @@ def item_index_data(context, request):
     # run validators for the item by PATCHing with check_only=True
     # json_body provided is the upgraded properties of the item
     validate_path = path + '?check_only=true'
-    validate_req = make_subrequest(request, validate_path, method='PATCH',
-                                   json_body=properties)
+    validate_req = make_subrequest(request, validate_path, json_body=properties)
     try:
         request.invoke_subrequest(validate_req)
     except ValidationFailure:

@@ -354,6 +354,35 @@ def audit_mapping():
     }
 
 
+def validation_error_mapping():
+    return {
+        'location': {
+            'type': 'text',
+            'fields': {
+                'raw': {
+                    'type': 'keyword'
+                }
+            }
+        },
+        'name': {
+            'type': 'text',
+            'fields': {
+                'raw': {
+                    'type': 'keyword'
+                }
+            }
+        },
+        'description': {
+            'type': 'text',
+            'fields': {
+                'raw': {
+                    'type': 'keyword'
+                }
+            }
+        }
+    }
+
+
 # generate an index record, which contains a mapping and settings
 def build_index_record(mapping, in_type):
     return {
@@ -479,7 +508,7 @@ def es_mapping(mapping, agg_items_mapping):
                 'include_in_all': False
             },
             'validation_errors': {
-                'type': 'object',
+                'properties': validation_error_mapping(),
                 'include_in_all': False
             },
             'unique_keys': {

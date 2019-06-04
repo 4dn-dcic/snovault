@@ -178,6 +178,9 @@ def collection_add(context, request, render=None):
 @view_config(context=Item, permission='edit_unvalidated', request_method='PATCH',
              validators=[no_validate_item_content_patch],
              request_param=['validate=false'])
+@view_config(context=Item, permission='index', request_method='GET',
+             validators=[validate_item_content_patch],
+             request_param=['check_only=true'])
 def item_edit(context, request, render=None):
     '''
     Endpoint for editing an existing Item.
@@ -187,6 +190,11 @@ def item_edit(context, request, render=None):
     PATCH - updates the current properties with those supplied.
     Note validators will handle the PATH ?delete_fields parameter if you want
     field to be deleted
+
+    Also allow a GET request to just run the edit validators when using
+    `check_only=true` query param when indexing. Whether using this or POST/
+    PATCH, always return a dummy response with `check_only=true` and do not
+    actually modify the DB with `update_item`
     '''
     check_only = asbool(request.params.get('check_only', False))
     if check_only:
@@ -209,23 +217,6 @@ def item_edit(context, request, render=None):
         '@graph': [rendered],
     }
     return result
-
-
-@view_config(context=Item, permission='view', request_method='PUT',
-             validators=[validate_item_content_put],
-             request_param=['check_only=true'])
-@view_config(context=Item, permission='view', request_method='PATCH',
-             validators=[validate_item_content_patch],
-             request_param=['check_only=true'])
-def item_edit_check_only(context, request, render=None):
-    """
-    Unlike with collection_add, break out new permissions so that the indexer
-    may run validators with only view permissions
-    """
-    return {
-        'status': "success",
-        '@type': ['result']
-    }
 
 
 @view_config(context=Item, permission='view', request_method='GET',

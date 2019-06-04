@@ -35,14 +35,27 @@ class MissingIndexItemException(Exception):
 
 
 def make_subrequest(request, path, method='GET', json_body=None):
-    """ Make a subrequest
-
-    Copies request environ data for authentication.
+    """
+    Make a subrequest from a parent request given a request path.
+    Copies request environ data for authentication. Handles making the path
+    WSGI compatible. Optionally can take a JSON body to attach to subrequest.
+    Used in _embed to form requests to invoke, and can also be used externally
 
     May be better to just pull out the resource through traversal and manually
     perform security checks.
+
+    Args:
+        request: current Request object
+        path (str): path for the subrequest. Can include query string
+        method (str): subrequest method, defaults to GET
+        json_body (dict): optional dict to attach as json_body to subrequest
+
+    Returns:
+        Request: the subrequest
     """
     env = request.environ.copy()
+    # handle path, include making wsgi compatible and splitting out query string
+    path = unquote_bytes_to_wsgi(native_(path))
     if path and '?' in path:
         path_info, query_string = path.split('?', 1)
         path_info = path_info
@@ -91,7 +104,6 @@ def embed(request, *elements, **kw):
     as_user = kw.get('as_user')
     index_uuid = kw.get('index_uuid')
     path = join(*elements)
-    path = unquote_bytes_to_wsgi(native_(path))
     # as_user controls whether or not the embed_cache is used
     # if request._indexing_view is True, always use the cache
     if as_user is not None and not request._indexing_view:

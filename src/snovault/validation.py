@@ -27,7 +27,9 @@ def includeme(config):
 
 
 class Errors(list):
-    """Holds Request errors
+    """
+    Holds Request errors.
+    Errors should have location (required), name, description.
     """
 
     def add(self, location, name=None, description=None, **kw):
