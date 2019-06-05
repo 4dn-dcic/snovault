@@ -63,8 +63,8 @@ class Root(Resource):
     __name__ = ''
     __parent__ = None
     __acl__ = [
-        (Allow, 'remoteuser.INDEXER', ['view', 'list', 'index']),
-        (Allow, 'remoteuser.EMBED', ['view', 'expand', 'audit']),
+        (Allow, 'remoteuser.INDEXER', ['view', 'view_raw', 'list', 'index']),
+        (Allow, 'remoteuser.EMBED', ['view', 'view_raw', 'expand', 'audit']),
         (Allow, Everyone, ['visible_for_edit']),
     ]
 
