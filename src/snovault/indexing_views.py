@@ -69,9 +69,10 @@ def item_index_data(context, request):
     for the given item. If an int sid is provided as a request parameter,
     will raise an sid exception if the current item context is behind the
     given sid.
-    Computationally intensive. Calculates the object, embedded, and audit views
-    for the given item, using ES results where possible for speed. Leverages
-    a number of attributes on the request to get information indexing needs.
+    Computationally intensive. Calculates the object and embedded views
+    for the given item, using ES results where possible for speed. Also handles
+    calculation of aggregated-items and validation-errors for the item.
+    Leverages a number of attrs on the request to get needed information
 
     Args:
         context: current Item
@@ -133,7 +134,6 @@ def item_index_data(context, request):
 
     # reset these properties, then run embedded view
     request._linked_uuids = set()
-    request._audit_uuids = set()
     request._rev_linked_uuids_by_item = {}
     request._aggregate_for['uuid'] = uuid
     request._aggregated_items = {
@@ -142,7 +142,6 @@ def item_index_data(context, request):
     # since request._indexing_view is set to True in indexer.py,
     # all embeds (including subrequests) below will use the embed cache
     embedded_view = request.invoke_view(path, '@@embedded', index_uuid=uuid)
-    # get _linked and _rev_linked uuids from the request before @@audit views add to them
     linked_uuids_embedded = request._linked_uuids.copy()
 
     # find uuids traversed that rev link to this item
@@ -158,13 +157,8 @@ def item_index_data(context, request):
     except ValidationFailure:
         pass
 
-    # lastly, run the audit view. Set the uuids we want to audit on
-    request._audit_uuids = list(linked_uuids_embedded)
-    audit_view = request.invoke_view(path, '@@audit')['audit']
-
     document = {
         'aggregated_items': aggregated_items,
-        'audit': audit_view,
         'embedded': embedded_view,
         'item_type': context.type_info.item_type,
         'linked_uuids_embedded': join_linked_uuids_sids(request, linked_uuids_embedded),

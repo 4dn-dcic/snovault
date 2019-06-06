@@ -7,11 +7,10 @@ Guide to where to edit Source Code
 ----------------
 
 * **src** directory - contains all the python and javascript code for front and backends
-    * **audit** - python instructions for checking metadata stored in the schema
     * **schemas** - JSON schemas ([JSONSchema], [JSON-LD]) describing allowed types and values for all metadata objects
     * **tests** - Unit and integration tests
     * **types** -  business logic for dispatching URLs and producing the correct JSON
-    * **upgrade** - python instructions for upgrading old objects stored to the latest 
+    * **upgrade** - python instructions for upgrading old objects stored to the latest
     * **loadxl.py** - python script that defines the schema objects to load
 
 
@@ -81,10 +80,10 @@ Adding a new schema
             "required": ["treatment_term_name", "treatment_type"]
 
 
-4. In the **types** directory add a collection class for the object to define the rendering of the object. 
+4. In the **types** directory add a collection class for the object to define the rendering of the object.
 Refer to [object-lifecycle.rst] to understand object rendering. Example of basic collection definition for treatments::
 
-    
+
             @collection(
                 name='treatments',
                 properties={
@@ -104,7 +103,7 @@ Refer to [object-lifecycle.rst] to understand object rendering. Example of basic
                 embedded = ['target']
 
     * *Reverse links* - specifying the links that are back calculated from an object that ```linkTo``` this object, for construct we have:
-    
+
                 rev = {
                     'characterizations': ('construct_characterization', 'characterizes'),
                 }
@@ -130,7 +129,7 @@ Refer to [object-lifecycle.rst] to understand object rendering. Example of basic
                 'train',
             ]
 
-7. Add in sample data to test the new schema in **tests** directory. Create a new JSON file in the **data/inserts** directory named after the new metadata object. 
+7. Add in sample data to test the new schema in **tests** directory. Create a new JSON file in the **data/inserts** directory named after the new metadata object.
 This new object is an array of example objects that can successfully POST against the schema defined, for example ::
 
             [
@@ -144,8 +143,6 @@ This new object is an array of example objects that can successfully POST agains
                     "property_2": 100,
                     "uuid": "0137a084-57af-4f69-b756-d6a920393fde"
                 }
-
-8. If applicable you may want to add audits on the metadata. Please refer to [making_audits]
 
 -----
 
@@ -167,13 +164,13 @@ There are 2 categories when we talk about updating an existing schema:
 
 2. In the **types** directory, make appropriate updates to object class by adding *embedding*, *reverse links*, and *calculated properties* as necessary.
 
-3. Update sample data, **data/inserts** directory, to test the changes made to the schema in **tests** directory. 
+3. Update sample data, **data/inserts** directory, to test the changes made to the schema in **tests** directory.
 
 
 ### Update schema version
 
-1. In the **schemas** directory, increment the schema version (1->2), if it meets the above rule: 
-        
+1. In the **schemas** directory, increment the schema version (1->2), if it meets the above rule:
+
         "schema_version": {
             "default": "2"
         }
@@ -214,18 +211,15 @@ There are 2 categories when we talk about updating an existing schema:
             assert value['schema_version'] == '3'
             assert value['property_1'] == 'value 1'
 
-5. If applicable you may need to update audits on the metadata. Please refer to [making_audits]
-
-6. To document all the schema changes that occurred between increments of the ```schema_version``` update the object changelogs the **schemas/changelogs** directory. Below is an example of the changelog for above upgrade:
+5. To document all the schema changes that occurred between increments of the ```schema_version``` update the object changelogs the **schemas/changelogs** directory. Below is an example of the changelog for above upgrade:
 
     Schema version 2
     ----------------
 
     * *property_1* values were changed to all lower case
-     
+
 
 [JSONSchema]: http://json-schema.org/
 [JSON-LD]:  http://json-ld.org/
 [overview.rst]: ../../../docs/overview.rst
 [object-lifecycle.rst]: ../../../docs/object-lifecycle.rst
-[making_audits]: making_audits.md

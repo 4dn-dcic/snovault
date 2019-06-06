@@ -143,9 +143,6 @@ def embedded_3rd_array():
             'edit': [
                 'group.admin',
                 'submits_for.828cd4fe-ebb0-4b36-a94a-d2e3a36cc989'
-            ],
-            'audit': [
-                'system.Everyone'
             ]
         },
         'treatment_type': 'siRNA for Gene:PARK2, FMR1'
@@ -181,9 +178,6 @@ def embedded_3rd_array():
             'edit': [
                 'group.admin',
                 'submits_for.828cd4fe-ebb0-4b36-a94a-d2e3a36cc989'
-            ],
-            'audit': [
-                'system.Everyone'
             ]
         },
         'treatment_type': 'shRNA for Gene:PARK2, FMR1'
@@ -218,9 +212,6 @@ def embedded_3rd_array():
             'edit': [
                 'group.admin',
                 'submits_for.828cd4fe-ebb0-4b36-a94a-d2e3a36cc989'
-            ],
-            'audit': [
-                'system.Everyone'
             ]
         },
         'modification_name': 'Stable Transfection for Gene:PARK2, FMR1',
@@ -251,9 +242,6 @@ def embedded_3rd_array():
             'edit': [
                 'group.admin',
                 'submits_for.828cd4fe-ebb0-4b36-a94a-d2e3a36cc989'
-            ],
-            'audit': [
-                'system.Everyone'
             ]
         },
         'modification_name': 'Other',
@@ -281,7 +269,7 @@ def embedded_3rd_array():
 
 @pytest.fixture()
 def embedded_lab():
-    return {'lab': {'fax': '000-000-0000', 'city': 'Boston', 'name': 'test-4dn-lab', 'state': 'MA', 'title': '4DN Testing Lab', 'status': 'current', 'country': 'USA', 'address1': 'Biomedical Bioinfomatics', 'address2': '10 Schattuck Street', 'postal_code': '02115', 'date_created': '2017-07-31T14:31:13.532200+00:00', 'institute_name': 'Harvard Medical School', 'schema_version': '1', 'institute_label': 'HMS', '@id': '/labs/test-4dn-lab/', '@type': ['Lab', 'Item'], 'uuid': '828cd4fe-ebb0-4b22-a94a-d2e3a36cc988', 'display_title': '4DN Testing Lab', 'principals_allowed': {'view': ['system.Everyone'], 'edit': ['group.admin', 'submits_for.828cd4fe-ebb0-4b22-a94a-d2e3a36cc988'], 'audit': ['system.Everyone']}}}
+    return {'lab': {'fax': '000-000-0000', 'city': 'Boston', 'name': 'test-4dn-lab', 'state': 'MA', 'title': '4DN Testing Lab', 'status': 'current', 'country': 'USA', 'address1': 'Biomedical Bioinfomatics', 'address2': '10 Schattuck Street', 'postal_code': '02115', 'date_created': '2017-07-31T14:31:13.532200+00:00', 'institute_name': 'Harvard Medical School', 'schema_version': '1', 'institute_label': 'HMS', '@id': '/labs/test-4dn-lab/', '@type': ['Lab', 'Item'], 'uuid': '828cd4fe-ebb0-4b22-a94a-d2e3a36cc988', 'display_title': '4DN Testing Lab', 'principals_allowed': {'view': ['system.Everyone'], 'edit': ['group.admin', 'submits_for.828cd4fe-ebb0-4b22-a94a-d2e3a36cc988']}}}
 
 
 @pytest.fixture()

@@ -10,12 +10,6 @@ from pyramid.config import Configurator
 from pyramid.settings import (
     asbool,
 )
-
-
-from .auditor import (  # noqa
-    AuditFailure,
-    audit_checker,
-)
 from .calculated import calculated_property  # noqa
 from .config import (  # noqa
     abstract_collection,
@@ -61,7 +55,6 @@ def includeme(config):
     config.include('.invalidation')
     config.include('.upgrader')
     config.include('.aggregated_items')
-    config.include('.auditor')
     config.include('.storage')
     config.include('.typeinfo')
     config.include('.resources')
@@ -127,8 +120,6 @@ def main(global_config, **local_config):
 
     # Load upgrades last so that all views (including testing views) are
     # registered.
-    # TODO we would need a generic upgrade audit PACKAGE (__init__)
-    # config.include('.audit)
     # config.include('.upgrade')
 
     app = config.make_wsgi_app()

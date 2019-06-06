@@ -26,11 +26,6 @@ class Snowset(Item):
         'lab.*',
         'award.*',
     ]
-    audit_inherit = [
-        'submitted_by',
-        'lab',
-        'award',
-    ]
     name_key = 'accession'
 
     @calculated_property(condition='date_released', schema={
@@ -84,9 +79,4 @@ class Snowflake(Item):
         'submitted_by.*',
         'award.uuid',
         'snowset.*'
-    ]
-    audit_inherit = [
-        'lab',
-        'submitted_by',
-
     ]

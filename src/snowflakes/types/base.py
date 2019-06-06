@@ -214,9 +214,6 @@ class Item(snovault.Item):
             },
             'edit': {
                 'type': 'string'
-            },
-            'audit': {
-                'type': 'string'
             }
         }
     },)

@@ -64,7 +64,7 @@ class Root(Resource):
     __parent__ = None
     __acl__ = [
         (Allow, 'remoteuser.INDEXER', ['view', 'view_raw', 'list', 'index']),
-        (Allow, 'remoteuser.EMBED', ['view', 'view_raw', 'expand', 'audit']),
+        (Allow, 'remoteuser.EMBED', ['view', 'view_raw', 'expand']),
         (Allow, Everyone, ['visible_for_edit']),
     ]
 
@@ -218,7 +218,6 @@ class Item(Resource):
     aggregated_items = {}
     embedded_list = []
     filtered_rev_statuses = ()
-    audit_inherit = None
     schema = None
     AbstractCollection = AbstractCollection
     Collection = Collection
@@ -479,9 +478,6 @@ class Item(Resource):
                 'type': 'string'
             },
             'edit': {
-                'type': 'string'
-            },
-            'audit': {
                 'type': 'string'
             }
         }

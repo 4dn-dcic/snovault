@@ -322,38 +322,6 @@ def index_settings():
     }
 
 
-def audit_mapping():
-    return {
-        'category': {
-            'type': 'text',
-            'fields': {
-                'raw': {
-                    'type': 'keyword'
-                }
-            }
-        },
-        'detail': {
-            'type': 'text',
-            'fields': {
-                'raw': {
-                    'type': 'keyword'
-                }
-            }
-        },
-        'level_name': {
-            'type': 'text',
-            'fields': {
-                'raw': {
-                    'type': 'keyword'
-                }
-            }
-        },
-        'level': {
-            'type': 'integer',
-        }
-    }
-
-
 def validation_error_mapping():
     return {
         'location': {
@@ -463,9 +431,6 @@ def es_mapping(mapping, agg_items_mapping):
                     },
                     'edit': {
                         'type': 'keyword'
-                    },
-                    'audit': {
-                        'type': 'keyword'
                     }
                 }
             },
@@ -522,23 +487,6 @@ def es_mapping(mapping, agg_items_mapping):
             'paths': {
                 'type': 'text',
                 'include_in_all': False
-            },
-            'audit': {
-                'include_in_all': False,
-                'properties': {
-                    'ERROR': {
-                        'properties': audit_mapping()
-                    },
-                    'NOT_COMPLIANT': {
-                        'properties': audit_mapping()
-                    },
-                    'WARNING': {
-                        'properties': audit_mapping()
-                    },
-                    'INTERNAL_ACTION': {
-                        'properties': audit_mapping()
-                    },
-                },
             }
         }
     }

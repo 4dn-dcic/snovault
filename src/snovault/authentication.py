@@ -302,7 +302,7 @@ def generate_password():
 
 def calc_principals(context):
     principals_allowed = {}
-    for permission in ('view', 'edit', 'audit'):
+    for permission in ('view', 'edit'):
         principals = principals_allowed_by_permission(context, permission)
         if principals is Everyone:
             principals = [Everyone]
