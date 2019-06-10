@@ -29,6 +29,7 @@ from .validators import (
     validate_item_content_patch,
     validate_item_content_post,
     validate_item_content_put,
+    validate_item_content_in_place
 )
 from .invalidation import add_to_indexing_queue
 import transaction
@@ -181,7 +182,7 @@ def collection_add(context, request, render=None):
              validators=[no_validate_item_content_patch],
              request_param=['validate=false'])
 @view_config(context=Item, permission='index', request_method='GET',
-             validators=[validate_item_content_patch],
+             validators=[validate_item_content_in_place],
              request_param=['check_only=true'])
 def item_edit(context, request, render=None):
     '''
