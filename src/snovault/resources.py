@@ -399,7 +399,7 @@ class Item(Resource):
         if any(forbidden):
             msg = ("Forbidden character(s) %s are not allowed in field: %s. Value: %s"
                    % (set(forbidden), field, value))
-            raise ValidationFailure('body', [], msg)
+            raise ValidationFailure('body', 'Item: path characters', msg)
 
     def update(self, properties, sheets=None):
         '''Alias of _update, called in crud_views.py - `update_item` (method)'''
@@ -428,7 +428,7 @@ class Item(Resource):
             for k, values in unique_keys.items():
                 if len(set(values)) != len(values):
                     msg = "Duplicate keys for %r: %r" % (k, values)
-                    raise ValidationFailure('body', [], msg)
+                    raise ValidationFailure('body', 'Item: duplicate keys', msg)
                 for uk_val in values:
                     self.validate_path_characters(k, uk_val)
 

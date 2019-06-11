@@ -204,6 +204,7 @@ def test_patch_delete_fields_required(content, testapp):
     # with validate=false, then defaults are not populated so default fields are also deleted
     res = testapp.patch_json(url + "?delete_fields=required", {}, status=422)
     assert res.json['description'] == "Failed validation"
+    assert res.json['errors'][0]['name'] == "Schema: "
     assert res.json['errors'][0]['description'] == "'required' is a required property"
 
 
@@ -247,6 +248,10 @@ def test_put_object_editing_child(content_with_child, testapp):
     # this is no longer allowed
     res = testapp.put_json(content_with_child['@id'], edit, status=422)
     assert res.json['description'] == 'Failed validation'
+    assert len(res.json['errors']) == 1
+    res_error = res.json['errors'][0]
+    assert res_error['name'] == 'Schema: reverse'
+    assert res_error['description'] == 'submission of calculatedProperty disallowed'
 
 
 def test_name_key_validation(link_targets, testapp):
@@ -255,6 +260,7 @@ def test_name_key_validation(link_targets, testapp):
     res = testapp.post_json('/testing-link-targets-sno/', target_data, status=422)
     assert res.json['description'] == 'Failed validation'
     res_error = res.json['errors'][0]
+    assert res_error['name'] == "Item: path characters"
     assert "Forbidden character(s) {'#'}" in res_error['description']
 
     # unique_key
@@ -262,6 +268,7 @@ def test_name_key_validation(link_targets, testapp):
     res = testapp.post_json('/testing-link-sources-sno/', source_data, status=422)
     assert res.json['description'] == 'Failed validation'
     res_error = res.json['errors'][0]
+    res_error['name'] == "Item: path characters"
     assert "Forbidden character(s) {'*'}" in res_error['description']
 
 
@@ -301,3 +308,10 @@ def test_check_only(content, testapp):
 
     # check_only raises validation errors
     res = testapp.patch_json(url + "?check_only=True&delete_fields=required", {}, status=422)
+    assert len(res.json['errors']) == 2
+    val_error = res.json['errors'][0]
+    assert val_error['name'] == 'Schema: '
+    assert val_error['description'] == "'required' is a required property"
+    del_error = res.json['errors'][1]
+    assert del_error['name'] == 'delete_fields'
+    assert del_error['description'] == 'Error deleting fields'

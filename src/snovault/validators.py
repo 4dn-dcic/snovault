@@ -76,7 +76,8 @@ def delete_fields(request, data, schema):
             if isinstance(error, IgnoreUnchanged):
                 if error.validator != 'permission':
                     continue
-            request.errors.add('body', error.path, error.message)
+            error_name = 'Schema: ' + '.'.join(list(error.path))
+            request.errors.add('body', error_name, error.message)
     if request.errors:
         raise ValidationFailure('body', 'delete_fields', 'Error deleting fields')
     # validate() may add fields, such as uuid and schema_version
