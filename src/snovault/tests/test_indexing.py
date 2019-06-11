@@ -1156,7 +1156,7 @@ def test_validators_on_indexing(app, testapp, indexer_testapp):
     time.sleep(2)
     es_res = es.get(index=TEST_TYPE, doc_type=TEST_TYPE, id=res.json['@graph'][0]['uuid'])
     assert len(es_res['_source'].get('validation_errors', [])) == 1
-    assert es_res['_source']['validation_errors'][0]['name'] == ['Schema: simple1']
+    assert es_res['_source']['validation_errors'][0]['name'] == 'Schema: simple1'
     # check that validation-errors view works
     val_err_view = testapp.get(ppp_id + '@@validation-errors', status=200).json
     assert val_err_view['@id'] == ppp_id
