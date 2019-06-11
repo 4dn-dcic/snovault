@@ -58,7 +58,7 @@ def delete_fields(request, data, schema):
     # validation, which does things like adding defaults
     if request.params.get('validate') == 'false':
         err_msg = 'Cannot delete fields on request with with validate=false'
-        raise ValidationFailure('body', ['?delete_fields'], err_msg)
+        raise ValidationFailure('body', 'delete_fields', err_msg)
 
     # make a copy of data after removing fields and validate
     to_validate = data.copy()
@@ -76,7 +76,7 @@ def delete_fields(request, data, schema):
             if isinstance(error, IgnoreUnchanged):
                 if error.validator != 'permission':
                     continue
-            error_name = 'Schema: ' + '.'.join(list(error.path))
+            error_name = 'Schema: ' + '.'.join([str(p) for p in error.path])
             request.errors.add('body', error_name, error.message)
     if request.errors:
         raise ValidationFailure('body', 'delete_fields', 'Error deleting fields')
