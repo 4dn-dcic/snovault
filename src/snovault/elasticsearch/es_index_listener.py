@@ -44,10 +44,7 @@ def run(testapp, interval=DEFAULT_INTERVAL, dry_run=False, path='/index', update
     )
 
     # Make sure elasticsearch is up before trying to index.
-    if path == '/index_file':
-        return
-    else:
-        es = testapp.app.registry[ELASTIC_SEARCH]
+    es = testapp.app.registry[ELASTIC_SEARCH]
     es.info()
 
     # main listening loop
@@ -221,7 +218,7 @@ def main():
         help="Poll interval between notifications")
     parser.add_argument(
         '--path', default='/index',
-        help="Path of indexing view (/index or /index_file)")
+        help="Path of indexing view (currently only /index)")
     parser.add_argument('config_uri', help="path to configfile")
     args = parser.parse_args()
 

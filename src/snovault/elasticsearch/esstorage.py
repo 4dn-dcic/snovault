@@ -1,5 +1,4 @@
 import elasticsearch.exceptions
-from snovault.util import get_root_request
 from elasticsearch.helpers import scan
 from elasticsearch_dsl import Search, Q
 from pyramid.threadlocal import get_current_request
