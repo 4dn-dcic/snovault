@@ -46,29 +46,12 @@ from timeit import default_timer as timer
 
 EPILOG = __doc__
 
-
 log = structlog.getLogger(__name__)
-
-# An index to store non-content metadata
-META_MAPPING = {
-    '_all': {
-        'enabled': False,
-    },
-    'enabled': False,
-}
 
 PATH_FIELDS = ['submitted_file_name']
 NON_SUBSTRING_FIELDS = ['uuid', '@id', 'submitted_by', 'md5sum', 'references', 'submitted_file_name']
 NUM_SHARDS = 1
 NUM_REPLICAS = 1
-
-
-def sorted_pairs_hook(pairs):
-    return OrderedDict(sorted(pairs))
-
-
-def sorted_dict(d):
-    return json.loads(json.dumps(d), object_pairs_hook=sorted_pairs_hook)
 
 
 def determine_if_is_date_field(field, schema):
@@ -524,6 +507,14 @@ def aggregated_items_mapping(types, item_type):
                         }
                     }
                 },
+                'embedded_path': {
+                    'type': 'text',
+                    'fields': {
+                        'raw': {
+                            'type': 'keyword'
+                        }
+                    }
+                },
                 'item': {
                     'properties': {}
                 }
@@ -667,21 +658,13 @@ def create_mapping_by_type(in_type, registry):
     return es_mapping(embed_mapping, agg_items_mapping)
 
 
-def build_index(app, es, in_type, mapping, uuids_to_index, dry_run, check_first, index_diff=False,
-                print_count_only=False, cached_meta=None, meta_bulk_actions=None):
+def build_index(app, es, in_type, mapping, uuids_to_index, dry_run, check_first,
+                index_diff=False, print_count_only=False):
     """
     Creates an es index for the given in_type with the given mapping and
-    settings defined by item_settings(). If check_first == True, attempting
-    to see if the index exists and is unchanged from the previous mapping.
-    If so, do not delete and recreate the index to save on indexing.
-    This function will trigger a reindexing of the in_type index if
-    the old index is kept but the es doc count differs from the db doc count.
-    Will also trigger a re-index for a newly created index if the indexing
-    document in meta exists and has an xmin.
-
-    please pass in cached_meta and meta_bulk_actions if you are creating multiple indices
-    then update meta index once with `elasticsearch.helpers.bulk(es, meta_bulk_actions)`
-    passing in `cached_meta` can also save on calls to check if index exists...
+    settings defined by item_settings(). If check_first is True, will compare
+    the given mapping with the found mapping for the index and skip creating
+    it if possible.
     """
     uuids_to_index[in_type] = set()
     if print_count_only:
@@ -692,22 +675,27 @@ def build_index(app, es, in_type, mapping, uuids_to_index, dry_run, check_first,
     # combines mapping and settings
     this_index_record = build_index_record(mapping, in_type)
 
+    if dry_run:
+        log.info('___DRY RUN___')
+        log.info('MAPPING: would use the attached mapping/settings for index %s' % (in_type),
+                 collection=in_type, mapping=this_index_record)
+        return
+
     # determine if index already exists for this type
-    # probably don't need to do this as I can do it upstream... but passing in meta makes it
-    # just a single if check
-    this_index_exists = check_if_index_exists(es, in_type, cached_meta)
+    this_index_exists = check_if_index_exists(es, in_type)
 
     # if the index exists, we might not need to delete it
     # otherwise, run if we are using the check-first or index_diff args
-    if check_first or index_diff:
-        prev_index_record = get_previous_index_record(this_index_exists, es, in_type)
-        if prev_index_record is not None and this_index_record == prev_index_record:
-            if in_type != 'meta':
-                check_and_reindex_existing(app, es, in_type, uuids_to_index, index_diff)
-            log.info('MAPPING: using existing index for collection %s' % (in_type), collection=in_type)
-            return
+    if (check_first or index_diff) and compare_against_existing_mapping(es, in_type, this_index_record):
+        import pdb; pdb.set_trace()
+        check_and_reindex_existing(app, es, in_type, uuids_to_index, index_diff)
+        log.info('MAPPING: using existing index for collection %s' % (in_type), collection=in_type)
+        return
 
-    if dry_run or index_diff:
+    # if index_diff and we've made it here, the mapping must be off
+    if index_diff:
+        log.error('MAPPING: cannot index diff for index %s due to differing mappings'
+                  % (in_type), collection=in_type)
         return
 
     # delete the index
@@ -735,40 +723,13 @@ def build_index(app, es, in_type, mapping, uuids_to_index, dry_run, check_first,
     coll_uuids = set(get_uuids_for_types(app.registry, types=[in_type]))
     end = timer()
     log.info('Time to get collection uuids: %s' % str(end-start), cat='fetch time',
-                duration=str(end-start), collection=in_type)
+             duration=str(end-start), collection=in_type)
     uuids_to_index[in_type] = coll_uuids
     log.info('MAPPING: will queue all %s items in the new index %s for reindexing' %
              (len(coll_uuids), in_type), cat='items to queue', count=len(coll_uuids), collection=in_type)
 
-    # put index_record in meta
-    if meta_bulk_actions is None:
-        meta_bulk_actions = []
-        # 1-2s faster to load in bulk if your doing more than one
-        start = timer()
-        res = es_safe_execute(es.index, index='meta', doc_type='meta', body=this_index_record, id=in_type)
-        end = timer()
-        log.info("Time to update metadata document: %s" % str(end-start), duration=str(end-start),
-                    collection=in_type, cat='update meta')
-        if res:
-            log.info("MAPPING: index record created for %s" % (in_type), collection=in_type)
-        else:
-            log.error("MAPPING: index record failed for %s" % (in_type), collection=in_type)
-    else:
-        # create bulk actions to be submitted after all mappings are created
-        bulk_action = {'_op_type': 'index',
-                       '_index': 'meta',
-                       '_type': 'meta',
-                       '_id': in_type,
-                       '_source': this_index_record
-                      }
-        meta_bulk_actions.append(bulk_action)
-    return meta_bulk_actions
 
-
-def check_if_index_exists(es, in_type, cached_indices=None):
-    # first attempt to get the index from the cached meta indices
-    if isinstance(cached_indices, dict) and cached_indices:
-        return in_type in cached_indices
+def check_if_index_exists(es, in_type):
     try:
         this_index_exists = es.indices.exists(index=in_type)
         if this_index_exists:
@@ -776,32 +737,6 @@ def check_if_index_exists(es, in_type, cached_indices=None):
     except ConnectionTimeout:
         this_index_exists = False
     return this_index_exists
-
-
-def get_previous_index_record(this_index_exists, es, in_type):
-    """
-    Decide if we need to drop the index + reindex (no index/no meta record)
-    OR
-    compare previous mapping and current mapping + settings to see if we need
-    to update. if not, use the existing mapping to prevent re-indexing.
-    """
-    prev_index_hit = {}
-    if this_index_exists:
-        try:
-            # multiple queries to meta... don't want this...
-            prev_index_hit = es.get(index='meta', doc_type='meta', id=in_type, ignore=[404])
-        except TransportError as excp:
-            if excp.info.get('status') == 503:
-                es.indices.refresh(index='meta')
-                time.sleep(3)
-                try:
-                    prev_index_hit = es.get(index='meta', doc_type='meta', id=in_type, ignore=[404])
-                except:
-                    return None
-        prev_index_record = prev_index_hit.get('_source')
-        return prev_index_record
-    else:
-        return None
 
 
 def check_and_reindex_existing(app, es, in_type, uuids_to_index, index_diff=False, print_counts=False):
@@ -860,6 +795,51 @@ def get_db_es_counts_and_db_uuids(app, es, in_type, index_diff=False):
     return db_count, es_count, db_uuids, diff_uuids
 
 
+def find_and_replace_unmapped_objects(new_mapping, found_mapping):
+    """
+    Needed to compare a newly created mapping and a mapping found in ES,
+    since unmapped objects will be automatically mapped by elasticsearch.
+    An example is `links` object, which we don't explictly map.
+
+    Recursively move through the new mapping to find such objects and then
+    replace them in the found mapping. Modifies both mappings in place
+    """
+    for key, new_val in new_mapping.items():
+        if key not in found_mapping:
+            continue
+        found_val = found_mapping[key]
+        if new_val.get('type') == 'object' and 'properties' not in new_val:
+            if found_val.get('properties') is not None and 'type' not in found_val:
+                # this was an automatically create mapping. Reset in found_mapping
+                del found_val['properties']
+                found_val['type'] = 'object'
+        # drill down into further properties
+        if 'properties' in new_val:
+            find_and_replace_unmapped_objects(new_val['properties'], found_val.get('properties', {}))
+
+
+def compare_against_existing_mapping(es, in_type, this_index_record, live_record=False):
+    """
+    Compare the given index mapping and compare it to the existing mapping
+    in an index. Return True if they are the same, False otherwise.
+    """
+    import pdb; pdb.set_trace()
+    found_mapping = es.indices.get_mapping(index=in_type).get(in_type, {}).get('mappings')
+    new_mapping = this_index_record['mappings']
+    # must handle automatically mapped objects to compare new mappings to live ones
+    # may change found_mapping
+    find_and_replace_unmapped_objects(new_mapping[in_type]['properties'],
+                                      found_mapping[in_type]['properties'])
+    found_map_json = json.dumps(found_mapping, sort_keys=True)
+    this_map_json = json.dumps(new_mapping, sort_keys=True)
+    # es converts {'properties': {}} --> {'type': 'object'}
+
+    # TODO: remove this?
+    # this_map_json = this_map_json.replace('{"properties": {}}', '{"type": "object"}')
+
+    return found_map_json == this_map_json
+
+
 def confirm_mapping(es, in_type, this_index_record):
     """
     The mapping put to ES can be incorrect, most likely due to residual
@@ -871,14 +851,10 @@ def confirm_mapping(es, in_type, this_index_record):
     mapping_check = False
     tries = 0
     while not mapping_check and tries < 5:
-        found_mapping = es.indices.get_mapping(index=in_type).get(in_type, {}).get('mappings')
-        found_map_json = json.dumps(found_mapping, sort_keys=True)
-        this_map_json = json.dumps(this_index_record['mappings'], sort_keys=True)
-        # es converts {'properties': {}} --> {'type': 'object'}
-        this_map_json = this_map_json.replace('{"properties": {}}', '{"type": "object"}')
-        if found_map_json == this_map_json:
+        if compare_against_existing_mapping(es, in_type, this_index_record):
             mapping_check = True
         else:
+            import pdb; pdb.set_trace()
             count = es.count(index=in_type, doc_type=in_type).get('count', 0)
             log.info('___BAD MAPPING FOUND FOR %s. RETRYING___\nDocument count in that index is %s.'
                         % (in_type, count), collection=in_type, count=count, cat='bad mapping')
@@ -925,6 +901,9 @@ def flatten_and_sort_uuids(registry, uuids_to_index, item_order):
     Returns:
         list: ordered uuids to index synchronously or queue for indexing
     """
+    # arg default of [] can be dangerous
+    if item_order is None:
+        item_order = []
     # process item_order to turn item names to item types
     proc_item_order = []
     for name_or_type in item_order:
@@ -964,12 +943,11 @@ def run_indexing(app, indexing_uuids):
 
 
 def run(app, collections=None, dry_run=False, check_first=False, skip_indexing=False,
-        index_diff=False, strict=False, sync_index=False, no_meta=False, print_count_only=False,
-        purge_queue=False, bulk_meta=True, item_order=[]):
+        index_diff=False, strict=False, sync_index=False, print_count_only=False,
+        purge_queue=False, item_order=None):
     """
     Run create_mapping. Has the following options:
     collections: run create mapping for the given list of item types only.
-        If specific collections are set, meta will not be re-created.
     dry_run: if True, do not delete/create indices
     skip_indexing: if True, do not index ANYTHING with this run.
     check_first: if True, attempt to keep indices that have not changed mapping.
@@ -983,15 +961,11 @@ def run(app, collections=None, dry_run=False, check_first=False, skip_indexing=F
         item_types are specified, since otherwise a complete reindex will
         occur anyways.
     sync_index: if True, synchronously run reindexing rather than queueing.
-    no_meta: if indexing all types (item_type not specified), will not
-        re-create the meta index if set.
     print_count_only: if True, print counts for existing indices instead of
         queueing items for reindexing. Must to be used with check_first.
     purge_queue: if True, purge the contents of all relevant indexing queues.
         Is automatically done on a full indexing (no index_diff, check_first,
         or collections).
-    bulk_meta: caches meta at the start of create_mapping and never queries or
-        updates it again, until the end when all mappings are bulk loaded into meta
     item_order: provide a list of item types (e.g. my_type) or item names
         (e.g. MyType). Indexing/queueing order will be dictated by index in the
         list, such that the items at the front are indexed first.
@@ -1016,23 +990,11 @@ def run(app, collections=None, dry_run=False, check_first=False, skip_indexing=F
     # keep track of uuids to be indexed after mapping is done.
     # Set of uuids for each item type; keyed by item type. Order for python < 3.6
     uuids_to_index = OrderedDict()
-    total_reindex = (collections == None and not dry_run and not check_first and not index_diff and not print_count_only)
+    total_reindex = (collections == None and not dry_run and not check_first
+                     and not index_diff and not print_count_only)
 
     if not collections:
         collections = list(registry[COLLECTIONS].by_item_type)
-        # automatically add meta to start when going through all collections
-        if not no_meta:
-            collections = ['meta'] + collections
-
-    # for bulk_meta, cache meta upfront, and only update it (with all mappings) at very end
-    cached_indices = meta_bulk_actions = None
-    if bulk_meta:
-        cached_indices = cache_meta(es)
-        meta_bulk_actions = []
-
-    # if meta doesn't exist, always add it
-    if not check_if_index_exists(es, 'meta', cached_indices) and 'meta' not in collections:
-        collections = ['meta'] + collections
 
     # clear the indexer queue on a total reindex
     if total_reindex or purge_queue:
@@ -1053,48 +1015,26 @@ def run(app, collections=None, dry_run=False, check_first=False, skip_indexing=F
     timings = {}
     log.info('\n___FOUND COLLECTIONS___:\n %s\n' % (str(collections)), cat=cat)
     for collection_name in collections:
-        if collection_name == 'meta':
-            # meta mapping just contains settings
-            build_index(app, es, collection_name, META_MAPPING, uuids_to_index,
-                        dry_run, check_first, index_diff, print_count_only,
-                        cached_indices, meta_bulk_actions)
-            # bail if we fail to make meta
-            if not check_if_index_exists(es, 'meta'):
-                log.info('\n___META NOT CREATED; CREATE MAPPING ABORTED___\n', cat=cat)
-                return timings
-            # only update this for bulk_meta setting
-            if cached_indices:
-                cached_indices['meta'] = 1
-        else:
-            start = timer()
-            mapping = create_mapping_by_type(collection_name, registry)
-            end = timer()
-            mapping_time = end - start
-            start = timer()
-            build_index(app, es, collection_name, mapping, uuids_to_index,
-                        dry_run, check_first, index_diff, print_count_only,
-                        cached_indices, meta_bulk_actions)
-            end = timer()
-            index_time = end - start
-            log.info('___FINISHED %s___\n' % (collection_name))
-            log.info('___Mapping Time: %s  Index time %s ___\n' % (mapping_time, index_time),
-                        cat='index mapping time', collection=collection_name, map_time=mapping_time,
-                        index_time=index_time)
-            if mapping_time > greatest_mapping_time['duration']:
-                greatest_mapping_time['collection'] = collection_name
-                greatest_mapping_time['duration'] = mapping_time
-            if index_time > greatest_index_creation_time['duration']:
-                greatest_index_creation_time['collection'] = collection_name
-                greatest_index_creation_time['duration'] = index_time
-            timings[collection_name] = {'mapping': mapping_time, 'index': index_time}
-
-    # should be called only for bulk_meta setting
-    if meta_bulk_actions:
         start = timer()
-        bulk(es, meta_bulk_actions)
+        mapping = create_mapping_by_type(collection_name, registry)
         end = timer()
-        log.info("bulk update for meta took %s" % str(end-start), cat='bulk_meta time',
-                    duration=str(end-start))
+        mapping_time = end - start
+        start = timer()
+        build_index(app, es, collection_name, mapping, uuids_to_index,
+                    dry_run, check_first, index_diff, print_count_only)
+        end = timer()
+        index_time = end - start
+        log.info('___FINISHED %s___\n' % (collection_name))
+        log.info('___Mapping Time: %s  Index time %s ___\n' % (mapping_time, index_time),
+                    cat='index mapping time', collection=collection_name, map_time=mapping_time,
+                    index_time=index_time)
+        if mapping_time > greatest_mapping_time['duration']:
+            greatest_mapping_time['collection'] = collection_name
+            greatest_mapping_time['duration'] = mapping_time
+        if index_time > greatest_index_creation_time['duration']:
+            greatest_index_creation_time['collection'] = collection_name
+            greatest_index_creation_time['duration'] = index_time
+        timings[collection_name] = {'mapping': mapping_time, 'index': index_time}
 
     overall_end = timer()
     cat = 'finished mapping'
@@ -1163,32 +1103,6 @@ def run(app, collections=None, dry_run=False, check_first=False, skip_indexing=F
     return timings
 
 
-def cache_meta(es):
-    ''' get what we know from ES about the state of our indexes'''
-
-    existing_indices = es.cat.indices(h='index,docs.count')
-    # determine which collections exist
-    indices_list = existing_indices.split('\n')
-    # indices call leaves some trailing stuff
-    if indices_list[-1] == '': indices_list.pop()
-    indices = {}
-    for index in indices_list:
-        if index:
-            name, count = index.split()
-            indices[name] = {'count': count}
-
-    # store all existing mappings
-    # we no longer create any mapping for meta.. so it's not searchable
-    '''if 'meta' in indices:
-        meta_idx = es.search(index='meta', body={'query': {'match_all': {}}})
-        for idx in meta_idx['hits']['hits']:
-            if idx.get('_id') and idx['_id'] in indices:
-                indices[idx['_id']]['mapping'] = idx['_source']
-    '''
-    # now indices should be all index that xisted with size and mapping (mapping includes settings)
-    return indices
-
-
 def main():
     parser = argparse.ArgumentParser(
         description="Create Elasticsearch mapping", epilog=EPILOG,
@@ -1208,9 +1122,7 @@ def main():
     parser.add_argument('--strict', action='store_true',
                         help="used with check_first in combination with item-type. Only index the given types (ignore associated items). Advanced users only")
     parser.add_argument('--sync-index', action='store_true',
-                        help="add to cause reindexing to occur synchronously instead of using the meta uuid_store")
-    parser.add_argument('--no-meta', action='store_true',
-                        help="add to disregard the meta index")
+                        help="add to trigger synchronous indexing instead of queued")
     parser.add_argument('--print-count-only', action='store_true',
                         help="use with check_first to only print counts")
     parser.add_argument('--purge-queue', action='store_true',
@@ -1228,9 +1140,9 @@ def main():
     #global log
     #log = structlog.get_logger(__name__)
 
-    uuids = run(app, args.item_type, args.dry_run, args.check_first, args.skip_indexing,
-                args.index_diff, args.strict, args.sync_index, args.no_meta,
-                args.print_count_only, args.purge_queue)
+    uuids = run(app, collections=args.item_type, dry_run=args.dry_run, check_first=args.check_first,
+                skip_indexing=args.skip_indexing, index_diff=args.index_diff, strict=args.strict,
+                sync_index=args.sync_index, print_count_only=args.print_count_only, purge_queue=args.purge_queue)
     return
 
 

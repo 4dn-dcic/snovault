@@ -287,8 +287,7 @@ def test_indexing_simple(app, testapp, indexer_testapp):
     assert 'indexing_content' in indexing_source
     assert indexing_source['indexing_status'] == 'finished'
     assert indexing_source['indexing_count'] > 0
-    testing_ppp_meta = es.get(index='meta', doc_type='meta', id=TEST_TYPE)
-    testing_ppp_source = testing_ppp_meta['_source']
+    testing_ppp_meta = es.indices.get_mapping(index=TEST_TYPE).get(TEST_TYPE, {})
     assert 'mappings' in testing_ppp_source
     assert 'settings' in testing_ppp_source
     # ensure we only have 1 shard for tests
@@ -735,16 +734,6 @@ def test_es_indices(app, elasticsearch):
         found_index_settings = item_index.get(item_type, {}).get('settings')
         assert found_index_mapping
         assert found_index_settings
-        # get the item record from meta and compare that
-        full_mapping = create_mapping_by_type(item_type, app.registry)
-        item_record = build_index_record(full_mapping, item_type)
-        try:
-            item_meta = es.get(index='meta', doc_type='meta', id=item_type)
-        except:
-            assert False
-        meta_record = item_meta.get('_source', None)
-        assert meta_record
-        assert item_record == meta_record
 
 
 def test_index_settings(app, testapp, indexer_testapp):
