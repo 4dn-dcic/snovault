@@ -808,11 +808,14 @@ def find_and_replace_dynamic_mappings(new_mapping, found_mapping):
     possible_add_properties = set(found_mapping) - set(new_mapping)
     for add_key in possible_add_properties:
         # know it's a dynamic mapping if 'raw' field is not present...
-        if 'fields' in found_mapping[add_key] and 'raw' not in found_mapping[add_key]['fields']:
-            del found_mapping[add_key]
         # ... or if type is not keyword/object and no fields/properties are defined
-        if ('fields' not in found_mapping[add_key] and 'properties' not in found_mapping[add_key] and
-            found_mapping[add_key].get('type') not in ['keyword', 'object']):
+        if (
+            ('fields' in found_mapping[add_key]
+             and 'raw' not in found_mapping[add_key]['fields']) or
+            ('fields' not in found_mapping[add_key]
+             and 'properties' not in found_mapping[add_key]
+             and found_mapping[add_key].get('type') not in ['keyword', 'object'])
+        ):
             del found_mapping[add_key]
 
     for key, new_val in new_mapping.items():
