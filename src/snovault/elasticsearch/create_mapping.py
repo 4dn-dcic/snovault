@@ -380,15 +380,15 @@ def es_mapping(mapping, agg_items_mapping):
         ],
         'properties': {
             'uuid': {
-                'type': 'text',
+                'type': 'keyword',
                 'include_in_all': False,
             },
             'sid': {
-                'type': 'long',
+                'type': 'keyword',
                 'include_in_all': False,
             },
             'item_type': {
-                'type': 'text',
+                'type': 'keyword',
             },
             'embedded': mapping,
             'object': {
@@ -452,7 +452,7 @@ def es_mapping(mapping, agg_items_mapping):
                 'include_in_all': False
             },
             'rev_linked_to_me': {
-                'type': 'text',
+                'type': 'keyword',
                 'include_in_all': False
             },
             'validation_errors': {
@@ -468,7 +468,7 @@ def es_mapping(mapping, agg_items_mapping):
                 'include_in_all': False
             },
             'paths': {
-                'type': 'text',
+                'type': 'keyword',
                 'include_in_all': False
             }
         }
@@ -804,17 +804,30 @@ def find_and_replace_dynamic_mappings(new_mapping, found_mapping):
     Recursively move through the new mapping to find such objects and then
     replace them in the found mapping. Modifies both mappings in place
     """
+    # identify dynamic mappings created by additionalProperties and remove
+    possible_add_properties = set(found_mapping) - set(new_mapping)
+    for add_key in possible_add_properties:
+        # know it's a dynamic mapping if 'raw' field is not present...
+        if 'fields' in found_mapping[add_key] and 'raw' not in found_mapping[add_key]['fields']:
+            del found_mapping[add_key]
+        # ... or if type is not keyword/object and no fields/properties are defined
+        if ('fields' not in found_mapping[add_key] and 'properties' not in found_mapping[add_key] and
+            found_mapping[add_key].get('type') not in ['keyword', 'object']):
+            del found_mapping[add_key]
+
     for key, new_val in new_mapping.items():
         if key not in found_mapping:
             continue
         found_val = found_mapping[key]
-        if new_val.get('type') == 'object' and 'properties' not in new_val:
+        if ((new_val.get('type') == 'object' and 'properties' not in new_val)
+            or (new_val.get('properties') == {} and 'type' not in new_val)):
             if found_val.get('properties') is not None and 'type' not in found_val:
-                # this was an automatically create mapping. Reset in found_mapping
+                # this was an dynamically created mapping. Reset it
                 del found_val['properties']
                 found_val['type'] = 'object'
+
         # drill down into further properties
-        if 'properties' in new_val:
+        if new_val.get('properties'):
             find_and_replace_dynamic_mappings(new_val['properties'], found_val.get('properties', {}))
 
 
