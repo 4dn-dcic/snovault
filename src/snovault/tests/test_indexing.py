@@ -289,11 +289,12 @@ def test_indexing_simple(app, testapp, indexer_testapp):
     assert 'indexing_content' in indexing_source
     assert indexing_source['indexing_status'] == 'finished'
     assert indexing_source['indexing_count'] > 0
-    testing_ppp_source = es.indices.get_mapping(index=TEST_TYPE).get(TEST_TYPE, {})
-    assert 'mappings' in testing_ppp_source
-    assert 'settings' in testing_ppp_source
+    testing_ppp_mappings = es.indices.get_mapping(index=TEST_TYPE).get(TEST_TYPE, {})
+    assert 'mappings' in testing_ppp_mappings
+    testing_ppp_settings = es.indices.get_settings(index=TEST_TYPE).get(TEST_TYPE, {})
+    assert 'settings' in testing_ppp_settings
     # ensure we only have 1 shard for tests
-    assert testing_ppp_source['settings']['index']['number_of_shards'] == 1
+    assert testing_ppp_settings['settings']['index']['number_of_shards'] == '1'
 
 
 def test_indexing_logging(app, testapp, indexer_testapp, capfd):
@@ -854,13 +855,13 @@ def test_create_mapping_check_first(app, testapp, indexer_testapp):
     # post an item and then index it
     testapp.post_json(TEST_COLL, {'required': ''})
     indexer_testapp.post_json('/index', {'record': True})
-    time.sleep(4)
+    time.sleep(2)
     initial_count = es.count(index=TEST_TYPE, doc_type=TEST_TYPE).get('count')
 
     # run with check_first but skip indexing. counts should still match because
     # the index wasn't removed
     run(app, check_first=True, collections=[TEST_TYPE], skip_indexing=True)
-    time.sleep(4)
+    time.sleep(2)
     second_count = es.count(index=TEST_TYPE, doc_type=TEST_TYPE).get('count')
     counter = 0
     while (second_count != initial_count and counter < 10):
@@ -873,6 +874,7 @@ def test_create_mapping_check_first(app, testapp, indexer_testapp):
     # should cause create_mapping w/ check_first to recreate
     es.indices.delete(index=TEST_TYPE)
     run(app, collections=[TEST_TYPE], check_first=True, skip_indexing=True)
+    time.sleep(2)
     third_count = es.count(index=TEST_TYPE, doc_type=TEST_TYPE).get('count')
     assert third_count == 0
     # ensure the re-created dynamic mapping still matches the original one
