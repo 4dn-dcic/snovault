@@ -686,15 +686,14 @@ def build_index(app, es, in_type, mapping, uuids_to_index, dry_run, check_first,
 
     # if the index exists, we might not need to delete it
     # otherwise, run if we are using the check-first or index_diff args
-    if (check_first or index_diff) and compare_against_existing_mapping(es, in_type, this_index_record):
-        import pdb; pdb.set_trace()
+    if (check_first or index_diff) and compare_against_existing_mapping(es, in_type, this_index_record, True):
         check_and_reindex_existing(app, es, in_type, uuids_to_index, index_diff)
         log.info('MAPPING: using existing index for collection %s' % (in_type), collection=in_type)
         return
 
     # if index_diff and we've made it here, the mapping must be off
     if index_diff:
-        log.error('MAPPING: cannot index diff for index %s due to differing mappings'
+        log.error('MAPPING: cannot index-diff for index %s due to differing mappings'
                   % (in_type), collection=in_type)
         return
 
@@ -795,7 +794,7 @@ def get_db_es_counts_and_db_uuids(app, es, in_type, index_diff=False):
     return db_count, es_count, db_uuids, diff_uuids
 
 
-def find_and_replace_unmapped_objects(new_mapping, found_mapping):
+def find_and_replace_dynamic_mappings(new_mapping, found_mapping):
     """
     Needed to compare a newly created mapping and a mapping found in ES,
     since unmapped objects will be automatically mapped by elasticsearch.
@@ -815,29 +814,40 @@ def find_and_replace_unmapped_objects(new_mapping, found_mapping):
                 found_val['type'] = 'object'
         # drill down into further properties
         if 'properties' in new_val:
-            find_and_replace_unmapped_objects(new_val['properties'], found_val.get('properties', {}))
+            find_and_replace_dynamic_mappings(new_val['properties'], found_val.get('properties', {}))
 
 
-def compare_against_existing_mapping(es, in_type, this_index_record, live_record=False):
+def compare_against_existing_mapping(es, in_type, this_index_record, live_mapping=False):
     """
     Compare the given index mapping and compare it to the existing mapping
     in an index. Return True if they are the same, False otherwise.
+    Use live_mapping=True when the existing mapping from the index may have been
+    automatically changed through ES dynamic mapping when documents were added.
+    In this case, attempt to revert the obtained mapping to its original state
+    using `find_and_replace_dynamic_mappings` so that it can be compared with
+    the new mapping.
+
+    Args:
+        es: current Elasticsearch client
+        in_type (str): item type of current index
+        this_index_record (dict): record of current index, with mapping and settings
+        live_mapping (bool): if True, compare new mapping to live one and remove
+            dynamically-created mappings
+
+    Returns:
+        bool: True if new mapping is the same as the live mapping
     """
-    import pdb; pdb.set_trace()
     found_mapping = es.indices.get_mapping(index=in_type).get(in_type, {}).get('mappings')
     new_mapping = this_index_record['mappings']
-    # must handle automatically mapped objects to compare new mappings to live ones
-    # may change found_mapping
-    find_and_replace_unmapped_objects(new_mapping[in_type]['properties'],
-                                      found_mapping[in_type]['properties'])
+    if live_mapping:
+        find_and_replace_dynamic_mappings(new_mapping[in_type]['properties'],
+                                          found_mapping[in_type]['properties'])
+    # dump to JSON to compare the mappings
     found_map_json = json.dumps(found_mapping, sort_keys=True)
-    this_map_json = json.dumps(new_mapping, sort_keys=True)
+    new_map_json = json.dumps(new_mapping, sort_keys=True)
     # es converts {'properties': {}} --> {'type': 'object'}
-
-    # TODO: remove this?
-    # this_map_json = this_map_json.replace('{"properties": {}}', '{"type": "object"}')
-
-    return found_map_json == this_map_json
+    new_map_json = new_map_json.replace('{"properties": {}}', '{"type": "object"}')
+    return found_map_json == new_map_json
 
 
 def confirm_mapping(es, in_type, this_index_record):
@@ -854,7 +864,6 @@ def confirm_mapping(es, in_type, this_index_record):
         if compare_against_existing_mapping(es, in_type, this_index_record):
             mapping_check = True
         else:
-            import pdb; pdb.set_trace()
             count = es.count(index=in_type, doc_type=in_type).get('count', 0)
             log.info('___BAD MAPPING FOUND FOR %s. RETRYING___\nDocument count in that index is %s.'
                         % (in_type, count), collection=in_type, count=count, cat='bad mapping')
