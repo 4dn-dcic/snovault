@@ -247,6 +247,15 @@ class TestingPostPutPatchSno(Item):
                 'linkTo': 'TestingLinkTargetSno',
                 'permission': 'import_items',
             },
+            'custom_object': {
+                'type': 'object',
+                "additionalProperties": True,
+                "properties": {
+                    "mapped_property": {
+                        "type": "string"
+                    }
+                }
+            }
         }
     }
 

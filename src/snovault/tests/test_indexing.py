@@ -786,6 +786,27 @@ def test_confirm_mapping(app, testapp, indexer_testapp):
     assert compare_against_existing_mapping(es, TEST_TYPE, index_record, True) is True
 
 
+def test_dynamic_mapping_check_first(app, testapp, indexer_testapp):
+    """
+    create_mapping with --check-first option must be able to properly compare
+    mappings that have been affected by dynamic mapping to those freshly
+    generated from schemas. One case of this being challenging is with items
+    with additionalProperties=True in their schemas...
+    """
+    es = app.registry[ELASTIC_SEARCH]
+    ppp_body = {
+        'required': '',
+        'custom_object': {'mapped_property': 'hey', 'unmap1': 1, 'unmap2': '2'}
+    }
+    testapp.post_json(TEST_COLL, ppp_body)
+    res = indexer_testapp.post_json('/index', {'record': True})
+    assert res.json['indexing_count'] == 1
+    time.sleep(2)
+    mapping = create_mapping_by_type(TEST_TYPE, app.registry)
+    index_record = build_index_record(mapping, TEST_TYPE)
+    assert compare_against_existing_mapping(es, TEST_TYPE, index_record, True) is True
+
+
 def test_check_and_reindex_existing(app, testapp):
     from snovault.elasticsearch.create_mapping import check_and_reindex_existing
     es = app.registry[ELASTIC_SEARCH]
@@ -882,7 +903,6 @@ def test_create_mapping_check_first(app, testapp, indexer_testapp):
 
 
 def test_create_mapping_index_diff(app, testapp, indexer_testapp):
-    from snovault.elasticsearch import create_mapping
     es = app.registry[ELASTIC_SEARCH]
     # post a couple items, index, then remove one
     res = testapp.post_json(TEST_COLL, {'required': ''})
