@@ -20,7 +20,6 @@ def includeme(config):
     config.add_request_method(embed, 'embed')
     config.add_request_method(embed, 'invoke_view')
     config.add_request_method(lambda request: set(), '_linked_uuids', reify=True)
-    config.add_request_method(lambda request: set(), '_audit_uuids', reify=True)
     config.add_request_method(lambda request: {}, '_sid_cache', reify=True)
     config.add_request_method(lambda request: {}, '_rev_linked_uuids_by_item', reify=True)
     config.add_request_method(lambda request: {}, '_aggregated_items', reify=True)
@@ -34,15 +33,28 @@ class MissingIndexItemException(Exception):
     pass
 
 
-def make_subrequest(request, path):
-    """ Make a subrequest
-
-    Copies request environ data for authentication.
+def make_subrequest(request, path, method='GET', json_body=None):
+    """
+    Make a subrequest from a parent request given a request path.
+    Copies request environ data for authentication. Handles making the path
+    WSGI compatible. Optionally can take a JSON body to attach to subrequest.
+    Used in _embed to form requests to invoke, and can also be used externally
 
     May be better to just pull out the resource through traversal and manually
     perform security checks.
+
+    Args:
+        request: current Request object
+        path (str): path for the subrequest. Can include query string
+        method (str): subrequest method, defaults to GET
+        json_body (dict): optional dict to attach as json_body to subrequest
+
+    Returns:
+        Request: the subrequest
     """
     env = request.environ.copy()
+    # handle path, include making wsgi compatible and splitting out query string
+    path = unquote_bytes_to_wsgi(native_(path))
     if path and '?' in path:
         path_info, query_string = path.split('?', 1)
         path_info = path_info
@@ -51,8 +63,11 @@ def make_subrequest(request, path):
         query_string = ''
     env['PATH_INFO'] = path_info
     env['QUERY_STRING'] = query_string
-    subreq = request.__class__(env, method='GET', content_type=None,
-                               body=b'')
+    subreq = request.__class__(env, method=method, content_type=None)
+    if json_body:
+        subreq.json = json_body
+    else:
+        subreq.body = b''
     subreq.remove_conditional_headers()
     # XXX "This does not remove headers like If-Match"
     subreq.__parent__ = request
@@ -88,7 +103,6 @@ def embed(request, *elements, **kw):
     as_user = kw.get('as_user')
     index_uuid = kw.get('index_uuid')
     path = join(*elements)
-    path = unquote_bytes_to_wsgi(native_(path))
     # as_user controls whether or not the embed_cache is used
     # if request._indexing_view is True, always use the cache
     if as_user is not None and not request._indexing_view:
@@ -99,7 +113,6 @@ def embed(request, *elements, **kw):
             # handle common cases of as_user, otherwise use what's given
             subreq_user = 'EMBED' if as_user is None else as_user
             cached = _embed(request, path, as_user=subreq_user)
-            # caching audits is safe because they don't add to linked_uuids
             embed_cache[path] = cached
 
     # NOTE: if result was retrieved from ES, the following cached attrs will be
@@ -112,17 +125,15 @@ def embed(request, *elements, **kw):
     if index_uuid and getattr(request, '_aggregate_for').get('uuid') == index_uuid:
         request._aggregated_items = cached['_aggregated_items']
         request._aggregate_for['uuid'] = None
-    # hardcode this because audits can cause serious problems with frame=page
-    if '@@audit' not in path:
-        request._linked_uuids.update(cached['_linked_uuids'])
-        request._sid_cache.update(cached['_sid_cache'])
-        # this is required because rev_linked_uuids_by_item is formatted as
-        # a dict keyed by item with value of set of uuids rev linking to that item
-        for item, rev_links in cached['_rev_linked_by_item'].items():
-            if item in request._rev_linked_uuids_by_item:
-                request._rev_linked_uuids_by_item[item].update(rev_links)
-            else:
-                request._rev_linked_uuids_by_item[item] = rev_links
+    request._linked_uuids.update(cached['_linked_uuids'])
+    request._sid_cache.update(cached['_sid_cache'])
+    # this is required because rev_linked_uuids_by_item is formatted as
+    # a dict keyed by item with value of set of uuids rev linking to that item
+    for item, rev_links in cached['_rev_linked_by_item'].items():
+        if item in request._rev_linked_uuids_by_item:
+            request._rev_linked_uuids_by_item[item].update(rev_links)
+        else:
+            request._rev_linked_uuids_by_item[item] = rev_links
     return result
 
 
@@ -154,9 +165,6 @@ def _embed(request, path, as_user='EMBED'):
     subreq._aggregate_for = request._aggregate_for
     subreq._aggregated_items = request._aggregated_items
     subreq._sid_cache = request._sid_cache
-    # pass the uuids we want to run audits on
-    if '@@audit' in path:
-        subreq._audit_uuids = request._audit_uuids
     if as_user is not True:
         if 'HTTP_COOKIE' in subreq.environ:
             del subreq.environ['HTTP_COOKIE']

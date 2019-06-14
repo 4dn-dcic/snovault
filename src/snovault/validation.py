@@ -27,9 +27,10 @@ def includeme(config):
 
 
 class Errors(list):
-    """Holds Request errors
     """
-
+    Holds Request errors.
+    Errors should have location (required), name, description.
+    """
     def add(self, location, name=None, description=None, **kw):
         """Registers a new error."""
         self.append(dict(
@@ -58,7 +59,7 @@ class ValidationFailure(HTTPUnprocessableEntity):
             self.detail = None
         else:
             if name is None:
-                name = []
+                name = 'Unnamed Error'
             self.detail = dict(location=location, name=name,
                                description=description, **kw)
 

@@ -388,7 +388,8 @@ def validate_request(schema, request, data=None, current=None):
 
     validated, errors = validate(schema, data, current)
     for error in errors:
-        request.errors.add('body', list(error.path), error.message)
+        error_path =  'Schema: ' + '.'.join([str(p) for p in error.path])
+        request.errors.add('body', error_path, error.message)
 
     if not errors:
         request.validated.update(validated)

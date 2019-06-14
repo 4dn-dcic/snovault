@@ -9,7 +9,7 @@ def includeme(config):
     config.scan(__name__)
 
 
-@view_config(context=Item, permission='audit', request_method='GET',
+@view_config(context=Item, permission='view', request_method='GET',
              name='aggregated-items')
 def item_view_aggregated_items(context, request):
     """
@@ -42,7 +42,7 @@ def item_view_aggregated_items(context, request):
 
 
 @calculated_property(context=Item, category='page', name='aggregated-items',
-                     condition=lambda request: request.has_permission('audit'))
+                     condition=lambda request: request.has_permission('view'))
 def aggregated_items_property(context, request):
     """
     Frame=page calculated property to add aggregated_items to response.

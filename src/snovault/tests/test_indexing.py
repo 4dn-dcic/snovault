@@ -30,7 +30,9 @@ from snovault.elasticsearch.create_mapping import (
     type_mapping,
     create_mapping_by_type,
     build_index_record,
-    check_if_index_exists
+    check_if_index_exists,
+    confirm_mapping,
+    compare_against_existing_mapping
 )
 from pyramid.paster import get_appsettings
 
@@ -279,7 +281,7 @@ def test_indexing_simple(app, testapp, indexer_testapp):
         count += 1
     assert res.json['total'] >= 2
     assert uuid in uuids
-    # test the meta index
+
     es = app.registry[ELASTIC_SEARCH]
     indexing_doc = es.get(index='indexing', doc_type='indexing', id='latest_indexing')
     indexing_source = indexing_doc['_source']
@@ -287,12 +289,12 @@ def test_indexing_simple(app, testapp, indexer_testapp):
     assert 'indexing_content' in indexing_source
     assert indexing_source['indexing_status'] == 'finished'
     assert indexing_source['indexing_count'] > 0
-    testing_ppp_meta = es.get(index='meta', doc_type='meta', id=TEST_TYPE)
-    testing_ppp_source = testing_ppp_meta['_source']
-    assert 'mappings' in testing_ppp_source
-    assert 'settings' in testing_ppp_source
+    testing_ppp_mappings = es.indices.get_mapping(index=TEST_TYPE).get(TEST_TYPE, {})
+    assert 'mappings' in testing_ppp_mappings
+    testing_ppp_settings = es.indices.get_settings(index=TEST_TYPE).get(TEST_TYPE, {})
+    assert 'settings' in testing_ppp_settings
     # ensure we only have 1 shard for tests
-    assert testing_ppp_source['settings']['index']['number_of_shards'] == 1
+    assert testing_ppp_settings['settings']['index']['number_of_shards'] == '1'
 
 
 def test_indexing_logging(app, testapp, indexer_testapp, capfd):
@@ -735,16 +737,6 @@ def test_es_indices(app, elasticsearch):
         found_index_settings = item_index.get(item_type, {}).get('settings')
         assert found_index_mapping
         assert found_index_settings
-        # get the item record from meta and compare that
-        full_mapping = create_mapping_by_type(item_type, app.registry)
-        item_record = build_index_record(full_mapping, item_type)
-        try:
-            item_meta = es.get(index='meta', doc_type='meta', id=item_type)
-        except:
-            assert False
-        meta_record = item_meta.get('_source', None)
-        assert meta_record
-        assert item_record == meta_record
 
 
 def test_index_settings(app, testapp, indexer_testapp):
@@ -774,36 +766,7 @@ def test_check_if_index_exists(app):
     assert not exists
 
 
-def test_check_if_index_exists_can_used_cached_index_list():
-    es = None
-    cached_idx = {TEST_TYPE: 22}
-    exists = check_if_index_exists(es, TEST_TYPE, cached_idx)
-    assert exists
-    # delete index
-    cached_idx = {'not_here':1}
-    exists = check_if_index_exists(es, TEST_TYPE, cached_idx)
-    assert not exists
-
-
-def test_get_previous_index_record(app):
-    from snovault.elasticsearch.create_mapping import get_previous_index_record
-    es = app.registry[ELASTIC_SEARCH]
-    record = get_previous_index_record(True, es, TEST_TYPE)
-    assert record
-    assert 'mappings' in record
-    assert 'settings' in record
-    # remove index record
-    es.delete(index='meta', doc_type='meta', id=TEST_TYPE)
-    record = get_previous_index_record(True, es, TEST_TYPE)
-    assert record is None
-
-
 def test_confirm_mapping(app, testapp, indexer_testapp):
-    from snovault.elasticsearch.create_mapping import (
-        create_mapping_by_type,
-        build_index_record,
-        confirm_mapping
-    )
     es = app.registry[ELASTIC_SEARCH]
     # make a dynamic mapping
     es.indices.delete(index=TEST_TYPE)
@@ -817,6 +780,31 @@ def test_confirm_mapping(app, testapp, indexer_testapp):
     tries_taken = confirm_mapping(es, TEST_TYPE, index_record)
     # 3 tries means it failed to correct, 0 means it was unneeded
     assert tries_taken > 0 and tries_taken < 3
+    # test against a live mapping to ensure handling of dynamic mapping works
+    run(app, collections=[TEST_TYPE], skip_indexing=True)
+    # compare_against_existing_mapping is used under the hood in confirm_mapping
+    assert compare_against_existing_mapping(es, TEST_TYPE, index_record, True) is True
+
+
+def test_dynamic_mapping_check_first(app, testapp, indexer_testapp):
+    """
+    create_mapping with --check-first option must be able to properly compare
+    mappings that have been affected by dynamic mapping to those freshly
+    generated from schemas. One case of this being challenging is with items
+    with additionalProperties=True in their schemas...
+    """
+    es = app.registry[ELASTIC_SEARCH]
+    ppp_body = {
+        'required': '',
+        'custom_object': {'mapped_property': 'hey', 'unmap1': 1, 'unmap2': '2'}
+    }
+    testapp.post_json(TEST_COLL, ppp_body)
+    res = indexer_testapp.post_json('/index', {'record': True})
+    assert res.json['indexing_count'] == 1
+    time.sleep(2)
+    mapping = create_mapping_by_type(TEST_TYPE, app.registry)
+    index_record = build_index_record(mapping, TEST_TYPE)
+    assert compare_against_existing_mapping(es, TEST_TYPE, index_record, True) is True
 
 
 def test_check_and_reindex_existing(app, testapp):
@@ -878,22 +866,23 @@ def test_es_purge_uuid(app, testapp, indexer_testapp, session):
 
 
 def test_create_mapping_check_first(app, testapp, indexer_testapp):
-    # ensure create mapping has been run
-    from snovault.elasticsearch import create_mapping
     es = app.registry[ELASTIC_SEARCH]
+    # get the initial mapping
+    mapping = create_mapping_by_type(TEST_TYPE, app.registry)
+    index_record = build_index_record(mapping, TEST_TYPE)
+    # ensure the dynamic mapping matches the manually created one
+    assert compare_against_existing_mapping(es, TEST_TYPE, index_record, True) is True
+
     # post an item and then index it
     testapp.post_json(TEST_COLL, {'required': ''})
     indexer_testapp.post_json('/index', {'record': True})
-    time.sleep(4)
+    time.sleep(2)
     initial_count = es.count(index=TEST_TYPE, doc_type=TEST_TYPE).get('count')
-    # make sure the meta entry is created
-    assert es.get(index='meta', doc_type='meta', id=TEST_TYPE)
 
     # run with check_first but skip indexing. counts should still match because
     # the index wasn't removed
-    create_mapping.run(app, check_first=True, collections=[TEST_TYPE], skip_indexing=True)
-    time.sleep(4)
-    assert es.get(index='meta', doc_type='meta', id=TEST_TYPE)
+    run(app, check_first=True, collections=[TEST_TYPE], skip_indexing=True)
+    time.sleep(2)
     second_count = es.count(index=TEST_TYPE, doc_type=TEST_TYPE).get('count')
     counter = 0
     while (second_count != initial_count and counter < 10):
@@ -902,22 +891,18 @@ def test_create_mapping_check_first(app, testapp, indexer_testapp):
         counter +=1
     assert second_count == initial_count
 
-    # make sure the meta entry is still there
-    assert es.get(index='meta', doc_type='meta', id=TEST_TYPE)
-
     # remove the index manually and do not index
     # should cause create_mapping w/ check_first to recreate
-    es.delete(index='meta', doc_type='meta', id=TEST_TYPE)
     es.indices.delete(index=TEST_TYPE)
-    create_mapping.run(app, collections=[TEST_TYPE], check_first=True, skip_indexing=True)
+    run(app, collections=[TEST_TYPE], check_first=True, skip_indexing=True)
+    time.sleep(2)
     third_count = es.count(index=TEST_TYPE, doc_type=TEST_TYPE).get('count')
     assert third_count == 0
-    # but the meta entry should be there
-    assert es.get(index='meta', doc_type='meta', id=TEST_TYPE)
+    # ensure the re-created dynamic mapping still matches the original one
+    assert compare_against_existing_mapping(es, TEST_TYPE, index_record, True) is True
 
 
 def test_create_mapping_index_diff(app, testapp, indexer_testapp):
-    from snovault.elasticsearch import create_mapping
     es = app.registry[ELASTIC_SEARCH]
     # post a couple items, index, then remove one
     res = testapp.post_json(TEST_COLL, {'required': ''})
@@ -1135,3 +1120,29 @@ def test_indexing_info(app, testapp, indexer_testapp):
     assert src_idx_info4.json['status'] == 'success'
     assert 'uuids_invalidated' not in src_idx_info4.json
     assert 'embedded_seconds' not in src_idx_info4.json
+
+
+def test_validators_on_indexing(app, testapp, indexer_testapp):
+    """
+    We now run PATCH validators for an indexed item using check_only=True
+    query param (so data isn't actually changed)
+    """
+    es = app.registry[ELASTIC_SEARCH]
+    # make an item with a validation error (`simple1` should be str)
+    res = testapp.post_json(TEST_COLL + '?validate=false&upgrade=False',
+                            {'required': '', 'simple1': 1}, status=201)
+    ppp_id = res.json['@graph'][0]['@id']
+    # validation-errors view should be empty before indexing
+    val_err_view = testapp.get(ppp_id + '@@validation-errors', status=200).json
+    assert val_err_view['@id'] == ppp_id
+    assert val_err_view['validation_errors'] == []
+
+    indexer_testapp.post_json('/index', {'record': True})
+    time.sleep(2)
+    es_res = es.get(index=TEST_TYPE, doc_type=TEST_TYPE, id=res.json['@graph'][0]['uuid'])
+    assert len(es_res['_source'].get('validation_errors', [])) == 1
+    assert es_res['_source']['validation_errors'][0]['name'] == 'Schema: simple1'
+    # check that validation-errors view works
+    val_err_view = testapp.get(ppp_id + '@@validation-errors', status=200).json
+    assert val_err_view['@id'] == ppp_id
+    assert val_err_view['validation_errors'] == es_res['_source']['validation_errors']

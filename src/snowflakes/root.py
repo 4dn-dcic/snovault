@@ -53,10 +53,8 @@ class SnowflakesRoot(Root):
     @reify
     def __acl__(self):
         acl = acl_from_settings(self.registry.settings) + [
-            (Allow, Everyone, ['list', 'search', 'search_audit', 'audit']),
-            (Allow, 'group.admin', ALL_PERMISSIONS),
-            # Avoid schema validation errors during audit
-            (Allow, 'remoteuser.EMBED', 'import_items'),
+            (Allow, Everyone, ['list', 'search']),
+            (Allow, 'group.admin', ALL_PERMISSIONS)
         ] + Root.__acl__
         return acl
 

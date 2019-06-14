@@ -33,8 +33,6 @@ Reverse links (rev_links) must also be kept track of in the invalidation process
 
 Both _linked_uuids and rev_links are only kept track of if we are indexing. This is done by setting request._indexing_view to True in indexing_views.py. The information about the linked uuids and uuids that reverse link to an item are stored in the Elasticsearch document for the item in the `linked_uuids` and `uuids_that_rev_link_to_me` fields, respectively.
 
-uuids visited during audits are NOT added to the linked_uuids of an item, meaning that changing an item that affects an audit may not necessarily cause invalidation of all items containing that audit, if the audit was on an item that is not in the linked_uuids of the items in question. For any given item run through @@index-data, the audits will be run on all the linked_uuids identified during the build of the @@embedded view of that item. This is done using `request.embed(<item-path>, '@@embedded')` after setting `request._indexing_view` = True.
-
 
 Finding items to invalidate
 ---------------------------
