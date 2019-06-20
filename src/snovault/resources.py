@@ -210,6 +210,15 @@ class Collection(AbstractCollection):
     ''' Separate class so add views do not apply to AbstractCollection '''
 
 
+# Almost every single display_title should have the same
+# schema definition, so we define it here to import & re-use.
+display_title_schema = {
+    "title": "Display Title",
+    "description": "A calculated title for every object in 4DN",
+    "type": "string",
+}
+
+
 class Item(Resource):
     item_type = None
     base_types = ['Item']
@@ -488,10 +497,6 @@ class Item(Resource):
         principals = calc_principals(self)
         return principals
 
-    @calculated_property(schema={
-        "title": "Display Title",
-        "description": "A calculated title",
-        "type": "string"
-    })
+    @calculated_property(schema=display_title_schema)
     def display_title(self):
         return str(self.uuid)

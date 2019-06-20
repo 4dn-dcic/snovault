@@ -23,6 +23,7 @@ from .resources import (  # noqa
     Item,
     Resource,
     Root,
+    display_title_schema
 )
 from .schema_utils import load_schema  # noqa
 from .upgrader import upgrade_step  # noqa
