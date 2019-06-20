@@ -74,7 +74,7 @@ def threadlocal_manager():
     apply_request_extensions(request)
     request.invoke_subrequest = app.invoke_subrequest
     request.root = app.root_factory(request)
-    request._stats = {}
+    request._stats = getattr(request, "_stats", {})
     manager.push({'request': request, 'registry': registry})
     yield
     signal.alarm(5)
