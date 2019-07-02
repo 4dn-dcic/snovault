@@ -48,13 +48,14 @@ def root(factory):
 
 
 def collection(name, **kw):
-    """ Attach a collection at the location ``name``.
-
+    """
+    Attach a collection at the location ``name``.
     Use as a decorator on Collection subclasses.
     """
 
     def set_collection(config, Collection, name, Item, **kw):
         registry = config.registry
+        # registers the type in registry[TYPES].all and .by_item_type
         ti = registry[TYPES].register(Item)
         collection = Collection(registry, name, ti, **kw)
         registry[COLLECTIONS].register(name, collection)
@@ -73,16 +74,18 @@ def collection(name, **kw):
 
 
 def abstract_collection(name, **kw):
-    """ Attach a collection at the location ``name``.
-
+    """
+    Attach a collection at the location ``name``.
     Use as a decorator on Collection subclasses.
     """
 
     def set_collection(config, Collection, name, Item, **kw):
         registry = config.registry
-        ti = registry[TYPES].register_abstract(Item.__name__)
-        registry[TYPES].all[Item] = ti  # XXX Ugly this is here.
-        collection = Collection(registry, name, ti, **kw)
+        # registers the type in registry[TYPES].by_abstract_type
+        # and the abstract type in registry[TYPES].all
+        abstract_ti = registry[TYPES].register_abstract(Item)
+        # register an abstract collection
+        collection = Collection(registry, name, abstract_ti, **kw)
         registry[COLLECTIONS].register(name, collection)
 
     def decorate(Item):

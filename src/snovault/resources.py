@@ -214,7 +214,7 @@ class Collection(AbstractCollection):
 # schema definition, so we define it here to import & re-use.
 display_title_schema = {
     "title": "Display Title",
-    "description": "A calculated title for every object in 4DN",
+    "description": "A calculated title for every object",
     "type": "string",
 }
 

@@ -6,6 +6,7 @@ from .interfaces import (
     COLLECTIONS,
     TYPES,
 )
+from urllib.parse import urlparse
 
 
 def includeme(config):
@@ -17,8 +18,24 @@ def includeme(config):
 def _annotated_schema(type_info, request):
     schema = type_info.schema.copy()
     schema['@type'] = ['JSONSchema']
+    jsonld_base = request.registry.settings['snovault.jsonld.terms_namespace']
+    schema['rdfs:seeAlso'] = urlparse(jsonld_base).path + type_info.name
+    # add links to profiles of children schemas
+    schema['children'] = [
+        '/profiles/' +  t_name + '.json' for t_name in type_info.child_types
+    ]
+
     if type_info.factory is None:
         return schema
+
+    # use first base_type that is not this type itself to handle abstract
+    found_subtype = None
+    for subtype in type_info.base_types:
+        if subtype != type_info.name:
+            found_subtype = subtype
+            break
+    if found_subtype:
+        schema['rdfs:subClassOf'] = '/profiles/' + found_subtype + '.json'
 
     collection = request.registry[COLLECTIONS][type_info.name]
     properties = OrderedDict()
@@ -54,4 +71,9 @@ def schemas(context, request):
     for type_info in types.by_item_type.values():
         name = type_info.name
         schemas[name] = _annotated_schema(type_info, request)
+        schemas[name]['child_types'] = type_info.child_types
+    for type_info in types.by_abstract_type.values():
+        name = type_info.name
+        schemas[name] = _annotated_schema(type_info, request)
+        schemas[name]['child_types'] = type_info.child_types
     return schemas

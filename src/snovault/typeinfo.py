@@ -41,6 +41,22 @@ class AbstractTypeInfo(object):
         ]
 
     @reify
+    def child_types(self):
+        """
+        Need to handle non-abstract item types and abstract types separately
+        """
+        child_types = [
+            ti.name for ti in self.types.by_item_type.values()
+            if self.name == ti.base_types[0]
+        ]
+        # child abstract types include the parent name, but not the type itself
+        child_types.extend([
+            ti.name for ti in self.types.by_abstract_type.values()
+            if (self.name != ti.name and self.name in ti.base_types)
+        ])
+        return child_types
+
+    @reify
     def schema(self):
         subschemas = (self.types[name].schema for name in self.subtypes)
         return reduce(combine_schemas, subschemas)
@@ -109,7 +125,7 @@ class TypesTool(object):
     def __init__(self, registry):
         self.registry = registry
         self.by_item_type = {}
-        self.abstract = {}
+        self.by_abstract_type = {}
         self.type_back_rev = {}
         self.all = {}
 
@@ -118,10 +134,10 @@ class TypesTool(object):
         item_type = factory.item_type or name
         ti = TypeInfo(self.registry, item_type, factory)
         self.all[ti.item_type] = self.by_item_type[ti.item_type] = ti
-        self.all[ti.name] = self.abstract[ti.name] = ti
+        self.all[ti.name] = ti
         self.all[ti.factory] = ti
-        for base in ti.base_types:
-            self.register_abstract(base)
+        # for base in ti.base_types:
+        #     self.register_abstract(base)
 
         # Calculate the reverse rev map
         for prop_name, spec in factory.rev.items():
@@ -131,12 +147,25 @@ class TypesTool(object):
 
         return ti
 
-    def register_abstract(self, name):
-        ti = self.abstract.get(name)
-        if ti is None:
-            ti = AbstractTypeInfo(self.registry, name)
-            self.all[name] = self.abstract[name] = ti
-        return ti
+    def register_abstract(self, factory):
+        # create the TypeInfo and register in self.by_abstract_type
+        # `item_type` is likely not set on the Items of abstract collections
+        name = factory.__name__
+        item_type = factory.item_type or name
+        ti = TypeInfo(self.registry, item_type, factory)
+        self.by_abstract_type[ti.item_type] = ti
+
+        # now create the AbstractTypeInfo, which is also registered
+        abstract_ti = AbstractTypeInfo(self.registry, name)
+        self.all[factory] = self.all[name] = abstract_ti
+        return abstract_ti
+
+    # def register_abstract(self, name):
+    #     ti = self.abstract.get(name)
+    #     if ti is None:
+    #         ti = AbstractTypeInfo(self.registry, name)
+    #         self.all[name] = self.abstract[name] = ti
+    #     return ti
 
     def __contains__(self, name):
         return name in self.all
