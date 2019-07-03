@@ -102,6 +102,13 @@ def abstract_collection(name, **kw):
 
 
 class CollectionsTool(dict):
+    """
+    Helper class used to register and store different item collections.
+    Collection/AbstractCollection class are defined in snovault.resources.py
+    Includes:
+    - Collections registered using the @collection decorator
+    - AbstractCollections registed using @abstract_collection
+    """
     def __init__(self):
         self.by_item_type = {}
 

@@ -27,9 +27,20 @@ def extract_schema_links(schema):
 
 
 class AbstractTypeInfo(object):
+    """
+    Contains meta information per item type held in a AbstractCollection.
+    Does not actually use the item resource itself. Has properties for finding
+    subtypes and child types of the given item, as well as a schema that is
+    formed by merging the subschemas.
+    """
     factory = None
 
     def __init__(self, registry, name):
+        """
+        Args:
+            registry (Registry): the Pyramid registry
+            name (str): item name, e.g. "MyItem"
+        """
         self.types = registry[TYPES]
         self.name = name
 
@@ -43,7 +54,8 @@ class AbstractTypeInfo(object):
     @reify
     def child_types(self):
         """
-        Need to handle non-abstract item types and abstract types separately
+        Need to handle non-abstract item types and abstract types separately,
+        due to the pre-existing setup of base_types
         """
         child_types = [
             ti.name for ti in self.types.by_item_type.values()
@@ -58,12 +70,29 @@ class AbstractTypeInfo(object):
 
     @reify
     def schema(self):
+        """
+        Schema resulting from merging the subschemas. NOT equivalent to the
+        schema defined for the item type itself (use the TypeInfo contained in
+        registry[TYPES].by_abstract_type[item_type] for that)
+        """
         subschemas = (self.types[name].schema for name in self.subtypes)
         return reduce(combine_schemas, subschemas)
 
 
 class TypeInfo(AbstractTypeInfo):
+    """
+    Extends AbstractTypeInfo for meta information per item type that is held
+    in a Collection. Has properties to reference the schema and various
+    related attributes, as well as connections to properties on the item
+    itself (through `factory`)
+    """
     def __init__(self, registry, item_type, factory):
+        """
+        Args:
+            registry (Registry): the Pyramid registry
+            item_type (str): item type for the item, e.g. "my_item"
+            factory (Item): actual resource for the item, e.g. snovault.resources.Item
+        """
         super(TypeInfo, self).__init__(registry, factory.__name__)
         self.registry = registry
         self.item_type = item_type
@@ -122,6 +151,22 @@ class TypeInfo(AbstractTypeInfo):
 
 
 class TypesTool(object):
+    """
+    Helper class used to register and store TypeInfo/AbstractTypeInfo classes
+    corresponding to different item types.
+    Whether an item type is abstract or not depends on the collection decorator
+    used for the function; see snovault.config.py for more information.
+    Below will refer to registry[TYPES] as "types"...
+
+    Includes:
+    - TypeInfo objects (for Collections) that are registered in types.all by
+      item type (e.g. my_item), item name (e.g. MyItem), and item class; also
+      types.by_item_type using item_type. Uses `register` method.
+    - AbstractTypeInfo objects (for AbstractCollections) that are registed in
+      types.all by item name and item class. Additionally, register the
+      TypeInfo for the item in types.by_abstract_type using item_type.
+      Uses the `register_abstract` method.
+    """
     def __init__(self, registry):
         self.registry = registry
         self.by_item_type = {}
@@ -159,13 +204,6 @@ class TypesTool(object):
         abstract_ti = AbstractTypeInfo(self.registry, name)
         self.all[factory] = self.all[name] = abstract_ti
         return abstract_ti
-
-    # def register_abstract(self, name):
-    #     ti = self.abstract.get(name)
-    #     if ti is None:
-    #         ti = AbstractTypeInfo(self.registry, name)
-    #         self.all[name] = self.abstract[name] = ti
-    #     return ti
 
     def __contains__(self, name):
         return name in self.all
