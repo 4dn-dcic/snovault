@@ -52,6 +52,8 @@ def _annotated_schema(type_info, request):
             break
     if found_subtype:
         schema['rdfs:subClassOf'] = '/profiles/' + found_subtype + '.json'
+    # add abstract flag to know if the profile represents abstract item
+    schema['isAbstract'] = type_info.is_abstract
 
     collection = request.registry[COLLECTIONS][type_info.name]
     properties = OrderedDict()

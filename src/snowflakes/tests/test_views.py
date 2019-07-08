@@ -312,6 +312,7 @@ def test_profiles(testapp, item_type):
     assert 'rdfs:seeAlso' in res.json
     assert 'rdfs:subClassOf' in res.json
     assert 'children' in res.json
+    assert res.json['isAbstract'] is False
 
 
 @pytest.mark.parametrize('item_type', ['Item', 'item', 'Snowset', 'snowset'])
@@ -329,6 +330,7 @@ def test_profiles_abstract(testapp, item_type):
         assert 'rdfs:subClassOf' in res.json
     # abstract types wil have children
     assert len(res.json['children']) >= 1
+    assert res.json['isAbstract'] is True
 
 
 def test_profiles_all(testapp, registry):

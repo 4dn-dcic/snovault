@@ -86,12 +86,13 @@ class TypeInfo(AbstractTypeInfo):
     related attributes, as well as connections to properties on the item
     itself (through `factory`)
     """
-    def __init__(self, registry, item_type, factory):
+    def __init__(self, registry, item_type, factory, abstract=False):
         """
         Args:
             registry (Registry): the Pyramid registry
             item_type (str): item type for the item, e.g. "my_item"
             factory (Item): actual resource for the item, e.g. snovault.resources.Item
+            abstract (bool): used to keep track if this is used for an abstract item
         """
         super(TypeInfo, self).__init__(registry, factory.__name__)
         self.registry = registry
@@ -100,6 +101,7 @@ class TypeInfo(AbstractTypeInfo):
         self.base_types = factory.base_types
         self.aggregated_items = factory.aggregated_items
         self.embedded_list = factory.embedded_list
+        self.is_abstract = abstract
 
     @reify
     def calculated_properties(self):
@@ -197,7 +199,7 @@ class TypesTool(object):
         # `item_type` is likely not set on the Items of abstract collections
         name = factory.__name__
         item_type = factory.item_type or name
-        ti = TypeInfo(self.registry, item_type, factory)
+        ti = TypeInfo(self.registry, item_type, factory, abstract=True)
         self.by_abstract_type[ti.item_type] = ti
 
         # now create the AbstractTypeInfo, which is also registered
