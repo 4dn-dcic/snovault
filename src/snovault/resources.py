@@ -117,6 +117,17 @@ class Root(Resource):
 
 
 class AbstractCollection(Resource, Mapping):
+    """
+    Collection for a certain type of resource that stores the following info:
+    - registry (pyramid registry)
+    - type_info (TypeInfo for a certain item type, see snovault.typeinfo.py)
+    - __acl__
+    - uniqueKey for the collection (e.g. item_name:key)
+    And some other info as well.
+
+    Collections allow retrieval of specific items with them by using the `get`
+    method with uuid or the unique_key
+    """
     properties = {}
     unique_key = None
 
@@ -214,7 +225,7 @@ class Collection(AbstractCollection):
 # schema definition, so we define it here to import & re-use.
 display_title_schema = {
     "title": "Display Title",
-    "description": "A calculated title for every object in 4DN",
+    "description": "A calculated title for every object",
     "type": "string",
 }
 
