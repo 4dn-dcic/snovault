@@ -9,12 +9,6 @@ def registry(app):
 
 
 @pytest.fixture
-def auditor(registry):
-    import snovault.interfaces
-    return registry[snovault.interfaces.AUDITOR]
-
-
-@pytest.fixture
 def blobs(registry):
     import snovault.interfaces
     return registry[snovault.interfaces.BLOBS]

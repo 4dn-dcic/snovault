@@ -43,6 +43,16 @@ _DBSESSION = None
 
 def includeme(config):
     registry = config.registry
+    register_storage(registry)
+
+
+def register_storage(registry):
+    """
+    Wrapper function to register a RDBStorage as registry[STORAGE]
+    """
+    if not registry[DBSESSION]:
+        registry[STORAGE] = None
+        return
     registry[STORAGE] = RDBStorage(registry[DBSESSION])
     global _DBSESSION
     _DBSESSION = registry[DBSESSION]

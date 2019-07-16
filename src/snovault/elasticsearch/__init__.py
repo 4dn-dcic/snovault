@@ -92,6 +92,8 @@ class TimedRequestsHttpConnection(RequestsHttpConnection):
             return
 
         duration = int(duration * 1e6)
+        if not hasattr(request, "_stats"):
+            request._stats = {}
         stats = request._stats
         stats[self.stats_count_key] = stats.get(self.stats_count_key, 0) + 1
         stats[self.stats_time_key] = stats.get(self.stats_time_key, 0) + duration

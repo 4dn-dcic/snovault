@@ -102,7 +102,7 @@ def test_linked_uuids_index_data(content, dummy_request, threadlocals):
         found_sid = dummy_request.registry['storage'].write.get_by_uuid(rid).sid
         assert dummy_request._sid_cache.get(rid) == found_sid
 
-    # embedded view linked uuids are unchanged; none are added from the audits
+    # embedded view linked uuids are unchanged
     assert dummy_request._linked_uuids == set([l['uuid'] for l in res['linked_uuids_embedded']])
     assert res['rev_link_names'] == {}
     assert res['rev_linked_to_me'] == [targets[0]['uuid']]

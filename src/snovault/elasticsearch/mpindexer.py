@@ -12,7 +12,9 @@ import atexit
 import structlog
 import logging
 from snovault import set_logging
+from snovault.storage import register_storage
 import transaction
+import signal
 from .indexer import (
     INDEXER,
     Indexer,
@@ -43,19 +45,21 @@ def initializer(app_factory, settings):
     """
     Need to initialize the app for the subprocess
     """
-    import signal
+    from snovault.app import configure_engine
     signal.signal(signal.SIGINT, signal.SIG_IGN)
 
+    # set up global variables to use throughout subprocess
     global app
-    atexit.register(clear_manager)
+    atexit.register(clear_manager_and_dispose_engine)
     app = app_factory(settings, indexer_worker=True, create_tables=False)
+
+    global db_engine
+    db_engine = configure_engine(settings)
 
     set_logging(app.registry.settings.get('elasticsearch.server'),
                 app.registry.settings.get('production'), level=logging.INFO)
     global log
     log = structlog.get_logger(__name__)
-
-    signal.signal(signal.SIGALRM, clear_manager)
 
 
 @contextmanager
@@ -64,9 +68,13 @@ def threadlocal_manager():
     Set registry and request attributes using the global app within the
     subprocess
     """
-    import signal
-    signal.alarm(0)
-    clear_manager()
+    import snovault.storage
+    import zope.sqlalchemy
+    from sqlalchemy import orm
+
+    # clear threadlocal manager, though it should be clean
+    manager.pop()
+
     registry = app.registry
     request = app.request_factory.blank('/_indexing_pool')
     request.registry = registry
@@ -74,14 +82,30 @@ def threadlocal_manager():
     apply_request_extensions(request)
     request.invoke_subrequest = app.invoke_subrequest
     request.root = app.root_factory(request)
-    request._stats = {}
+    request._stats = getattr(request, "_stats", {})
+
+    # configure a sqlalchemy session and adjust isolation level
+    DBSession = orm.scoped_session(orm.sessionmaker(bind=db_engine))
+    request.registry[DBSESSION] = DBSession
+    register_storage(request.registry)
+    zope.sqlalchemy.register(DBSession)
+    snovault.storage.register(DBSession)  # adds transactions-table listeners
+    connection = request.registry[DBSESSION]().connection()
+    connection.execute('SET TRANSACTION ISOLATION LEVEL READ COMMITTED READ ONLY')
+
+    # add the newly created request to the pyramid threadlocal manager
     manager.push({'request': request, 'registry': registry})
     yield
-    signal.alarm(5)
+    # remove the session when leaving contextmanager
+    request.registry[DBSESSION].remove()
 
 
-def clear_manager(signum=None, frame=None):
+def clear_manager_and_dispose_engine(signum=None, frame=None):
     manager.pop()
+    # manually dispose of db engines for garbage collection
+    if db_engine is not None:
+        db_engine.dispose()
+
 
 ### These helper functions are needed for multiprocessing
 
@@ -110,6 +134,7 @@ def queue_update_helper():
 
 
 def queue_error_callback(cb_args, counter, errors):
+    print('\n\n... CALLBACK ...\n\n')
     local_errors, local_counter = cb_args
     if counter:
         counter[0] = local_counter[0] + counter[0]
@@ -122,7 +147,8 @@ class MPIndexer(Indexer):
     def __init__(self, registry, processes=None):
         super(MPIndexer, self).__init__(registry)
         self.chunksize = int(registry.settings.get('indexer.chunk_size', 1024))
-        self.processes = processes
+        # self.processes = processes
+        self.processes = 1
         self.initargs = (registry[APP_FACTORY], registry.settings,)
         # workers in the pool will be replaced after finishing one task
         # to free memory
@@ -151,27 +177,35 @@ class MPIndexer(Indexer):
         sync_uuids = request.json.get('uuids', None)
         workers = pool._processes if self.processes is None else self.processes
         # ensure workers != 0
-        workers = 1 if workers == 0 else workers
+        # workers = 1 if workers == 0 else workers
+        workers = 100
         errors = []
-        if sync_uuids:
-            # determine how many uuids should be used for each process
-            chunkiness = int((len(sync_uuids) - 1) / workers) + 1
-            if chunkiness > self.chunksize:
-                chunkiness = self.chunksize
-            # imap_unordered to hopefully shuffle item types and come up with
-            # a more or less equal workload for each process
-            for error in pool.imap_unordered(sync_update_helper, sync_uuids, chunkiness):
-                if error is not None:
-                    errors.append(error)
-                elif counter:  # don't increment counter on an error
-                    counter[0] += 1
-                if counter[0] % 10 == 0:
-                    log.info('Indexing %d (sync)', counter[0])
+        try:
+            if sync_uuids:
+                # determine how many uuids should be used for each process
+                chunkiness = int((len(sync_uuids) - 1) / workers) + 1
+                if chunkiness > self.chunksize:
+                    chunkiness = self.chunksize
+                # imap_unordered to hopefully shuffle item types and come up with
+                # a more or less equal workload for each process
+                for error in pool.imap_unordered(sync_update_helper, sync_uuids, chunkiness):
+                    if error is not None:
+                        errors.append(error)
+                    elif counter:  # don't increment counter on an error
+                        counter[0] += 1
+                    if counter[0] % 10 == 0:
+                        log.info('Indexing %d (sync)', counter[0])
+            else:
+                # use partial here so the callback can use counter and errors
+                callback_w_errors = partial(queue_error_callback, counter=counter, errors=errors)
+                for i in range(workers):
+                    pool.apply_async(queue_update_helper, callback=callback_w_errors)
+        except Exception as exc:
+            # on exception, terminate workers immediately before joining
+            log.error("MPIndexer.update_objects Exception, terminating. Detail: %s" % repr(exc))
+            pool.terminate()
         else:
-            # use partial here so the callback can use counter and errors
-            callback_w_errors = partial(queue_error_callback, counter=counter, errors=errors)
-            for i in range(workers):
-                pool.apply_async(queue_update_helper, callback=callback_w_errors)
-        pool.close()
+            # standard usage, will let workers finish before joining
+            pool.close()
         pool.join()
         return errors

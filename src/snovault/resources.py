@@ -64,7 +64,7 @@ class Root(Resource):
     __parent__ = None
     __acl__ = [
         (Allow, 'remoteuser.INDEXER', ['view', 'view_raw', 'list', 'index']),
-        (Allow, 'remoteuser.EMBED', ['view', 'view_raw', 'expand', 'audit']),
+        (Allow, 'remoteuser.EMBED', ['view', 'view_raw', 'expand']),
         (Allow, Everyone, ['visible_for_edit']),
     ]
 
@@ -117,6 +117,17 @@ class Root(Resource):
 
 
 class AbstractCollection(Resource, Mapping):
+    """
+    Collection for a certain type of resource that stores the following info:
+    - registry (pyramid registry)
+    - type_info (TypeInfo for a certain item type, see snovault.typeinfo.py)
+    - __acl__
+    - uniqueKey for the collection (e.g. item_name:key)
+    And some other info as well.
+
+    Collections allow retrieval of specific items with them by using the `get`
+    method with uuid or the unique_key
+    """
     properties = {}
     unique_key = None
 
@@ -210,6 +221,15 @@ class Collection(AbstractCollection):
     ''' Separate class so add views do not apply to AbstractCollection '''
 
 
+# Almost every single display_title should have the same
+# schema definition, so we define it here to import & re-use.
+display_title_schema = {
+    "title": "Display Title",
+    "description": "A calculated title for every object",
+    "type": "string",
+}
+
+
 class Item(Resource):
     item_type = None
     base_types = ['Item']
@@ -218,7 +238,6 @@ class Item(Resource):
     aggregated_items = {}
     embedded_list = []
     filtered_rev_statuses = ()
-    audit_inherit = None
     schema = None
     AbstractCollection = AbstractCollection
     Collection = Collection
@@ -400,7 +419,7 @@ class Item(Resource):
         if any(forbidden):
             msg = ("Forbidden character(s) %s are not allowed in field: %s. Value: %s"
                    % (set(forbidden), field, value))
-            raise ValidationFailure('body', [], msg)
+            raise ValidationFailure('body', 'Item: path characters', msg)
 
     def update(self, properties, sheets=None):
         '''Alias of _update, called in crud_views.py - `update_item` (method)'''
@@ -429,7 +448,7 @@ class Item(Resource):
             for k, values in unique_keys.items():
                 if len(set(values)) != len(values):
                     msg = "Duplicate keys for %r: %r" % (k, values)
-                    raise ValidationFailure('body', [], msg)
+                    raise ValidationFailure('body', 'Item: duplicate keys', msg)
                 for uk_val in values:
                     self.validate_path_characters(k, uk_val)
 
@@ -480,9 +499,6 @@ class Item(Resource):
             },
             'edit': {
                 'type': 'string'
-            },
-            'audit': {
-                'type': 'string'
             }
         }
     })
@@ -492,10 +508,6 @@ class Item(Resource):
         principals = calc_principals(self)
         return principals
 
-    @calculated_property(schema={
-        "title": "Display Title",
-        "description": "A calculated title",
-        "type": "string"
-    })
+    @calculated_property(schema=display_title_schema)
     def display_title(self):
         return str(self.uuid)

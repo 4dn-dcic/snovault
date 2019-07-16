@@ -167,6 +167,7 @@ def composite(loader, global_conf, **settings):
     if 'interval' in settings:
         kwargs['interval'] = float(settings['interval'])
 
+    # daemon thread that actually executes `run` method to call /index
     listener = ErrorHandlingThread(target=run, name='listener', kwargs=kwargs)
     listener.daemon = True
     log.debug('starting listener')

@@ -20,16 +20,12 @@ def item_is_revoked(request, path):
         'description': 'Abstract class describing different collections of snowflakes.',
     })
 class Snowset(Item):
+    item_type = 'snowset'
     base_types = ['Snowset'] + Item.base_types
     embedded_list = [
         'submitted_by.*',
         'lab.*',
         'award.*',
-    ]
-    audit_inherit = [
-        'submitted_by',
-        'lab',
-        'award',
     ]
     name_key = 'accession'
 
@@ -84,9 +80,4 @@ class Snowflake(Item):
         'submitted_by.*',
         'award.uuid',
         'snowset.*'
-    ]
-    audit_inherit = [
-        'lab',
-        'submitted_by',
-
     ]

@@ -64,7 +64,7 @@ tests_require = [
 
 setup(
     name='snovault',
-    version='0.10',
+    version='1.0.0',
     description='Snovault Hybrid Object Relational Database Framework',
     long_description=README + '\n\n' + CHANGES,
     packages=find_packages('src'),
@@ -72,9 +72,9 @@ setup(
     include_package_data=True,
     package_data={'':['nginx-dev.conf']},
     zip_safe=False,
-    author='Benjamin Hitz',
-    author_email='hitz@stanford.edu',
-    url='http://github.com/ENCODE-DCC/snovault/',
+    author='Carl Vitzthum',
+    author_email='carl_vitzthum@hms.harvard.edu',
+    url='http://github.com/4dn-dcic/snovault/',
     license='MIT',
     install_requires=requires,
     tests_require=tests_require,
@@ -114,7 +114,7 @@ setup(
         #   3 - Alpha
         #   4 - Beta
         #   5 - Production/Stable
-        'Development Status :: 3 - Alpha',
+        'Development Status :: 4 - Beta',
 
         # Indicate who your project is intended for
         'Intended Audience :: Developers',

@@ -76,7 +76,8 @@ def configure_engine(settings):
 
 
 def set_postgresql_statement_timeout(engine, timeout=20 * 1000):
-    """ Prevent Postgres waiting indefinitely for a lock.
+    """
+    Prevent Postgres waiting indefinitely for a lock.
     """
     from sqlalchemy import event
     import psycopg2
@@ -100,19 +101,25 @@ def json_from_path(path, default=None):
 
 
 def configure_dbsession(config):
+    """
+    Create a sqlalchemy engine and a session that uses it, the latter of which
+    is added to the registry. Handle some extra registration
+    """
+    import snovault.storage
+    import zope.sqlalchemy
+    from sqlalchemy import orm
     from snovault import DBSESSION
+
     settings = config.registry.settings
     DBSession = settings.pop(DBSESSION, None)
-    if DBSession is None:
+
+    # handle creating the database engine separately with indexer_worker
+    if DBSession is None and not settings.get('indexer_worker'):
         engine = configure_engine(settings)
 
         if asbool(settings.get('create_tables', False)):
             from snovault.storage import Base
             Base.metadata.create_all(engine)
-
-        import snovault.storage
-        import zope.sqlalchemy
-        from sqlalchemy import orm
 
         DBSession = orm.scoped_session(orm.sessionmaker(bind=engine))
         zope.sqlalchemy.register(DBSession)
@@ -210,18 +217,6 @@ def main(global_config, **local_config):
         config.include('snovault.elasticsearch')
         config.include('.search')
 
-    if 'snp_search.server' in config.registry.settings:
-        addresses = aslist(config.registry.settings['snp_search.server'])
-        config.registry['snp_search'] = Elasticsearch(
-            addresses,
-            serializer=PyramidJSONSerializer(json_renderer),
-            connection_class=TimedRequestsHttpConnection,
-            retry_on_timeout=True,
-            timeout=60,
-            maxsize=50
-        )
-        config.include('.region_search')
-        config.include('.peak_indexer')
     config.include(static_resources)
     config.include(changelogs)
 
@@ -236,7 +231,6 @@ def main(global_config, **local_config):
     # Load upgrades last so that all views (including testing views) are
     # registered.
     config.include('.upgrade')
-    config.include('.audit')
 
     app = config.make_wsgi_app()
 

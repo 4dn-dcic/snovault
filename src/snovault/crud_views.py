@@ -20,6 +20,7 @@ from .resources import (
     Collection,
     Item,
 )
+from .calculated import calculated_property
 from .validation import ValidationFailure
 from .validators import (
     no_validate_item_content_patch,
@@ -28,6 +29,7 @@ from .validators import (
     validate_item_content_patch,
     validate_item_content_post,
     validate_item_content_put,
+    validate_item_content_in_place
 )
 from .invalidation import add_to_indexing_queue
 import transaction
@@ -37,6 +39,7 @@ log = get_logger(__name__)
 
 
 def includeme(config):
+    config.include('.calculated')
     config.scan(__name__)
 
 
@@ -144,6 +147,14 @@ def render_item(request, context, render, return_uri_also=False):
              request_param=['validate=false'])
 def collection_add(context, request, render=None):
     '''Endpoint for adding a new Item.'''
+
+    check_only = asbool(request.params.get('check_only', False))
+    if check_only:
+        return {
+            'status': "success",
+            '@type': ['result'],
+        }
+
     if render is None:
         render = request.params.get('render', True)
 
@@ -170,6 +181,9 @@ def collection_add(context, request, render=None):
 @view_config(context=Item, permission='edit_unvalidated', request_method='PATCH',
              validators=[no_validate_item_content_patch],
              request_param=['validate=false'])
+@view_config(context=Item, permission='index', request_method='GET',
+             validators=[validate_item_content_in_place],
+             request_param=['check_only=true'])
 def item_edit(context, request, render=None):
     '''
     Endpoint for editing an existing Item.
@@ -179,7 +193,19 @@ def item_edit(context, request, render=None):
     PATCH - updates the current properties with those supplied.
     Note validators will handle the PATH ?delete_fields parameter if you want
     field to be deleted
+
+    Also allow a GET request to just run the edit validators when using
+    `check_only=true` query param when indexing. Whether using this or POST/
+    PATCH, always return a dummy response with `check_only=true` and do not
+    actually modify the DB with `update_item`
     '''
+    check_only = asbool(request.params.get('check_only', False))
+    if check_only:
+        return {
+            'status': "success",
+            '@type': ['result'],
+        }
+
     if render is None:
         render = request.params.get('render', True)
 
@@ -267,3 +293,50 @@ def item_delete_full(context, request, render=None):
         'notification' : 'Deletion failed',
         '@graph': [uuid]
     }
+
+
+@view_config(context=Item, permission='view', request_method='GET',
+             name='validation-errors')
+def item_view_validation_errors(context, request):
+    """
+    View config for validation_errors. If the current model does not have
+    `source`, it means we are using write (RDS) storage and not ES. In that
+    case, do not calculate the validation errors as it would require an extra
+    request and some tricky permission handling.
+
+    Args:
+        context: current Item
+        request: current request
+
+    Returns:
+        A dictionary including item path and validation errors from ES
+    """
+    if not hasattr(context.model, 'source'):
+        return {
+            '@id': request.resource_path(context),
+            'validation_errors': [],
+        }
+    source = context.model.source
+    allowed = set(source['principals_allowed']['view'])  # use view permissions
+    if allowed.isdisjoint(request.effective_principals):
+        raise HTTPForbidden()
+    return {
+        '@id': source['object']['@id'],
+        'validation_errors': source.get('validation_errors', [])
+    }
+
+
+@calculated_property(context=Item, category='page', name='validation-errors',
+                     condition=lambda request: request.has_permission('view'))
+def validation_errors_property(context, request):
+    """
+    Frame=page calculated property to add validation_errors to response.
+    The request.embed calls item_view_validation_errors
+    Args:
+        context: current Item
+        request: current Request
+    Returns:
+        List result of validation errors
+    """
+    path = request.resource_path(context)
+    return request.embed(path, '@@validation-errors')['validation_errors']

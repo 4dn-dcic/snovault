@@ -58,7 +58,7 @@ def delete_fields(request, data, schema):
     # validation, which does things like adding defaults
     if request.params.get('validate') == 'false':
         err_msg = 'Cannot delete fields on request with with validate=false'
-        raise ValidationFailure('body', ['?delete_fields'], err_msg)
+        raise ValidationFailure('body', 'delete_fields', err_msg)
 
     # make a copy of data after removing fields and validate
     to_validate = data.copy()
@@ -76,9 +76,10 @@ def delete_fields(request, data, schema):
             if isinstance(error, IgnoreUnchanged):
                 if error.validator != 'permission':
                     continue
-            request.errors.add('body', list(error.path), error.message)
+            error_name = 'Schema: ' + '.'.join([str(p) for p in error.path])
+            request.errors.add('body', error_name, error.message)
     if request.errors:
-        raise ValidationFailure('body', ['?delete_fields'], 'error deleting fields')
+        raise ValidationFailure('body', 'delete_fields', 'Error deleting fields')
     # validate() may add fields, such as uuid and schema_version
     for orig_field in [k for k in validated]:
         if orig_field not in to_validate:
@@ -117,4 +118,32 @@ def validate_item_content_patch(context, request):
     current = context.upgrade_properties().copy()
     current['uuid'] = str(context.uuid)
     # this will add defaults values back to deleted fields with schema defaults
+    validate_request(schema, request, data, current)
+
+
+def validate_item_content_in_place(context, request):
+    """
+    Used with indexer. Validate the request against the schema using only the
+    data in the request, which will be upgraded context properties, to save a
+    call to the DB with `context.upgrade_properties`
+
+    Args:
+        context: current Item context
+        request: current Request
+
+    Returns:
+        None
+
+    Raises:
+        ValidationFailure: on uuid mismatch or schema validation failure
+    """
+    data = request.json
+    schema = context.type_info.schema
+    if 'uuid' in data and UUID(data['uuid']) != context.uuid:
+        msg = 'uuid may not be changed'
+        raise ValidationFailure('body', ['uuid'], msg)
+    # set current to data, since this validator is not meant to be used for
+    # changing properties. Used with call to `schema_utils.validate`
+    current = data.copy()
+    current['uuid'] = str(context.uuid)
     validate_request(schema, request, data, current)

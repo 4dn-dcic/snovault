@@ -11,6 +11,8 @@ from timeit import default_timer as timer
 from .resources import Item
 from .authentication import calc_principals
 from .interfaces import STORAGE
+from .embed import make_subrequest
+from .validation import ValidationFailure
 from .elasticsearch.indexer_utils import find_uuids_for_indexing
 
 def includeme(config):
@@ -67,9 +69,10 @@ def item_index_data(context, request):
     for the given item. If an int sid is provided as a request parameter,
     will raise an sid exception if the current item context is behind the
     given sid.
-    Computationally intensive. Calculates the object, embedded, and audit views
-    for the given item, using ES results where possible for speed. Leverages
-    a number of attributes on the request to get information indexing needs.
+    Computationally intensive. Calculates the object and embedded views
+    for the given item, using ES results where possible for speed. Also handles
+    calculation of aggregated-items and validation-errors for the item.
+    Leverages a number of attrs on the request to get needed information
 
     Args:
         context: current Item
@@ -82,6 +85,7 @@ def item_index_data(context, request):
     # upgrade_properties calls necessary upgraders based on schema_version
     properties = context.upgrade_properties()
 
+    # TODO: sid check should take ALL linked sids into account
     # if we want to check an sid, it should be set as a query param
     sid_check = request.params.get('sid', None)
     if sid_check:
@@ -131,7 +135,6 @@ def item_index_data(context, request):
 
     # reset these properties, then run embedded view
     request._linked_uuids = set()
-    request._audit_uuids = set()
     request._rev_linked_uuids_by_item = {}
     request._aggregate_for['uuid'] = uuid
     request._aggregated_items = {
@@ -140,20 +143,23 @@ def item_index_data(context, request):
     # since request._indexing_view is set to True in indexer.py,
     # all embeds (including subrequests) below will use the embed cache
     embedded_view = request.invoke_view(path, '@@embedded', index_uuid=uuid)
-    # get _linked and _rev_linked uuids from the request before @@audit views add to them
     linked_uuids_embedded = request._linked_uuids.copy()
 
     # find uuids traversed that rev link to this item
     rev_linked_to_me = get_rev_linked_items(request, uuid)
     aggregated_items = {agg: res['items'] for agg, res in request._aggregated_items.items()}
 
-    # lastly, run the audit view. Set the uuids we want to audit on
-    request._audit_uuids = list(linked_uuids_embedded)
-    audit_view = request.invoke_view(path, '@@audit')['audit']
+    # run validators for the item by PATCHing with check_only=True
+    # json_body provided is the upgraded properties of the item
+    validate_path = path + '?check_only=true'
+    validate_req = make_subrequest(request, validate_path, json_body=properties)
+    try:
+        request.invoke_subrequest(validate_req)
+    except ValidationFailure:
+        pass
 
     document = {
         'aggregated_items': aggregated_items,
-        'audit': audit_view,
         'embedded': embedded_view,
         'item_type': context.type_info.item_type,
         'linked_uuids_embedded': join_linked_uuids_sids(request, linked_uuids_embedded),
@@ -168,10 +174,11 @@ def item_index_data(context, request):
             for name in context.propsheets.keys() if name != ''
         },
         'rev_link_names': rev_link_names,
+        'rev_linked_to_me': sorted(rev_linked_to_me),
         'sid': context.sid,
         'unique_keys': unique_keys,
         'uuid': uuid,
-        'rev_linked_to_me': sorted(rev_linked_to_me)
+        'validation_errors': validate_req.errors
     }
 
     return document
