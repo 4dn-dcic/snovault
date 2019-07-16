@@ -42,12 +42,6 @@ def index(request):
     es = request.registry[ELASTIC_SEARCH]
     indexer = request.registry[INDEXER]
 
-    # ensure we get the latest version of what is in the db as much as possible
-    session = request.registry[DBSESSION]()
-    connection = session.connection()
-    connection.execute('SET TRANSACTION ISOLATION LEVEL READ COMMITTED READ ONLY')
-
-
     if not dry_run:
         index_start_time = datetime.datetime.now()
         index_start_str = index_start_time.isoformat()
@@ -129,6 +123,11 @@ class Indexer(object):
         """
         Top level update routing
         """
+        # ensure we get the latest version of what is in the db as much as possible
+        session = request.registry[DBSESSION]()
+        connection = session.connection()
+        connection.execute('SET TRANSACTION ISOLATION LEVEL READ COMMITTED READ ONLY')
+
         # indexing is either run with sync uuids passed through the request
         # (which is synchronous) OR uuids from the queue
         sync_uuids = request.json.get('uuids', None)
@@ -189,6 +188,7 @@ class Indexer(object):
         """
         Used with the queue
         """
+        print('++++++++++++++++++++++++++++++++++++++++++++++\n')
         errors = []
         # hold uuids that will be used to find secondary uuids
         non_strict_uuids = set()
@@ -198,10 +198,12 @@ class Indexer(object):
         # only check deferred queue on the first run, since there shouldn't
         # be much in there at any given point
         messages, target_queue = self.get_messages_from_queue(skip_deferred=False)
+        print('+++++ RECEIVED %s' % len(messages))
         while len(messages) > 0:
             for idx, msg in enumerate(messages):
                 # get all the details
                 msg_body = json.loads(msg['Body'])
+                print('>>> %s\n' % msg_body)
                 msg_uuid= msg_body['uuid']
                 msg_sid = msg_body['sid']
                 msg_curr_time = msg_body['timestamp']
@@ -301,6 +303,8 @@ class Indexer(object):
         target_queue is an optional string queue name:
             'primary', 'secondary', or 'deferred'
         """
+        print('-------> DBSession %s' % request.registry[DBSESSION])
+        print('-------> Storage %s' % request.registry['storage'])
         # logging constant
         cat = 'index object'
 
@@ -326,15 +330,19 @@ class Indexer(object):
 
         try:
             result = request.embed(index_data_query, as_user='INDEXER')
+            print('-------> result %s' % index_data_query)
             duration = timer() - start
             log.bind(collection=result.get('item_type'))
             # log.info("Time to embed", duration=duration, cat="embed object")
         except SidException as e:
+            print('-------> exc1 %s' % e)
+            print('\n\n=== DEFERRED ===\n\n')
             duration = timer() - start
             log.warning('Invalid sid found', duration=duration, cat=cat)
             # this will cause the item to be sent to the deferred queue
             return {'error_message': 'deferred_retry', 'txn_str': str(request.tm.get())}
         except (MissingIndexItemException, KeyError) as e:
+            print('-------> exc2 %s' % e)
             # only consider a KeyError deferrable if not already in deferred queue
             # TODO: all transaction-related KeyErrors can be fixed by splitting
             # indexing into one transaction per item
@@ -352,6 +360,7 @@ class Indexer(object):
                 log.error('KeyError rendering @@index-data', duration=duration, exc_info=True, cat=cat)
                 return {'error_message': repr(e), 'time': curr_time, 'uuid': str(uuid)}
         except Exception as e:
+            print('-------> exc3 %s' % e)
             duration = timer() - start
             log.error('Error rendering @@index-data', duration=duration, exc_info=True, cat=cat)
             return {'error_message': repr(e), 'time': curr_time, 'uuid': str(uuid)}

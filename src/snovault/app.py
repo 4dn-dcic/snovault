@@ -76,7 +76,8 @@ def configure_engine(settings):
 
 
 def set_postgresql_statement_timeout(engine, timeout=20 * 1000):
-    """ Prevent Postgres waiting indefinitely for a lock.
+    """
+    Prevent Postgres waiting indefinitely for a lock.
     """
     from sqlalchemy import event
     import psycopg2
@@ -103,7 +104,7 @@ def configure_dbsession(config):
     from snovault import DBSESSION
     settings = config.registry.settings
     DBSession = settings.pop(DBSESSION, None)
-    if DBSession is None:
+    if DBSession is None and not settings.get('indexer_worker'):
         engine = configure_engine(settings)
 
         if asbool(settings.get('create_tables', False)):
@@ -210,18 +211,6 @@ def main(global_config, **local_config):
         config.include('snovault.elasticsearch')
         config.include('.search')
 
-    if 'snp_search.server' in config.registry.settings:
-        addresses = aslist(config.registry.settings['snp_search.server'])
-        config.registry['snp_search'] = Elasticsearch(
-            addresses,
-            serializer=PyramidJSONSerializer(json_renderer),
-            connection_class=TimedRequestsHttpConnection,
-            retry_on_timeout=True,
-            timeout=60,
-            maxsize=50
-        )
-        config.include('.region_search')
-        config.include('.peak_indexer')
     config.include(static_resources)
     config.include(changelogs)
 
