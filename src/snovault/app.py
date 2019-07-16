@@ -101,19 +101,25 @@ def json_from_path(path, default=None):
 
 
 def configure_dbsession(config):
+    """
+    Create a sqlalchemy engine and a session that uses it, the latter of which
+    is added to the registry. Handle some extra registration
+    """
+    import snovault.storage
+    import zope.sqlalchemy
+    from sqlalchemy import orm
     from snovault import DBSESSION
+
     settings = config.registry.settings
     DBSession = settings.pop(DBSESSION, None)
+
+    # handle creating the database engine separately with indexer_worker
     if DBSession is None and not settings.get('indexer_worker'):
         engine = configure_engine(settings)
 
         if asbool(settings.get('create_tables', False)):
             from snovault.storage import Base
             Base.metadata.create_all(engine)
-
-        import snovault.storage
-        import zope.sqlalchemy
-        from sqlalchemy import orm
 
         DBSession = orm.scoped_session(orm.sessionmaker(bind=engine))
         zope.sqlalchemy.register(DBSession)

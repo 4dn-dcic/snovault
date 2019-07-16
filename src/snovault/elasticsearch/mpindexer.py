@@ -71,8 +71,10 @@ def threadlocal_manager():
     import snovault.storage
     import zope.sqlalchemy
     from sqlalchemy import orm
-    # signal.alarm(0)  # cancels any scheduled alarm
+
+    # clear threadlocal manager, though it should be clean
     manager.pop()
+
     registry = app.registry
     request = app.request_factory.blank('/_indexing_pool')
     request.registry = registry
@@ -82,6 +84,7 @@ def threadlocal_manager():
     request.root = app.root_factory(request)
     request._stats = getattr(request, "_stats", {})
 
+    # configure a sqlalchemy session and adjust isolation level
     DBSession = orm.scoped_session(orm.sessionmaker(bind=db_engine))
     request.registry[DBSESSION] = DBSession
     register_storage(request.registry)
@@ -90,14 +93,16 @@ def threadlocal_manager():
     connection = request.registry[DBSESSION]().connection()
     connection.execute('SET TRANSACTION ISOLATION LEVEL READ COMMITTED READ ONLY')
 
+    # add the newly created request to the pyramid threadlocal manager
     manager.push({'request': request, 'registry': registry})
     yield
+    # remove the session when leaving contextmanager
     request.registry[DBSESSION].remove()
 
 
 def clear_manager_and_dispose_engine(signum=None, frame=None):
     manager.pop()
-    # must manually close scoped sessions created by indexer workers
+    # manually dispose of db engines for garbage collection
     if db_engine is not None:
         db_engine.dispose()
 
