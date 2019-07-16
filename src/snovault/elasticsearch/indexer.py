@@ -195,26 +195,43 @@ class Indexer(object):
         # hold the reverse-linked uuids that need to be invalidated
         rev_linked_uuids = set()
         to_delete = []  # hold messages that will be deleted
+        deferred = False  # if true, we need to restart the transaction
         # only check deferred queue on the first run, since there shouldn't
         # be much in there at any given point
         messages, target_queue = self.get_messages_from_queue(skip_deferred=False)
-        print('+++++ RECEIVED %s' % len(messages))
         while len(messages) > 0:
+            print('+++++ RECEIVED %s from %s' % (len(messages), target_queue))
             for idx, msg in enumerate(messages):
                 # get all the details
                 msg_body = json.loads(msg['Body'])
                 print('>>> %s\n' % msg_body)
+
+                # send the message back and delete so that dlq count is unaffected
+                if deferred:
+                    print('\n\nDEFERRED SKIP\n\n')
+                    self.queue.send_messages([msg_body], target_queue=target_queue)
+                    to_delete.append(msg)
+                    # delete messages when we have the right number
+                    if len(to_delete) == self.queue.delete_batch_size:
+                        self.queue.delete_messages(to_delete, target_queue=target_queue)
+                        to_delete = []
+                    continue
+
                 msg_uuid= msg_body['uuid']
                 msg_sid = msg_body['sid']
                 msg_curr_time = msg_body['timestamp']
                 msg_detail = msg_body.get('detail')
                 msg_telemetry = msg_body.get('telemetry_id')
-                # check to see if we are using the same txn that caused a deferral
-                if target_queue == 'deferred' and msg_detail == str(request.tm.get()):
-                    # re-create a new message so we don't affect retry count (dlq)
-                    self.queue.send_messages([msg_body], target_queue=target_queue)
-                    to_delete.append(msg)
-                    continue
+
+
+                # # check to see if we are using the same txn that caused a deferral
+                # if target_queue == 'deferred' and msg_detail == str(request.tm.get()):
+                #     # re-create a new message so we don't affect retry count (dlq)
+                #     self.queue.send_messages([msg_body], target_queue=target_queue)
+                #     to_delete.append(msg)
+                #     continue
+
+
                 # build the object and index into ES
                 # if strict==True, do not add uuids rev_linking to item to queue
                 if msg_body['strict'] is True:
@@ -229,11 +246,16 @@ class Indexer(object):
                                                telemetry_id=msg_telemetry)
                 if error:
                     if error.get('error_message') == 'deferred_retry':
-                        # send this to the deferred queue
-                        msg_body['detail'] = error['txn_str']
-                        self.queue.send_messages([msg_body], target_queue='deferred')
-                        # delete the old message
+                        self.queue.send_messages([msg_body], target_queue=target_queue)
                         to_delete.append(msg)
+                        deferred = True
+
+                        # OLD APPROACH
+                        # # send this to the deferred queue
+                        # msg_body['detail'] = error['txn_str']
+                        # self.queue.send_messages([msg_body], target_queue='deferred')
+                        # # delete the old message
+                        # to_delete.append(msg)
                     else:
                         # on a regular error, replace the message back in the queue
                         # could do something with error, like putting on elasticache
@@ -246,10 +268,12 @@ class Indexer(object):
                         non_strict_uuids.add(msg_uuid)
                     if counter: counter[0] += 1  # do not increment on error
                     to_delete.append(msg)
+
                 # delete messages when we have the right number
                 if len(to_delete) == self.queue.delete_batch_size:
                     self.queue.delete_messages(to_delete, target_queue=target_queue)
                     to_delete = []
+
             # add to secondary queue, if applicable
             # search for all items that linkTo the non-strict items or contain
             # a rev_link to to them
@@ -264,6 +288,13 @@ class Indexer(object):
                     errors.append({'error_message': error_msg})
                 non_strict_uuids = set()
                 rev_linked_uuids = set()
+
+            # if we need to restart the worker, break out of while loop
+            if deferred:
+                print('\n\nDEFERRED BREAK\n\n')
+                break
+
+            # obtain more messages, possibly from a different queue
             prev_target_queue = target_queue
             messages, target_queue = self.get_messages_from_queue(skip_deferred=True)
             # if we have switched between primary and secondary queues, delete
@@ -271,7 +302,8 @@ class Indexer(object):
             if prev_target_queue != target_queue and to_delete:
                 self.queue.delete_messages(to_delete, target_queue=prev_target_queue)
                 to_delete = []
-        # we're done. delete any outstanding messages
+
+        # we're done. delete any outstanding messages before returning
         if to_delete:
             self.queue.delete_messages(to_delete, target_queue=target_queue)
         return errors
@@ -303,8 +335,6 @@ class Indexer(object):
         target_queue is an optional string queue name:
             'primary', 'secondary', or 'deferred'
         """
-        print('-------> DBSession %s' % request.registry[DBSESSION])
-        print('-------> Storage %s' % request.registry['storage'])
         # logging constant
         cat = 'index object'
 
@@ -330,37 +360,28 @@ class Indexer(object):
 
         try:
             result = request.embed(index_data_query, as_user='INDEXER')
-            print('-------> result %s' % index_data_query)
             duration = timer() - start
             log.bind(collection=result.get('item_type'))
             # log.info("Time to embed", duration=duration, cat="embed object")
         except SidException as e:
-            print('-------> exc1 %s' % e)
             print('\n\n=== DEFERRED ===\n\n')
             duration = timer() - start
             log.warning('Invalid sid found', duration=duration, cat=cat)
             # this will cause the item to be sent to the deferred queue
-            return {'error_message': 'deferred_retry', 'txn_str': str(request.tm.get())}
+            return {'error_message': 'deferred_retry'}
         except (MissingIndexItemException, KeyError) as e:
-            print('-------> exc2 %s' % e)
             # only consider a KeyError deferrable if not already in deferred queue
-            # TODO: all transaction-related KeyErrors can be fixed by splitting
-            # indexing into one transaction per item
             duration = timer() - start
             if e.__class__ == MissingIndexItemException and cm_source:
                 # cannot find the item in the DB by uuid and the message came
                 # from create-mapping. Skip completely
                 log.error('Missing create-mapping resource when indexing. Skipping', duration=duration, cat=cat)
                 return
-            elif target_queue != 'deferred':
+            else:
                 log.info('KeyError', duration=duration, cat=cat)
                 # this will cause the item to be sent to the deferred queue
-                return {'error_message': 'deferred_retry', 'txn_str': str(request.tm.get())}
-            else:
-                log.error('KeyError rendering @@index-data', duration=duration, exc_info=True, cat=cat)
-                return {'error_message': repr(e), 'time': curr_time, 'uuid': str(uuid)}
+                return {'error_message': 'deferred_retry'}
         except Exception as e:
-            print('-------> exc3 %s' % e)
             duration = timer() - start
             log.error('Error rendering @@index-data', duration=duration, exc_info=True, cat=cat)
             return {'error_message': repr(e), 'time': curr_time, 'uuid': str(uuid)}

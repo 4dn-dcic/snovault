@@ -129,12 +129,12 @@ def queue_update_helper():
         local_counter = [0]
         request = get_current_request()
         indexer = request.registry[INDEXER]
-
         local_errors = indexer.update_objects_queue(request, local_counter)
         return (local_errors, local_counter)
 
 
 def queue_error_callback(cb_args, counter, errors):
+    print('\n\n... CALLBACK ...\n\n')
     local_errors, local_counter = cb_args
     if counter:
         counter[0] = local_counter[0] + counter[0]
@@ -147,7 +147,8 @@ class MPIndexer(Indexer):
     def __init__(self, registry, processes=None):
         super(MPIndexer, self).__init__(registry)
         self.chunksize = int(registry.settings.get('indexer.chunk_size', 1024))
-        self.processes = processes
+        # self.processes = processes
+        self.processes = 1
         self.initargs = (registry[APP_FACTORY], registry.settings,)
         # workers in the pool will be replaced after finishing one task
         # to free memory

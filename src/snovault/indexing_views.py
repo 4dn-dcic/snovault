@@ -85,6 +85,7 @@ def item_index_data(context, request):
     # upgrade_properties calls necessary upgraders based on schema_version
     properties = context.upgrade_properties()
 
+    # TODO: sid check should take ALL linked sids into account
     # if we want to check an sid, it should be set as a query param
     sid_check = request.params.get('sid', None)
     if sid_check:
