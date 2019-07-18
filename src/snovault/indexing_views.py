@@ -67,8 +67,9 @@ def item_index_data(context, request):
     """
     Very important view which is used to calculate all the data indexed in ES
     for the given item. If an int sid is provided as a request parameter,
-    will raise an sid exception if the current item context is behind the
-    given sid.
+    will raise an sid exception if the maximum sid value on current_propsheets
+    table is less than the given value.
+
     Computationally intensive. Calculates the object and embedded views
     for the given item, using ES results where possible for speed. Also handles
     calculation of aggregated-items and validation-errors for the item.
@@ -85,16 +86,17 @@ def item_index_data(context, request):
     # upgrade_properties calls necessary upgraders based on schema_version
     properties = context.upgrade_properties()
 
-    # TODO: sid check should take ALL linked sids into account
-    # if we want to check an sid, it should be set as a query param
+    # compare sid check to the max sid among all items
+    max_sid = context.max_sid
     sid_check = request.params.get('sid', None)
     if sid_check:
         try:
             sid_check = int(sid_check)
         except ValueError:
             raise ValueError('sid parameter must be an integer. Provided sid: %s' % sid)
-        if context.sid < sid_check:
-            raise SidException('sid from the query (%s) is greater than that on context (%s). Bailing.' % (sid_check, context.sid))
+        if max_sid < sid_check:
+            raise SidException('sid from the query (%s) is greater than maximum sid (%s). Bailing.'
+                               % (sid_check, max_sid))
 
     # ES versions 2 and up don't allow dots in links. Update these to use ~s
     new_links = {}
@@ -165,6 +167,7 @@ def item_index_data(context, request):
         'linked_uuids_embedded': join_linked_uuids_sids(request, linked_uuids_embedded),
         'linked_uuids_object': join_linked_uuids_sids(request, linked_uuids_object),
         'links': links,
+        'max_sid': max_sid,
         'object': object_view,
         'paths': sorted(paths),
         'principals_allowed': principals_allowed,

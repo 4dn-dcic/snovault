@@ -15,6 +15,7 @@ from snovault import set_logging
 from snovault.storage import register_storage
 import transaction
 import signal
+import time
 from .indexer import (
     INDEXER,
     Indexer,
@@ -84,14 +85,14 @@ def threadlocal_manager():
     request.root = app.root_factory(request)
     request._stats = getattr(request, "_stats", {})
 
-    # configure a sqlalchemy session and adjust isolation level
+    # configure a sqlalchemy session and set isolation level
     DBSession = orm.scoped_session(orm.sessionmaker(bind=db_engine))
     request.registry[DBSESSION] = DBSession
     register_storage(request.registry)
     zope.sqlalchemy.register(DBSession)
     snovault.storage.register(DBSession)  # adds transactions-table listeners
     connection = request.registry[DBSESSION]().connection()
-    connection.execute('SET TRANSACTION ISOLATION LEVEL READ COMMITTED READ ONLY')
+    connection.execute('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY')
 
     # add the newly created request to the pyramid threadlocal manager
     manager.push({'request': request, 'registry': registry})
@@ -134,7 +135,6 @@ def queue_update_helper():
 
 
 def queue_error_callback(cb_args, counter, errors):
-    print('\n\n... CALLBACK ...\n\n')
     local_errors, local_counter = cb_args
     if counter:
         counter[0] = local_counter[0] + counter[0]
@@ -147,11 +147,9 @@ class MPIndexer(Indexer):
     def __init__(self, registry, processes=None):
         super(MPIndexer, self).__init__(registry)
         self.chunksize = int(registry.settings.get('indexer.chunk_size', 1024))
-        # self.processes = processes
-        self.processes = 1
+        self.processes = processes
         self.initargs = (registry[APP_FACTORY], registry.settings,)
         # workers in the pool will be replaced after finishing one task
-        # to free memory
         self.maxtasks = 1
 
     def init_pool(self):
@@ -173,39 +171,65 @@ class MPIndexer(Indexer):
         queue for indexing (see indexer.py).
         Close the pool at the end of the function and return list of errors.
         """
+        t0 = time.time()
         pool = self.init_pool()
         sync_uuids = request.json.get('uuids', None)
         workers = pool._processes if self.processes is None else self.processes
         # ensure workers != 0
-        # workers = 1 if workers == 0 else workers
-        workers = 100
+        workers = 1 if workers == 0 else workers
         errors = []
-        try:
-            if sync_uuids:
-                # determine how many uuids should be used for each process
-                chunkiness = int((len(sync_uuids) - 1) / workers) + 1
-                if chunkiness > self.chunksize:
-                    chunkiness = self.chunksize
-                # imap_unordered to hopefully shuffle item types and come up with
-                # a more or less equal workload for each process
-                for error in pool.imap_unordered(sync_update_helper, sync_uuids, chunkiness):
-                    if error is not None:
-                        errors.append(error)
-                    elif counter:  # don't increment counter on an error
-                        counter[0] += 1
-                    if counter[0] % 10 == 0:
-                        log.info('Indexing %d (sync)', counter[0])
-            else:
-                # use partial here so the callback can use counter and errors
-                callback_w_errors = partial(queue_error_callback, counter=counter, errors=errors)
-                for i in range(workers):
-                    pool.apply_async(queue_update_helper, callback=callback_w_errors)
-        except Exception as exc:
-            # on exception, terminate workers immediately before joining
-            log.error("MPIndexer.update_objects Exception, terminating. Detail: %s" % repr(exc))
-            pool.terminate()
+
+        # use sync_uuids with imap_unordered for synchronous indexing OR
+        # apply_async for asynchronous indexing
+        if sync_uuids:
+            # determine how many uuids should be used for each process
+            chunkiness = int((len(sync_uuids) - 1) / workers) + 1
+            if chunkiness > self.chunksize:
+                chunkiness = self.chunksize
+            # imap_unordered to hopefully shuffle item types and come up with
+            # a more or less equal workload for each process
+            for error in pool.imap_unordered(sync_update_helper, sync_uuids, chunkiness):
+                if error is not None:
+                    errors.append(error)
+                elif counter:  # don't increment counter on an error
+                    counter[0] += 1
+                if counter[0] % 10 == 0:
+                    log.info('Indexing %d (sync)', counter[0])
         else:
-            # standard usage, will let workers finish before joining
-            pool.close()
+            # use partial here so the callback can use counter and errors
+            callback_w_errors = partial(queue_error_callback, counter=counter, errors=errors)
+            # hold AsyncResult objects returned by apply_async
+            async_results = []
+            # last_count used to track if there is "more" work to do
+            last_count = 0
+
+            # create the initial workers (same as number of processes in pool)
+            for i in range(workers):
+                res = pool.apply_async(queue_update_helper, callback=callback_w_errors)
+                async_results.append(res)
+
+            # check worker statuses
+            # add more workers if any are finished and indexing is ongoing
+            while True:
+                results_to_add = []
+                idxs_to_rm = []
+                for idx, res in enumerate(async_results):
+                    if res.ready():
+                        idxs_to_rm.append(idx)
+                        # stop adding workers once counter has stopped
+                        if counter and counter[0] > last_count:
+                            last_count = counter[0]
+                            res = pool.apply_async(queue_update_helper, callback=callback_w_errors)
+                            results_to_add.append(res)
+
+                for idx in sorted(idxs_to_rm, reverse=True):
+                    del async_results[idx]
+                async_results.extend(results_to_add)
+
+                if len(async_results) == 0:
+                    break
+                time.sleep(0.5)
+
+        pool.close()
         pool.join()
         return errors

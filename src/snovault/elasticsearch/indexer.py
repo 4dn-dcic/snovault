@@ -123,10 +123,9 @@ class Indexer(object):
         """
         Top level update routing
         """
-        # ensure we get the latest version of what is in the db as much as possible
         session = request.registry[DBSESSION]()
         connection = session.connection()
-        connection.execute('SET TRANSACTION ISOLATION LEVEL READ COMMITTED READ ONLY')
+        connection.execute('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY')
 
         # indexing is either run with sync uuids passed through the request
         # (which is synchronous) OR uuids from the queue
@@ -139,24 +138,16 @@ class Indexer(object):
             errors = self.update_objects_queue(request, counter)
 
 
-    def get_messages_from_queue(self, skip_deferred=False):
+    def get_messages_from_queue(self):
         """
         Simple helper method. Attempt to get items from deferred queue first,
         and if none are found, check primary and then secondary queues. Both use
         long polling. Returns list of messages received and the string target
         the the queue came from.
-        If skip_deferred, don't check that queue.
         """
-        try_order = ['primary', 'secondary'] if skip_deferred else ['deferred', 'primary', 'secondary']
         messages = None
         target_queue = None
-        for try_queue in try_order:
-            # SPECIAL CASE: if we are looking at secondary but have items in
-            # deferred, exit so that we can get a new transaction
-            if skip_deferred and try_queue == 'secondary':
-                deferred_waiting = self.queue.number_of_messages().get('deferred_waiting')
-                if deferred_waiting and deferred_waiting > 0:
-                    break
+        for try_queue in self.queue.queue_targets:
             messages = self.queue.receive_messages(target_queue=try_queue)
             if messages:
                 target_queue = try_queue
@@ -164,7 +155,8 @@ class Indexer(object):
         return messages, target_queue
 
 
-    def find_and_queue_secondary_items(self, source_uuids, rev_linked_uuids, telemetry_id=None):
+    def find_and_queue_secondary_items(self, source_uuids, rev_linked_uuids,
+                                       sid=None, telemetry_id=None):
         """
         Find all associated uuids of the given set of  non-strict uuids using ES
         and queue them in the secondary queue. Associated uuids include uuids
@@ -181,37 +173,33 @@ class Indexer(object):
         secondary_uuids = list(associated_uuids - source_uuids)
         # items queued through this function are ALWAYS strict in secondary queue
         return self.queue.add_uuids(self.registry, secondary_uuids, strict=True,
-                                    target_queue='secondary', telemetry_id=telemetry_id)
+                                    target_queue='secondary', sid=sid,
+                                    telemetry_id=telemetry_id)
 
 
     def update_objects_queue(self, request, counter):
         """
         Used with the queue
         """
-        print('++++++++++++++++++++++++++++++++++++++++++++++\n')
         errors = []
         # hold uuids that will be used to find secondary uuids
         non_strict_uuids = set()
         # hold the reverse-linked uuids that need to be invalidated
         rev_linked_uuids = set()
         to_delete = []  # hold messages that will be deleted
-        deferred = False  # if true, we need to restart the transaction
-        # only check deferred queue on the first run, since there shouldn't
-        # be much in there at any given point
-        messages, target_queue = self.get_messages_from_queue(skip_deferred=False)
+        to_defer = []  # hold messages once we need to restart the worker
+        deferred = False  # if true, we need to restart the worker
+        messages, target_queue = self.get_messages_from_queue()
         while len(messages) > 0:
-            print('+++++ RECEIVED %s from %s' % (len(messages), target_queue))
             for idx, msg in enumerate(messages):
-                # get all the details
                 msg_body = json.loads(msg['Body'])
-                print('>>> %s\n' % msg_body)
 
-                # send the message back and delete so that dlq count is unaffected
+                # handle case where worker needs to restart
+                # recycle additional messages (no effect on dlq count) and
+                # delete old messages
                 if deferred:
-                    print('\n\nDEFERRED SKIP\n\n')
-                    self.queue.send_messages([msg_body], target_queue=target_queue)
+                    to_defer.append(msg_body)
                     to_delete.append(msg)
-                    # delete messages when we have the right number
                     if len(to_delete) == self.queue.delete_batch_size:
                         self.queue.delete_messages(to_delete, target_queue=target_queue)
                         to_delete = []
@@ -223,39 +211,21 @@ class Indexer(object):
                 msg_detail = msg_body.get('detail')
                 msg_telemetry = msg_body.get('telemetry_id')
 
-
-                # # check to see if we are using the same txn that caused a deferral
-                # if target_queue == 'deferred' and msg_detail == str(request.tm.get()):
-                #     # re-create a new message so we don't affect retry count (dlq)
-                #     self.queue.send_messages([msg_body], target_queue=target_queue)
-                #     to_delete.append(msg)
-                #     continue
-
-
                 # build the object and index into ES
-                # if strict==True, do not add uuids rev_linking to item to queue
+                # if strict, do not add uuids rev_linking to item to queue
                 if msg_body['strict'] is True:
                     error = self.update_object(request, msg_uuid, None,
                                                sid=msg_sid, curr_time=msg_curr_time,
-                                               target_queue=target_queue,
                                                telemetry_id=msg_telemetry)
                 else:
                     error = self.update_object(request, msg_uuid, rev_linked_uuids,
                                                sid=msg_sid, curr_time=msg_curr_time,
-                                               target_queue=target_queue,
                                                telemetry_id=msg_telemetry)
                 if error:
-                    if error.get('error_message') == 'deferred_retry':
-                        self.queue.send_messages([msg_body], target_queue=target_queue)
+                    if error.get('error_message') == 'defer_restart':
+                        to_defer.append(msg_body)
                         to_delete.append(msg)
                         deferred = True
-
-                        # OLD APPROACH
-                        # # send this to the deferred queue
-                        # msg_body['detail'] = error['txn_str']
-                        # self.queue.send_messages([msg_body], target_queue='deferred')
-                        # # delete the old message
-                        # to_delete.append(msg)
                     else:
                         # on a regular error, replace the message back in the queue
                         # could do something with error, like putting on elasticache
@@ -277,10 +247,10 @@ class Indexer(object):
             # add to secondary queue, if applicable
             # search for all items that linkTo the non-strict items or contain
             # a rev_link to to them
-            # reset uuid tracking (non_strict_uuids and rev_linked_uuids) after
             if non_strict_uuids or rev_linked_uuids:
                 queued, failed = self.find_and_queue_secondary_items(non_strict_uuids,
                                                                      rev_linked_uuids,
+                                                                     msg_sid,
                                                                      msg_telemetry)
                 if failed:
                     error_msg = 'Failure(s) queueing secondary uuids: %s' % str(failed)
@@ -291,12 +261,13 @@ class Indexer(object):
 
             # if we need to restart the worker, break out of while loop
             if deferred:
-                print('\n\nDEFERRED BREAK\n\n')
+                if to_defer:
+                    self.queue.send_messages(to_defer, target_queue=target_queue)
                 break
 
             # obtain more messages, possibly from a different queue
             prev_target_queue = target_queue
-            messages, target_queue = self.get_messages_from_queue(skip_deferred=True)
+            messages, target_queue = self.get_messages_from_queue()
             # if we have switched between primary and secondary queues, delete
             # outstanding messages using previous queue
             if prev_target_queue != target_queue and to_delete:
@@ -327,13 +298,11 @@ class Indexer(object):
 
 
     def update_object(self, request, uuid, add_to_secondary=None, sid=None,
-                      curr_time=None, target_queue=None, telemetry_id=None):
+                      curr_time=None, telemetry_id=None):
         """
         Actually index the uuid using the index-data view.
         add_to_secondary is a set that gets the rev_linked_to_me
         from the request.embed(/<uuid>/@@index-data)
-        target_queue is an optional string queue name:
-            'primary', 'secondary', or 'deferred'
         """
         # logging constant
         cat = 'index object'
@@ -353,10 +322,9 @@ class Indexer(object):
                 cm_source = True
 
         # check the sid with a less intensive view than @@index-data
+        index_data_query = '/%s/@@index-data' % uuid
         if sid:
-            index_data_query = '/%s/@@index-data?sid=%s' % (uuid, sid)
-        else:
-            index_data_query = '/%s/@@index-data' % uuid
+            index_data_query += '?sid=%s' % sid
 
         try:
             result = request.embed(index_data_query, as_user='INDEXER')
@@ -364,11 +332,10 @@ class Indexer(object):
             log.bind(collection=result.get('item_type'))
             # log.info("Time to embed", duration=duration, cat="embed object")
         except SidException as e:
-            print('\n\n=== DEFERRED ===\n\n')
             duration = timer() - start
-            log.warning('Invalid sid found', duration=duration, cat=cat)
-            # this will cause the item to be sent to the deferred queue
-            return {'error_message': 'deferred_retry'}
+            log.warning('Invalid max sid', duration=duration, cat=cat)
+            # this will cause the item to be deferred by restarting worker
+            return {'error_message': 'defer_restart'}
         except (MissingIndexItemException, KeyError) as e:
             # only consider a KeyError deferrable if not already in deferred queue
             duration = timer() - start
@@ -379,12 +346,13 @@ class Indexer(object):
                 return
             else:
                 log.info('KeyError', duration=duration, cat=cat)
-                # this will cause the item to be sent to the deferred queue
-                return {'error_message': 'deferred_retry'}
+                # this will cause the item to be deferred by restarting worker
+                return {'error_message': 'defer_restart'}
         except Exception as e:
             duration = timer() - start
             log.error('Error rendering @@index-data', duration=duration, exc_info=True, cat=cat)
             return {'error_message': repr(e), 'time': curr_time, 'uuid': str(uuid)}
+
         # add found uuids that rev_link this item to be put in the secondary queue
         # find_and_queue_secondary_items() serves to find rev_linking items that
         # are currently in ES; this will pick up new rev links as well
