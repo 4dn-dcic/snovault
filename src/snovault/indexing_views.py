@@ -87,13 +87,13 @@ def item_index_data(context, request):
     properties = context.upgrade_properties()
 
     # compare sid check to the max sid among all items
+    max_sid = context.max_sid
     sid_check = request.params.get('sid', None)
     if sid_check:
         try:
             sid_check = int(sid_check)
         except ValueError:
             raise ValueError('sid parameter must be an integer. Provided sid: %s' % sid)
-        max_sid = context.max_sid
         if max_sid < sid_check:
             raise SidException('sid from the query (%s) is greater than maximum sid (%s). Bailing.'
                                % (sid_check, max_sid))
@@ -167,6 +167,7 @@ def item_index_data(context, request):
         'linked_uuids_embedded': join_linked_uuids_sids(request, linked_uuids_embedded),
         'linked_uuids_object': join_linked_uuids_sids(request, linked_uuids_object),
         'links': links,
+        'max_sid': max_sid,
         'object': object_view,
         'paths': sorted(paths),
         'principals_allowed': principals_allowed,

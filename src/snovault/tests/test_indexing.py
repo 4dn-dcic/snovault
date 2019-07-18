@@ -138,7 +138,6 @@ def test_indexer_queue(app):
     assert indexer_queue.queue_url is not None
     assert indexer_queue.dlq_url is not None
     assert indexer_queue.second_queue_url is not None
-    assert indexer_queue.defer_queue_url is not None
     test_message = 'abc123'
     to_index, failed = indexer_queue.add_uuids(app.registry, [test_message], strict=True)
     assert to_index == [test_message]
@@ -171,12 +170,9 @@ def test_indexer_queue(app):
     assert tries_left > 0
 
 
-def test_queue_indexing_deferred(app, testapp):
-    # let's put some test messages to the secondary queue and a collection
-    # to the deferred queue. Posting will add uuid to the primary queue
-    # delete all messages afterwards
-    # also check telemetry_id and make sure it gets put on the queue
+def test_queue_indexing_telemetry_id(app, testapp):
     indexer_queue = app.registry[INDEXER_QUEUE]
+    assert set(indexer_queue.queue_targets) == {'primary', 'secondary'}
     indexer_queue.clear_queue()
     testapp.post_json(TEST_COLL + '?telemetry_id=test_telem', {'required': ''})
     time.sleep(2)
@@ -187,25 +183,18 @@ def test_queue_indexing_deferred(app, testapp):
     }
     testapp.post_json('/queue_indexing?telemetry_id=test_telem', secondary_body)
     time.sleep(2)
-    deferred_body = {
-        'uuids': ['abcdef'],
-        'strict': True,
-        'target_queue': 'deferred',
-    }
-    testapp.post_json('/queue_indexing?telemetry_id=test_telem', deferred_body)
     # make sure the queue eventually sorts itself out
     tries_left = 5
     while tries_left > 0:
         msg_count = indexer_queue.number_of_messages()
         if (msg_count['primary_waiting'] == 1 and
-            msg_count['secondary_waiting'] == 2 and
-            msg_count['deferred_waiting'] == 1):
+            msg_count['secondary_waiting'] == 2):
             break
         tries_left -= 0
         time.sleep(3)
     assert tries_left > 0
     # delete the messages
-    for target in ['primary', 'secondary', 'deferred']:
+    for target in indexer_queue.queue_targets:
         received = indexer_queue.receive_messages(target_queue=target)
         assert len(received) > 0
         for msg in received:
@@ -219,8 +208,7 @@ def test_queue_indexing_deferred(app, testapp):
     while tries_left > 0:
         msg_count = indexer_queue.number_of_messages()
         if (msg_count['primary_waiting'] == 0 and
-            msg_count['secondary_waiting'] == 0 and
-            msg_count['deferred_waiting'] == 0):
+            msg_count['secondary_waiting'] == 0):
             break
         tries_left -= 0
         time.sleep(3)
@@ -584,19 +572,18 @@ def test_queue_indexing_with_linked(app, testapp, indexer_testapp, dummy_request
 
 
 def test_indexing_invalid_sid(app, testapp, indexer_testapp):
-    """
-    For now, this test uses the deferred queue strategy
-    """
+    from snovault.indexing_views import SidException
     indexer_queue = app.registry[INDEXER_QUEUE]
     es = app.registry[ELASTIC_SEARCH]
-    # post an item, index, then find verion (sid)
+    # post an item, index, then find version (sid)
     res = testapp.post_json(TEST_COLL, {'required': ''})
     test_uuid = res.json['@graph'][0]['uuid']
     res = indexer_testapp.post_json('/index', {'record': True})
     assert res.json['indexing_count'] == 1
     time.sleep(4)
     es_item = es.get(index=TEST_TYPE, doc_type=TEST_TYPE, id=test_uuid)
-    inital_version = es_item['_version']
+    initial_version = es_item['_version']  # same as sid
+    assert es_item['_source']['max_sid'] == initial_version
 
     # now increment the version and check it
     res = testapp.patch_json(TEST_COLL + test_uuid, {'required': 'meh'})
@@ -604,29 +591,20 @@ def test_indexing_invalid_sid(app, testapp, indexer_testapp):
     assert res.json['indexing_count'] == 1
     time.sleep(4)
     es_item = es.get(index=TEST_TYPE, doc_type=TEST_TYPE, id=test_uuid)
-    assert es_item['_version'] == inital_version + 1
+    assert es_item['_version'] == initial_version + 1
+    assert es_item['_source']['max_sid'] == initial_version + 1
 
     # now try to manually bump an invalid version for the queued item
-    # expect it to be sent to the deferred queue.
-    to_queue = {
-        'uuid': test_uuid,
-        'sid': inital_version + 2,
-        'strict': True,
-        'timestamp': datetime.utcnow().isoformat()
-    }
-    indexer_queue.send_messages([to_queue], target_queue='primary')
-    res = indexer_testapp.post_json('/index', {'record': True})
-    time.sleep(4)
-    assert res.json['indexing_count'] == 0
-    received_deferred = indexer_queue.receive_messages(target_queue='deferred')
-    assert len(received_deferred) == 1
-    indexer_queue.delete_messages(received_deferred, target_queue='deferred')
+    # check for SidException from indexing-views
+    index_query = '/%s/@@index-data?sid=%s' % (test_uuid, initial_version + 2)
+    with pytest.raises(SidException):
+        testapp.get(index_query)
 
 
 def test_indexing_invalid_sid_linked_items(app, testapp, indexer_testapp):
     """
-    Make sure that items sent to the deferred queue do not trigger indexing
-    of secondary items
+    Make sure that when an item is deferred due to invalid sid, it does not
+    add any items to the secondary queue
     """
     indexer_queue = app.registry[INDEXER_QUEUE]
     es = app.registry[ELASTIC_SEARCH]
@@ -648,18 +626,18 @@ def test_indexing_invalid_sid_linked_items(app, testapp, indexer_testapp):
     time.sleep(2)
     es_item = es.get(index='testing_link_target_sno', doc_type='testing_link_target_sno',
                      id=target1['uuid'])
-    inital_version = es_item['_version']
+    initial_version = es_item['_version']
 
     # now try to manually bump an invalid version for the queued item
-    # expect it to be sent to the deferred queue.
+    # expect it to be recycled to the primary queue and not cause any
+    # secondary indexing
     to_queue = {
         'uuid': target1['uuid'],
-        'sid': inital_version + 2,
+        'sid': initial_version + 2,
         'strict': False,
         'timestamp': datetime.utcnow().isoformat()
     }
     indexer_queue.send_messages([to_queue], target_queue='primary')
-    # make sure nothing is in secondary queue after calling /index
     received_secondary = indexer_queue.receive_messages(target_queue='secondary')
     assert len(received_secondary) == 0
     res = indexer_testapp.post_json('/index', {'record': True})
@@ -668,9 +646,10 @@ def test_indexing_invalid_sid_linked_items(app, testapp, indexer_testapp):
     # make sure nothing is in secondary queue after calling /index
     received_secondary = indexer_queue.receive_messages(target_queue='secondary')
     assert len(received_secondary) == 0
-    received_deferred = indexer_queue.receive_messages(target_queue='deferred')
+    # remove the message with invalid sid
+    received_deferred = indexer_queue.receive_messages(target_queue='primary')
     assert len(received_deferred) == 1
-    indexer_queue.delete_messages(received_deferred, target_queue='deferred')
+    indexer_queue.delete_messages(received_deferred, target_queue='primary')
 
 
 def test_queue_indexing_endpoint(app, testapp, indexer_testapp):
@@ -937,7 +916,7 @@ def test_indexing_esstorage(app, testapp, indexer_testapp):
     indexer_queue = app.registry[INDEXER_QUEUE]
     es = app.registry[ELASTIC_SEARCH]
     esstorage = app.registry[STORAGE].read
-    # post an item, index, then find verion (sid)
+    # post an item, index, then find version (sid)
     res = testapp.post_json(TEST_COLL, {'required': 'some_value'})
     test_uuid = res.json['@graph'][0]['uuid']
     res = indexer_testapp.post_json('/index', {'record': True})

@@ -387,6 +387,10 @@ def es_mapping(mapping, agg_items_mapping):
                 'type': 'keyword',
                 'include_in_all': False,
             },
+            'max_sid': {
+                'type': 'keyword',
+                'include_in_all': False,
+            },
             'item_type': {
                 'type': 'keyword',
             },

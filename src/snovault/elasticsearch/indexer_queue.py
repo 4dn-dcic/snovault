@@ -176,8 +176,7 @@ class QueueManager(object):
         # short names for queues
         self.queue_targets = {
             'primary': self.queue_url,
-            'secondary': self.second_queue_url,
-            'dlq': self.dlq_url
+            'secondary': self.second_queue_url
         }
 
     def add_uuids(self, registry, uuids, strict=False, target_queue='primary',

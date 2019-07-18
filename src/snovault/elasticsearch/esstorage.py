@@ -83,6 +83,10 @@ class CachedModel(object):
     def sid(self):
         return self.source['sid']
 
+    @property
+    def max_sid(self):
+        return self.source['max_sid']
+
     def used_for(self, item):
         alsoProvides(item, ICachedItem)
 
