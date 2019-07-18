@@ -208,7 +208,8 @@ class MPIndexer(Indexer):
                 res = pool.apply_async(queue_update_helper, callback=callback_w_errors)
                 async_results.append(res)
 
-            # pool worker results and add more workers if indexing is ongoing
+            # check worker statuses
+            # add more workers if any are finished and indexing is ongoing
             while True:
                 results_to_add = []
                 idxs_to_rm = []
@@ -221,7 +222,6 @@ class MPIndexer(Indexer):
                             res = pool.apply_async(queue_update_helper, callback=callback_w_errors)
                             results_to_add.append(res)
 
-                # update async_results with removed and added results
                 for idx in sorted(idxs_to_rm, reverse=True):
                     del async_results[idx]
                 async_results.extend(results_to_add)
