@@ -284,7 +284,7 @@ class ElasticSearchStorage(object):
 
     def get_sids_by_uuids(self, rids):
         """
-        Currently not implemented. Just return an empty dict
+        Currently not implemented for ES. Just return an empty dict
 
         Args:
             rids (list): list of string rids (uuids)
@@ -293,6 +293,12 @@ class ElasticSearchStorage(object):
             dict keyed by rid with integer sid values
         """
         return {}
+
+    def get_max_sid(self):
+        """
+        Currently not implemented for ES. Just return None
+        """
+        return None
 
     def purge_uuid(self, rid, item_type=None, registry=None):
         """

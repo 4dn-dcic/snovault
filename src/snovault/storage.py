@@ -172,6 +172,20 @@ class RDBStorage(object):
         data = {str(res.rid): res.sid for res in results if res.name == ''}
         return data
 
+    def get_max_sid(self):
+        """
+        Return the current max sid from the `current_propsheet` table.
+        Not specific to a given uuid (i.e. rid)
+
+        Returns:
+            int: maximum sid found
+        """
+        session = self.DBSession()
+        # first element of the first result or None if no rows present.
+        # If multiple rows are returned, raises MultipleResultsFound.
+        data = session.query(func.max(CurrentPropertySheet.sid)).scalar()
+        return data
+
     def __iter__(self, *item_types):
         session = self.DBSession()
         query = session.query(Resource.rid)
@@ -481,8 +495,7 @@ class CurrentPropertySheet(Base):
     rid = Column(UUID, ForeignKey('resources.rid'),
                  nullable=False, primary_key=True)
     name = Column(types.String, nullable=False, primary_key=True)
-    sid = Column(types.Integer,
-                 ForeignKey('propsheets.sid'), nullable=False)
+    sid = Column(types.Integer, ForeignKey('propsheets.sid'), nullable=False)
     propsheet = orm.relationship(
         'PropertySheet', lazy='joined', innerjoin=True,
         primaryjoin="CurrentPropertySheet.sid==PropertySheet.sid",
@@ -565,6 +578,11 @@ class Resource(Base):
         primary one (with '' key)
         """
         return self.data[''].sid
+
+    @property
+    def max_sid(self):
+        # data = session.query(func.max(CurrentPropertySheet.sid)).scalar()
+        return _DBSESSION.query(func.max(CurrentPropertySheet.sid)).scalar()
 
     def used_for(self, item):
         pass

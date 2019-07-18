@@ -15,6 +15,7 @@ from snovault import set_logging
 from snovault.storage import register_storage
 import transaction
 import signal
+import time
 from .indexer import (
     INDEXER,
     Indexer,
@@ -84,14 +85,14 @@ def threadlocal_manager():
     request.root = app.root_factory(request)
     request._stats = getattr(request, "_stats", {})
 
-    # configure a sqlalchemy session and adjust isolation level
+    # configure a sqlalchemy session and set isolation level
     DBSession = orm.scoped_session(orm.sessionmaker(bind=db_engine))
     request.registry[DBSESSION] = DBSession
     register_storage(request.registry)
     zope.sqlalchemy.register(DBSession)
     snovault.storage.register(DBSession)  # adds transactions-table listeners
     connection = request.registry[DBSESSION]().connection()
-    connection.execute('SET TRANSACTION ISOLATION LEVEL READ COMMITTED READ ONLY')
+    connection.execute('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY')
 
     # add the newly created request to the pyramid threadlocal manager
     manager.push({'request': request, 'registry': registry})
@@ -149,7 +150,6 @@ class MPIndexer(Indexer):
         self.processes = processes
         self.initargs = (registry[APP_FACTORY], registry.settings,)
         # workers in the pool will be replaced after finishing one task
-        # to free memory
         self.maxtasks = 1
 
     def init_pool(self):
@@ -171,7 +171,6 @@ class MPIndexer(Indexer):
         queue for indexing (see indexer.py).
         Close the pool at the end of the function and return list of errors.
         """
-        import time
         t0 = time.time()
         pool = self.init_pool()
         sync_uuids = request.json.get('uuids', None)
@@ -203,12 +202,9 @@ class MPIndexer(Indexer):
             async_results = []
             # last_count used to track if there is "more" work to do
             last_count = 0
-            invoked = 0
 
             # create the initial workers (same as number of processes in pool)
             for i in range(workers):
-                invoked += 1
-                print('\n==== INITIAL APPLY %s ====' % invoked)
                 res = pool.apply_async(queue_update_helper, callback=callback_w_errors)
                 async_results.append(res)
 
@@ -218,13 +214,10 @@ class MPIndexer(Indexer):
                 idxs_to_rm = []
                 for idx, res in enumerate(async_results):
                     if res.ready():
-                        print('\n### READY')
                         idxs_to_rm.append(idx)
                         # stop adding workers once counter has stopped
                         if counter and counter[0] > last_count:
                             last_count = counter[0]
-                            invoked += 1
-                            print('\n==== EXTRA APPLY %s ====' % invoked)
                             res = pool.apply_async(queue_update_helper, callback=callback_w_errors)
                             results_to_add.append(res)
 
@@ -234,13 +227,9 @@ class MPIndexer(Indexer):
                 async_results.extend(results_to_add)
 
                 if len(async_results) == 0:
-                    print('\n### BREAK')
                     break
+                time.sleep(0.5)
 
-        print('\n### CLOSING')
         pool.close()
-        print('\n### JOINING')
         pool.join()
-        print('\n### DONE. Invoked: %s. Counter: %s. Elapsed: %s\n'
-              % (invoked, counter, time.time() -t0))
         return errors
