@@ -62,7 +62,7 @@ def index(request):
             indexing_content['initial_queue_status'] = indexer.queue.number_of_messages()
         indexing_record['indexing_content'] = indexing_content
         indexing_record['indexing_started'] = index_start_str
-        indexing_counter = [0]  # do this so I can pass it as a reference
+        indexing_counter = [0, {}]  # do this so I can pass it as a reference
         # actually index
         # try to ensure ES is reasonably up to date
         es.indices.refresh(index='_all')
@@ -237,6 +237,15 @@ class Indexer(object):
                     if msg_body['strict'] is False:
                         non_strict_uuids.add(msg_uuid)
                     if counter: counter[0] += 1  # do not increment on error
+
+                    if counter and msg_uuid not in counter[1]:
+                        counter[1][msg_uuid] = {'strict': 0, 'non-strict': 0}
+                    if counter:
+                        if msg_body['strict'] is True:
+                            counter[1][msg_uuid]['strict'] += 1
+                        else:
+                            counter[1][msg_uuid]['non-strict'] += 1
+
                     to_delete.append(msg)
 
                 # delete messages when we have the right number

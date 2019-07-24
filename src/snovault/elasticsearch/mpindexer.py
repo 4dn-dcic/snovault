@@ -171,7 +171,6 @@ class MPIndexer(Indexer):
         queue for indexing (see indexer.py).
         Close the pool at the end of the function and return list of errors.
         """
-        t0 = time.time()
         pool = self.init_pool()
         sync_uuids = request.json.get('uuids', None)
         workers = pool._processes if self.processes is None else self.processes
