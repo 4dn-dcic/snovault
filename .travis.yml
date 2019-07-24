@@ -12,7 +12,7 @@ addons:
     config:
       retries: true
     packages:
-    - oracle-java9-set-default
+    - oracle-java8-set-default
     - bsdtar
     - build-essential
     - make
