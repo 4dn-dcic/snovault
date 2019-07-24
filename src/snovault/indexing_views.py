@@ -226,5 +226,6 @@ def indexing_info(request):
         response['description'] = 'Using live results for embedded view of %s. Query with run=False to skip this.' % uuid
     else:
         response['description'] = 'Query with run=True to calculate live information on invalidation and embedding time.'
-    response['status'] = 'success'
+    response['display_title'] = 'Indexing Info for %s' % uuid
+    response['status'] = 'Success'
     return response

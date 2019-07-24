@@ -104,6 +104,7 @@ def indexing_status(request):
     else:
         for queue in numbers:
             response[queue] = numbers[queue]
+        response['display_title'] = 'Indexing Status'
         response['status'] = 'Success'
     return response
 
