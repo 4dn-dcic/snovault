@@ -287,19 +287,27 @@ def test_indexing_simple(app, testapp, indexer_testapp):
 
 def test_indexing_logging(app, testapp, indexer_testapp, capfd):
     import logging
+    import structlog
     from dcicutils.log_utils import calculate_log_index, set_logging
+    es = app.registry[ELASTIC_SEARCH]
     set_logging(es_server=app.registry.settings.get('elasticsearch.server'),
-                in_prod=True, level=logging.INFO)
+                in_prod=True, level=logging.INFO, log_name='snovault')
+
+    # initial test
+    logger = structlog.get_logger('snovault')
+    logger.info('testing testing')
     log_index_name = calculate_log_index()
+    exists = check_if_index_exists(es, log_index_name)
+    assert exists
+
+    # index an item and make sure logging to stdout occurs
     post_res = testapp.post_json(TEST_COLL, {'required': ''})
     post_uuid = post_res.json['@graph'][0]['uuid']
     res = indexer_testapp.post_json('/index', {'record': True})
     assert res.json['indexing_count'] == 1
     assert res.json['indexing_status'] == 'finished'
     check_logs = capfd.readouterr()[-1].split('\n')
-    # find records of /index log and specific update_object() log
     item_idx_record = None
-    index_call_record = None
     for record in check_logs:
         if not record:
             continue
@@ -308,33 +316,26 @@ def test_indexing_logging(app, testapp, indexer_testapp, capfd):
             continue
         if proc_record.get('item_uuid') == post_uuid:
             item_idx_record = proc_record
-        elif proc_record.get('url_path') == '/index':
-            index_call_record = proc_record
     assert item_idx_record is not None
-    assert index_call_record is not None
     assert item_idx_record['collection'] == TEST_TYPE
     assert 'uo_start_time' in item_idx_record
     assert isinstance(item_idx_record['sid'], int)
     assert 'log_uuid' in item_idx_record
     assert 'level' in item_idx_record
-    # actually check ES for the index call record
-    # this is because the specific item index is run from MPIndexer, which
-    # makes it hard to call `set_logging` for test purposes there
-    # TODO: when ES logging is in place, use item_idx_record for test below...\
-    assert 'log_uuid' in index_call_record
-    assert 'level' in index_call_record
-    log_uuid = index_call_record['log_uuid']
+    assert item_idx_record['url_path'] == '/index'
+
     # now get the log from ES
-    es = app.registry[ELASTIC_SEARCH]
+    log_uuid = item_idx_record['log_uuid']
     log_doc = es.get(index=log_index_name, doc_type='log', id=log_uuid)
     log_source = log_doc['_source']
+    assert log_source['item_uuid'] == post_uuid
     assert log_source['url_path'] == '/index'
     assert 'level' in log_source
+
     # remove the log index
     es.indices.delete(index=log_index_name)
     exists = check_if_index_exists(es, log_index_name)
     assert not exists
-
 
 
 def test_indexing_queue_records(app, testapp, indexer_testapp):
