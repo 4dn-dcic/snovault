@@ -39,7 +39,6 @@ from .indexer_utils import find_uuids_for_indexing, get_uuids_for_types
 import transaction
 import os
 import argparse
-from snovault import set_logging
 import logging
 from timeit import default_timer as timer
 
@@ -1134,6 +1133,7 @@ def run(app, collections=None, dry_run=False, check_first=False, skip_indexing=F
 
 
 def main():
+    from snovault import set_logging
     parser = argparse.ArgumentParser(
         description="Create Elasticsearch mapping", epilog=EPILOG,
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -1160,15 +1160,11 @@ def main():
 
     args = parser.parse_args()
 
-    #logging.basicConfig()
     app = get_app(args.config_uri, args.app_name)
 
-
     # Loading app will have configured from config file. Reconfigure here:
-    set_logging(app.registry.settings.get('elasticsearch.server'),
-                app.registry.settings.get('production'), level=logging.INFO)
-    #global log
-    #log = structlog.get_logger(__name__)
+    # Use `es_server=app.registry.settings.get('elasticsearch.server')` when ES logging is working
+    set_logging(in_prod=app.registry.settings.get('production'), level=logging.INFO)
 
     uuids = run(app, collections=args.item_type, dry_run=args.dry_run, check_first=args.check_first,
                 skip_indexing=args.skip_indexing, index_diff=args.index_diff, strict=args.strict,

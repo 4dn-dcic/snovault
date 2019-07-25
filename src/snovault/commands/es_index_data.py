@@ -23,6 +23,7 @@ def main():
     ''' Indexes app data loaded to elasticsearch '''
 
     import argparse
+    from snovault import set_logging
     parser = argparse.ArgumentParser(
         description="Index data in Elastic Search", epilog=EPILOG,
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -40,7 +41,9 @@ def main():
     app = get_app(args.config_uri, args.app_name, options)
 
     # Loading app will have configured from config file. Reconfigure here:
-    logging.getLogger('snovault').setLevel(logging.DEBUG)
+    # Use `es_server=app.registry.settings.get('elasticsearch.server')` when ES logging is working
+    set_logging(in_prod=app.registry.settings.get('production'), level=logging.INFO)
+
     return run(app, args.uuid)
 
 

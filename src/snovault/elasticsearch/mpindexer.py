@@ -57,8 +57,8 @@ def initializer(app_factory, settings):
     global db_engine
     db_engine = configure_engine(settings)
 
-    set_logging(app.registry.settings.get('elasticsearch.server'),
-                app.registry.settings.get('production'), level=logging.INFO)
+    # Use `es_server=app.registry.settings.get('elasticsearch.server')` when ES logging is working
+    set_logging(in_prod=app.registry.settings.get('production'))
     global log
     log = structlog.get_logger(__name__)
 

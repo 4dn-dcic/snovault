@@ -286,7 +286,8 @@ def test_indexing_simple(app, testapp, indexer_testapp):
 
 
 def test_indexing_logging(app, testapp, indexer_testapp, capfd):
-    from dcicutils.log_utils import calculate_log_index
+    from dcicutils.log_utils import calculate_log_index, set_logging
+    set_logging(settings.get('elasticsearch.server'), settings.get('production'))
     log_index_name = calculate_log_index()
     post_res = testapp.post_json(TEST_COLL, {'required': ''})
     post_uuid = post_res.json['@graph'][0]['uuid']
