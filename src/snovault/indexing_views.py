@@ -227,5 +227,5 @@ def indexing_info(request):
     else:
         response['description'] = 'Query with run=True to calculate live information on invalidation and embedding time.'
     response['display_title'] = 'Indexing Info for %s' % uuid
-    response['status'] = 'Success'
+    response['status'] = 'success'
     return response

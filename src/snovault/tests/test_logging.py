@@ -76,10 +76,7 @@ def test_logging_basic(testapp, external_tx, capfd):
         here, we configure the logs without the es_server to ensure that
         the rest of it works
         '''
-        from snovault import set_logging
-        set_logging(in_prod=True)
-
-        # somethign that generates logs
+        # something that generates logs
         # add a telemetry id and some log contents using a query string
         res = testapp.post_json(COLLECTION_URL + "?telemetry_id=test&log_action=action_test", item_with_uuid[0], status=201)
         # multiple logs emitted in this process, must find the one we want
