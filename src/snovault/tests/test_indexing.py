@@ -332,10 +332,11 @@ def test_indexing_logging(app, testapp, indexer_testapp, capfd):
     assert log_source['url_path'] == '/index'
     assert 'level' in log_source
 
-    # remove the log index
+    # remove the log index and reset logging
     es.indices.delete(index=log_index_name)
     exists = check_if_index_exists(es, log_index_name)
     assert not exists
+    set_logging(in_prod=True, level=logging.WARN, log_name='snovault')
 
 
 def test_indexing_queue_records(app, testapp, indexer_testapp):
