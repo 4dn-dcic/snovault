@@ -100,7 +100,7 @@ def json_from_path(path, default=None):
     return json.load(open(path))
 
 
-def configure_dbsession(config):
+def configure_dbsession(config, clear_data=False):
     """
     Create a sqlalchemy engine and a session that uses it, the latter of which
     is added to the registry. Handle some extra registration
@@ -109,6 +109,7 @@ def configure_dbsession(config):
     import zope.sqlalchemy
     from sqlalchemy import orm
     from snovault import DBSESSION
+    from snovault.storage import Base
 
     settings = config.registry.settings
     DBSession = settings.pop(DBSESSION, None)
@@ -117,8 +118,11 @@ def configure_dbsession(config):
     if DBSession is None and not settings.get('indexer_worker'):
         engine = configure_engine(settings)
 
+        # useful for test instances where we want to clear the data
+        if clear_data:
+            Base.metadata.drop_all(engine)
+
         if asbool(settings.get('create_tables', False)):
-            from snovault.storage import Base
             Base.metadata.create_all(engine)
 
         DBSession = orm.scoped_session(orm.sessionmaker(bind=engine))

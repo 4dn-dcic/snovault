@@ -74,8 +74,8 @@ def main(global_config, **local_config):
     settings = global_config
     settings.update(local_config)
 
-    # TODO: move to dcicutils
-    set_logging(settings.get('elasticsearch.server'), settings.get('production'))
+    set_logging(in_prod=settings.get('production'))
+    # set_logging(settings.get('elasticsearch.server'), settings.get('production'))
 
     # TODO - these need to be set for dummy app
     # settings['snovault.jsonld.namespaces'] = json_asset('snovault:schemas/namespaces.json')

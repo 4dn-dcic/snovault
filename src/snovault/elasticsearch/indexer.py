@@ -233,6 +233,7 @@ class Indexer(object):
                         self.queue.replace_messages([msg], target_queue=target_queue, vis_timeout=180)
                         errors.append(error)
                 else:
+                    # Sucessfully processed! (i.e. indexed or discarded conflict)
                     # if non-strict, adding will queue associated items to secondary
                     if msg_body['strict'] is False:
                         non_strict_uuids.add(msg_uuid)

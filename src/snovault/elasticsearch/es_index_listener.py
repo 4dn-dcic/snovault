@@ -202,6 +202,7 @@ def internal_app(configfile, app_name=None, username=None):
 
 def main():
     import argparse
+    from snovault import set_logging
     parser = argparse.ArgumentParser(
         description="Listen for changes from postgres and index in elasticsearch",
         epilog=EPILOG,
@@ -219,7 +220,7 @@ def main():
         help="Poll interval between notifications")
     parser.add_argument(
         '--path', default='/index',
-        help="Path of indexing view (currently only /index)")
+        help="Path of indexing view")
     parser.add_argument('config_uri', help="path to configfile")
     args = parser.parse_args()
 
@@ -232,14 +233,9 @@ def main():
     if args.verbose or args.dry_run:
         level = logging.DEBUG
 
-    set_logging(app.registry.settings.get('elasticsearch.server'),
-                app.registry.settings.get('production'), level=level)
-    #global log
-    #log = structlog.get_logger(__name__)
-
     # Loading app will have configured from config file. Reconfigure here:
-    #logging.getLogger('snovault').setLevel(logging.DEBUG)
-
+    # Use `es_server=app.registry.settings.get('elasticsearch.server')` when ES logging is working
+    set_logging(in_prod=app.registry.settings.get('production'), level=logging.INFO)
     return run(testapp, args.poll_interval, args.dry_run, args.path)
 
 

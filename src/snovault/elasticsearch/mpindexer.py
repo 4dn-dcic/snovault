@@ -57,8 +57,8 @@ def initializer(app_factory, settings):
     global db_engine
     db_engine = configure_engine(settings)
 
-    set_logging(app.registry.settings.get('elasticsearch.server'),
-                app.registry.settings.get('production'), level=logging.INFO)
+    # Use `es_server=app.registry.settings.get('elasticsearch.server')` when ES logging is working
+    set_logging(in_prod=app.registry.settings.get('production'))
     global log
     log = structlog.get_logger(__name__)
 
@@ -171,7 +171,6 @@ class MPIndexer(Indexer):
         queue for indexing (see indexer.py).
         Close the pool at the end of the function and return list of errors.
         """
-        t0 = time.time()
         pool = self.init_pool()
         sync_uuids = request.json.get('uuids', None)
         workers = pool._processes if self.processes is None else self.processes
