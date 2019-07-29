@@ -320,12 +320,12 @@ def test_check_only(content, testapp):
 def test_max_sid_view(content, testapp):
     res = testapp.get('/max-sid', status=200)
     assert res.json['status'] == 'success'
-    assert 'sid' in res.json
-    starting_sid = res.json['max-sid']
+    assert 'max_sid' in res.json
+    starting_sid = res.json['max_sid']
     # increment sid and make sure it is updated
     url = content['@id']
     testapp.patch_json(url, {}, status=200)
 
     res = testapp.get('/max-sid', status=200)
     assert res.json['status'] == 'success'
-    assert res.json['max-sid'] > starting_sid
+    assert res.json['max_sid'] > starting_sid
