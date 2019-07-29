@@ -17,6 +17,7 @@ from .elasticsearch.indexer_utils import find_uuids_for_indexing
 
 def includeme(config):
     config.add_route('indexing-info', '/indexing-info')
+    config.add_route('max-sid', '/max-sid')
     config.scan(__name__)
 
 
@@ -228,4 +229,26 @@ def indexing_info(request):
         response['description'] = 'Query with run=True to calculate live information on invalidation and embedding time.'
     response['display_title'] = 'Indexing Info for %s' % uuid
     response['status'] = 'success'
+    return response
+
+
+@view_config(route_name='max-sid', permission='index', request_method='GET')
+def max_sid(request):
+    """
+    Very simple endpoint to return the current maximum sid used in postgres.
+    Might make more sense to define this view in storage.py, but leave it here
+    with the other sid/indexing related code.
+
+    Args:
+        request: current Request object
+
+    Returns:
+        dict response
+    """
+    response = {'display_title': 'Current maximum database sid'}
+    try:
+        max_sid = request.registry[STORAGE].write.get_max_sid()
+        response.update({'status': 'success', 'max_sid': max_sid})
+    except Exception as exc:
+        response.update({'status': 'failure', 'detail': str(exc)})
     return response
