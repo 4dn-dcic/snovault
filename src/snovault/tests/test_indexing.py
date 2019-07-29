@@ -286,19 +286,26 @@ def test_indexing_simple(app, testapp, indexer_testapp):
 
 
 def test_indexing_logging(app, testapp, indexer_testapp, capfd):
-    import logging
-    import structlog
-    from dcicutils.log_utils import calculate_log_index, set_logging
-    es = app.registry[ELASTIC_SEARCH]
-    set_logging(es_server=app.registry.settings.get('elasticsearch.server'),
-                in_prod=True, level=logging.INFO, log_name='snovault')
-
-    # initial test
-    logger = structlog.get_logger('snovault')
-    logger.info('testing testing')
-    log_index_name = calculate_log_index()
-    exists = check_if_index_exists(es, log_index_name)
-    assert exists
+    """
+    This test is meant to do 2 things.
+    - Test correct logging contents to stdout/stderr using capfd fixture
+    - Test that logs are correctly shipped to Elasticsearch when `es_server`
+      setting (along with `in_prod=True`) and used in set_logging
+    HOWEVER, logging cannot be reset to NOT use ES (which is what is currently
+    desired), so for the time being, the second part of the test is disabled
+    """
+    ### PART OF ES LOGGING TEST (DISABLED)
+    # import logging
+    # import structlog
+    # from dcicutils.log_utils import calculate_log_index, set_logging
+    # es = app.registry[ELASTIC_SEARCH]
+    # set_logging(es_server=app.registry.settings.get('elasticsearch.server'),
+    #             in_prod=True, level=logging.INFO, log_name='snovault')
+    # logger = structlog.get_logger('snovault')
+    # logger.info('testing testing')
+    # log_index_name = calculate_log_index()
+    # exists = check_if_index_exists(es, log_index_name)
+    # assert exists
 
     # index an item and make sure logging to stdout occurs
     post_res = testapp.post_json(TEST_COLL, {'required': ''})
@@ -324,20 +331,19 @@ def test_indexing_logging(app, testapp, indexer_testapp, capfd):
     assert 'level' in item_idx_record
     assert item_idx_record['url_path'] == '/index'
 
-    # now get the log from ES
-    log_uuid = item_idx_record['log_uuid']
-    log_doc = es.get(index=log_index_name, doc_type='log', id=log_uuid)
-    log_source = log_doc['_source']
-    assert log_source['item_uuid'] == post_uuid
-    assert log_source['url_path'] == '/index'
-    assert 'level' in log_source
-
-    # remove the log index and reset logging
-    es.indices.delete(index=log_index_name)
-    exists = check_if_index_exists(es, log_index_name)
-    assert not exists
-    structlog.reset_defaults()  # must call this
-    set_logging(es_server=None, in_prod=True, level=logging.WARN, log_name='snovault')
+    ### PART OF ES LOGGING TEST (DISABLED)
+    # # now get the log from ES
+    # log_uuid = item_idx_record['log_uuid']
+    # log_doc = es.get(index=log_index_name, doc_type='log', id=log_uuid)
+    # log_source = log_doc['_source']
+    # assert log_source['item_uuid'] == post_uuid
+    # assert log_source['url_path'] == '/index'
+    # assert 'level' in log_source
+    #
+    # # remove the log index and reset logging
+    # es.indices.delete(index=log_index_name)
+    # exists = check_if_index_exists(es, log_index_name)
+    # assert not exists
 
 
 def test_indexing_queue_records(app, testapp, indexer_testapp):
