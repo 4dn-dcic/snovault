@@ -12,9 +12,6 @@ elasticsearch.aws_auth = true
 [composite:indexer]
 use = config:base.ini#indexer
 
-[composite:fileindexer]
-use = config:base.ini#fileindexer
-
 [pipeline:main]
 pipeline =
     config:base.ini#memlimit

@@ -1,3 +1,4 @@
+dist: trusty
 language: python
 sudo: true
 cache:
@@ -9,8 +10,6 @@ cache:
   - node_modules
 addons:
   apt:
-    config:
-      retries: true
     packages:
     - oracle-java9-set-default
     - bsdtar

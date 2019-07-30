@@ -1,5 +1,4 @@
 import elasticsearch.exceptions
-from snovault.util import get_root_request
 from elasticsearch.helpers import scan
 from elasticsearch_dsl import Search, Q
 from pyramid.threadlocal import get_current_request
@@ -82,6 +81,10 @@ class CachedModel(object):
     @property
     def sid(self):
         return self.source['sid']
+
+    @property
+    def max_sid(self):
+        return self.source['max_sid']
 
     def used_for(self, item):
         alsoProvides(item, ICachedItem)
@@ -284,7 +287,7 @@ class ElasticSearchStorage(object):
 
     def get_sids_by_uuids(self, rids):
         """
-        Currently not implemented. Just return an empty dict
+        Currently not implemented for ES. Just return an empty dict
 
         Args:
             rids (list): list of string rids (uuids)
@@ -293,6 +296,12 @@ class ElasticSearchStorage(object):
             dict keyed by rid with integer sid values
         """
         return {}
+
+    def get_max_sid(self):
+        """
+        Currently not implemented for ES. Just return None
+        """
+        return None
 
     def purge_uuid(self, rid, item_type=None, registry=None):
         """

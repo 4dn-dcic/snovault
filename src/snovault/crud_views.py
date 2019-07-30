@@ -236,6 +236,7 @@ def get_linking_items(context, request, render=None):
     result = {
         'status': 'success',
         '@type': ['result'],
+        'display_title': 'Links to %s' % item_uuid,
         'notification' : '%s has %s items linking to it. This may include rev_links if status != deleted' % (item_uuid, len(links)),
         'uuids_linking_to': links
     }

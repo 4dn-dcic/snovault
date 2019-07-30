@@ -285,6 +285,10 @@ class Item(Resource):
     def sid(self):
         return self.model.sid
 
+    @property
+    def max_sid(self):
+        return self.model.max_sid
+
     def links(self, properties):
         return {
             path: set(simple_path_ids(properties, path))

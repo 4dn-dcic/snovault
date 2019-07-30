@@ -17,6 +17,7 @@ from .elasticsearch.indexer_utils import find_uuids_for_indexing
 
 def includeme(config):
     config.add_route('indexing-info', '/indexing-info')
+    config.add_route('max-sid', '/max-sid')
     config.scan(__name__)
 
 
@@ -67,8 +68,9 @@ def item_index_data(context, request):
     """
     Very important view which is used to calculate all the data indexed in ES
     for the given item. If an int sid is provided as a request parameter,
-    will raise an sid exception if the current item context is behind the
-    given sid.
+    will raise an sid exception if the maximum sid value on current_propsheets
+    table is less than the given value.
+
     Computationally intensive. Calculates the object and embedded views
     for the given item, using ES results where possible for speed. Also handles
     calculation of aggregated-items and validation-errors for the item.
@@ -85,15 +87,17 @@ def item_index_data(context, request):
     # upgrade_properties calls necessary upgraders based on schema_version
     properties = context.upgrade_properties()
 
-    # if we want to check an sid, it should be set as a query param
+    # compare sid check to the max sid among all items
+    max_sid = context.max_sid
     sid_check = request.params.get('sid', None)
     if sid_check:
         try:
             sid_check = int(sid_check)
         except ValueError:
             raise ValueError('sid parameter must be an integer. Provided sid: %s' % sid)
-        if context.sid < sid_check:
-            raise SidException('sid from the query (%s) is greater than that on context (%s). Bailing.' % (sid_check, context.sid))
+        if max_sid < sid_check:
+            raise SidException('sid from the query (%s) is greater than maximum sid (%s). Bailing.'
+                               % (sid_check, max_sid))
 
     # ES versions 2 and up don't allow dots in links. Update these to use ~s
     new_links = {}
@@ -164,6 +168,7 @@ def item_index_data(context, request):
         'linked_uuids_embedded': join_linked_uuids_sids(request, linked_uuids_embedded),
         'linked_uuids_object': join_linked_uuids_sids(request, linked_uuids_object),
         'links': links,
+        'max_sid': max_sid,
         'object': object_view,
         'paths': sorted(paths),
         'principals_allowed': principals_allowed,
@@ -222,5 +227,28 @@ def indexing_info(request):
         response['description'] = 'Using live results for embedded view of %s. Query with run=False to skip this.' % uuid
     else:
         response['description'] = 'Query with run=True to calculate live information on invalidation and embedding time.'
+    response['display_title'] = 'Indexing Info for %s' % uuid
     response['status'] = 'success'
+    return response
+
+
+@view_config(route_name='max-sid', permission='index', request_method='GET')
+def max_sid(request):
+    """
+    Very simple endpoint to return the current maximum sid used in postgres.
+    Might make more sense to define this view in storage.py, but leave it here
+    with the other sid/indexing related code.
+
+    Args:
+        request: current Request object
+
+    Returns:
+        dict response
+    """
+    response = {'display_title': 'Current maximum database sid'}
+    try:
+        max_sid = request.registry[STORAGE].write.get_max_sid()
+        response.update({'status': 'success', 'max_sid': max_sid})
+    except Exception as exc:
+        response.update({'status': 'failure', 'detail': str(exc)})
     return response

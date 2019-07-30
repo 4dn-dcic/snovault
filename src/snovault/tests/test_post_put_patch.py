@@ -315,3 +315,17 @@ def test_check_only(content, testapp):
     del_error = res.json['errors'][1]
     assert del_error['name'] == 'delete_fields'
     assert del_error['description'] == 'Error deleting fields'
+
+
+def test_max_sid_view(content, testapp):
+    res = testapp.get('/max-sid', status=200)
+    assert res.json['status'] == 'success'
+    assert 'max_sid' in res.json
+    starting_sid = res.json['max_sid']
+    # increment sid and make sure it is updated
+    url = content['@id']
+    testapp.patch_json(url, {}, status=200)
+
+    res = testapp.get('/max-sid', status=200)
+    assert res.json['status'] == 'success'
+    assert res.json['max_sid'] > starting_sid
