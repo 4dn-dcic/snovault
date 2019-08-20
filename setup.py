@@ -6,6 +6,9 @@ here = os.path.abspath(os.path.dirname(__file__))
 README = open(os.path.join(here, 'README.rst')).read()
 CHANGES = open(os.path.join(here, 'CHANGES.rst')).read()
 
+version_path = path.join(this_directory, "src/snovault/_version.py")
+this_version = io.open(version_path).readlines()[-1].split()[-1].strip("\"'")
+
 
 requires = [
     'Pillow',
@@ -64,7 +67,7 @@ tests_require = [
 
 setup(
     name='snovault',
-    version='1.2.1',
+    version=this_version,
     description='Snovault Hybrid Object Relational Database Framework',
     long_description=README + '\n\n' + CHANGES,
     packages=find_packages('src'),
