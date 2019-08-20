@@ -6,8 +6,8 @@ here = os.path.abspath(os.path.dirname(__file__))
 README = open(os.path.join(here, 'README.rst')).read()
 CHANGES = open(os.path.join(here, 'CHANGES.rst')).read()
 
-version_path = path.join(this_directory, "src/snovault/_version.py")
-this_version = io.open(version_path).readlines()[-1].split()[-1].strip("\"'")
+version_path = os.path.join(here, "src/snovault/_version.py")
+this_version = open(version_path).readlines()[-1].split()[-1].strip("\"'")
 
 
 requires = [
