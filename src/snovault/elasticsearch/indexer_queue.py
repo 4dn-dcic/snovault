@@ -70,12 +70,15 @@ def queue_indexing(request):
     target = request.json.get('target_queue', 'primary')
     if req_uuids:
         # queue these as secondary
-        queued, failed = queue_indexer.add_uuids(request.registry, req_uuids, strict=strict,
-                                                 target_queue=target, telemetry_id=telemetry_id)
+        queued, failed = queue_indexer.add_uuids(request.registry, req_uuids,
+                                                 strict=strict, target_queue=target,
+                                                 telemetry_id=telemetry_id)
         response['requested_uuids'] = req_uuids
     else:
         # queue these as secondary
-        queued, failed = queue_indexer.add_collections(request.registry, req_collections, strict=strict,
+        queued, failed = queue_indexer.add_collections(request.registry,
+                                                       req_collections,
+                                                       strict=strict,
                                                        target_queue=target,
                                                        telemetry_id=telemetry_id)
         response['requested_collections'] = req_collections
