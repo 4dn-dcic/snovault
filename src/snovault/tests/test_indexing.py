@@ -34,7 +34,7 @@ from snovault.elasticsearch.create_mapping import (
     confirm_mapping,
     compare_against_existing_mapping
 )
-from snovault.elasticsearch.indexing import (
+from snovault.elasticsearch.indexer import (
     check_sid,
     SidException
 )
