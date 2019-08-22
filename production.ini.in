@@ -6,7 +6,6 @@ file_upload_bucket = ${file_upload_bucket}
 blob_bucket = ${blob_bucket}
 blob_store_profile_name = encoded-files-upload
 accession_factory = ${accession_factory}
-indexer.processes = ${indexer_processes}
 elasticsearch.aws_auth = true
 
 [composite:indexer]

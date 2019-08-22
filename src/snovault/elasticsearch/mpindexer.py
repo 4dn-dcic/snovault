@@ -1,6 +1,9 @@
 from snovault import DBSESSION
 from contextlib import contextmanager
-from multiprocessing import get_context
+from multiprocessing import (
+    get_context,
+    cpu_count
+)
 from multiprocessing.pool import Pool
 from functools import partial
 from pyramid.request import apply_request_extensions
@@ -30,12 +33,7 @@ log = structlog.getLogger(__name__)
 def includeme(config):
     if config.registry.settings.get('indexer_worker'):
         return
-    processes = config.registry.settings.get('indexer.processes')
-    try:
-        processes = int(processes)
-    except:
-        processes = None
-    config.registry[INDEXER] = MPIndexer(config.registry, processes=processes)
+    config.registry[INDEXER] = MPIndexer(config.registry)
 
 
 ### Running in subprocess
@@ -144,10 +142,11 @@ def queue_error_callback(cb_args, counter, errors):
 ### Running in main process
 
 class MPIndexer(Indexer):
-    def __init__(self, registry, processes=None):
+    def __init__(self, registry):
         super(MPIndexer, self).__init__(registry)
         self.chunksize = int(registry.settings.get('indexer.chunk_size', 1024))
-        self.processes = processes
+        num_cpu = cpu_count()
+        self.processes = num_cpu - 1 if num_cpu > 1 else num_cpu
         self.initargs = (registry[APP_FACTORY], registry.settings,)
         # workers in the pool will be replaced after finishing one task
         self.maxtasks = 1
@@ -173,7 +172,7 @@ class MPIndexer(Indexer):
         """
         pool = self.init_pool()
         sync_uuids = request.json.get('uuids', None)
-        workers = pool._processes if self.processes is None else self.processes
+        workers = self.processes
         # ensure workers != 0
         workers = 1 if workers == 0 else workers
         errors = []
