@@ -12,6 +12,7 @@ from pyramid.view import view_config
 from pyramid.decorator import reify
 from .interfaces import INDEXER_QUEUE, INDEXER_QUEUE_MIRROR
 from .indexer_utils import get_uuids_for_types
+from collections import OrderedDict
 
 log = structlog.getLogger(__name__)
 
@@ -178,10 +179,10 @@ class QueueManager(object):
             self.second_queue_url = self.get_queue_url(self.second_queue_name)
             self.dlq_url = self.get_queue_url(self.dlq_name)
         # short names for queues
-        self.queue_targets = {
+        self.queue_targets = OrderedDict({
             'primary': self.queue_url,
             'secondary': self.second_queue_url
-        }
+        })
 
     def add_uuids(self, registry, uuids, strict=False, target_queue='primary',
                   sid=None, telemetry_id=None):
