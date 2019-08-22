@@ -12,6 +12,7 @@ from pyramid.view import view_config
 from pyramid.decorator import reify
 from .interfaces import INDEXER_QUEUE, INDEXER_QUEUE_MIRROR
 from .indexer_utils import get_uuids_for_types
+from collections import OrderedDict
 
 log = structlog.getLogger(__name__)
 
@@ -70,12 +71,15 @@ def queue_indexing(request):
     target = request.json.get('target_queue', 'primary')
     if req_uuids:
         # queue these as secondary
-        queued, failed = queue_indexer.add_uuids(request.registry, req_uuids, strict=strict,
-                                                 target_queue=target, telemetry_id=telemetry_id)
+        queued, failed = queue_indexer.add_uuids(request.registry, req_uuids,
+                                                 strict=strict, target_queue=target,
+                                                 telemetry_id=telemetry_id)
         response['requested_uuids'] = req_uuids
     else:
         # queue these as secondary
-        queued, failed = queue_indexer.add_collections(request.registry, req_collections, strict=strict,
+        queued, failed = queue_indexer.add_collections(request.registry,
+                                                       req_collections,
+                                                       strict=strict,
                                                        target_queue=target,
                                                        telemetry_id=telemetry_id)
         response['requested_collections'] = req_collections
@@ -175,10 +179,10 @@ class QueueManager(object):
             self.second_queue_url = self.get_queue_url(self.second_queue_name)
             self.dlq_url = self.get_queue_url(self.dlq_name)
         # short names for queues
-        self.queue_targets = {
+        self.queue_targets = OrderedDict({
             'primary': self.queue_url,
             'secondary': self.second_queue_url
-        }
+        })
 
     def add_uuids(self, registry, uuids, strict=False, target_queue='primary',
                   sid=None, telemetry_id=None):

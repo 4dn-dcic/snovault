@@ -3,7 +3,6 @@ from elasticsearch.exceptions import (
     ConnectionError,
     TransportError,
 )
-from ..indexing_views import SidException
 from ..embed import MissingIndexItemException
 from pyramid.view import view_config
 from urllib3.exceptions import ReadTimeoutError
@@ -14,6 +13,7 @@ from .interfaces import (
 )
 from snovault import (
     DBSESSION,
+    STORAGE
 )
 from .indexer_utils import find_uuids_for_indexing
 import datetime
@@ -31,6 +31,35 @@ def includeme(config):
     config.scan(__name__)
     registry = config.registry
     registry[INDEXER] = Indexer(registry)
+
+
+# really simple exception to know when the sid check fails
+class SidException(Exception):
+    pass
+
+
+def check_sid(sid, max_sid):
+    """
+    Simple function to compare a given sid to given max_sid.
+    Raise an Exception if malformed or lesser max_sid
+
+    Args:
+        sid (int): query sid
+        max_sid (int): maximum sid to compare to
+
+    Raises:
+        ValueError: if sid or max_sid are not valid
+        SidException: if sid in request is greater than max sid
+    """
+    try:
+        sid = int(sid)
+        max_sid = int(max_sid)
+    except ValueError:
+        raise ValueError('sid (%s) and max sid (%s) must be integers.'
+                         % (sid, max_sid))
+    if max_sid < sid:
+        raise SidException('Query sid (%s) is greater than max sid (%s).'
+                           % (sid, max_sid))
 
 
 @view_config(route_name='index', request_method='POST', permission="index")
@@ -188,6 +217,8 @@ class Indexer(object):
         rev_linked_uuids = set()
         to_delete = []  # hold messages that will be deleted
         to_defer = []  # hold messages once we need to restart the worker
+        # max_sid does not change of the lifetime of request
+        max_sid = request.registry[STORAGE].write.get_max_sid()
         deferred = False  # if true, we need to restart the worker
         messages, target_queue = self.get_messages_from_queue()
         while len(messages) > 0:
@@ -214,22 +245,32 @@ class Indexer(object):
                 # build the object and index into ES
                 # if strict, do not add uuids rev_linking to item to queue
                 if msg_body['strict'] is True:
-                    error = self.update_object(request, msg_uuid, None,
-                                               sid=msg_sid, curr_time=msg_curr_time,
+                    error = self.update_object(request, msg_uuid,
+                                               add_to_secondary=None,
+                                               sid=msg_sid, max_sid=max_sid,
+                                               curr_time=msg_curr_time,
                                                telemetry_id=msg_telemetry)
                 else:
-                    error = self.update_object(request, msg_uuid, rev_linked_uuids,
-                                               sid=msg_sid, curr_time=msg_curr_time,
+                    error = self.update_object(request, msg_uuid,
+                                               add_to_secondary=rev_linked_uuids,
+                                               sid=msg_sid, max_sid=max_sid,
+                                               curr_time=msg_curr_time,
                                                telemetry_id=msg_telemetry)
                 if error:
-                    if error.get('error_message') == 'defer_restart':
+                    if error.get('error_message') == 'defer_resend':
+                        # resend the message and delete original so that receive
+                        # count is not affected. set `deferred` to restart worker
                         to_defer.append(msg_body)
                         to_delete.append(msg)
                         deferred = True
+                    elif error.get('error_message') == 'defer_replace':
+                        # replace the message with a VisibilityTimeout
+                        # set `deferred` to restart worker
+                        self.queue.replace_messages([msg], target_queue=target_queue, vis_timeout=180)
+                        deferred = True
                     else:
-                        # on a regular error, replace the message back in the queue
+                        # regular error, replace the message with a VisibilityTimeout
                         # could do something with error, like putting on elasticache
-                        # set VisibilityTimeout high so that other items can process
                         self.queue.replace_messages([msg], target_queue=target_queue, vis_timeout=180)
                         errors.append(error)
                 else:
@@ -289,8 +330,7 @@ class Indexer(object):
         """
         errors = []
         for i, uuid in enumerate(sync_uuids):
-            # add_to_secondary = None here since invalidation is not used
-            error = self.update_object(request, uuid, None)
+            error = self.update_object(request, uuid)
             if error is not None:  # don't increment counter on an error
                 errors.append(error)
             elif counter:
@@ -299,7 +339,7 @@ class Indexer(object):
 
 
     def update_object(self, request, uuid, add_to_secondary=None, sid=None,
-                      curr_time=None, telemetry_id=None):
+                      max_sid=None, curr_time=None, telemetry_id=None):
         """
         Actually index the uuid using the index-data view.
         add_to_secondary is a set that gets the rev_linked_to_me
@@ -308,7 +348,7 @@ class Indexer(object):
         # logging constant
         cat = 'index object'
 
-        #timing stuff
+        # timing stuff
         start = timer()
         if not curr_time:
             curr_time = datetime.datetime.utcnow().isoformat()  # utc
@@ -322,33 +362,36 @@ class Indexer(object):
             if telemetry_id.startswith('cm_run_'):
                 cm_source = True
 
-        # check the sid with a less intensive view than @@index-data
         index_data_query = '/%s/@@index-data' % uuid
-        if sid:
-            index_data_query += '?sid=%s' % sid
-
         try:
+            # check sid first -- will raise SidException if invalid
+            if sid is not None:
+                check_sid(sid, max_sid)  # max_sid should be set already
             result = request.embed(index_data_query, as_user='INDEXER')
             duration = timer() - start
             log.bind(collection=result.get('item_type'))
             # log.info("Time to embed", duration=duration, cat="embed object")
         except SidException as e:
             duration = timer() - start
-            log.warning('Invalid max sid', duration=duration, cat=cat)
-            # this will cause the item to be deferred by restarting worker
-            return {'error_message': 'defer_restart'}
-        except (MissingIndexItemException, KeyError) as e:
-            # only consider a KeyError deferrable if not already in deferred queue
+            log.warning('Invalid max sid. Resending...', duration=duration, cat=cat)
+            # causes the item to be deferred by restarting worker
+            # item will be re-sent (won't affect receive count)
+            return {'error_message': 'defer_resend'}
+        except MissingIndexItemException:
+            # cannot find item. This could be due to it being purged.
+            # if message is from create mapping, simply skip.
+            # otherwise replace message and item will possibly make it to DLQ
             duration = timer() - start
-            if e.__class__ == MissingIndexItemException and cm_source:
-                # cannot find the item in the DB by uuid and the message came
-                # from create-mapping. Skip completely
-                log.error('Missing create-mapping resource when indexing. Skipping', duration=duration, cat=cat)
+            if cm_source:
+                log.error('MissingIndexItemException encountered on resource %s'
+                          ' from create_mapping. Skipping...' % index_data_query,
+                          duration=duration, cat=cat)
                 return
             else:
-                log.info('KeyError', duration=duration, cat=cat)
-                # this will cause the item to be deferred by restarting worker
-                return {'error_message': 'defer_restart'}
+                log.warning('MissingIndexItemException encountered on resource '
+                            '%s. No sid found. Replacing...' % index_data_query,
+                            duration=duration, cat=cat)
+                return {'error_message': 'defer_replace'}
         except Exception as e:
             duration = timer() - start
             log.error('Error rendering @@index-data', duration=duration, exc_info=True, cat=cat)

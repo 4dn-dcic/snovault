@@ -6,7 +6,10 @@ Example.
 """
 
 from webtest import TestApp
-from snovault.elasticsearch import ELASTIC_SEARCH
+from snovault.elasticsearch.interfaces import (
+    ELASTIC_SEARCH,
+    INDEXER_QUEUE
+)
 import atexit
 import datetime
 import elasticsearch.exceptions
@@ -47,8 +50,16 @@ def run(testapp, interval=DEFAULT_INTERVAL, dry_run=False, path='/index', update
     es = testapp.app.registry[ELASTIC_SEARCH]
     es.info()
 
+    queue = testapp.app.registry[INDEXER_QUEUE]
+
     # main listening loop
     while True:
+        # if not messages to index, skip the /index call. Counts are approximate
+        queue_counts = queue.number_of_messages()
+        if (not queue_counts['primary_waiting'] and not queue_counts['secondary_waiting']):
+            time.sleep(interval)
+            continue
+
         try:
             res = testapp.post_json(path, {
                 'record': True,
