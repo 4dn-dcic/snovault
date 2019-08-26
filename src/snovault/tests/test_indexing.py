@@ -34,6 +34,10 @@ from snovault.elasticsearch.create_mapping import (
     confirm_mapping,
     compare_against_existing_mapping
 )
+from snovault.elasticsearch.indexer import (
+    check_sid,
+    SidException
+)
 from pyramid.paster import get_appsettings
 
 pytestmark = [pytest.mark.indexing]
@@ -54,7 +58,6 @@ def app_settings(wsgi_server_host_port, elasticsearch_server, postgresql_server,
     settings['collection_datastore'] = 'elasticsearch'
     settings['item_datastore'] = 'elasticsearch'
     settings['indexer'] = True
-    settings['indexer.processes'] = 2
 
     # use aws auth to access elasticsearch
     if aws_auth:
@@ -598,7 +601,6 @@ def test_queue_indexing_with_linked(app, testapp, indexer_testapp, dummy_request
 
 
 def test_indexing_invalid_sid(app, testapp, indexer_testapp):
-    from snovault.indexing_views import SidException
     indexer_queue = app.registry[INDEXER_QUEUE]
     es = app.registry[ELASTIC_SEARCH]
     # post an item, index, then find version (sid)
@@ -620,11 +622,10 @@ def test_indexing_invalid_sid(app, testapp, indexer_testapp):
     assert es_item['_version'] == initial_version + 1
     assert es_item['_source']['max_sid'] == initial_version + 1
 
-    # now try to manually bump an invalid version for the queued item
-    # check for SidException from indexing-views
-    index_query = '/%s/@@index-data?sid=%s' % (test_uuid, initial_version + 2)
+    # manually cause SidException
+    max_sid = app.registry[STORAGE].write.get_max_sid()
     with pytest.raises(SidException):
-        testapp.get(index_query)
+        check_sid(initial_version + 2, max_sid)
 
 
 def test_indexing_invalid_sid_linked_items(app, testapp, indexer_testapp):

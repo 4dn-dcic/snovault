@@ -157,21 +157,24 @@ class PickStorage(object):
         Attempt to purge an item by given resource id (rid), completely
         removing it from ES and DB.
         """
-        if not item_type: # ES deletion requires index & doc_type, which are both == item_type
-            model = self.get_by_uuid(rid)
+        model = self.get_by_uuid(rid)
+        # ES deletion requires index & doc_type, which are both == item_type
+        if not item_type:
             item_type = model.item_type
+        max_sid = model.max_sid
         uuids_linking_to_item = self.find_uuids_linked_to_item(rid)
         if len(uuids_linking_to_item) > 0:
             raise HTTPLocked(detail="Cannot purge item as other items still link to it",
                              comment=uuids_linking_to_item)
-        log.error('PURGE: purging %s' % rid)
+        log.warning('PURGE: purging %s' % rid)
 
         # delete the item from DB
         self.write.purge_uuid(rid)
         # delete the item from ES and also the mirrored ES if present
         self.read.purge_uuid(rid, item_type, self.registry)
         # queue related items for reindexing
-        self.registry[INDEXER].find_and_queue_secondary_items(set([rid]), set())
+        self.registry[INDEXER].find_and_queue_secondary_items(set([rid]), set(),
+                                                              sid=max_sid)
 
     def get_rev_links(self, model, rel, *item_types):
         return self.storage().get_rev_links(model, rel, *item_types)

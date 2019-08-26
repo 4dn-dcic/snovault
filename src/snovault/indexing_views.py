@@ -21,11 +21,6 @@ def includeme(config):
     config.scan(__name__)
 
 
-# really simple exception to know when the sid check fails
-class SidException(Exception):
-    pass
-
-
 def join_linked_uuids_sids(request, uuids):
     """
     Simply iterate through the uuids and return an array of dicts containing
@@ -86,18 +81,6 @@ def item_index_data(context, request):
     uuid = str(context.uuid)
     # upgrade_properties calls necessary upgraders based on schema_version
     properties = context.upgrade_properties()
-
-    # compare sid check to the max sid among all items
-    max_sid = context.max_sid
-    sid_check = request.params.get('sid', None)
-    if sid_check:
-        try:
-            sid_check = int(sid_check)
-        except ValueError:
-            raise ValueError('sid parameter must be an integer. Provided sid: %s' % sid)
-        if max_sid < sid_check:
-            raise SidException('sid from the query (%s) is greater than maximum sid (%s). Bailing.'
-                               % (sid_check, max_sid))
 
     # ES versions 2 and up don't allow dots in links. Update these to use ~s
     new_links = {}
@@ -168,7 +151,7 @@ def item_index_data(context, request):
         'linked_uuids_embedded': join_linked_uuids_sids(request, linked_uuids_embedded),
         'linked_uuids_object': join_linked_uuids_sids(request, linked_uuids_object),
         'links': links,
-        'max_sid': max_sid,
+        'max_sid': context.max_sid,
         'object': object_view,
         'paths': sorted(paths),
         'principals_allowed': principals_allowed,
