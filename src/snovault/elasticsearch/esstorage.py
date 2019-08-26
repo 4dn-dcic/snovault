@@ -14,12 +14,12 @@ from .interfaces import (
 )
 from ..storage import RDBStorage
 from .indexer_utils import find_uuids_for_indexing
+from .create_mapping import SEARCH_MAX
 from dcicutils import es_utils
 import structlog
 
 log = structlog.getLogger(__name__)
 
-SEARCH_MAX = 99999  # OutOfMemoryError if too high. Previously: (2 ** 31) - 1
 
 def includeme(config):
     from snovault import STORAGE

@@ -51,6 +51,7 @@ PATH_FIELDS = ['submitted_file_name']
 NON_SUBSTRING_FIELDS = ['uuid', '@id', 'submitted_by', 'md5sum', 'references', 'submitted_file_name']
 NUM_SHARDS = 1
 NUM_REPLICAS = 1
+SEARCH_MAX = 10000
 
 
 def determine_if_is_date_field(field, schema):
@@ -234,7 +235,7 @@ def index_settings():
         'index': {
             'number_of_shards': NUM_SHARDS,
             'number_of_replicas': NUM_REPLICAS,
-            'max_result_window': 100000,
+            'max_result_window': SEARCH_MAX,
             'mapping': {
                 'total_fields': {
                     'limit': 5000
