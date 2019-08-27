@@ -30,20 +30,21 @@ def test_build_default_embeds():
 
 def test_find_default_embeds_and_expand_emb_list(registry):
     from snovault import TYPES
-    # use EmbeddingTest as test case, linkTo TestingDownload
+    # use EmbeddingTest as test case
+    # 'attachment' -> linkTo TestingDownload
     type_info = registry[TYPES].by_item_type['EmbeddingTest']
     schema_props = type_info.schema.get('properties')
     default_embeds = find_default_embeds_for_schema('', schema_props)
     expected_embeds = ['attachment', 'principals_allowed.*']
     assert(set(default_embeds) == set(expected_embeds))
 
-    # get expansions from attachment    
+    # get expansions from 'attachment'    
     dummy_emb_list = [emb + '.*' if not emb.endswith('*') else emb for emb in expected_embeds ]
     embs_to_add, _ = expand_embedded_list('EmbeddingTest', registry[TYPES], dummy_emb_list, schema_props, set())
     expected_to_add = ['attachment', 'attachment.attachment.*', 'attachment.attachment2.*', 'attachment.principals_allowed.*']
     assert(set(embs_to_add) == set(expected_to_add))
 
-    # add default embeds for all items in a path
+    # add default embeds for all items 'attachment'
     test_embed = ['attachment.attachment.*']
     embs_to_add2, _ = expand_embedded_list('EmbeddingTest', registry[TYPES], test_embed, schema_props, set())
     expected_to_add2 = ['attachment']

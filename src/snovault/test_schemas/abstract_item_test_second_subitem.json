@@ -1,0 +1,12 @@
+{
+    "title": "AbstractItemTestSecondSubItem",
+    "type": "object",
+    "description": "This is a second testing item",
+    "properties": {
+        "info": {
+            "type": "object",
+            "title": "AbstractItemTestSecondSubItem Property",
+            "description": "This is a description property"
+        }
+    }
+}

@@ -57,11 +57,7 @@ class AbstractItemTest(Item):
     })
 class AbstractItemTestSubItem(AbstractItemTest):
     item_type = 'AbstractItemTestSubItem'
-    schema = {
-        'title': "AbstractItemTestSubItem",
-        'description': "This is a testing item",
-        'properties': {},
-    }
+    schema = load_schema('snovault:test_schemas/abstract_item_test_subitem.json')
 
 
 @collection(
@@ -73,11 +69,7 @@ class AbstractItemTestSubItem(AbstractItemTest):
     })
 class AbstractItemTestSecondSubItem(AbstractItemTest):
     item_type = 'AbstractItemTestSecondSubItem'
-    schema = {
-        'title': 'AbstractItemTestSecondSubItem',
-        'description': "This is a second testing item",
-        'properties': {},
-    }
+    schema = load_schema('snovault:test_schemas/abstract_item_test_second_subitem.json')
 
 
 @collection(
@@ -106,97 +98,19 @@ class EmbeddingTest(Item):
 )
 class TestingDownload(ItemWithAttachment):
     item_type = 'testing_download'
-    schema = {
-        'type': 'object',
-        'properties': {
-            'attachment': {
-                'type': 'object',
-                'attachment': True,
-                'properties': {
-                    'type': {
-                        'type': 'string',
-                        'enum': ['image/png'],
-                    }
-                }
-            },
-            'attachment2': {
-                'type': 'object',
-                'attachment': True,
-                'properties': {
-                    'type': {
-                        'type': 'string',
-                        'enum': ['image/png'],
-                    }
-                }
-            }
-        }
-    }
+    schema = load_schema('snovault:test_schemas/testing_download.json')
 
 
 @collection('testing-link-sources-sno', unique_key='testing_link_sources-sno:name')
 class TestingLinkSourceSno(Item):
     item_type = 'testing_link_source_sno'
-    schema = {
-        'type': 'object',
-        'properties': {
-            'name': {
-                'type': 'string',
-                'uniqueKey': True,
-            },
-            'uuid': {
-                'type': 'string',
-            },
-            'target': {
-                'type': 'string',
-                'linkTo': 'TestingLinkTargetSno',
-            },
-            'ppp': {
-                'type': 'string',
-                'linkTo': 'TestingPostPutPatchSno',
-            },
-            'status': {
-                'type': 'string',
-            },
-        },
-        'required': ['target'],
-        'additionalProperties': False,
-    }
+    schema = load_schema('snovault:test_schemas/testing_link_source_sno.json')
 
 
 @collection('testing-link-aggregates-sno')
 class TestingLinkAggregateSno(Item):
     item_type = 'testing_link_aggregate_sno'
-    schema = {
-        'type': 'object',
-        'properties': {
-            'name': {
-                'type': 'string',
-            },
-            'uuid': {
-                'type': 'string',
-            },
-            'targets': {
-                'type': 'array',
-                'items': {
-                    'type': 'object',
-                    'properties': {
-                        'test_description': {
-                            'type': 'string'
-                        },
-                        'target':{
-                            'type': 'string',
-                            'linkTo': 'TestingLinkTargetSno'
-                        }
-                    }
-                }
-            },
-            'status': {
-                'type': 'string',
-            }
-        },
-        'required': ['targets'],
-        'additionalProperties': False,
-    }
+    schema = load_schema('snovault:test_schemas/testing_link_aggregate_sno.json')
     aggregated_items = {
         "targets": ['target.uuid', 'test_description']
     }
@@ -206,22 +120,7 @@ class TestingLinkAggregateSno(Item):
 class TestingLinkTargetSno(Item):
     item_type = 'testing_link_target_sno'
     name_key = 'name'
-    schema = {
-        'type': 'object',
-        'properties': {
-            'name': {
-                'type': 'string',
-                'uniqueKey': True,
-            },
-            'uuid': {
-                'type': 'string',
-            },
-            'status': {
-                'type': 'string',
-            },
-        },
-        'additionalProperties': False,
-    }
+    schema = load_schema('snovault:test_schemas/testing_link_target_sno.json')
     rev = {
         'reverse': ('TestingLinkSourceSno', 'target'),
     }
@@ -258,121 +157,19 @@ class TestingLinkTargetSno(Item):
 class TestingPostPutPatchSno(Item):
     item_type = 'testing_post_put_patch_sno'
     embedded_list = ['protected_link.*']
-    schema = {
-        'required': ['required'],
-        'type': 'object',
-        "additionalProperties": False,
-        'properties': {
-            "schema_version": {
-                "type": "string",
-                "pattern": "^\\d+(\\.\\d+)*$",
-                "requestMethod": [],
-                "default": "1",
-            },
-            "uuid": {
-                "title": "UUID",
-                "description": "",
-                "type": "string",
-                "format": "uuid",
-                "permission": "import_items",
-                "requestMethod": "POST",
-            },
-            'required': {
-                'type': 'string',
-            },
-            'simple1': {
-                'type': 'string',
-                'default': 'simple1 default',
-            },
-            'simple2': {
-                'type': 'string',
-                'default': 'simple2 default',
-            },
-            'field_no_default': {
-                'type': 'string',
-            },
-            'enum_no_default': {
-                'type': 'string',
-                'enum': [
-                    '1',
-                    '2'
-                ]
-            },
-            'protected': {
-                # This should be allowed on PUT so long as value is the same
-                'type': 'string',
-                'default': 'protected default',
-                'permission': 'import_items',
-            },
-            'protected_link': {
-                # This should be allowed on PUT so long as the linked uuid is
-                # the same
-                'type': 'string',
-                'linkTo': 'TestingLinkTargetSno',
-                'permission': 'import_items',
-            },
-            'custom_object': {
-                'type': 'object',
-                "additionalProperties": True,
-                "properties": {
-                    "mapped_property": {
-                        "type": "string"
-                    }
-                }
-            }
-        }
-    }
+    schema = load_schema('snovault:test_schemas/testing_post_put_patch_sno.json')
 
 
 @collection('testing-server-defaults')
 class TestingServerDefault(Item):
     item_type = 'testing_server_default'
-    schema = {
-        'type': 'object',
-        'properties': {
-            'uuid': {
-                'serverDefault': 'uuid4',
-                'type': 'string',
-            },
-            'user': {
-                'serverDefault': 'userid',
-                'linkTo': 'User',
-                'type': 'string',
-            },
-            'now': {
-                'serverDefault': 'now',
-                'format': 'date-time',
-                'type': 'string',
-            },
-            'accession': {
-                'serverDefault': 'accession',
-                'accessionType': 'AB',
-                'format': 'accession',
-                'type': 'string',
-            },
-        }
-    }
+    schema = load_schema('snovault:test_schemas/testing_server_default.json')
 
 
 @collection('testing-dependencies')
 class TestingDependencies(Item):
     item_type = 'testing_dependencies'
-    schema = {
-        'type': 'object',
-        'dependencies': {
-            'dep1': ['dep2'],
-            'dep2': ['dep1'],
-        },
-        'properties': {
-            'dep1': {
-                'type': 'string',
-            },
-            'dep2': {
-                'type': 'string',
-                'enum': ['dep2'],
-            },
-        }
-    }
+    schema = load_schema('snovault:test_schemas/testing_dependencies.json')
 
 
 @view_config(name='testing-render-error', request_method='GET')

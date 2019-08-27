@@ -23,31 +23,12 @@ PUBLIC_COLLECTIONS = [
 ]
 
 
-def test_home(anonhtmltestapp):
-    res = anonhtmltestapp.get('/', status=200)
-    assert res.body.startswith(b'<!DOCTYPE html>')
+# def test_home(anonhtmltestapp):
+#     res = anonhtmltestapp.get('/', status=200)
+#     assert res.body.startswith(b'<!DOCTYPE html>')
 
 
-def test_home_json(testapp):
-    res = testapp.get('/', status=200)
-    assert res.json['@type']
 
-
-def test_home_app_version(testapp):
-    res = testapp.get('/', status=200)
-    assert 'app_version' in res.json
-
-
-def test_vary_html(anonhtmltestapp):
-    res = anonhtmltestapp.get('/', status=200)
-    assert res.vary is not None
-    assert 'Accept' in res.vary
-
-
-def test_vary_json(anontestapp):
-    res = anontestapp.get('/', status=200)
-    assert res.vary is not None
-    assert 'Accept' in res.vary
 
 
 @pytest.mark.parametrize('item_type', [k for k in TYPE_LENGTH if k != 'user'])
@@ -101,6 +82,7 @@ def test_json(testapp, item_type):
     assert res.json['@type']
 
 
+# relevant?
 def test_json_basic_auth(anonhtmltestapp):
     from base64 import b64encode
     from pyramid.compat import ascii_native_
@@ -110,6 +92,7 @@ def test_json_basic_auth(anonhtmltestapp):
     assert res.content_type == 'application/json'
 
 
+# relevant?
 def test_load_sample_data(
         award,
         lab,
@@ -117,11 +100,6 @@ def test_load_sample_data(
         ):
     assert True, 'Fixtures have loaded sample data'
 
-
-@pytest.mark.xfail
-def test_abstract_collection(testapp, experiment):
-    testapp.get('/Dataset/{accession}'.format(**experiment))
-    testapp.get('/datasets/{accession}'.format(**experiment))
 
 
 @pytest.mark.slow
@@ -132,48 +110,39 @@ def test_load_workbook(workbook, testapp, item_type, length):
     res = testapp.get('/%s/?limit=all' % item_type).maybe_follow(status=200)
     assert len(res.json['@graph']) == length
 
-
+# relevant?
 @pytest.mark.slow
 def test_collection_limit(workbook, testapp):
     res = testapp.get('/awards/?limit=2', status=200)
     assert len(res.json['@graph']) == 2
 
 
-def test_collection_post(testapp):
-    item = {
-        'name': 'NIS39393',
-        'title': 'Grant to make snow',
-        'project': 'ENCODE',
-        'rfa': 'ENCODE3',
-    }
-    return testapp.post_json('/award', item, status=201)
-
-
+# relevant?
 def test_collection_post_bad_json(testapp):
     item = {'foo': 'bar'}
     res = testapp.post_json('/award', item, status=422)
     assert res.json['errors']
 
-
+# relevant?
 def test_collection_post_malformed_json(testapp):
     item = '{'
     headers = {'Content-Type': 'application/json'}
     res = testapp.post('/award', item, status=400, headers=headers)
     assert res.json['detail'].startswith('Expecting')
 
-
+# relevant?
 def test_collection_post_missing_content_type(testapp):
     item = '{}'
     testapp.post('/award', item, status=415)
 
-
+# relevant?
 def test_collection_post_bad_(anontestapp):
     from base64 import b64encode
     from pyramid.compat import ascii_native_
     value = "Authorization: Basic %s" % ascii_native_(b64encode(b'nobody:pass'))
     anontestapp.post_json('/award', {}, headers={'Authorization': value}, status=401)
 
-
+# relevant?
 def test_collection_actions_filtered_by_permission(workbook, testapp, anontestapp):
     res = testapp.get('/pages/')
     assert any(action for action in res.json.get('actions', []) if action['name'] == 'add')
@@ -181,7 +150,7 @@ def test_collection_actions_filtered_by_permission(workbook, testapp, anontestap
     res = anontestapp.get('/pages/')
     assert not any(action for action in res.json.get('actions', []) if action['name'] == 'add')
 
-
+# relevant?
 def test_item_actions_filtered_by_permission(testapp, authenticated_testapp, award):
     location = award['@id']
 
@@ -191,7 +160,7 @@ def test_item_actions_filtered_by_permission(testapp, authenticated_testapp, awa
     res = authenticated_testapp.get(location)
     assert not any(action for action in res.json.get('actions', []) if action['name'] == 'edit')
 
-
+# relevant?
 def test_collection_put(testapp, execute_counter):
     initial = {
         'name': 'NIS39393',
@@ -302,19 +271,6 @@ def test_index_data_workbook(workbook, testapp, indexer_testapp, item_type):
         indexer_testapp.get(item['@id'] + '@@index-data')
 
 
-# @pytest.mark.parametrize('item_type', TYPE_LENGTH)
-# def test_profiles(testapp, item_type):
-#     from jsonschema_serialize_fork import Draft4Validator
-#     res = testapp.get('/profiles/%s.json' % item_type).maybe_follow(status=200)
-#     errors = Draft4Validator.check_schema(res.json)
-#     assert not errors
-#     # added from snovault.schema_views._annotated_schema
-#     assert 'rdfs:seeAlso' in res.json
-#     assert 'rdfs:subClassOf' in res.json
-#     assert 'children' in res.json
-#     assert res.json['isAbstract'] is False
-#
-#
 # @pytest.mark.parametrize('item_type', ['Item', 'item', 'Snowset', 'snowset'])
 # def test_profiles_abstract(testapp, item_type):
 #     from jsonschema_serialize_fork import Draft4Validator
@@ -331,16 +287,6 @@ def test_index_data_workbook(workbook, testapp, indexer_testapp, item_type):
 #     # abstract types wil have children
 #     assert len(res.json['children']) >= 1
 #     assert res.json['isAbstract'] is True
-#
-#
-# def test_profiles_all(testapp, registry):
-#     from jsonschema_serialize_fork import Draft4Validator
-#     res = testapp.get('/profiles/').maybe_follow(status=200)
-#     # make sure all types are present, including abstract types
-#     for ti in registry[TYPES].by_item_type.values():
-#         assert ti.name in res.json
-#     for ti in registry[TYPES].by_abstract_type.values():
-#         assert ti.name in res.json
 #
 # def test_bad_frame(testapp, award):
 #     res = testapp.get(award['@id'] + '?frame=bad', status=404)
