@@ -6,6 +6,7 @@ from snovault import (
     Item,
     calculated_property,
     collection,
+    abstract_collection,
 )
 from snovault.attachment import ItemWithAttachment
 from snovault.interfaces import CONNECTION
@@ -32,6 +33,54 @@ def allowed(context, request):
         'principals_allowed_by_permission': principals_allowed_by_permission(context, permission),
     }
 
+
+@abstract_collection(
+    name='abstractItemTests',
+    unique_key='accession',
+    properties={
+        'title': "AbstractItemTests",
+        'description': "Abstract Item that is inherited for testing",
+    })
+class AbstractItemTest(Item):
+    item_type = 'AbstractItemTest'
+    base_types = ['AbstractItemTest'] + Item.base_types
+    embedded_list = [
+        'testfield1.*',
+        'testfield2.*',
+    ]
+    name_key = 'accession'
+
+
+@collection(
+    name='AbstractItemTestSubItems',
+    unique_key='accession',
+    properties={
+        'title': "AbstractItemTestSubItems",
+        'description': "Item based off of AbstractItemTest"
+    })
+class AbstractItemTestSubItem(AbstractItemTest):
+    item_type = 'AbstractItemTestSubItem'
+    schema = {
+        'title': "AbstractItemTestSubItem",
+        'description': "This is a testing item",
+        'properties': {},
+    }
+
+
+@collection(
+    name='AbstractItemTestSecondSubItems',
+    unique_key='accession',
+    properties={
+        'title': 'AbstractItemTestSecondSubItems',
+        'description': "Second item based off of AbstractItemTest"
+    })
+class AbstractItemTestSecondSubItem(AbstractItemTest):
+    item_type = 'AbstractItemTestSecondSubItem'
+    schema = {
+        'title': 'AbstractItemTestSecondSubItem',
+        'description': "This is a second testing item",
+        'properties': {},
+    }
 
 @collection(
     'testing-downloads',
