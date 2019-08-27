@@ -2,6 +2,24 @@ import pytest
 from snovault import TYPES
 TYPE_NAMES = ['TestingPostPutPatchSno', 'TestingDownload']
 
+# this (sortof) does what type_length
+# does in the snowflakes test_views.py
+def get_parameterized_names():
+    import os
+    return [name.split('.')[0] for name in os.listdir(os.getcwd() + '/src/snovault/test_schemas')]
+
+PARAMETERIZED_NAMES = get_parameterized_names()
+
+@pytest.mark.parametrize('item_type', [k for k in PARAMETERIZED_NAMES])
+def test_collections(testapp, item_type):
+    res = testapp.get('/' + item_type).follow(status=200)
+    assert '@graph' in res.json
+
+@pytest.mark.parametrize('item_type', [k for k in PARAMETERIZED_NAMES])
+def test_html_collections(testapp, item_type):
+    res = testapp.get('/' + item_type).follow(status=200)
+    assert res.body.startswith(b'<!DOCTYPE html>')
+
 # works as is
 def test_home_json(testapp):
     res = testapp.get('/', status=200)
