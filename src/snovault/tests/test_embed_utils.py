@@ -56,3 +56,38 @@ def test_find_default_embeds_and_expand_emb_list(registry):
                       'attachment.principals_allowed.*']
     assert set(expected_built) == set(build_default_embeds(embs_to_add2, set()))
 
+def test_crawl_schema(registry):
+    from snovault import TYPES
+    from copy import deepcopy
+    field_path = 'attachment.@type'
+    embedding_schema = registry[TYPES].by_item_type['EmbeddingTest'].schema
+    res = crawl_schema(registry[TYPES], field_path, embedding_schema)
+    assert isinstance(res, dict)
+    assert res['type'] == 'array'
+
+    # test some bad cases.
+    with pytest.raises(Exception) as exec_info:
+        crawl_schema(registry[TYPES], field_path, 'not_a_schema')
+    # different error, since it attempts to find the file locally
+    assert 'Invalid starting schema' in str(exec_info)
+
+    field_path2 = 'attachment.@id.title'
+    with pytest.raises(Exception) as exec_info2:
+        crawl_schema(registry[TYPES], field_path2, embedding_schema)
+    # different error, since it attempts to find the file locally
+    assert 'Non-dictionary schema' in str(exec_info2)
+
+    field_path3 = 'attachment.@types.blah'
+    with pytest.raises(Exception) as exec_info3:
+        crawl_schema(registry[TYPES], field_path3, embedding_schema)
+    # different error, since it attempts to find the file locally
+    assert 'Field not found' in str(exec_info3)
+
+    # screw with the schema to create an invalid linkTo
+    embedding_schema = registry[TYPES].by_item_type['EmbeddingTest'].schema
+    schema_copy = deepcopy(embedding_schema)
+    schema_copy['properties']['attachment']['linkTo'] = 'NotAnItem'
+    with pytest.raises(Exception) as exec_info4:
+        crawl_schema(registry[TYPES], field_path, schema_copy)
+    # different error, since it attempts to find the file locally
+    assert 'Invalid linkTo' in str(exec_info4)

@@ -92,12 +92,9 @@ class EmbeddingTest(Item):
     schema = load_schema('snovault:test_schemas/embedding_test.json')
     name_key = 'accession'
 
+    # use TestingDownload to test
     embedded_list = [
-        'lab.*',
-        'lab.awards.project',
-        'lab.awards.title',
-        'submitted_by.*',
-        'award.uuid',
+        'attachment'
     ]
 
 @collection(
