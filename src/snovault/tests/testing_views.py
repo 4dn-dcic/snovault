@@ -57,7 +57,7 @@ class AbstractItemTest(Item):
     })
 class AbstractItemTestSubItem(AbstractItemTest):
     item_type = 'AbstractItemTestSubItem'
-    schema = load_schema('snovault:test_schemas/abstract_item_test_subitem.json')
+    schema = load_schema('snovault:test_schemas/AbstractItemTestSubItem.json')
 
 
 @collection(
@@ -69,7 +69,7 @@ class AbstractItemTestSubItem(AbstractItemTest):
     })
 class AbstractItemTestSecondSubItem(AbstractItemTest):
     item_type = 'AbstractItemTestSecondSubItem'
-    schema = load_schema('snovault:test_schemas/abstract_item_test_second_subitem.json')
+    schema = load_schema('snovault:test_schemas/AbstractItemTestSecondSubItem.json')
 
 
 @collection(
@@ -81,7 +81,7 @@ class AbstractItemTestSecondSubItem(AbstractItemTest):
     })
 class EmbeddingTest(Item):
     item_type = 'EmbeddingTest'
-    schema = load_schema('snovault:test_schemas/embedding_test.json')
+    schema = load_schema('snovault:test_schemas/EmbeddingTest.json')
     name_key = 'accession'
 
     # use TestingDownload to test
@@ -98,19 +98,19 @@ class EmbeddingTest(Item):
 )
 class TestingDownload(ItemWithAttachment):
     item_type = 'testing_download'
-    schema = load_schema('snovault:test_schemas/testing_download.json')
+    schema = load_schema('snovault:test_schemas/TestingDownload.json')
 
 
 @collection('testing-link-sources-sno', unique_key='testing_link_sources-sno:name')
 class TestingLinkSourceSno(Item):
     item_type = 'testing_link_source_sno'
-    schema = load_schema('snovault:test_schemas/testing_link_source_sno.json')
+    schema = load_schema('snovault:test_schemas/TestingLinkSourceSno.json')
 
 
 @collection('testing-link-aggregates-sno')
 class TestingLinkAggregateSno(Item):
     item_type = 'testing_link_aggregate_sno'
-    schema = load_schema('snovault:test_schemas/testing_link_aggregate_sno.json')
+    schema = load_schema('snovault:test_schemas/TestingLinkAggregateSno.json')
     aggregated_items = {
         "targets": ['target.uuid', 'test_description']
     }
@@ -120,7 +120,7 @@ class TestingLinkAggregateSno(Item):
 class TestingLinkTargetSno(Item):
     item_type = 'testing_link_target_sno'
     name_key = 'name'
-    schema = load_schema('snovault:test_schemas/testing_link_target_sno.json')
+    schema = load_schema('snovault:test_schemas/TestingLinkTargetSno.json')
     rev = {
         'reverse': ('TestingLinkSourceSno', 'target'),
     }
@@ -157,19 +157,19 @@ class TestingLinkTargetSno(Item):
 class TestingPostPutPatchSno(Item):
     item_type = 'testing_post_put_patch_sno'
     embedded_list = ['protected_link.*']
-    schema = load_schema('snovault:test_schemas/testing_post_put_patch_sno.json')
+    schema = load_schema('snovault:test_schemas/TestingPostPutPatchSno.json')
 
 
 @collection('testing-server-defaults')
 class TestingServerDefault(Item):
     item_type = 'testing_server_default'
-    schema = load_schema('snovault:test_schemas/testing_server_default.json')
+    schema = load_schema('snovault:test_schemas/TestingServerDefault.json')
 
 
 @collection('testing-dependencies')
 class TestingDependencies(Item):
     item_type = 'testing_dependencies'
-    schema = load_schema('snovault:test_schemas/testing_dependencies.json')
+    schema = load_schema('snovault:test_schemas/TestingDependencies.json')
 
 
 @view_config(name='testing-render-error', request_method='GET')
