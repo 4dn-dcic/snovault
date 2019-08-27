@@ -7,6 +7,7 @@ from snovault import (
     calculated_property,
     collection,
     abstract_collection,
+    load_schema,
 )
 from snovault.attachment import ItemWithAttachment
 from snovault.interfaces import CONNECTION
@@ -44,10 +45,6 @@ def allowed(context, request):
 class AbstractItemTest(Item):
     item_type = 'AbstractItemTest'
     base_types = ['AbstractItemTest'] + Item.base_types
-    embedded_list = [
-        'testfield1.*',
-        'testfield2.*',
-    ]
     name_key = 'accession'
 
 
@@ -81,6 +78,27 @@ class AbstractItemTestSecondSubItem(AbstractItemTest):
         'description': "This is a second testing item",
         'properties': {},
     }
+
+
+@collection(
+    name='EmbeddingTests',
+    unique_key='accession',
+    properties={
+        'title': 'EmbeddingTests',
+        'description': 'Listing of EmbeddingTests'
+    })
+class EmbeddingTest(Item):
+    item_type = 'EmbeddingTest'
+    schema = load_schema('snovault:test_schemas/embedding_test.json')
+    name_key = 'accession'
+
+    embedded_list = [
+        'lab.*',
+        'lab.awards.project',
+        'lab.awards.title',
+        'submitted_by.*',
+        'award.uuid',
+    ]
 
 @collection(
     'testing-downloads',

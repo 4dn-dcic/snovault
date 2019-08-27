@@ -6,7 +6,7 @@ from snovault.util import (
     crawl_schema
 )
 
-
+n
 def test_crawl_schema(registry):
     from snovault import TYPES
     from copy import deepcopy
