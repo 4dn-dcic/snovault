@@ -49,38 +49,38 @@ class AbstractItemTest(Item):
 
 
 @collection(
-    name='AbstractItemTestSubItems',
+    name='abstract-item-test-sub-items',
     unique_key='accession',
     properties={
         'title': "AbstractItemTestSubItems",
         'description': "Item based off of AbstractItemTest"
     })
 class AbstractItemTestSubItem(AbstractItemTest):
-    item_type = 'AbstractItemTestSubItem'
+    item_type = 'abstract_item_test_sub_item'
     schema = load_schema('snovault:test_schemas/AbstractItemTestSubItem.json')
 
 
 @collection(
-    name='AbstractItemTestSecondSubItems',
+    name='abstract-item-test-second-sub-items',
     unique_key='accession',
     properties={
         'title': 'AbstractItemTestSecondSubItems',
         'description': "Second item based off of AbstractItemTest"
     })
 class AbstractItemTestSecondSubItem(AbstractItemTest):
-    item_type = 'AbstractItemTestSecondSubItem'
+    item_type = 'abstract_item_test_second_sub_item'
     schema = load_schema('snovault:test_schemas/AbstractItemTestSecondSubItem.json')
 
 
 @collection(
-    name='EmbeddingTests',
+    name='embedding-tests',
     unique_key='accession',
     properties={
         'title': 'EmbeddingTests',
         'description': 'Listing of EmbeddingTests'
     })
 class EmbeddingTest(Item):
-    item_type = 'EmbeddingTest'
+    item_type = 'embedding_test'
     schema = load_schema('snovault:test_schemas/EmbeddingTest.json')
     name_key = 'accession'
 

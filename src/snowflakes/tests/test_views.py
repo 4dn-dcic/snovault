@@ -23,55 +23,6 @@ PUBLIC_COLLECTIONS = [
 ]
 
 
-# def test_home(anonhtmltestapp):
-#     res = anonhtmltestapp.get('/', status=200)
-#     assert res.body.startswith(b'<!DOCTYPE html>')
-
-
-
-# @pytest.mark.slow
-# @pytest.mark.parametrize('item_type', TYPE_LENGTH)
-# def test_html_pages(workbook, testapp, htmltestapp, item_type):
-#     res = testapp.get('/%s?limit=all' % item_type).follow(status=200)
-#     for item in res.json['@graph']:
-#         res = htmltestapp.get(item['@id'])
-#         assert res.body.startswith(b'<!DOCTYPE html>')
-
-
-# @pytest.mark.slow
-# @pytest.mark.parametrize('item_type', [k for k in TYPE_LENGTH if k != 'user'])
-# def test_html_server_pages(workbook, item_type, wsgi_server):
-#     from webtest import TestApp
-#     testapp = TestApp(wsgi_server)
-#     res = testapp.get(
-#         '/%s?limit=all' % item_type,
-#         headers={'Accept': 'application/json'},
-#     ).follow(
-#         status=200,
-#         headers={'Accept': 'application/json'},
-#     )
-#     for item in res.json['@graph']:
-#         res = testapp.get(item['@id'], status=200)
-#         assert res.body.startswith(b'<!DOCTYPE html>')
-#         assert b'Internal Server Error' not in res.body
-
-
-# @pytest.mark.parametrize('item_type', TYPE_LENGTH)
-# def test_json(testapp, item_type):
-#     res = testapp.get('/' + item_type).follow(status=200)
-#     assert res.json['@type']
-
-
-# relevant?
-# def test_json_basic_auth(anonhtmltestapp):
-#     from base64 import b64encode
-#     from pyramid.compat import ascii_native_
-#     url = '/'
-#     value = "Authorization: Basic %s" % ascii_native_(b64encode(b'nobody:pass'))
-#     res = anonhtmltestapp.get(url, headers={'Authorization': value}, status=401)
-#     assert res.content_type == 'application/json'
-
-
 # relevant?
 def test_load_sample_data(
         award,
@@ -81,95 +32,8 @@ def test_load_sample_data(
     assert True, 'Fixtures have loaded sample data'
 
 
-# no longer relevant?
-@pytest.mark.slow
-@pytest.mark.parametrize(('item_type', 'length'), TYPE_LENGTH.items())
-def test_load_workbook(workbook, testapp, item_type, length):
-    # testdata must come before testapp in the funcargs list for their
-    # savepoints to be correctly ordered.
-    res = testapp.get('/%s/?limit=all' % item_type).maybe_follow(status=200)
-    assert len(res.json['@graph']) == length
 
-# relevant?
-@pytest.mark.slow
-def test_collection_limit(workbook, testapp):
-    res = testapp.get('/awards/?limit=2', status=200)
-    assert len(res.json['@graph']) == 2
-
-
-# relevant?
-# def test_collection_post_bad_json(testapp):
-#     item = {'foo': 'bar'}
-#     res = testapp.post_json('/award', item, status=422)
-#     assert res.json['errors']
-
-# relevant?
-def test_collection_post_malformed_json(testapp):
-    item = '{'
-    headers = {'Content-Type': 'application/json'}
-    res = testapp.post('/award', item, status=400, headers=headers)
-    assert res.json['detail'].startswith('Expecting')
-
-# relevant?
-def test_collection_post_missing_content_type(testapp):
-    item = '{}'
-    testapp.post('/award', item, status=415)
-
-# relevant?
-def test_collection_post_bad_(anontestapp):
-    from base64 import b64encode
-    from pyramid.compat import ascii_native_
-    value = "Authorization: Basic %s" % ascii_native_(b64encode(b'nobody:pass'))
-    anontestapp.post_json('/award', {}, headers={'Authorization': value}, status=401)
-
-# Cant be done without anontestapp?
-def test_collection_actions_filtered_by_permission(workbook, testapp, anontestapp):
-    res = testapp.get('/pages/')
-    assert any(action for action in res.json.get('actions', []) if action['name'] == 'add')
-
-    res = anontestapp.get('/pages/')
-    assert not any(action for action in res.json.get('actions', []) if action['name'] == 'add')
-
-# cant be done without authenticated_testapp?
-def test_item_actions_filtered_by_permission(testapp, authenticated_testapp, award):
-    location = award['@id']
-
-    res = testapp.get(location)
-    assert any(action for action in res.json.get('actions', []) if action['name'] == 'edit')
-
-    res = authenticated_testapp.get(location)
-    assert not any(action for action in res.json.get('actions', []) if action['name'] == 'edit')
-
-# cant run, no award
-def test_collection_put(testapp, execute_counter):
-    initial = {
-        'name': 'NIS39393',
-        'title': 'Grant to make snow',
-        'project': 'ENCODE',
-        'rfa': 'ENCODE3',
-    }
-    item_url = testapp.post_json('/award', initial).location
-
-    with execute_counter.expect(1):
-        item = testapp.get(item_url).json
-
-    for key in initial:
-        assert item[key] == initial[key]
-
-    update = {
-        'name': 'NIS440404',
-        'title': 'Frozen wastland',
-        'project': 'ENCODE',
-        'rfa': 'ENCODE3',
-    }
-    testapp.put_json(item_url, update, status=200)
-
-    res = testapp.get('/' + item['uuid']).follow().json
-
-    for key in update:
-        assert res[key] == update[key]
-
-# cant run, no award
+# XXX: can probably be repurposed
 def test_post_duplicate_uuid(testapp, award):
     item = {
         'uuid': award['uuid'],
@@ -180,7 +44,7 @@ def test_post_duplicate_uuid(testapp, award):
     }
     testapp.post_json('/award', item, status=409)
 
-# cant run, no lab
+# XXX: how to set up?
 def test_user_effective_principals(submitter, lab, anontestapp, execute_counter):
     email = submitter['email']
     with execute_counter.expect(1):
@@ -197,24 +61,17 @@ def test_user_effective_principals(submitter, lab, anontestapp, execute_counter)
         'viewing_group.ENCODE',
     ]
 
-# cant run, no test-section
-def test_page_toplevel(workbook, anontestapp):
-    res = anontestapp.get('/test-section/', status=200)
-    assert res.json['@id'] == '/test-section/'
 
-    res = anontestapp.get('/pages/test-section/', status=301)
-    assert res.location == 'http://localhost/test-section/'
-
-# cant run, no test-section
+# N/A?
 def test_page_nested(workbook, anontestapp):
     res = anontestapp.get('/test-section/subpage/', status=200)
     assert res.json['@id'] == '/test-section/subpage/'
 
-# cant run, no test-section
+# N/A?
 def test_page_nested_in_progress(workbook, anontestapp):
     return anontestapp.get('/test-section/subpage-in-progress/', status=403)
 
-# cant run, no pages
+# N/A?
 def test_page_homepage(workbook, anontestapp):
     res = anontestapp.get('/pages/homepage/', status=200)
     assert res.json['canonical_uri'] == '/'
@@ -223,7 +80,7 @@ def test_page_homepage(workbook, anontestapp):
     assert 'default_page' in res.json
     assert res.json['default_page']['@id'] == '/pages/homepage/'
 
-# cant run, no pages
+# N/A?
 def test_page_collection_default(workbook, anontestapp):
     res = anontestapp.get('/pages/images/', status=200)
     assert res.json['canonical_uri'] == '/images/'
@@ -231,38 +88,3 @@ def test_page_collection_default(workbook, anontestapp):
     res = anontestapp.get('/images/', status=200)
     assert 'default_page' in res.json
     assert res.json['default_page']['@id'] == '/pages/images/'
-
-# cant run, terms does not have submitted_by
-def test_jsonld_term(testapp):
-    res = testapp.get('/terms/submitted_by')
-    assert res.json
-
-
-# @pytest.mark.slow
-# @pytest.mark.parametrize('item_type', TYPE_LENGTH)
-# def test_index_data_workbook(workbook, testapp, indexer_testapp, item_type):
-#     res = testapp.get('/%s?limit=all' % item_type).follow(status=200)
-#     for item in res.json['@graph']:
-#         indexer_testapp.get(item['@id'] + '@@index-data')
-
-
-# @pytest.mark.parametrize('item_type', ['Item', 'item', 'Snowset', 'snowset'])
-# def test_profiles_abstract(testapp, item_type):
-#     from jsonschema_serialize_fork import Draft4Validator
-#     res = testapp.get('/profiles/%s.json' % item_type).maybe_follow(status=200)
-#     errors = Draft4Validator.check_schema(res.json)
-#     assert not errors
-#     # added from snovault.schema_views._annotated_schema
-#     assert 'rdfs:seeAlso' in res.json
-#     # Item/item does not have subClass
-#     if item_type.lower() == 'item':
-#         assert 'rdfs:subClassOf' not in res.json
-#     else:
-#         assert 'rdfs:subClassOf' in res.json
-#     # abstract types wil have children
-#     assert len(res.json['children']) >= 1
-#     assert res.json['isAbstract'] is True
-#
-# def test_bad_frame(testapp, award):
-#     res = testapp.get(award['@id'] + '?frame=bad', status=404)
-#     assert res.json['detail'] == '?frame=bad'
