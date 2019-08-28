@@ -5,6 +5,7 @@
     "required": ["title", "description"],
     "properties": {
         "schema_version": {
+            "type": "object",
             "default": "1"
         },
         "attachment": {
