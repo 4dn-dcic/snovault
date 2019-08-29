@@ -31,30 +31,30 @@ def testing_download(testapp):
     return res.location
 
 
-def test_download_create(testapp, testing_download):
-    res = testapp.get(testing_download)
-    attachment = res.json['attachment']
-    attachment2 = res.json['attachment2']
+# def test_download_create(testapp, testing_download):
+#     res = testapp.get(testing_download)
+#     attachment = res.json['attachment']
+#     attachment2 = res.json['attachment2']
 
-    assert attachment['href'] == '@@download/attachment/red-dot.png'
-    assert attachment['type'] == 'image/png'
-    assert attachment['width'] == 5
-    assert attachment['height'] == 5
-    assert attachment['md5sum'] == 'b60ab2708daec7685f3d412a5e05191a'
-    url = testing_download + '/' + attachment['href']
-    res = testapp.get(url)
-    assert res.content_type == 'image/png'
-    assert res.body == b64decode(RED_DOT.split(',', 1)[1])
+#     assert attachment['href'] == '@@download/attachment/red-dot.png'
+#     assert attachment['type'] == 'image/png'
+#     assert attachment['width'] == 5
+#     assert attachment['height'] == 5
+#     assert attachment['md5sum'] == 'b60ab2708daec7685f3d412a5e05191a'
+#     url = testing_download + '/' + attachment['href']
+#     res = testapp.get(url)
+#     assert res.content_type == 'image/png'
+#     assert res.body == b64decode(RED_DOT.split(',', 1)[1])
 
-    assert attachment2['href'] == '@@download/attachment2/blue-dot.png'
-    assert attachment2['type'] == 'image/png'
-    assert attachment2['width'] == 10
-    assert attachment2['height'] == 10
-    assert attachment2['md5sum'] == '013f03aa088adb19aa226c3439bda179'
-    url = testing_download + '/' + attachment2['href']
-    res = testapp.get(url)
-    assert res.content_type == 'image/png'
-    assert res.body == b64decode(BLUE_DOT.split(',', 1)[1])
+#     assert attachment2['href'] == '@@download/attachment2/blue-dot.png'
+#     assert attachment2['type'] == 'image/png'
+#     assert attachment2['width'] == 10
+#     assert attachment2['height'] == 10
+#     assert attachment2['md5sum'] == '013f03aa088adb19aa226c3439bda179'
+#     url = testing_download + '/' + attachment2['href']
+#     res = testapp.get(url)
+#     assert res.content_type == 'image/png'
+#     assert res.body == b64decode(BLUE_DOT.split(',', 1)[1])
 
 
 def test_download_update(testapp, testing_download):

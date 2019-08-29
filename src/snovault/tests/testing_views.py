@@ -86,7 +86,7 @@ class EmbeddingTest(Item):
 
     # use TestingDownload to test
     embedded_list = [
-        'attachment'
+        'attachment.*'
     ]
 
 @collection(

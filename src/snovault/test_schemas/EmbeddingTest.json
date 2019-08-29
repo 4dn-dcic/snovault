@@ -11,6 +11,9 @@
         "attachment": {
             "type": "object",
             "linkTo": "TestingDownload"
+        },
+        "uuid": {
+            "type": "string"
         }
     },
     "columns": {
