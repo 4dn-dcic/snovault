@@ -109,7 +109,7 @@ def main():
         from pyramid.path import DottedNameResolver
         load_test_data = app.registry.settings.get('snovault.load_test_data')
         load_test_data = DottedNameResolver().resolve(load_test_data)
-        load_res = load_test_data(app, args.access_key)
+        load_res = load_test_data(app)
         if load_res:  # None if successful
             raise(load_res)
 
