@@ -107,6 +107,7 @@ def setup_and_teardown(app):
     transaction.commit()
 
 
+@pytest.mark.flaky
 @pytest.mark.es
 def test_indexer_queue_adds_telemetry_id(app):
     indexer_queue = app.registry[INDEXER_QUEUE]
@@ -128,7 +129,7 @@ def test_indexer_queue_adds_telemetry_id(app):
     # finally, delete
     indexer_queue.delete_messages(received)
 
-
+@pytest.mark.flaky
 @pytest.mark.es
 def test_indexer_queue(app):
     indexer_queue_mirror = app.registry[INDEXER_QUEUE_MIRROR]
@@ -173,6 +174,7 @@ def test_indexer_queue(app):
     assert tries_left > 0
 
 
+@pytest.mark.flaky
 def test_queue_indexing_telemetry_id(app, testapp):
     indexer_queue = app.registry[INDEXER_QUEUE]
     assert set(indexer_queue.queue_targets) == {'primary', 'secondary'}
@@ -218,6 +220,7 @@ def test_queue_indexing_telemetry_id(app, testapp):
     assert tries_left > 0
 
 
+@pytest.mark.flaky
 def test_queue_indexing_after_post_patch(app, testapp):
     # make sure that the right stuff gets queued up on a post or a patch
     indexer_queue = app.registry[INDEXER_QUEUE]
@@ -251,6 +254,7 @@ def test_queue_indexing_after_post_patch(app, testapp):
     indexer_queue.delete_messages(received)
 
 
+@pytest.mark.flaky
 def test_indexing_simple(app, testapp, indexer_testapp):
     # First post a single item so that subsequent indexing is incremental
     testapp.post_json(TEST_COLL, {'required': ''})
@@ -288,6 +292,7 @@ def test_indexing_simple(app, testapp, indexer_testapp):
     assert testing_ppp_settings['settings']['index']['number_of_shards'] == '1'
 
 
+@pytest.mark.flaky
 def test_indexing_logging(app, testapp, indexer_testapp, capfd):
     """
     This test is meant to do 2 things.
@@ -349,6 +354,7 @@ def test_indexing_logging(app, testapp, indexer_testapp, capfd):
     # assert not exists
 
 
+@pytest.mark.flaky
 def test_indexing_queue_records(app, testapp, indexer_testapp):
     """
     Do a full test using different forms of create mapping and both sync
@@ -393,6 +399,7 @@ def test_indexing_queue_records(app, testapp, indexer_testapp):
     assert indexing_record.get('_source') == indexing_doc_source
 
 
+@pytest.mark.flaky
 def test_sync_and_queue_indexing(app, testapp, indexer_testapp):
     es = app.registry[ELASTIC_SEARCH]
     indexer_queue = app.registry[INDEXER_QUEUE]
@@ -429,6 +436,7 @@ def test_sync_and_queue_indexing(app, testapp, indexer_testapp):
     assert doc_count == 2
 
 
+@pytest.mark.flaky
 def test_queue_indexing_with_linked(app, testapp, indexer_testapp, dummy_request):
     """
     Test a whole bunch of things here:
@@ -600,6 +608,7 @@ def test_queue_indexing_with_linked(app, testapp, indexer_testapp, dummy_request
     assert es_res_emb2 is None
 
 
+@pytest.mark.flaky
 def test_indexing_invalid_sid(app, testapp, indexer_testapp):
     indexer_queue = app.registry[INDEXER_QUEUE]
     es = app.registry[ELASTIC_SEARCH]
@@ -628,6 +637,7 @@ def test_indexing_invalid_sid(app, testapp, indexer_testapp):
         check_sid(initial_version + 2, max_sid)
 
 
+@pytest.mark.flaky
 def test_indexing_invalid_sid_linked_items(app, testapp, indexer_testapp):
     """
     Make sure that when an item is deferred due to invalid sid, it does not
@@ -679,6 +689,7 @@ def test_indexing_invalid_sid_linked_items(app, testapp, indexer_testapp):
     indexer_queue.delete_messages(received_deferred, target_queue='primary')
 
 
+@pytest.mark.flaky
 def test_queue_indexing_endpoint(app, testapp, indexer_testapp):
     es = app.registry[ELASTIC_SEARCH]
     # post a couple things
@@ -721,6 +732,7 @@ def test_queue_indexing_endpoint(app, testapp, indexer_testapp):
     assert res.json['number_queued'] == 0
 
 
+@pytest.mark.flaky
 def test_es_indices(app, elasticsearch):
     """
     Test overall create_mapping functionality using app.
@@ -745,6 +757,7 @@ def test_es_indices(app, elasticsearch):
         assert found_index_settings
 
 
+@pytest.mark.flaky
 def test_index_settings(app, testapp, indexer_testapp):
     from snovault.elasticsearch.create_mapping import index_settings
     es_settings = index_settings()
@@ -762,6 +775,7 @@ def test_index_settings(app, testapp, indexer_testapp):
 
 
 # some unit tests associated with build_index in create_mapping
+@pytest.mark.flaky
 def test_check_if_index_exists(app):
     es = app.registry[ELASTIC_SEARCH]
     exists = check_if_index_exists(es, TEST_TYPE)
@@ -772,6 +786,7 @@ def test_check_if_index_exists(app):
     assert not exists
 
 
+@pytest.mark.flaky
 def test_confirm_mapping(app, testapp, indexer_testapp):
     es = app.registry[ELASTIC_SEARCH]
     # make a dynamic mapping
@@ -792,6 +807,7 @@ def test_confirm_mapping(app, testapp, indexer_testapp):
     assert compare_against_existing_mapping(es, TEST_TYPE, index_record, True) is True
 
 
+@pytest.mark.flaky
 def test_dynamic_mapping_check_first(app, testapp, indexer_testapp):
     """
     create_mapping with --check-first option must be able to properly compare
@@ -813,6 +829,7 @@ def test_dynamic_mapping_check_first(app, testapp, indexer_testapp):
     assert compare_against_existing_mapping(es, TEST_TYPE, index_record, True) is True
 
 
+@pytest.mark.flaky
 def test_check_and_reindex_existing(app, testapp):
     from snovault.elasticsearch.create_mapping import check_and_reindex_existing
     es = app.registry[ELASTIC_SEARCH]
@@ -829,6 +846,7 @@ def test_check_and_reindex_existing(app, testapp):
     assert(len(test_uuids)) == 1
 
 
+@pytest.mark.flaky
 def test_es_purge_uuid(app, testapp, indexer_testapp, session):
     indexer_queue = app.registry[INDEXER_QUEUE]
     es = app.registry[ELASTIC_SEARCH]
@@ -871,6 +889,7 @@ def test_es_purge_uuid(app, testapp, indexer_testapp, session):
     assert check_post_from_es_2['found'] == False
 
 
+@pytest.mark.flaky
 def test_create_mapping_check_first(app, testapp, indexer_testapp):
     es = app.registry[ELASTIC_SEARCH]
     # get the initial mapping
@@ -908,12 +927,20 @@ def test_create_mapping_check_first(app, testapp, indexer_testapp):
     assert compare_against_existing_mapping(es, TEST_TYPE, index_record, True) is True
 
 
+def delay_rerun(*args):
+    """ Rerun function for flaky """
+    time.sleep(60)
+    return True
+
+
+@pytest.mark.flaky(max_runs=3, rerun_filter=delay_rerun)
 def test_create_mapping_index_diff(app, testapp, indexer_testapp):
     es = app.registry[ELASTIC_SEARCH]
     # post a couple items, index, then remove one
-    res = testapp.post_json(TEST_COLL, {'required': ''})
-    test_uuid = res.json['@graph'][0]['uuid']
-    testapp.post_json(TEST_COLL, {'required': ''})  # second item
+    res1 = testapp.post_json(TEST_COLL, {'required': ''})
+    test_uuid = res1.json['@graph'][0]['uuid']
+    res2 = testapp.post_json(TEST_COLL, {'required': ''})  # second item
+    test2_uuid = res2.json
     create_mapping.run(app, collections=[TEST_TYPE], purge_queue=True)
     indexer_testapp.post_json('/index', {'record': True})
     time.sleep(4)
@@ -936,6 +963,7 @@ def test_create_mapping_index_diff(app, testapp, indexer_testapp):
     assert third_count == initial_count
 
 
+@pytest.mark.flaky(max_runs=3, rerun_filter=delay_rerun)
 def test_indexing_esstorage(app, testapp, indexer_testapp):
     """
     Test some esstorage methods (a.k.a. registry[STORAGE].read)
@@ -962,6 +990,7 @@ def test_indexing_esstorage(app, testapp, indexer_testapp):
     assert db_res_direct == None
 
 
+@pytest.mark.flaky(max_runs=3, rerun_filter=delay_rerun)
 def test_aggregated_items(app, testapp, indexer_testapp):
     """
     Test that the item aggregation works, which only occurs when indexing
@@ -1073,6 +1102,7 @@ def test_aggregated_items(app, testapp, indexer_testapp):
     indexer_testapp.post_json('/index', {'record': True})
 
 
+@pytest.mark.flaky(max_runs=3, rerun_filter=delay_rerun)
 def test_indexing_info(app, testapp, indexer_testapp):
     """
     Test the information on indexing-info for a given uuid and make sure that
@@ -1128,6 +1158,7 @@ def test_indexing_info(app, testapp, indexer_testapp):
     assert 'embedded_seconds' not in src_idx_info4.json
 
 
+@pytest.mark.flaky(max_runs=3, rerun_filter=delay_rerun)
 def test_validators_on_indexing(app, testapp, indexer_testapp):
     """
     We now run PATCH validators for an indexed item using check_only=True
