@@ -328,8 +328,7 @@ class QueueManager(object):
             queue_urls[queue_name] = queue_url
         return queue_urls
 
-
-    def clear_queue(self):
+    def purge_queue(self):
         """
         Clear out the queue and dlq completely. You can no longer retrieve
         these messages. Takes up to 60 seconds.
@@ -342,6 +341,18 @@ class QueueManager(object):
             except self.client.exceptions.PurgeQueueInProgress:
                 log.warning('\n___QUEUE IS ALREADY BEING PURGED: %s___\n' % queue_url,
                             queue_url=queue_url)
+
+    def clear_queue(self):
+        """
+        Manually clears the queue by repeatedly calling receieve_messages then
+        deleting those messages. A sleep is necessary in case there is a delay
+        in message propagation.
+        """
+        msgs = self.receive_messages()
+        while msgs:
+            self.delete_messages(msgs)  # what to do with failures?
+            time.sleep(2)
+            msgs = self.receive_messages()  
 
     def delete_queue(self, queue_url):
         """

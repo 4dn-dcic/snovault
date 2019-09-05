@@ -1029,7 +1029,7 @@ def run(app, collections=None, dry_run=False, check_first=False, skip_indexing=F
     # clear the indexer queue on a total reindex
     if total_reindex or purge_queue:
         log.info('___PURGING THE QUEUE AND CLEARING INDEXING RECORDS BEFORE MAPPING___\n', cat=cat)
-        indexer_queue.clear_queue()
+        indexer_queue.purge_queue()
         # we also want to remove the 'indexing' index, which stores old records
         # it's not guaranteed to be there, though
         es_safe_execute(es.indices.delete, index='indexing', ignore=[400,404])
