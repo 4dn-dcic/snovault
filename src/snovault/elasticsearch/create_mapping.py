@@ -51,7 +51,7 @@ PATH_FIELDS = ['submitted_file_name']
 NON_SUBSTRING_FIELDS = ['uuid', '@id', 'submitted_by', 'md5sum', 'references', 'submitted_file_name']
 NUM_SHARDS = 1
 NUM_REPLICAS = 1
-SEARCH_MAX = 10000
+SEARCH_MAX = 100000
 
 
 def determine_if_is_date_field(field, schema):
