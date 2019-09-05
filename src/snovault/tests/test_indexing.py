@@ -40,7 +40,7 @@ from snovault.elasticsearch.indexer import (
 )
 from pyramid.paster import get_appsettings
 
-pytestmark = [pytest.mark.indexing]
+pytestmark = [pytest.mark.indexing, pytest.mark.flaky]
 TEST_COLL = '/testing-post-put-patch-sno/'
 TEST_TYPE = 'testing_post_put_patch_sno'  # use one collection for testing
 
@@ -842,7 +842,8 @@ def test_es_purge_uuid(app, testapp, indexer_testapp, session):
     assert str(check.uuid) == test_uuid
 
     # Then index it:
-    create_mapping.run(app, collections=[TEST_TYPE], sync_index=True, purge_queue=True)
+    create_mapping.run(app, collections=[TEST_TYPE], sync_index=True)
+    indexer_queue.clear_queue()
     time.sleep(4)
 
     ## Now ensure that we do have it in ES:
@@ -914,7 +915,9 @@ def test_create_mapping_index_diff(app, testapp, indexer_testapp):
     res = testapp.post_json(TEST_COLL, {'required': ''})
     test_uuid = res.json['@graph'][0]['uuid']
     testapp.post_json(TEST_COLL, {'required': ''})  # second item
-    create_mapping.run(app, collections=[TEST_TYPE], purge_queue=True)
+    create_mapping.run(app, collections=[TEST_TYPE])
+    indexer_queue = app.registry[INDEXER_QUEUE]
+    indexer_queue.clear_queue()
     indexer_testapp.post_json('/index', {'record': True})
     time.sleep(4)
     initial_count = es.count(index=TEST_TYPE, doc_type=TEST_TYPE).get('count')

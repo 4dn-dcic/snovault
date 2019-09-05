@@ -345,14 +345,12 @@ class QueueManager(object):
     def clear_queue(self):
         """
         Manually clears the queue by repeatedly calling receieve_messages then
-        deleting those messages. A sleep is necessary in case there is a delay
-        in message propagation.
+        deleting those messages.
         """
         msgs = self.receive_messages()
         while msgs:
-            self.delete_messages(msgs)  # what to do with failures?
-            time.sleep(2)
-            msgs = self.receive_messages()  
+            self.delete_messages(msgs)
+            msgs = self.receive_messages()
 
     def delete_queue(self, queue_url):
         """
