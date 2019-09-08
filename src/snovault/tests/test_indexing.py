@@ -175,7 +175,8 @@ def test_indexer_queue(app):
 
 def test_queue_indexing_telemetry_id(app, testapp):
     indexer_queue = app.registry[INDEXER_QUEUE]
-    assert set(indexer_queue.queue_targets) == {'primary', 'secondary'}
+    ordered_queue_targets = [targ for targ in indexer_queue.queue_targets]
+    assert ordered_queue_targets == ['primary', 'secondary']
     indexer_queue.clear_queue()
     testapp.post_json(TEST_COLL + '?telemetry_id=test_telem', {'required': ''})
     time.sleep(2)
