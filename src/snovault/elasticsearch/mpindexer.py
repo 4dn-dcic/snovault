@@ -145,8 +145,9 @@ class MPIndexer(Indexer):
     def __init__(self, registry):
         super(MPIndexer, self).__init__(registry)
         self.chunksize = int(registry.settings.get('indexer.chunk_size', 1024))
+        # use 2 fewer processes than cpu count, with a minimum of 1
         num_cpu = cpu_count()
-        self.processes = num_cpu - 1 if num_cpu > 1 else num_cpu
+        self.processes = num_cpu - 2 if num_cpu - 2 > 1 else 1
         self.initargs = (registry[APP_FACTORY], registry.settings,)
         # workers in the pool will be replaced after finishing one task
         self.maxtasks = 1
