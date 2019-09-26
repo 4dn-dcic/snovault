@@ -39,6 +39,8 @@ from snovault.elasticsearch.indexer import (
     SidException
 )
 from pyramid.paster import get_appsettings
+from snovault.tests.pyramidfixtures import dummy_request
+from snovault.tests.toolfixtures import registry, root, elasticsearch
 
 pytestmark = [pytest.mark.indexing]
 TEST_COLL = '/testing-post-put-patch-sno/'

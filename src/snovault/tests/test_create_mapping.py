@@ -1,4 +1,6 @@
 import pytest
+from snovault.tests.pyramidfixtures import dummy_request
+from snovault.tests.toolfixtures import registry
 from snovault import TYPES
 from snovault.tests.test_views import PARAMETERIZED_NAMES
 from snovault.elasticsearch.interfaces import ELASTIC_SEARCH
@@ -24,7 +26,7 @@ def test_merge_schemas(registry):
     test_subschema = test_schema['properties']['attachment']
     res = merge_schemas(test_subschema, registry[TYPES])
     assert res
-    assert res != test_subschema 
+    assert res != test_subschema
     assert res['properties']['attachment']['attachment'] == True
 
 def test_update_mapping_by_embed(registry):
@@ -39,7 +41,7 @@ def test_update_mapping_by_embed(registry):
     assert new_m['type'] == 'text'
     assert 'raw' in new_m['fields']
     assert 'lower_case_sort' in new_m['fields']
-    
+
     #import pdb; pdb.set_trace()
     # then test with real data and wildcard (*)
     test_schema = registry[TYPES][unit_test_type].schema

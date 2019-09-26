@@ -1,4 +1,6 @@
 import pytest
+from snovault.tests.toolfixtures import registry, root
+from snovault.tests.pyramidfixtures import dummy_request, threadlocals
 from snovault.tests.test_views import PARAMETERIZED_NAMES
 
 targets = [
@@ -32,7 +34,7 @@ def convert_names_to_snake():
         snake = '_'.join(map(str.lower, caps))
         res.append(snake)
     return res
-        
+
 SNAKE_NAMES = convert_names_to_snake()
 
 @pytest.fixture(autouse=True)
@@ -74,7 +76,7 @@ def test_add_default_embeds(registry, item_type):
     assert principals_allowed_included_in_default_embeds
 
 
-# XXX: This test... doesn't do much. 
+# XXX: This test... doesn't do much.
 # Just because an error is thrown doesn't mean it did the right thing
 @pytest.mark.parametrize('item_type', SNAKE_NAMES)
 def test_manual_embeds(registry, item_type):

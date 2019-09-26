@@ -1,5 +1,5 @@
 import pytest
-
+from snovault.tests.toolfixtures import registry
 from snovault.tests.test_views import PARAMETERIZED_NAMES
 
 @pytest.mark.parametrize('schema', PARAMETERIZED_NAMES)

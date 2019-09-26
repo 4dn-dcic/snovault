@@ -1,4 +1,5 @@
 import pytest
+from snovault.tests.toolfixtures import registry
 from snovault.util import (
     build_default_embeds,
     find_default_embeds_for_schema,
@@ -8,7 +9,7 @@ from snovault.util import (
 )
 
 def test_find_collection_subtypes(app):
-    test_item_type = 'AbstractItemTest' 
+    test_item_type = 'AbstractItemTest'
     expected_types = ['abstract_item_test_second_sub_item', 'abstract_item_test_sub_item']
     res = find_collection_subtypes(app.registry, test_item_type)
     assert sorted(res) == expected_types
@@ -38,7 +39,7 @@ def test_find_default_embeds_and_expand_emb_list(registry):
     expected_embeds = ['attachment', 'principals_allowed.*']
     assert(set(default_embeds) == set(expected_embeds))
 
-    # get expansions from 'attachment'    
+    # get expansions from 'attachment'
     dummy_emb_list = [emb + '.*' if not emb.endswith('*') else emb for emb in expected_embeds ]
     embs_to_add, _ = expand_embedded_list('EmbeddingTest', registry[TYPES], dummy_emb_list, schema_props, set())
     expected_to_add = ['attachment', 'attachment.attachment.*', 'attachment.attachment2.*', 'attachment.principals_allowed.*']

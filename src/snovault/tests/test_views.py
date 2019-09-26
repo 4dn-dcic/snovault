@@ -1,5 +1,6 @@
 import pytest
 from snovault import TYPES
+from snovault.tests.toolfixtures import registry, root
 TYPE_NAMES = ['TestingPostPutPatchSno', 'TestingDownload']
 
 """ Get all item types from schema names """
@@ -15,37 +16,6 @@ def test_collections(testapp, item_type):
     """ Get all item types, check they are in the response """
     res = testapp.get('/' + item_type).follow(status=200)
     assert item_type.encode('utf-8') in res.body
-
-
-# XXX: Perhaps needs an additinal fixture to insert some test data?
-@pytest.mark.slow
-@pytest.mark.parametrize('item_type', PARAMETERIZED_NAMES)
-def test_html_pages(testapp, item_type):
-    res = testapp.get('/%s?limit=all' % item_type).follow(status=200)
-    for item in res.json['@graph']:
-        res = testapp.get(item['@id'])
-        assert res.body.startswith(b'<!DOCTYPE html>')
-        assert item_type.encode('utf-8') in res.body
-
-
-# XXX: Perhaps needs an additinal fixture to insert some test data?
-@pytest.mark.slow
-@pytest.mark.parametrize('item_type', PARAMETERIZED_NAMES)
-def test_html_server_pages(item_type, wsgi_server):
-    from webtest import TestApp
-    testapp = TestApp(wsgi_server)
-    res = testapp.get(
-        '/%s?limit=all' % item_type,
-        headers={'Accept': 'application/json'},
-    ).follow(
-        status=200,
-        headers={'Accept': 'application/json'},
-    )
-    for item in res.json['@graph']:
-        res = testapp.get(item['@id'], status=200)
-        assert res.body.startswith(b'<!DOCTYPE html>')
-        assert item_type.encode('utf-8') in res.body
-        assert b'Internal Server Error' not in res.body
 
 
 @pytest.mark.parametrize('item_type', PARAMETERIZED_NAMES)
@@ -123,16 +93,6 @@ def test_collection_limit(testapp):
     assert len(res_all.json['@graph']) == 3
     assert len(res_2.json['@graph']) == 2
 
-
-# XXX: embedding-tests has no 'actions', not clear where those are defined
-def test_collection_actions_filtered_by_permission(testapp, anontestapp):
-    res = testapp.get('/embedding-tests/')
-    assert any(action for action in res.json.get('actions', []) if action['name'] == 'add')
-
-    res = anontestapp.get('/embedding-tests/')
-    assert not any(action for action in res.json.get('actions', []) if action['name'] == 'add')
-
-
 def test_collection_put(testapp, execute_counter):
     """ Insert and udpate an item into a collection, verify it worked """
     initial = {
@@ -179,7 +139,7 @@ def test_invalid_collection_put(testapp):
 
     valid = {
         'title': "Testing",
-        'type': "object", 
+        'type': "object",
         'description': "This is a valid object",
     }
     invalid_update = {
@@ -194,12 +154,6 @@ def test_page_toplevel(anontestapp):
     res = anontestapp.get('/embedding-tests/', status=200)
     assert res.json['@id'] == '/embedding-tests/'
 
-
-# cant run, terms does not have submitted_by
-def test_jsonld_term(testapp):
-    res = testapp.get('/embedding-tests/attachment')
-    import pdb; pdb.set_trace()
-    assert res.json
 
 # works as is
 def test_jsonld_context(testapp):
@@ -242,9 +196,6 @@ def test_profiles(testapp, item_type):
     assert res.json['isAbstract'] is False
 
 
-# needs modification?
-# passes 'AbstractItemTest'
-# there are no other abstract collections here to use?
 @pytest.mark.parametrize('item_type', ['AbstractItemTest'])
 def test_profiles_abstract(testapp, item_type):
     from jsonschema_serialize_fork import Draft4Validator
@@ -263,7 +214,6 @@ def test_profiles_abstract(testapp, item_type):
     assert res.json['isAbstract'] is True
 
 
-# works as is
 def test_profiles_all(testapp, registry):
     from jsonschema_serialize_fork import Draft4Validator
     res = testapp.get('/profiles/').maybe_follow(status=200)
@@ -272,10 +222,3 @@ def test_profiles_all(testapp, registry):
         assert ti.name in res.json
     for ti in registry[TYPES].by_abstract_type.values():
         assert ti.name in res.json
-
-# needs modification 
-# gives 404, i think because /award
-# doesn't exist in snovault
-def test_bad_frame(testapp, award):
-    res = testapp.get(award['@id'] + '?frame=bad', status=404)
-    assert res.json['detail'] == '?frame=bad'
