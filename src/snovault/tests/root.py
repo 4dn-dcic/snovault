@@ -55,7 +55,7 @@ def acl_from_settings(settings):
 
 
 @root
-class SnowflakesRoot(Root):
+class TestRoot(Root):
     properties = {
         'title': 'Home',
         'portal_title': 'Snowflakes',
@@ -64,9 +64,11 @@ class SnowflakesRoot(Root):
     @reify
     def __acl__(self):
         acl = acl_from_settings(self.registry.settings) + [
-            (Allow, Everyone, ['list', 'search']),
+            (Allow, Everyone, ['list', 'search', 'index']),
             (Allow, 'group.admin', ALL_PERMISSIONS)
-        ] + Root.__acl__
+        ] + [(Allow, 'remoteuser.INDEXER', ['view', 'view_raw', 'list', 'index']),
+        (Allow, 'remoteuser.EMBED', ['view', 'view_raw', 'expand']),
+        (Allow, Everyone, ['visible_for_edit'])]
         return acl
 
     # BBB
@@ -74,7 +76,7 @@ class SnowflakesRoot(Root):
         return self.connection.get_by_uuid(uuid, default)
 
     def get(self, name, default=None):
-        resource = super(SnowflakesRoot, self).get(name, None)
+        resource = super(TestRoot, self).get(name, None)
         if resource is not None:
             return resource
         resource = self.connection.get_by_unique_key('page:location', name)

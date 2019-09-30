@@ -20,6 +20,7 @@ from snovault import (
     abstract_collection,
     load_schema,
 )
+from snovault.tests.root import TestRoot
 from snovault.attachment import ItemWithAttachment
 from snovault.interfaces import CONNECTION
 
@@ -40,7 +41,7 @@ ONLY_ADMIN_VIEW = [
 ]
 
 ALLOW_EVERYONE_VIEW = [
-    (Allow, Everyone, 'view'),
+    (Allow, Everyone, ['view', 'list']),
 ] + ONLY_ADMIN_VIEW
 
 
@@ -131,7 +132,7 @@ class Collection(BaseCollection):
             return
         # XXX collections should be setup after all types are registered.
         # Don't access type_info.schema here as that precaches calculated schema too early.
-        self.__acl__ = ALLOW_SUBMITTER_ADD
+        self.__acl__ = (ALLOW_SUBMITTER_ADD + ALLOW_EVERYONE_VIEW)
 
 
 @abstract_collection(
@@ -184,6 +185,8 @@ class Item(BaseItem):
         # Don't finalize to avoid validation here.
         properties = self.upgrade_properties().copy()
         status = properties.get('status')
+        if status is None:
+            return [(Allow, Everyone, ['list', 'add', 'view', 'edit', 'add_unvalidated', 'index', 'storage', 'import_items', 'search'])]
         return self.STATUS_ACL.get(status, ALLOW_LAB_SUBMITTER_EDIT)
 
     def __ac_local_roles__(self):
@@ -251,14 +254,13 @@ class SharedItem(Item):
 
 @calculated_property(context=Item.Collection, category='action')
 def add(context, request):
-    # import pdb; pdb.set_trace()
-    # if request.has_permission('add'):
-    return {
-        'name': 'add',
-        'title': 'Add',
-        'profile': '/profiles/{ti.name}.json'.format(ti=context.type_info),
-        'href': '{item_uri}#!add'.format(item_uri=request.resource_path(context)),
-    }
+    if request.has_permission('add'):
+        return {
+            'name': 'add',
+            'title': 'Add',
+            'profile': '/profiles/{ti.name}.json'.format(ti=context.type_info),
+            'href': '{item_uri}#!add'.format(item_uri=request.resource_path(context)),
+            }
 
 
 @calculated_property(context=Item, category='action')

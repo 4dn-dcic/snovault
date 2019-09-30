@@ -62,11 +62,6 @@ class Resource(object):
 class Root(Resource):
     __name__ = ''
     __parent__ = None
-    __acl__ = [
-        (Allow, 'remoteuser.INDEXER', ['view', 'view_raw', 'list', 'index']),
-        (Allow, 'remoteuser.EMBED', ['view', 'view_raw', 'expand']),
-        (Allow, Everyone, ['visible_for_edit']),
-    ]
     properties = {}
 
     def __init__(self, registry):

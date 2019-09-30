@@ -212,7 +212,6 @@ def main(global_config, **local_config):
     config.include('.authentication')
     config.include('.server_defaults')
     config.include('.types')
-    config.include('.root')
     config.include('.batch_download')
     config.include('.visualization')
 

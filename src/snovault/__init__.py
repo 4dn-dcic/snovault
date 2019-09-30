@@ -101,7 +101,7 @@ def main(global_config, **local_config):
     config.include('.renderers')
     # these two should be application specific
     config.include('.authentication')
-    config.include('.root') # XXX: Change to snowflakes.root, tests pass 
+    config.include('snovault.tests.root') # XXX: Change to snowflakes.root, tests pass
 
     if 'elasticsearch.server' in config.registry.settings:
         config.include('snovault.elasticsearch')

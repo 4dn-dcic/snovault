@@ -55,7 +55,9 @@ class SnowflakesRoot(Root):
         acl = acl_from_settings(self.registry.settings) + [
             (Allow, Everyone, ['list', 'search']),
             (Allow, 'group.admin', ALL_PERMISSIONS)
-        ] + Root.__acl__
+        ] + [(Allow, 'remoteuser.INDEXER', ['view', 'view_raw', 'list', 'index']),
+        (Allow, 'remoteuser.EMBED', ['view', 'view_raw', 'expand']),
+        (Allow, Everyone, ['visible_for_edit'])]
         return acl
 
     # BBB
@@ -63,6 +65,7 @@ class SnowflakesRoot(Root):
         return self.connection.get_by_uuid(uuid, default)
 
     def get(self, name, default=None):
+        import pdb; pdb.set_trace()
         resource = super(SnowflakesRoot, self).get(name, None)
         if resource is not None:
             return resource

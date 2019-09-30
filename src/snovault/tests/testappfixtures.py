@@ -11,7 +11,7 @@ _app_settings = {
     'production': True,
     'structlog.dir': '/tmp/',
     'multiauth.policies': 'session remoteuser accesskey webuser',
-    'multiauth.groupfinder': 'snovault.authorization.groupfinder',
+    'multiauth.groupfinder': 'snovault.tests.authorization.groupfinder',
     'multiauth.policy.session.use': 'snovault.authentication.NamespacedAuthenticationPolicy',
     'multiauth.policy.session.base': 'pyramid.authentication.SessionAuthenticationPolicy',
     'multiauth.policy.session.namespace': 'mailto',

@@ -42,7 +42,6 @@ def test_update_mapping_by_embed(registry):
     assert 'raw' in new_m['fields']
     assert 'lower_case_sort' in new_m['fields']
 
-    #import pdb; pdb.set_trace()
     # then test with real data and wildcard (*)
     test_schema = registry[TYPES][unit_test_type].schema
     test_subschema = test_schema['properties']['attachment']
