@@ -98,10 +98,10 @@ def main(global_config, **local_config):
     config.commit()  # commit so search can override listing
 
     # Render an HTML page to browsers and a JSON document for API clients
-    config.include('snowflakes.renderers')
+    config.include('.renderers')
     # these two should be application specific
     config.include('.authentication')
-    config.include('snowflakes.root')
+    config.include('.root') # XXX: Change to snowflakes.root, tests pass 
 
     if 'elasticsearch.server' in config.registry.settings:
         config.include('snovault.elasticsearch')
@@ -121,7 +121,7 @@ def main(global_config, **local_config):
 
     # Load upgrades last so that all views (including testing views) are
     # registered.
-    # config.include('.upgrade')
+    #config.include('.upgrade')
 
     app = config.make_wsgi_app()
 

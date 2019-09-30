@@ -181,7 +181,6 @@ def main(global_config, **local_config):
     """
     settings = global_config
     settings.update(local_config)
-
     settings['snovault.jsonld.namespaces'] = json_asset('encoded:schemas/namespaces.json')
     settings['snovault.jsonld.terms_namespace'] = 'https://www.encodeproject.org/terms/'
     settings['snovault.jsonld.terms_prefix'] = 'encode'
