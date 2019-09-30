@@ -67,6 +67,7 @@ class Root(Resource):
         (Allow, 'remoteuser.EMBED', ['view', 'view_raw', 'expand']),
         (Allow, Everyone, ['visible_for_edit']),
     ]
+    properties = {}
 
     def __init__(self, registry):
         self.registry = registry
