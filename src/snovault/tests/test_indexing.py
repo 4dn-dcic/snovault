@@ -328,7 +328,7 @@ def test_indexing_logging(app, testapp, indexer_testapp, capfd):
     for record in check_logs:
         if not record:
             continue
-        proc_record = yaml.load(record.strip())
+        proc_record = yaml.load('{' + record.strip().split('{', 1)[1])
         if not isinstance(proc_record, dict):
             continue
         if proc_record.get('item_uuid') == post_uuid:
