@@ -131,7 +131,6 @@ def test_indexer_queue_adds_telemetry_id(app):
     # finally, delete
     indexer_queue.delete_messages(received)
 
-@pytest.mark.flaky
 @pytest.mark.es
 def test_indexer_queue(app):
     indexer_queue_mirror = app.registry[INDEXER_QUEUE_MIRROR]
