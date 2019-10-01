@@ -1,4 +1,7 @@
 import pytest
+import logging
+
+logging.basicConfig()
 
 pytest_plugins = [
     'snovault.tests.serverfixtures',

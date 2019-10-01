@@ -75,7 +75,7 @@ def main(global_config, **local_config):
     settings.update(local_config)
 
     set_logging(in_prod=settings.get('production'))
-    # set_logging(settings.get('elasticsearch.server'), settings.get('production'))
+    #set_logging(settings.get('elasticsearch.server'), settings.get('production'))
 
     # TODO - these need to be set for dummy app
     # settings['snovault.jsonld.namespaces'] = json_asset('snovault:schemas/namespaces.json')
@@ -101,12 +101,12 @@ def main(global_config, **local_config):
     config.include('.renderers')
     # these two should be application specific
     config.include('.authentication')
-    config.include('snovault.tests.root') # XXX: Change to snowflakes.root, tests pass
+    config.include('snovault.tests.root')
 
     if 'elasticsearch.server' in config.registry.settings:
         config.include('snovault.elasticsearch')
         # needed for /search/?
-        config.include('snowflakes.search')
+        config.include('.search')
 
     config.include(static_resources)
     config.include(changelogs)

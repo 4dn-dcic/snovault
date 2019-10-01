@@ -65,7 +65,7 @@ def main():
 
     logging.basicConfig(format='')
     # Loading app will have configured from config file. Reconfigure here:
-    logging.getLogger('snowvault').setLevel(logging.DEBUG)
+    logging.getLogger('snovault').setLevel(logging.DEBUG)
 
     # get the config and see if we want to connect to non-local servers
     config = get_appsettings(args.config_uri, args.app_name)
