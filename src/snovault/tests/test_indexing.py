@@ -147,6 +147,7 @@ def test_indexer_queue(app):
     to_index, failed = indexer_queue.add_uuids(app.registry, [test_message], strict=True)
     assert to_index == [test_message]
     assert not failed
+    time.sleep(5) # make sure all msgs are received
     received = indexer_queue.receive_messages()
     assert len(received) == 1
     msg_body = json.loads(received[0]['Body'])
