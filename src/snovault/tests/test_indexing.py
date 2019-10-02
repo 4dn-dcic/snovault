@@ -132,6 +132,7 @@ def test_indexer_queue_adds_telemetry_id(app):
     indexer_queue.delete_messages(received)
 
 @pytest.mark.es
+@pytest.mark.flaky
 def test_indexer_queue(app):
     indexer_queue_mirror = app.registry[INDEXER_QUEUE_MIRROR]
     # this is only set up for webprod/webprod2
