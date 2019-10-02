@@ -325,6 +325,8 @@ def test_indexing_logging(app, testapp, indexer_testapp, capfd):
     check_logs = capfd.readouterr()[-1].split('\n')
     item_idx_record = None
     for record in check_logs:
+        print('************')
+        print(record)
         if not record:
             continue
         try:
