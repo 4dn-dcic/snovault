@@ -335,12 +335,15 @@ def test_indexing_logging(app, testapp, indexer_testapp, capfd):
             continue
         if proc_record.get('item_uuid') == post_uuid:
             item_idx_record = proc_record
+            break
     assert item_idx_record is not None
     assert item_idx_record['collection'] == TEST_TYPE
     assert 'uo_start_time' in item_idx_record
     assert isinstance(item_idx_record['sid'], int)
     assert 'log_uuid' in item_idx_record
     assert 'level' in item_idx_record
+    print('*******************')
+    print(item_idx_record)
     assert item_idx_record['url_path'] == '/index'
 
     ### PART OF ES LOGGING TEST (DISABLED)
