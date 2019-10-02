@@ -42,7 +42,7 @@ from pyramid.paster import get_appsettings
 from snovault.tests.pyramidfixtures import dummy_request
 from snovault.tests.toolfixtures import registry, root, elasticsearch
 
-pytestmark = [pytest.mark.indexing]
+pytestmark = [pytest.mark.indexing, pytest.mark.flaky]
 TEST_COLL = '/testing-post-put-patch-sno/'
 TEST_TYPE = 'testing_post_put_patch_sno'  # use one collection for testing
 
@@ -179,7 +179,8 @@ def test_indexer_queue(app):
 @pytest.mark.flaky
 def test_queue_indexing_telemetry_id(app, testapp):
     indexer_queue = app.registry[INDEXER_QUEUE]
-    assert set(indexer_queue.queue_targets) == {'primary', 'secondary'}
+    ordered_queue_targets = [targ for targ in indexer_queue.queue_targets]
+    assert ordered_queue_targets == ['primary', 'secondary']
     indexer_queue.clear_queue()
     testapp.post_json(TEST_COLL + '?telemetry_id=test_telem', {'required': ''})
     time.sleep(2)
@@ -867,7 +868,8 @@ def test_es_purge_uuid(app, testapp, indexer_testapp, session):
     assert str(check.uuid) == test_uuid
 
     # Then index it:
-    create_mapping.run(app, collections=[TEST_TYPE], sync_index=True, purge_queue=True)
+    create_mapping.run(app, collections=[TEST_TYPE], sync_index=True)
+    indexer_queue.clear_queue()
     time.sleep(4)
 
     ## Now ensure that we do have it in ES:
@@ -944,11 +946,12 @@ def delay_rerun(*args):
 def test_create_mapping_index_diff(app, testapp, indexer_testapp):
     es = app.registry[ELASTIC_SEARCH]
     # post a couple items, index, then remove one
-    res1 = testapp.post_json(TEST_COLL, {'required': ''})
-    test_uuid = res1.json['@graph'][0]['uuid']
-    res2 = testapp.post_json(TEST_COLL, {'required': ''})  # second item
-    test2_uuid = res2.json
-    create_mapping.run(app, collections=[TEST_TYPE], purge_queue=True)
+    res = testapp.post_json(TEST_COLL, {'required': ''})
+    test_uuid = res.json['@graph'][0]['uuid']
+    testapp.post_json(TEST_COLL, {'required': ''})  # second item
+    create_mapping.run(app, collections=[TEST_TYPE])
+    indexer_queue = app.registry[INDEXER_QUEUE]
+    indexer_queue.clear_queue()
     indexer_testapp.post_json('/index', {'record': True})
     time.sleep(4)
     initial_count = es.count(index=TEST_TYPE, doc_type=TEST_TYPE).get('count')
