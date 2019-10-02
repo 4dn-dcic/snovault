@@ -325,8 +325,6 @@ def test_indexing_logging(app, testapp, indexer_testapp, capfd):
     check_logs = capfd.readouterr()[-1].split('\n')
     item_idx_record = None
     for record in check_logs:
-        print('************')
-        print(record)
         if not record:
             continue
         try:
@@ -335,7 +333,8 @@ def test_indexing_logging(app, testapp, indexer_testapp, capfd):
             continue
         if not isinstance(proc_record, dict):
             continue
-        if proc_record.get('item_uuid') == post_uuid:
+        if (proc_record.get('item_uuid') == post_uuid and
+            proc_record.get('url_path', None) is not None):
             item_idx_record = proc_record
             break
     assert item_idx_record is not None
@@ -344,8 +343,6 @@ def test_indexing_logging(app, testapp, indexer_testapp, capfd):
     assert isinstance(item_idx_record['sid'], int)
     assert 'log_uuid' in item_idx_record
     assert 'level' in item_idx_record
-    print('*******************')
-    print(item_idx_record)
     assert item_idx_record['url_path'] == '/index'
 
     ### PART OF ES LOGGING TEST (DISABLED)
