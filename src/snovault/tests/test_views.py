@@ -121,7 +121,6 @@ def test_collection_put(testapp, execute_counter):
         assert res[key] == update[key]
 
 
-# XXX: new test
 def test_invalid_collection_put(testapp):
     """ Tests that inserting various invalid items will appropriately fail """
     missing_required = {
@@ -149,20 +148,16 @@ def test_invalid_collection_put(testapp):
     testapp.put_json(item_url, invalid_update, status=422)
 
 
-# XXX: first part of this test works but second will not since it refers to pages
 def test_page_toplevel(anontestapp):
     res = anontestapp.get('/embedding-tests/', status=200)
     assert res.json['@id'] == '/embedding-tests/'
 
 
-# works as is
 def test_jsonld_context(testapp):
     res = testapp.get('/terms/', status=200)
     assert res.json
 
-# works without workbook?
-# also not sure if it previously had any effect
-# as status code was not checked, now looks for 200
+
 @pytest.mark.slow
 @pytest.mark.parametrize('item_type', PARAMETERIZED_NAMES)
 def test_index_data_workbook(testapp, indexer_testapp, item_type):
@@ -170,19 +165,17 @@ def test_index_data_workbook(testapp, indexer_testapp, item_type):
     for item in res.json['@graph']:
         indexer_testapp.get(item['@id'] + '@@index-data', status=200)
 
-# works as it (if x failed is expected, which i think it is)
+
 @pytest.mark.xfail
 def test_abstract_collection(testapp, experiment):
     testapp.get('/Dataset/{accession}'.format(**experiment))
     testapp.get('/datasets/{accession}'.format(**experiment))
 
 
-# XXX: Instead of checking html we just check to see if it can be reached
 def test_home(testapp):
     testapp.get('/', status=200)
 
 
-# works as is
 @pytest.mark.parametrize('item_type', TYPE_NAMES)
 def test_profiles(testapp, item_type):
     from jsonschema_serialize_fork import Draft4Validator

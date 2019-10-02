@@ -53,8 +53,6 @@ def content(testapp):
         testapp.post_json(url, item, status=201)
 
 
-# XXX: does not work on testing_server_default
-# as it relies on 'User', which doesn't exist in snovault
 @pytest.mark.parametrize('item_type', [name for name in SNAKE_NAMES if name != 'testing_server_default'])
 def test_add_default_embeds(registry, item_type):
     """
@@ -76,8 +74,6 @@ def test_add_default_embeds(registry, item_type):
     assert principals_allowed_included_in_default_embeds
 
 
-# XXX: This test... doesn't do much.
-# Just because an error is thrown doesn't mean it did the right thing
 @pytest.mark.parametrize('item_type', SNAKE_NAMES)
 def test_manual_embeds(registry, item_type):
     """
