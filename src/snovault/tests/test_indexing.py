@@ -294,7 +294,6 @@ def test_indexing_simple(app, testapp, indexer_testapp):
     # ensure we only have 1 shard for tests
     assert testing_ppp_settings['settings']['index']['number_of_shards'] == '1'
 
-@pytest.mark.skip # Log on travis is truncated, passes locally
 @pytest.mark.flaky(max_runs=3)
 def test_indexing_logging(app, testapp, indexer_testapp, capfd):
     """
