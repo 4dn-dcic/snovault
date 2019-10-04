@@ -8,6 +8,7 @@ from pyramid.traversal import resource_path
 from pyramid.view import view_config
 from pyramid.settings import asbool
 from timeit import default_timer as timer
+from contextlib import contextmanager
 from .resources import Item
 from .authentication import calc_principals
 from .interfaces import STORAGE
@@ -19,6 +20,20 @@ def includeme(config):
     config.add_route('indexing-info', '/indexing-info')
     config.add_route('max-sid', '/max-sid')
     config.scan(__name__)
+
+
+@contextmanager
+def indexing_timer(timer_dict, time_key):
+    """
+    Simple contextmanager to time components of index-data
+
+    Args:
+        timer_dict (dict): dictionary to add timing results to
+        time_key (str): key to use for the given timing result
+    """
+    start = timer()
+    yield
+    timer_dict[time_key] = timer() - start
 
 
 def join_linked_uuids_sids(request, uuids):
@@ -78,35 +93,40 @@ def item_index_data(context, request):
     Returns:
         A dict document representing the full data to index for the given item
     """
+    indexing_stats = {}  # hold timing details for this view
+
     uuid = str(context.uuid)
     # upgrade_properties calls necessary upgraders based on schema_version
-    properties = context.upgrade_properties()
+    with indexing_timer(indexing_stats, 'upgrade_properties'):
+        properties = context.upgrade_properties()
 
     # ES versions 2 and up don't allow dots in links. Update these to use ~s
     new_links = {}
     for key, val in context.links(properties).items():
         new_links['~'.join(key.split('.'))] = val
     links = new_links
-    unique_keys = context.unique_keys(properties)
 
     principals_allowed = calc_principals(context)
     path = resource_path(context)
     paths = {path}
     collection = context.collection
 
-    if collection.unique_key in unique_keys:
-        paths.update(
-            resource_path(collection, key)
-            for key in unique_keys[collection.unique_key])
-
-    for base in (collection, request.root):
-        for key_name in ('accession', 'alias'):
-            if key_name not in unique_keys:
-                continue
-            paths.add(resource_path(base, uuid))
+    with indexing_timer(indexing_stats, 'unique_keys'):
+        unique_keys = context.unique_keys(properties)
+        if collection.unique_key in unique_keys:
             paths.update(
-                resource_path(base, key)
-                for key in unique_keys[key_name])
+                resource_path(collection, key)
+                for key in unique_keys[collection.unique_key])
+
+    with indexing_timer(indexing_stats, 'paths'):
+        for base in (collection, request.root):
+            for key_name in ('accession', 'alias'):
+                if key_name not in unique_keys:
+                    continue
+                paths.add(resource_path(base, uuid))
+                paths.update(
+                    resource_path(base, key)
+                    for key in unique_keys[key_name])
 
     path = path + '/'
     # setting _indexing_view enables the embed_cache and cause population of
@@ -115,7 +135,8 @@ def item_index_data(context, request):
 
     # run the object view first
     request._linked_uuids = set()
-    object_view = request.invoke_view(path, '@@object')
+    with indexing_timer(indexing_stats, 'object_view'):
+        object_view = request.invoke_view(path, '@@object')
     linked_uuids_object = request._linked_uuids.copy()
     rev_link_names = request._rev_linked_uuids_by_item.get(uuid, {}).copy()
 
@@ -128,25 +149,34 @@ def item_index_data(context, request):
     }
     # since request._indexing_view is set to True in indexer.py,
     # all embeds (including subrequests) below will use the embed cache
-    embedded_view = request.invoke_view(path, '@@embedded', index_uuid=uuid)
+    with indexing_timer(indexing_stats, 'embedded_view'):
+        embedded_view = request.invoke_view(path, '@@embedded', index_uuid=uuid)
     linked_uuids_embedded = request._linked_uuids.copy()
 
     # find uuids traversed that rev link to this item
-    rev_linked_to_me = get_rev_linked_items(request, uuid)
-    aggregated_items = {agg: res['items'] for agg, res in request._aggregated_items.items()}
+    with indexing_timer(indexing_stats, 'rev_links'):
+        rev_linked_to_me = get_rev_linked_items(request, uuid)
+
+    # calculated aggregated items
+    with indexing_timer(indexing_stats, 'aggregated_items'):
+        aggregated_items = {agg: res['items'] for agg, res in
+                            request._aggregated_items.items()}
 
     # run validators for the item by PATCHing with check_only=True
     # json_body provided is the upgraded properties of the item
-    validate_path = path + '?check_only=true'
-    validate_req = make_subrequest(request, validate_path, json_body=properties)
-    try:
-        request.invoke_subrequest(validate_req)
-    except ValidationFailure:
-        pass
+    with indexing_timer(indexing_stats, 'validation'):
+        validate_path = path + '?check_only=true'
+        validate_req = make_subrequest(request, validate_path,
+                                       json_body=properties)
+        try:
+            request.invoke_subrequest(validate_req)
+        except ValidationFailure:
+            pass
 
     document = {
         'aggregated_items': aggregated_items,
         'embedded': embedded_view,
+        'indexing_stats': indexing_stats,
         'item_type': context.type_info.item_type,
         'linked_uuids_embedded': join_linked_uuids_sids(request, linked_uuids_embedded),
         'linked_uuids_object': join_linked_uuids_sids(request, linked_uuids_object),
@@ -198,11 +228,9 @@ def indexing_info(request):
     if asbool(request.params.get('run', True)):
         request._indexing_view = True
         request.datastore = 'database'
-        path = '/' + uuid + '/@@embedded'
-        start = timer()
-        embedded_view = request.invoke_view(path, index_uuid=uuid, as_user='INDEXER')
-        end = timer()
-        response['embedded_seconds'] = end - start
+        path = '/' + uuid + '/@@index-data'
+        index_view = request.invoke_view(path, index_uuid=uuid, as_user='INDEXER')
+        response['indexing_stats'] = index_view['indexing_stats']
         es_assc_uuids = find_uuids_for_indexing(request.registry, set([uuid]))
         new_rev_link_uuids = get_rev_linked_items(request, uuid)
         # invalidated: items linking to this in es + newly rev linked items

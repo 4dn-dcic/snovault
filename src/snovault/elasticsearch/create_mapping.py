@@ -474,6 +474,10 @@ def es_mapping(mapping, agg_items_mapping):
             'paths': {
                 'type': 'keyword',
                 'include_in_all': False
+            },
+            'indexing_stats': {
+                'type': 'object',
+                'include_in_all': False
             }
         }
     }
