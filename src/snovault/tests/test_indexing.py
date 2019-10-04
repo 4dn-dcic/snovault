@@ -1110,8 +1110,8 @@ def test_indexing_info(app, testapp, indexer_testapp):
     assert idx_info_err.json['status'] == 'error'
     src_idx_info = testapp.get('/indexing-info?uuid=%s' % source['uuid'])
     assert src_idx_info.json['status'] == 'success'
-    assert 'indexing_stats' in src_idx_info
-    assert 'embedded_view' in src_idx_info['indexing_stats']
+    assert 'indexing_stats' in src_idx_info.json
+    assert 'embedded_view' in src_idx_info.json['indexing_stats']
     # up to date
     assert src_idx_info.json['sid_es'] == src_idx_info.json['sid_db']
     assert set(src_idx_info.json['uuids_invalidated']) == set([target1['uuid'], source['uuid']])
@@ -1119,8 +1119,8 @@ def test_indexing_info(app, testapp, indexer_testapp):
     testapp.patch_json('/testing-link-sources-sno/' + source['uuid'], {'target': target2['uuid']})
     src_idx_info2 = testapp.get('/indexing-info?uuid=%s' % source['uuid'])
     assert src_idx_info2.json['status'] == 'success'
-    assert 'indexing_stats' in src_idx_info2
-    assert 'embedded_view' in src_idx_info2['indexing_stats']
+    assert 'indexing_stats' in src_idx_info2.json
+    assert 'embedded_view' in src_idx_info2.json['indexing_stats']
     # es is now out of date, since not indexed yet
     assert src_idx_info2.json['sid_es'] < src_idx_info2.json['sid_db']
     # target1 will still be in invalidated uuids, since es has not updated
@@ -1131,8 +1131,8 @@ def test_indexing_info(app, testapp, indexer_testapp):
     src_idx_info3 = testapp.get('/indexing-info?uuid=%s' % source['uuid'])
     assert src_idx_info3.json['status'] == 'success'
     assert src_idx_info3.json['sid_es'] == src_idx_info3.json['sid_db']
-    assert 'indexing_stats' in src_idx_info3
-    assert 'embedded_view' in src_idx_info3['indexing_stats']
+    assert 'indexing_stats' in src_idx_info3.json
+    assert 'embedded_view' in src_idx_info3.json['indexing_stats']
     # target1 has now been updated and removed from invalidated uuids
     assert set(src_idx_info3.json['uuids_invalidated']) == set([target2['uuid'], source['uuid']])
     # try the view without calculated embedded view
