@@ -369,8 +369,10 @@ class Indexer(object):
                 check_sid(sid, max_sid)  # max_sid should be set already
             result = request.embed(index_data_query, as_user='INDEXER')
             duration = timer() - start
+            # add total duration to indexing_stats in document
+            result['indexing_stats']['total_indexing_view'] = duration
             log.bind(collection=result.get('item_type'))
-            # log.info("Time to embed", duration=duration, cat="embed object")
+            # log.info("Time for index-data", duration=duration, cat="indexing view")
         except SidException as e:
             duration = timer() - start
             log.warning('Invalid max sid. Resending...', duration=duration, cat=cat)
