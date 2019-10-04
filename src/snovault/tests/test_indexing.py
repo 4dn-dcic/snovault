@@ -961,6 +961,10 @@ def test_indexing_esstorage(app, testapp, indexer_testapp):
     assert es_res == es_res_by_uuid.source
     assert es_res == es_res_by_json.source
     assert es_res == es_res_direct['_source']
+    # make sure indexing_stats and certain timings are included
+    assert 'indexing_stats' in es_res_direct['_source']
+    assert 'embedded_view' in es_res_direct['_source']['indexing_stats']
+    assert 'total_indexing_view' in es_res_direct['_source']['indexing_stats']
     # db get_by_uuid direct returns None by design
     db_res_direct = app.registry[STORAGE].write.get_by_uuid_direct(test_uuid, TEST_TYPE)
     assert db_res_direct == None
@@ -1106,6 +1110,8 @@ def test_indexing_info(app, testapp, indexer_testapp):
     assert idx_info_err.json['status'] == 'error'
     src_idx_info = testapp.get('/indexing-info?uuid=%s' % source['uuid'])
     assert src_idx_info.json['status'] == 'success'
+    assert 'indexing_stats' in src_idx_info
+    assert 'embedded_view' in src_idx_info['indexing_stats']
     # up to date
     assert src_idx_info.json['sid_es'] == src_idx_info.json['sid_db']
     assert set(src_idx_info.json['uuids_invalidated']) == set([target1['uuid'], source['uuid']])
@@ -1113,6 +1119,8 @@ def test_indexing_info(app, testapp, indexer_testapp):
     testapp.patch_json('/testing-link-sources-sno/' + source['uuid'], {'target': target2['uuid']})
     src_idx_info2 = testapp.get('/indexing-info?uuid=%s' % source['uuid'])
     assert src_idx_info2.json['status'] == 'success'
+    assert 'indexing_stats' in src_idx_info2
+    assert 'embedded_view' in src_idx_info2['indexing_stats']
     # es is now out of date, since not indexed yet
     assert src_idx_info2.json['sid_es'] < src_idx_info2.json['sid_db']
     # target1 will still be in invalidated uuids, since es has not updated
@@ -1123,13 +1131,15 @@ def test_indexing_info(app, testapp, indexer_testapp):
     src_idx_info3 = testapp.get('/indexing-info?uuid=%s' % source['uuid'])
     assert src_idx_info3.json['status'] == 'success'
     assert src_idx_info3.json['sid_es'] == src_idx_info3.json['sid_db']
+    assert 'indexing_stats' in src_idx_info3
+    assert 'embedded_view' in src_idx_info3['indexing_stats']
     # target1 has now been updated and removed from invalidated uuids
     assert set(src_idx_info3.json['uuids_invalidated']) == set([target2['uuid'], source['uuid']])
     # try the view without calculated embedded view
     src_idx_info4 = testapp.get('/indexing-info?uuid=%s&run=False' % source['uuid'])
     assert src_idx_info4.json['status'] == 'success'
     assert 'uuids_invalidated' not in src_idx_info4.json
-    assert 'embedded_seconds' not in src_idx_info4.json
+    assert 'indexing_stats' not in src_idx_info4.json
 
 
 def test_validators_on_indexing(app, testapp, indexer_testapp):
