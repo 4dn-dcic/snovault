@@ -93,26 +93,8 @@ setup(
         dev-servers = snovault.dev_servers:main
         es-index-listener = snovault.elasticsearch.es_index_listener:main
 
-        add-date-created = snowflakes.commands.add_date_created:main
-        check-rendering = snowflakes.commands.check_rendering:main
-        deploy = snowflakes.commands.deploy:main
-        extract_test_data = snowflakes.commands.extract_test_data:main
-        es-index-data = snowflakes.commands.es_index_data:main
-        import-data = snowflakes.commands.import_data:main
-        jsonld-rdf = snowflakes.commands.jsonld_rdf:main
-        profile = snowflakes.commands.profile:main
-        spreadsheet-to-json = snowflakes.commands.spreadsheet_to_json:main
-        migrate-attachments-aws = snowflakes.commands.migrate_attachments_aws:main
-
-        [paste.app_factory]
-        main = snowflakes:main
-        snowflakes = snowflakes:main
-
         [paste.composite_factory]
         indexer = snovault.elasticsearch.es_index_listener:composite
-
-        [paste.filter_app_factory]
-        memlimit = snowflakes.memlimit:filter_app
         ''',
     classifiers=[
         # How mature is this project? Common values are
