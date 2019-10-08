@@ -64,7 +64,7 @@ class TestRoot(Root):
     @reify
     def __acl__(self):
         acl = acl_from_settings(self.registry.settings) + [
-            (Allow, Everyone, ['list', 'search', 'index']),
+            (Allow, Everyone, ['list', 'search']),
             (Allow, 'group.admin', ALL_PERMISSIONS)
         ] + [(Allow, 'remoteuser.INDEXER', ['view', 'view_raw', 'list', 'index']),
         (Allow, 'remoteuser.EMBED', ['view', 'view_raw', 'expand']),
