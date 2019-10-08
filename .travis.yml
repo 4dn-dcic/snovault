@@ -67,7 +67,7 @@ install:
 - pip uninstall -y six
 - pip install six==1.11.0
 - python bootstrap.py --buildout-version 2.9.5 --setuptools-version 37.0.0
-- bin/buildout -c || (echo "Retrying buildout" && bin/buildout )
+- bin/buildout || ( echo "Retrying buildout" && bin/buildout )
 - pip install pytest==2.9.1
 - pip install coveralls
 - pip install codacy-coverage
