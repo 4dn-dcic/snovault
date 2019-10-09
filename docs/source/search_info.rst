@@ -1,4 +1,4 @@
-Search Info:
+Search Info
 =====================
 
 **URIS**
