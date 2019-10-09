@@ -2,7 +2,7 @@ Changes to embedding and indexing
 =================================
 
 EMBEDDING
-=========
+^^^^^^^^^
 
 The 4DN DCIC team has moved away from the "embed everything" mentality that was previously in snovault. In it's place, we've allowed a precise control of what gets embedded for each object type. These are the 'embedded lists' (embedded_list property) defined for each object in the corresponding /types/ file. To provide minimal embeds without forcing us to have to manually embed common fields (read: add to individual types files), default embedding was added. This will automatically provide @id, link_id, display_title, principals_allowed, and uuid fields for any linked object at the top level. Additionally, all subobjects defined in the schema are automatically fully embedded. Embedding a linkTo with a '*' at the end of the embed path will emulate this functionality for any object in the embedded list (this means that all linkTos within that object will also get the three fields mentioned above, as well as all top level fields). Otherwise, valid embeds are single fields or just the object (in which case link_id, display_title, and uuid) are added. Below are some examples to illustrate:
 
@@ -52,7 +52,7 @@ Since embedding directly affects the elasticsearch (ES) mapping and indexing, it
 Similarly, the embedded fields are passed into the embed.py code to trim the result to the specific fields we desire. A cache is used during embedding to speed up the embedding process (see embed_cache.py). It caches the calculated results for view of a given item, keyed by path. For example, <my-item>/@@embedded and <my-item>/@@object would be separate entries in the cache.
 
 INDEXING
-========
+^^^^^^^^
 
 As of spring 2018, the 4DN DCIC team diverged significantly from the indexing strategy previously used by ENCODE. Whereas the old system was based on creating database snapshots identified by the most recent transaction (xmin), the new system queues individual items for indexing and the /index endpoint triggers a process to pull them off and index them into ES. The queues currently used are from simple queue service (SQS), an AWS product. This provided us a performance increase as well as increased visibility into what was happening in the processes (which was previously a black box). The system is built of the following components:
 

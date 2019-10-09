@@ -1,8 +1,8 @@
 ========================
-SnoVault JSON-LD Database Framework
+SnoVault
 ========================
 
-Version 0.1
+Snovault is a JSON-LD Database Framework that serves as the backend for the 4DN Data portal and CGAP. Version 0.2
 
 |Build status|_
 

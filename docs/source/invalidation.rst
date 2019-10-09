@@ -1,5 +1,5 @@
-Dependency tracking and invalidation
-====================================
+Dependecies/invalidation
+===========================
 
 Quick reference of important files (all under src/snovault/)
 ----------------------------------

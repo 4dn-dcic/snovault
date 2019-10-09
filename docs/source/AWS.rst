@@ -1,5 +1,5 @@
-Demo Machines
-=============
+AWS Demo Machines
+=================
 
 To launch a demo machine you need an access key (log into AWS console to create one under IAM) which you place in ``~/.aws/credentials`` (see _aws getting started) which is shared with the aws cli utility::
 
@@ -50,7 +50,7 @@ You can then follow the deployment progress with::
 
 
 Authorization of Demo Machines
-==============================
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Demo machines restore their database from the current Postgres WAL archive stored in S3 by WAL-E.
 The demo machines are granted read access via `IAM roles`_ assigned to them by the deploy script.
