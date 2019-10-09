@@ -37,10 +37,6 @@ def convert_names_to_snake():
 
 SNAKE_NAMES = convert_names_to_snake()
 
-@pytest.fixture(autouse=True)
-def autouse_external_tx(external_tx):
-    pass
-
 
 @pytest.fixture
 def content(testapp):

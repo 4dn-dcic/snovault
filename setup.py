@@ -86,16 +86,6 @@ setup(
     extras_require={
         'test': tests_require,
     },
-    entry_points='''
-        [console_scripts]
-        batchupgrade = snovault.batchupgrade:main
-        create-mapping = snovault.elasticsearch.create_mapping:main
-        dev-servers = snovault.dev_servers:main
-        es-index-listener = snovault.elasticsearch.es_index_listener:main
-
-        [paste.composite_factory]
-        indexer = snovault.elasticsearch.es_index_listener:composite
-        ''',
     classifiers=[
         # How mature is this project? Common values are
         #   3 - Alpha

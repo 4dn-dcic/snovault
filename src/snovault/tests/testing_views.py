@@ -239,19 +239,6 @@ class Item(BaseItem):
             return self.properties.get('uuid', None)
 
 
-class SharedItem(Item):
-    ''' An Item visible to all authenticated users while "proposed" or "in progress".
-    '''
-    def __ac_local_roles__(self):
-        roles = {}
-        properties = self.upgrade_properties().copy()
-        if 'lab' in properties:
-            lab_submitters = 'submits_for.%s' % properties['lab']
-            roles[lab_submitters] = 'role.lab_submitter'
-        roles[Authenticated] = 'role.viewing_group_member'
-        return roles
-
-
 @calculated_property(context=Item.Collection, category='action')
 def add(context, request):
     if request.has_permission('add'):
