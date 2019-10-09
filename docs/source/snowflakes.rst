@@ -17,3 +17,5 @@ In addition, several relevant tests that lived in Snowflakes have been migrated 
 To fix this, several aspects of the tests have been refactored. We now load test schemas from files and have migrated many of the relevant fixtures from Snowflakes. ``config.py`` also required changes to account for behavior Snovault expected that it inherited from Snowflakes due to how includes work in PyTest.
 
 Test coverage for Snovault should still be fairly strong, especially when combined with that of Fourfront/CGAP. Some indexing tests are marked as flaky as we've found they experience intermittent failures. Updating how we clear the SQS queue has also helped to remidy this issue.
+
+One issue of note that was not solved involved a particular logging related test that appears to pass on local and fail on Travis. The associated test is ``test_indexing_logging``. This tests makes a index post on the application and checks to see that a correct log message was emitted. The log message itself is emitted but for some reason on Travis it is truncated. Even spinning up Travis on an identical container could not reproduce the issue. The relevant line is marked in the test file. 

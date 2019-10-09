@@ -130,6 +130,7 @@ After first setting up `Package Control`_ (follow install and usage instructions
    overview
    auth
    AWS
+   custom-travis
    aws-deploy
    embedding-and-indexing
    invalidation
