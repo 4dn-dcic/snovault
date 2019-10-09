@@ -129,9 +129,7 @@ After first setting up `Package Control`_ (follow install and usage instructions
    self
    overview
    auth
-   AWS
    custom-travis
-   aws-deploy
    embedding-and-indexing
    invalidation
    object-lifecycle

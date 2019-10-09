@@ -1,7 +1,7 @@
 Database Documentation:
 =====================
 
-The (encodeD) system uses a Postgres implementation of a document store of a JSONLD_ object hierarchy.   Multiple view of each document are indexed in Elasticsearch_ for speed and efficient faceting and filtering.  The JSON-LD object tree can be exported from Elasticsearch with a query, converted to RDF_ and loaded into a SPARQL_ store for arbitrary queries.
+The (encodeD) system uses a Postgres implementation of a document store of a JSONLD_ object hierarchy.   Multiple views of each document are indexed in Elasticsearch_ for speed and efficient faceting and filtering.  The JSON-LD object tree can be exported from Elasticsearch with a query, converted to RDF_ and loaded into a SPARQL_ store for arbitrary queries.
 
 **POSTGRES RDB**
 
