@@ -32,8 +32,6 @@ If you need to update dependencies::
 
     $ brew update
     $ brew upgrade
-    $ rm -rf snowflakes/eggs
-
 
 Step 3: Run buildout::
 
@@ -104,58 +102,6 @@ Or if you need to supply command line arguments::
     $ ./node_modules/.bin/jest
 
 
-Building Javascript
-===================
-
-Our Javascript is written using ES6 and JSX, so needs to be compiled
-using babel and webpack.
-
-To build production-ready bundles, do::
-
-    $ npm run build
-
-(This is also done as part of running buildout.)
-
-To build development bundles and continue updating them as you edit source files, run::
-
-    $ npm run dev
-
-The development bundles are not minified, to speed up building.
-
-
-Notes on SASS/Compass
-=====================
-
-We use the `SASS <http://sass-lang.com/>`_ and `Compass <http://compass-style.org/>`_ CSS preprocessors.
-The buildout installs the SASS and Compass utilities and compiles the CSS.
-When changing the SCSS source files you must recompile the CSS using one of the following methods:
-
-Compiling "on the fly"
-----------------------
-
-Compass can watch for any changes made to .scss files and instantly compile them to .css.
-To start this, from the root of the project (where config.rb is) do::
-
-    $ bin/compass watch
-
-You can specify whether the compiled CSS is minified or not in config.rb. (Currently, it is set to minify.)
-
-Force compiling
----------------
-
-::
-
-    $ bin/compass compile
-
-Again, you can specify whether the compiled CSS is minified or not in config.rb.
-
-Also see the `Compass Command Line Documentation <http://compass-style.org/help/tutorials/command-line/>`_ and the `Configuration Reference <http://compass-style.org/help/tutorials/configuration-reference/>`_.
-
-And of course::
-
-    $ bin/compass help
-
-
 SublimeLinter
 =============
 
@@ -189,3 +135,4 @@ After first setting up `Package Control`_ (follow install and usage instructions
    invalidation
    object-lifecycle
    search_info
+   snowflakes

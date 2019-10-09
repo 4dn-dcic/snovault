@@ -1,4 +1,4 @@
-Changes to embedding and indexing
+Embedding and Indexing
 =================================
 
 EMBEDDING

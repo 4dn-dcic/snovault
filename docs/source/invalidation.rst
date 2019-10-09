@@ -1,4 +1,4 @@
-Dependecies/invalidation
+Dependecies/Invalidation
 ===========================
 
 Quick reference of important files (all under src/snovault/)
