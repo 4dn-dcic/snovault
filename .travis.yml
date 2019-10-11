@@ -67,10 +67,15 @@ install:
 - pip uninstall -y six
 - pip install six==1.11.0
 - python bootstrap.py --buildout-version 2.9.5 --setuptools-version 37.0.0
-- bin/buildout || ( echo "Retrying buildout" && bin/buildout )
+- bin/buildout
 - pip install pytest==2.9.1
 - pip install coveralls
 - pip install codacy-coverage
 script:
-- if test -n "$UNIT"; then bin/test -v -v --timeout=400 --aws-auth --cov src/snovault --es search-fourfront-builds-uhevxdzfcv7mkm5pj5svcri3aq.us-east-1.es.amazonaws.com:80;
+- |
+  if test -n "$UNIT"; then bin/test -v -v --timeout=400 --aws-auth --cov src/snovault --es search-fourfront-builds-uhevxdzfcv7mkm5pj5svcri3aq.us-east-1.es.amazonaws.com:80;
+  fi
+  if [[ $TRAVIS_BRANCH == 'master' ]]; then
+  echo 'Triggering docs build'
+  curl -X POST -d "branches=master" -d "token=$DOCS_TOKEN" https://readthedocs.org/api/v2/webhook/snovault/99596/
   fi

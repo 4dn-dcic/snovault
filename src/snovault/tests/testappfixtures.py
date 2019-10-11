@@ -12,19 +12,19 @@ _app_settings = {
     'structlog.dir': '/tmp/',
     'multiauth.policies': 'session remoteuser accesskey webuser',
     'multiauth.groupfinder': 'snovault.tests.authorization.groupfinder',
-    'multiauth.policy.session.use': 'snovault.authentication.NamespacedAuthenticationPolicy',
+    'multiauth.policy.session.use': 'snovault.tests.authentication.NamespacedAuthenticationPolicy',
     'multiauth.policy.session.base': 'pyramid.authentication.SessionAuthenticationPolicy',
     'multiauth.policy.session.namespace': 'mailto',
-    'multiauth.policy.remoteuser.use': 'snovault.authentication.NamespacedAuthenticationPolicy',
+    'multiauth.policy.remoteuser.use': 'snovault.tests.authentication.NamespacedAuthenticationPolicy',
     'multiauth.policy.remoteuser.namespace': 'remoteuser',
     'multiauth.policy.remoteuser.base': 'pyramid.authentication.RemoteUserAuthenticationPolicy',
-    'multiauth.policy.accesskey.use': 'snovault.authentication.NamespacedAuthenticationPolicy',
+    'multiauth.policy.accesskey.use': 'snovault.tests.authentication.NamespacedAuthenticationPolicy',
     'multiauth.policy.accesskey.namespace': 'accesskey',
-    'multiauth.policy.accesskey.base': 'snovault.authentication.BasicAuthAuthenticationPolicy',
-    'multiauth.policy.accesskey.check': 'snovault.authentication.basic_auth_check',
-    'multiauth.policy.webuser.use':  'snovault.authentication.NamespacedAuthenticationPolicy',
+    'multiauth.policy.accesskey.base': 'snovault.tests.authentication.BasicAuthAuthenticationPolicy',
+    'multiauth.policy.accesskey.check': 'snovault.tests.authentication.basic_auth_check',
+    'multiauth.policy.webuser.use':  'snovault.tests.authentication.NamespacedAuthenticationPolicy',
     'multiauth.policy.webuser.namespace': 'webuser',
-    'multiauth.policy.webuser.base': 'snovault.authentication.WebUserAuthenticationPolicy'
+    'multiauth.policy.webuser.base': 'snovault.tests.authentication.WebUserAuthenticationPolicy'
 }
 
 

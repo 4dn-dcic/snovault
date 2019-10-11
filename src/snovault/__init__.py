@@ -99,14 +99,16 @@ def main(global_config, **local_config):
 
     # Render an HTML page to browsers and a JSON document for API clients
     config.include('.renderers')
-    # these two should be application specific
-    config.include('.authentication')
-    config.include('snovault.tests.root')
+
+    # only include this stuff if we're testing
+    if asbool(settings.get('testing', False)):
+        config.include('snovault.tests.testing_views')
+        config.include('snovault.tests.authentication')
+        config.include('snovault.tests.root')
+        config.include('snovault.tests.search')
 
     if 'elasticsearch.server' in config.registry.settings:
         config.include('snovault.elasticsearch')
-        # needed for /search/?
-        config.include('.search')
 
     config.include(static_resources)
     config.include(changelogs)
@@ -115,9 +117,6 @@ def main(global_config, **local_config):
     aws_ip_ranges = json_from_path(settings.get('aws_ip_ranges_path'), {'prefixes': []})
     config.registry['aws_ipset'] = netaddr.IPSet(
         record['ip_prefix'] for record in aws_ip_ranges['prefixes'] if record['service'] == 'AMAZON')
-
-    if asbool(settings.get('testing', False)):
-        config.include('.tests.testing_views')
 
     # Load upgrades last so that all views (including testing views) are
     # registered.

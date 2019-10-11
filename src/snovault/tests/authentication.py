@@ -299,19 +299,3 @@ def generate_password():
     random_bytes = os.urandom(10)
     password = base64.b32encode(random_bytes).decode('ascii').rstrip('=').lower()
     return password
-
-def calc_principals(context):
-    principals_allowed = {}
-    for permission in ('view', 'edit'):
-        principals = principals_allowed_by_permission(context, permission)
-        if principals is Everyone:
-            principals = [Everyone]
-        elif Everyone in principals:
-            principals = [Everyone]
-        elif Authenticated in principals:
-            principals = [Authenticated]
-        # Filter our roles
-        principals_allowed[permission] = [
-            p for p in sorted(principals) if not p.startswith('role.')
-        ]
-    return principals_allowed

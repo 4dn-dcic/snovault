@@ -8,8 +8,7 @@ from pyramid.traversal import resource_path
 from pyramid.view import view_config
 from pyramid.settings import asbool
 from timeit import default_timer as timer
-from .resources import Item
-from .authentication import calc_principals
+from .resources import Item, calc_principals
 from .interfaces import STORAGE
 from .embed import make_subrequest
 from .validation import ValidationFailure
