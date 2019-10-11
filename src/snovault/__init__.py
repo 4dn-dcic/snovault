@@ -105,10 +105,11 @@ def main(global_config, **local_config):
         config.include('snovault.tests.testing_views')
         config.include('snovault.tests.authentication')
         config.include('snovault.tests.root')
-        config.include('snovault.tests.search')
 
     if 'elasticsearch.server' in config.registry.settings:
         config.include('snovault.elasticsearch')
+        config.include('snovault.tests.search')
+
 
     config.include(static_resources)
     config.include(changelogs)
