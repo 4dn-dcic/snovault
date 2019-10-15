@@ -128,6 +128,7 @@ After first setting up `Package Control`_ (follow install and usage instructions
 
    self
    overview
+   testing
    auth
    custom-travis
    embedding-and-indexing
