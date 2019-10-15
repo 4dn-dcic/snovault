@@ -137,8 +137,7 @@ def queue_update_helper():
 
 def queue_error_callback(cb_args, counter, errors):
     """
-    Update the counter, errors, and process info with the result of the
-    given callback arguments
+    Update the counter and errors with the result of the given callback arguments
     """
     local_errors, local_counter, _ = cb_args
     if counter:
