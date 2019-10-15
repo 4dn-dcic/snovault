@@ -258,7 +258,7 @@ def test_indexing_simple(app, testapp, indexer_testapp):
     res = indexer_testapp.post_json('/index', {'record': True})
     assert res.json['indexing_count'] == 1
     assert res.json['indexing_status'] == 'finished'
-    assert res.json['errors'] is None
+    assert res.json['errors'] == []
     res = testapp.post_json(TEST_COLL, {'required': ''})
     uuid = res.json['@graph'][0]['uuid']
     res = indexer_testapp.post_json('/index', {'record': True})
