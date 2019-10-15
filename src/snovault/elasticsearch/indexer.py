@@ -319,7 +319,7 @@ class Indexer(object):
         # we're done. delete any outstanding messages before returning
         if to_delete:
             self.queue.delete_messages(to_delete, target_queue=target_queue)
-        return errors
+        return (errors, deferred)
 
 
     def update_objects_sync(self, request, sync_uuids, counter):
