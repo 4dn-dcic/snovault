@@ -6,6 +6,15 @@ from snovault import COLLECTIONS, STORAGE
 from snovault.util import find_collection_subtypes
 
 
+def get_namespaced_index(config, index):
+    """ Grabs indexer.namespace from settings and namespace the given index """
+    settings = config.registry.settings
+    namespace = settings.get('indexer.namespace', None)
+    if namespace is None:
+        return index
+    return namespace + index
+
+
 def find_uuids_for_indexing(registry, updated, find_index='_all'):
     """
     Run a search to find uuids of objects with that contain the given set of

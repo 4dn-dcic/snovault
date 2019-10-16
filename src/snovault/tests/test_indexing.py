@@ -40,8 +40,8 @@ from snovault.elasticsearch.indexer import (
 )
 from pyramid.paster import get_appsettings
 
-pytestmark = [pytest.mark.indexing, pytest.mark.flaky]
-TEST_COLL = '/testing-post-put-patch-sno/'
+pytestmark = [pytest.mark.indexing] #pytest.mark.flaky]
+TEST_COLL = 'testing-post-put-patch-sno/'
 TEST_TYPE = 'testing_post_put_patch_sno'  # use one collection for testing
 
 # we just need single shard for these tests
@@ -254,36 +254,39 @@ def test_queue_indexing_after_post_patch(app, testapp):
 
 def test_indexing_simple(app, testapp, indexer_testapp):
     # First post a single item so that subsequent indexing is incremental
-    testapp.post_json(TEST_COLL, {'required': ''})
+    namespaced_index = indexer_utils.get_namespaced_index(app, TEST_COLL)
+    testapp.post_json('/' + TEST_COLL, {'required': ''})
     res = indexer_testapp.post_json('/index', {'record': True})
     assert res.json['indexing_count'] == 1
     assert res.json['indexing_status'] == 'finished'
     assert res.json['errors'] is None
-    res = testapp.post_json(TEST_COLL, {'required': ''})
+    res = testapp.post_json('/' + TEST_COLL, {'required': ''})
     uuid = res.json['@graph'][0]['uuid']
     res = indexer_testapp.post_json('/index', {'record': True})
     assert res.json['indexing_count'] == 1
-    res = testapp.get('/search/?type=TestingPostPutPatchSno')
+    res = testapp.get('/search/?type=%s' % TEST_TYPE)
     uuids = [indv_res['uuid'] for indv_res in res.json['@graph']]
     count = 0
     while uuid not in uuids and count < 20:
         time.sleep(1)
-        res = testapp.get('/search/?type=TestingPostPutPatchSno')
+        res = testapp.get('/search/?type=%s' % namespaced_index)
         uuids = [indv_res['uuid'] for indv_res in res.json['@graph']]
         count += 1
     assert res.json['total'] >= 2
     assert uuid in uuids
 
     es = app.registry[ELASTIC_SEARCH]
-    indexing_doc = es.get(index='indexing', doc_type='indexing', id='latest_indexing')
+    namespaced_index = indexer_utils.get_namespaced_index(app, 'indexing')
+    indexing_doc = es.get(index=namespaced_index, doc_type='indexing', id='latest_indexing')
     indexing_source = indexing_doc['_source']
     assert 'indexing_finished' in indexing_source
     assert 'indexing_content' in indexing_source
     assert indexing_source['indexing_status'] == 'finished'
     assert indexing_source['indexing_count'] > 0
-    testing_ppp_mappings = es.indices.get_mapping(index=TEST_TYPE).get(TEST_TYPE, {})
+    namespaced_index = indexer_utils.get_namespaced_index(app, TEST_TYPE)
+    testing_ppp_mappings = es.indices.get_mapping(index=namespaced_index).get(TEST_TYPE, {})
     assert 'mappings' in testing_ppp_mappings
-    testing_ppp_settings = es.indices.get_settings(index=TEST_TYPE).get(TEST_TYPE, {})
+    testing_ppp_settings = es.indices.get_settings(index=namespaced_index).get(TEST_TYPE, {})
     assert 'settings' in testing_ppp_settings
     # ensure we only have 1 shard for tests
     assert testing_ppp_settings['settings']['index']['number_of_shards'] == '1'

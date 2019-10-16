@@ -36,6 +36,7 @@ from .app import (
     json_from_path,
     )
 import logging
+import os
 from dcicutils.log_utils import set_logging
 
 
@@ -75,6 +76,9 @@ def main(global_config, **local_config):
     settings.update(local_config)
 
     set_logging(in_prod=settings.get('production'))
+
+    # Set index namespace
+    settings['indexer.namespace'] = os.environ.get('TRAVIS_JID', None)
     # set_logging(settings.get('elasticsearch.server'), settings.get('production'))
 
     # TODO - these need to be set for dummy app

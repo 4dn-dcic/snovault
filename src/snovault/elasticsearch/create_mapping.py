@@ -35,7 +35,7 @@ import time
 import datetime
 import sys
 from snovault.commands.es_index_data import run as run_index_data
-from .indexer_utils import find_uuids_for_indexing, get_uuids_for_types
+from .indexer_utils import get_namespaced_index, find_uuids_for_indexing, get_uuids_for_types
 import transaction
 import os
 import argparse
@@ -659,7 +659,10 @@ def create_mapping_by_type(in_type, registry):
     Return a full mapping for a given doc_type of in_type
     """
     # build a schema-based hierarchical mapping for embedded view
-    collection = registry[COLLECTIONS].by_item_type[in_type]
+    try:
+        collection = registry[COLLECTIONS].by_item_type[in_type]
+    except: # in case we are namespacing
+        collection = registry[COLLECTIONS].by_item_type[in_type.split('/')[2]]
     embed_mapping = type_mapping(registry[TYPES], collection.type_info.item_type)
     agg_items_mapping = aggregated_items_mapping(registry[TYPES], collection.type_info.item_type)
     # finish up the mapping
@@ -674,6 +677,7 @@ def build_index(app, es, in_type, mapping, uuids_to_index, dry_run, check_first,
     the given mapping with the found mapping for the index and skip creating
     it if possible.
     """
+    in_type = get_namespaced_index(app, in_type) # namespace types
     uuids_to_index[in_type] = set()
     if print_count_only:
         log.info('___PRINTING COUNTS___')
@@ -1042,7 +1046,8 @@ def run(app, collections=None, dry_run=False, check_first=False, skip_indexing=F
     # but no mapping. this is where indexing_records go
     if not check_if_index_exists(es, 'indexing'):
         idx_settings = {'settings': index_settings()}
-        es_safe_execute(es.indices.create, index='indexing', body=idx_settings)
+        namespaced_index = get_namespaced_index(app, 'indexing')
+        es_safe_execute(es.indices.create, index=namespaced_index, body=idx_settings)
 
     greatest_mapping_time = {'collection': '', 'duration': 0}
     greatest_index_creation_time = {'collection': '', 'duration': 0}

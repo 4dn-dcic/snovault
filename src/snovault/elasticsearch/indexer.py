@@ -15,7 +15,7 @@ from snovault import (
     DBSESSION,
     STORAGE
 )
-from .indexer_utils import find_uuids_for_indexing
+from .indexer_utils import get_namespaced_index, find_uuids_for_indexing
 import datetime
 import structlog
 import time
@@ -70,6 +70,7 @@ def index(request):
     dry_run = request.json.get('dry_run', False)  # if True, do not actually index
     es = request.registry[ELASTIC_SEARCH]
     indexer = request.registry[INDEXER]
+    namespaced_index = get_namespaced_index(request, 'indexing')
 
     if not dry_run:
         index_start_time = datetime.datetime.now()
@@ -122,14 +123,14 @@ def index(request):
 
         if record:
             try:
-                es.index(index='indexing', doc_type='indexing', body=indexing_record, id=index_start_str)
-                es.index(index='indexing', doc_type='indexing', body=indexing_record, id='latest_indexing')
+                es.index(index=namespaced_index, doc_type='indexing', body=indexing_record, id=index_start_str)
+                es.index(index=namespaced_index, doc_type='indexing', body=indexing_record, id='latest_indexing')
             except:
                 indexing_record['indexing_status'] = 'errored'
                 error_messages = copy.deepcopy(indexing_record['errors'])
                 del indexing_record['errors']
-                es.index(index='indexing', doc_type='indexing', body=indexing_record, id=index_start_str)
-                es.index(index='indexing', doc_type='indexing', body=indexing_record, id='latest_indexing')
+                es.index(index=namespaced_index, doc_type='indexing', body=indexing_record, id=index_start_str)
+                es.index(index=namespaced_index, doc_type='indexing', body=indexing_record, id='latest_indexing')
                 for item in error_messages:
                     if 'error_message' in item:
                         log.error('Indexing error', **item)
