@@ -113,14 +113,9 @@ def schema_mapping(field, schema, top_level=False):
                     'ignore_above': KW_IGNORE_ABOVE
                 },
                 'lower_case_sort': {
-                    'type': 'text',
-                    'analyzer': 'case_insensistive_sort',
-                    'fields': {
-                        'keyword': {
-                            'type': 'keyword',
-                            'ignore_above': KW_IGNORE_ABOVE
-                        }
-                    }
+                    'type': 'keyword',
+                    'normalizer': 'case_insensistive_sort',
+                    'ignore_above': KW_IGNORE_ABOVE
                 }
             }
         }
@@ -138,14 +133,9 @@ def schema_mapping(field, schema, top_level=False):
                     'ignore_above': KW_IGNORE_ABOVE
                 },
                 'lower_case_sort': {
-                    'type': 'text',
-                    'analyzer': 'case_insensistive_sort',
-                    'fields': {
-                        'keyword': {
-                            'type': 'keyword',
-                            'ignore_above': KW_IGNORE_ABOVE
-                        }
-                    }
+                    'type': 'keyword',
+                    'normalizer': 'case_insensistive_sort',
+                    'ignore_above': KW_IGNORE_ABOVE
                 }
             }
         }
@@ -159,14 +149,9 @@ def schema_mapping(field, schema, top_level=False):
                     'ignore_above': KW_IGNORE_ABOVE
                 },
                 'lower_case_sort': {
-                    'type': 'text',
-                    'analyzer': 'case_insensistive_sort',
-                    'fields': {
-                        'keyword': {
-                            'type': 'keyword',
-                            'ignore_above': KW_IGNORE_ABOVE
-                        }
-                    }
+                    'type': 'keyword',
+                    'normalizer': 'case_insensistive_sort',
+                    'ignore_above': KW_IGNORE_ABOVE
                 }
             }
         }
@@ -184,14 +169,9 @@ def schema_mapping(field, schema, top_level=False):
                     'ignore_above': KW_IGNORE_ABOVE
                 },
                 'lower_case_sort': {
-                    'type': 'text',
-                    'analyzer': 'case_insensistive_sort',
-                    'fields': {
-                        'keyword': {
-                            'type': 'keyword',
-                            'ignore_above': KW_IGNORE_ABOVE
-                        }
-                    }
+                    'type': 'keyword',
+                    'normalizer': 'case_insensistive_sort',
+                    'ignore_above': KW_IGNORE_ABOVE
                 }
             }
         }
@@ -210,14 +190,9 @@ def schema_mapping(field, schema, top_level=False):
                     'ignore_above': KW_IGNORE_ABOVE
                 },
                 'lower_case_sort': {
-                    'type': 'text',
-                    'analyzer': 'case_insensistive_sort',
-                    'fields': {
-                        'keyword': {
-                            'type': 'keyword',
-                            'ignore_above': KW_IGNORE_ABOVE
-                        }
-                    }
+                    'type': 'keyword',
+                    'normalizer': 'case_insensistive_sort',
+                    'ignore_above': KW_IGNORE_ABOVE
                 }
             }
         }
@@ -231,14 +206,9 @@ def schema_mapping(field, schema, top_level=False):
                     'ignore_above': KW_IGNORE_ABOVE
                 },
                 'lower_case_sort': {
-                    'type': 'text',
-                    'analyzer': 'case_insensistive_sort',
-                    'fields': {
-                        'keyword': {
-                            'type': 'keyword',
-                            'ignore_above': KW_IGNORE_ABOVE
-                        }
-                    }
+                    'type': 'keyword',
+                    'normalizer': 'case_insensistive_sort',
+                    'ignore_above': KW_IGNORE_ABOVE
                 }
             }
         }
@@ -296,12 +266,6 @@ def index_settings():
                             'asciifolding'
                         ]
                     },
-                    'case_insensistive_sort': {
-                        'tokenizer': 'keyword',
-                        'filter': [
-                            'lowercase',
-                        ]
-                    },
                     'snovault_path_analyzer': {
                         'type': 'custom',
                         'tokenizer': 'snovault_path_tokenizer',
@@ -312,6 +276,12 @@ def index_settings():
                     'snovault_path_tokenizer': {
                         'type': 'path_hierarchy',
                         'reverse': True
+                    }
+                },
+                'normalizer': {
+                    'case_insensistive_sort': {
+                        'type': 'custom',
+                        'filter': ['lowercase']
                     }
                 }
             }
