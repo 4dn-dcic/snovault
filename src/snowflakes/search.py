@@ -10,6 +10,7 @@ from snovault import (
 )
 from snovault.embed import make_subrequest
 from snovault.elasticsearch import ELASTIC_SEARCH
+from snovault.elasticsearch.indexer_utils import get_namespaced_index
 from snovault.elasticsearch.create_mapping import determine_if_is_date_field
 from snovault.resource_views import collection_view_listing_db
 from snovault.util import (
@@ -1041,7 +1042,6 @@ def set_facets(search, facets, search_filters, string_query, request, doc_types,
     aggs = OrderedDict()
 
     for field, facet in facets: # E.g. 'type','experimentset_type','experiments_in_set.award.project', ...
-
         field_schema = schema_for_field(field, request, doc_types, should_log=True)
         is_date_field = field_schema and determine_if_is_date_field(field, field_schema)
         is_numerical_field = field_schema and field_schema['type'] in ("integer", "float", "number")
@@ -1286,7 +1286,8 @@ def find_index_by_doc_types(request, doc_types, ignore):
             continue
         else:
             result = find_collection_subtypes(request.registry, doc_type)
-            indexes.extend(result)
+            namespaced_results = map(lambda t: get_namespaced_index(request, t), result)
+            indexes.extend(namespaced_results)
     # remove any duplicates
     indexes = list(set(indexes))
     index_string = ','.join(indexes)

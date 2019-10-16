@@ -410,8 +410,9 @@ class Indexer(object):
         for backoff in [0, 1, 2]:
             time.sleep(backoff)
             try:
+                namespaced_index = get_namespaced_index(request, result['item_type'])
                 self.es.index(
-                    index=result['item_type'], doc_type=result['item_type'], body=result,
+                    index=namespaced_index, doc_type=result['item_type'], body=result,
                     id=str(uuid), version=result['sid'], version_type='external_gte',
                     request_timeout=30
                 )
