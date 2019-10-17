@@ -102,6 +102,8 @@ setup(
         spreadsheet-to-json = snowflakes.commands.spreadsheet_to_json:main
         migrate-attachments-aws = snowflakes.commands.migrate_attachments_aws:main
 
+        wipe-test-indices = snovault.commands.wipe_test_indices:main
+
         [paste.app_factory]
         main = snowflakes:main
         snowflakes = snowflakes:main

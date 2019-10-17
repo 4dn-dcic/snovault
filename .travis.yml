@@ -74,3 +74,4 @@ install:
 script:
 - if test -n "$UNIT"; then bin/test -v -v --timeout=400 --aws-auth --cov src/snovault --es search-fourfront-builds-uhevxdzfcv7mkm5pj5svcri3aq.us-east-1.es.amazonaws.com:80;
   fi
+- bin/wipe-test-indices $TRAVIS_JOB_ID search-fourfront-builds-uhevxdzfcv7mkm5pj5svcri3aq.us-east-1.es.amazonaws.com:80
