@@ -4,7 +4,6 @@ from setuptools import setup, find_packages
 
 here = os.path.abspath(os.path.dirname(__file__))
 README = open(os.path.join(here, 'README.rst')).read()
-CHANGES = open(os.path.join(here, 'CHANGES.rst')).read()
 
 version_path = os.path.join(here, "src/snovault/_version.py")
 this_version = open(version_path).readlines()[-1].split()[-1].strip("\"'")
@@ -71,7 +70,7 @@ setup(
     name='snovault',
     version=this_version,
     description='Snovault Hybrid Object Relational Database Framework',
-    long_description=README + '\n\n' + CHANGES,
+    long_description=README,
     packages=find_packages('src'),
     package_dir={'': 'src'},
     zip_safe=False,
