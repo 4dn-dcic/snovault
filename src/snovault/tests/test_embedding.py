@@ -1,4 +1,7 @@
 import pytest
+from snovault.tests.toolfixtures import registry, root
+from snovault.tests.pyramidfixtures import dummy_request, threadlocals
+from snovault.tests.test_views import PARAMETERIZED_NAMES
 
 targets = [
     {'name': 'one', 'uuid': '775795d3-4410-4114-836b-8eeecf1d0c2f'},
@@ -21,9 +24,18 @@ sources = [
 ]
 
 
-@pytest.fixture(autouse=True)
-def autouse_external_tx(external_tx):
-    pass
+# Convert names to snake is needed so that
+# we can parameterize on the embeds
+def convert_names_to_snake():
+    from re import findall
+    res = []
+    for name in PARAMETERIZED_NAMES:
+        caps = findall('[A-Z][^A-Z]*', name)
+        snake = '_'.join(map(str.lower, caps))
+        res.append(snake)
+    return res
+
+SNAKE_NAMES = convert_names_to_snake()
 
 
 @pytest.fixture
@@ -35,6 +47,43 @@ def content(testapp):
     url = '/testing-link-sources-sno/'
     for item in sources:
         testapp.post_json(url, item, status=201)
+
+
+@pytest.mark.parametrize('item_type', [name for name in SNAKE_NAMES if name != 'testing_server_default'])
+def test_add_default_embeds(registry, item_type):
+    """
+    Ensure default embedding matches the schema for each object
+    """
+    from snovault.util import add_default_embeds, crawl_schemas_by_embeds
+    from snovault import TYPES
+    type_info = registry[TYPES].by_item_type[item_type]
+    schema = type_info.schema
+    embeds = add_default_embeds(item_type, registry[TYPES], type_info.embedded_list, schema)
+    principals_allowed_included_in_default_embeds = False
+    for embed in embeds:
+        split_embed = embed.strip().split('.')
+        if 'principals_allowed' in split_embed:
+            principals_allowed_included_in_default_embeds = True
+        error, _ = crawl_schemas_by_embeds(item_type, registry[TYPES], split_embed, schema['properties'])
+        assert error is None
+
+    assert principals_allowed_included_in_default_embeds
+
+
+@pytest.mark.parametrize('item_type', SNAKE_NAMES)
+def test_manual_embeds(registry, item_type):
+    """
+    Ensure manual embedding in the types files are valid
+    """
+    from snovault.util import crawl_schemas_by_embeds
+    from snovault import TYPES
+    type_info = registry[TYPES].by_item_type[item_type]
+    schema = type_info.schema
+    embeds = type_info.embedded_list
+    for embed in embeds:
+        split_embed = embed.strip().split('.')
+        error, _ = crawl_schemas_by_embeds(item_type, registry[TYPES], split_embed, schema['properties'])
+        assert error is None
 
 def test_linked_uuids_unset(content, dummy_request, threadlocals):
     # without setting _indexing_view = True on the request,

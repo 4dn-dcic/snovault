@@ -31,7 +31,6 @@ from .app import (
     app_version,
     session,
     configure_dbsession,
-    static_resources,
     changelogs,
     json_from_path,
     )
@@ -75,7 +74,7 @@ def main(global_config, **local_config):
     settings.update(local_config)
 
     set_logging(in_prod=settings.get('production'))
-    # set_logging(settings.get('elasticsearch.server'), settings.get('production'))
+    #set_logging(settings.get('elasticsearch.server'), settings.get('production'))
 
     # TODO - these need to be set for dummy app
     # settings['snovault.jsonld.namespaces'] = json_asset('snovault:schemas/namespaces.json')
@@ -97,18 +96,19 @@ def main(global_config, **local_config):
     config.include('snovault')
     config.commit()  # commit so search can override listing
 
-    # Render an HTML page to browsers and a JSON document for API clients
-    config.include('snowflakes.renderers')
-    # these two should be application specific
-    config.include('.authentication')
-    config.include('snowflakes.root')
+    config.include('.renderers')
+
+    # only include this stuff if we're testing
+    if asbool(settings.get('testing', False)):
+        config.include('snovault.tests.testing_views')
+        config.include('snovault.tests.authentication')
+        config.include('snovault.tests.root')
+        if settings.get('elasticsearch.server'):
+            config.include('snovault.tests.search')
 
     if 'elasticsearch.server' in config.registry.settings:
         config.include('snovault.elasticsearch')
-        # needed for /search/?
-        config.include('snowflakes.search')
 
-    config.include(static_resources)
     config.include(changelogs)
 
     # TODO This is optional AWS only - possibly move to a plug-in
@@ -116,12 +116,9 @@ def main(global_config, **local_config):
     config.registry['aws_ipset'] = netaddr.IPSet(
         record['ip_prefix'] for record in aws_ip_ranges['prefixes'] if record['service'] == 'AMAZON')
 
-    if asbool(settings.get('testing', False)):
-        config.include('.tests.testing_views')
-
     # Load upgrades last so that all views (including testing views) are
     # registered.
-    # config.include('.upgrade')
+    #config.include('.upgrade')
 
     app = config.make_wsgi_app()
 

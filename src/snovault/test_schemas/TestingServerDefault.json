@@ -1,0 +1,25 @@
+{
+    "type": "object",
+    "properties": {
+        "uuid": {
+            "serverDefault": "uuid4",
+            "type": "string"
+        },
+        "user": {
+            "serverDefault": "userid",
+            "linkTo": "User",
+            "type": "string"
+        },
+        "now": {
+            "serverDefault": "now",
+            "format": "date-time",
+            "type": "string"
+        },
+        "accession": {
+            "serverDefault": "accession",
+            "accessionType": "AB",
+            "format": "accession",
+            "type": "string"
+        }
+    }
+}

@@ -32,8 +32,6 @@ If you need to update dependencies::
 
     $ brew update
     $ brew upgrade
-    $ rm -rf snowflakes/eggs
-
 
 Step 3: Run buildout::
 

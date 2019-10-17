@@ -1,0 +1,16 @@
+{
+    "type": "object",
+    "dependencies": {
+        "dep1": ["dep2"],
+        "dep2": ["dep1"]
+    },
+    "properties": {
+        "dep1": {
+            "type": "string"
+        },
+        "dep2": {
+            "type": "string",
+            "enum": ["dep2"]
+        }
+    }
+}

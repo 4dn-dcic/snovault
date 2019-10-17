@@ -4,7 +4,6 @@ from setuptools import setup, find_packages
 
 here = os.path.abspath(os.path.dirname(__file__))
 README = open(os.path.join(here, 'README.rst')).read()
-CHANGES = open(os.path.join(here, 'CHANGES.rst')).read()
 
 version_path = os.path.join(here, "src/snovault/_version.py")
 this_version = open(version_path).readlines()[-1].split()[-1].strip("\"'")
@@ -47,6 +46,7 @@ requires = [
     'bcrypt',
     'cryptacular',
     'aws-requests-auth',
+    'PyYaml==3.12',
     # for logging
     'colorama',
     'structlog',
@@ -62,6 +62,7 @@ if sys.version_info.major == 2:
 tests_require = [
     'pytest>=2.4.0',
     'pytest-mock',
+    'flaky',
     'pytest_exact_fixtures',
 ]
 
@@ -69,11 +70,9 @@ setup(
     name='snovault',
     version=this_version,
     description='Snovault Hybrid Object Relational Database Framework',
-    long_description=README + '\n\n' + CHANGES,
+    long_description=README,
     packages=find_packages('src'),
     package_dir={'': 'src'},
-    include_package_data=True,
-    package_data={'':['nginx-dev.conf']},
     zip_safe=False,
     author='Carl Vitzthum',
     author_email='carl_vitzthum@hms.harvard.edu',
@@ -84,34 +83,6 @@ setup(
     extras_require={
         'test': tests_require,
     },
-    entry_points='''
-        [console_scripts]
-        batchupgrade = snovault.batchupgrade:main
-        create-mapping = snovault.elasticsearch.create_mapping:main
-        dev-servers = snovault.dev_servers:main
-        es-index-listener = snovault.elasticsearch.es_index_listener:main
-
-        add-date-created = snowflakes.commands.add_date_created:main
-        check-rendering = snowflakes.commands.check_rendering:main
-        deploy = snowflakes.commands.deploy:main
-        extract_test_data = snowflakes.commands.extract_test_data:main
-        es-index-data = snowflakes.commands.es_index_data:main
-        import-data = snowflakes.commands.import_data:main
-        jsonld-rdf = snowflakes.commands.jsonld_rdf:main
-        profile = snowflakes.commands.profile:main
-        spreadsheet-to-json = snowflakes.commands.spreadsheet_to_json:main
-        migrate-attachments-aws = snowflakes.commands.migrate_attachments_aws:main
-
-        [paste.app_factory]
-        main = snowflakes:main
-        snowflakes = snowflakes:main
-
-        [paste.composite_factory]
-        indexer = snovault.elasticsearch.es_index_listener:composite
-
-        [paste.filter_app_factory]
-        memlimit = snowflakes.memlimit:filter_app
-        ''',
     classifiers=[
         # How mature is this project? Common values are
         #   3 - Alpha

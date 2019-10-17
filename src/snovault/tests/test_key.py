@@ -19,11 +19,6 @@ bad_items = [
 ]
 
 
-@pytest.fixture(autouse=True)
-def autouse_external_tx(external_tx):
-    pass
-
-
 @pytest.fixture(scope='session')
 def app(DBSession):
     from pyramid.config import Configurator
