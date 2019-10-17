@@ -14,7 +14,6 @@ def main():
     jid, r_es = sys.argv[1], sys.argv[2]
     logger.info('Wiping ES instances on %s with prefix %s\n' % (r_es, jid))
     try:
-        import pdb; pdb.set_trace()
         client = create_es_client(r_es, use_aws_auth=True)
     except:
         logger.error('Failed to get ES client')
