@@ -1,19 +1,18 @@
-
 ========================
-SnoVault JSON-LD Database Framework
+Snovault
 ========================
 
-Version 0.1
+Snovault is a JSON-LD Database Framework that serves as the backend for the 4DN Data portal and CGAP.
 
 |Build status|_
 
-.. |Build status| image:: https://travis-ci.org/ENCODE-DCC/snovault.png?branch=master
-.. _Build status: https://travis-ci.org/ENCODE-DCC/snovault
+.. |Build status| image:: https://travis-ci.org/4dn-dcic/snovault.svg?branch=master
+.. _Build status: https://travis-ci.org/4dn-dcic/snovault
 
 Installation Instructions
 =========================
 
-Currently these are for Mac OSX.  For linux, look at cloud-config.yml it should be reasonably easy to infer from that
+Currently these are for Mac OSX using homebrew. If using linux, install dependencies with a different package manager.
 
 Step 0: Install Xcode (from App Store) and homebrew: http://brew.sh::
 
@@ -24,10 +23,10 @@ Step 1: Verify that homebrew is working properly::
 
 Step 2: Install or update dependencies::
 
-    $ brew install libevent libmagic libxml2 libxslt openssl postgresql graphviz nginx python3
+    $ brew install libevent libmagic libxml2 libxslt openssl postgresql graphviz python3
     $ brew install freetype libjpeg libtiff littlecms webp  # Required by Pillow
     $ brew tap homebrew/versions
-    $ brew install elasticsearch@5.6 node@10
+    $ brew install elasticsearch@5.6
 
 If you need to update dependencies::
 
@@ -56,25 +55,6 @@ If you wish to completely rebuild the application, or have updated dependencies:
     $ make clean
 
     Then goto Step 3.
-
-Step 4: Start the application locally
-
-In one terminal startup the database servers and nginx proxy with::
-
-    $ bin/dev-servers development.ini --app-name app --clear --init --load
-
-This will first clear any existing data in /tmp/snowflakes
-Then postgres and elasticsearch servers will be initiated within /tmp/snowflakes.
-An nginx proxy running on port 8000 will be started.
-The servers are started, and finally the test set will be loaded.
-
-In a second terminal, run the app with::
-
-    $ bin/pserve development.ini
-
-Indexing will then proceed in a background thread similar to the production setup.
-
-Browse to the interface at http://localhost:8000/.
 
 
 Running tests

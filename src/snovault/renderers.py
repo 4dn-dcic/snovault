@@ -1,10 +1,5 @@
 from pkg_resources import resource_filename
-from pyramid.events import (
-    BeforeRender,
-    subscriber,
-)
 from pyramid.httpexceptions import (
-    HTTPMovedPermanently,
     HTTPPreconditionFailed,
     HTTPUnauthorized,
     HTTPUnsupportedMediaType,
@@ -29,33 +24,16 @@ import time
 
 log = logging.getLogger(__name__)
 
-# TODO Move to SnoVault?
-
 
 def includeme(config):
-    config.add_tween(
-        '.renderers.fix_request_method_tween_factory',
-        under='snovault.stats.stats_tween_factory')
-    config.add_tween(
-        '.renderers.normalize_cookie_tween_factory',
-        under='.renderers.fix_request_method_tween_factory')
-
-    renderer_tween = (
-        '.renderers.debug_page_or_json'
-        if config.registry.settings['pyramid.reload_templates']
-        else '.renderers.page_or_json'
-    )
-
-    config.add_tween(
-        renderer_tween,
-        under='.renderers.normalize_cookie_tween_factory')
-
-    config.add_tween(
-        '.renderers.set_x_request_url_tween_factory',
-        under=renderer_tween,
-    )
-
-    config.add_tween('.renderers.security_tween_factory', under='pyramid_tm.tm_tween_factory')
+    config.add_tween('.renderers.fix_request_method_tween_factory',
+                     under='snovault.stats.stats_tween_factory')
+    config.add_tween('.renderers.normalize_cookie_tween_factory',
+                     under='.renderers.fix_request_method_tween_factory')
+    config.add_tween('.renderers.set_x_request_url_tween_factory',
+                     under='.renderers.normalize_cookie_tween_factory')
+    config.add_tween('.renderers.security_tween_factory',
+                     under='pyramid_tm.tm_tween_factory')
     config.scan(__name__)
 
 
@@ -171,122 +149,3 @@ def set_x_request_url_tween_factory(handler, registry):
         return response
 
     return set_x_request_url_tween
-
-
-@subscriber(BeforeRender)
-def canonical_redirect(event):
-    request = event['request']
-
-    # Ignore subrequests
-    if len(manager.stack) > 1:
-        return
-
-    if request.method not in ('GET', 'HEAD'):
-        return
-    if request.response.status_int != 200:
-        return
-    if not request.environ.get('snowflakes.canonical_redirect', True):
-        return
-    if request.path_info == '/':
-        return
-
-    if not isinstance(event.rendering_val, dict):
-        return
-
-    canonical = event.rendering_val.get('@id', None)
-    if canonical is None:
-        return
-    canonical_path, _, canonical_qs = canonical.partition('?')
-
-    request_path = _join_path_tuple(('',) + split_path_info(request.path_info))
-    if (request_path == canonical_path.rstrip('/') and
-            request.path_info.endswith('/') == canonical_path.endswith('/') and
-            (canonical_qs in ('', request.query_string))):
-        return
-
-    if '/@@' in request.path_info:
-        return
-
-    qs = canonical_qs or request.query_string
-    location = canonical_path + ('?' if qs else '') + qs
-    raise HTTPMovedPermanently(location=location)
-
-
-def should_transform(request, response):
-    if request.method not in ('GET', 'HEAD'):
-        return False
-
-    if response.content_type != 'application/json':
-        return False
-
-    format = request.params.get('format')
-    if format is None:
-        original_vary = response.vary or ()
-        response.vary = original_vary + ('Accept', 'Authorization')
-        if request.authorization is not None:
-            format = 'json'
-        else:
-            mime_type = request.accept.best_match(
-                [
-                    'text/html',
-                    'application/ld+json',
-                    'application/json',
-                ],
-                'text/html')
-            format = mime_type.split('/', 1)[1]
-            if format == 'ld+json':
-                format = 'json'
-    else:
-        format = format.lower()
-        if format not in ('html', 'json'):
-            format = 'html'
-
-    if format == 'json':
-        return False
-
-    request._transform_start = time.time()
-    return True
-
-
-def after_transform(request, response):
-    end = time.time()
-    duration = int((end - request._transform_start) * 1e6)
-    stats = request._stats
-    stats['render_count'] = stats.get('render_count', 0) + 1
-    stats['render_time'] = stats.get('render_time', 0) + duration
-    request._stats_html_attribute = True
-
-
-# Rendering huge pages can make the node process memory usage explode.
-# Ideally we would let the OS handle this with `ulimit` or by calling
-# `resource.setrlimit()` from  a `subprocess.Popen(preexec_fn=...)`.
-# Unfortunately Linux does not enforce RLIMIT_RSS.
-# An alternative would be to use cgroups, but that makes per-process limits
-# tricky to enforce (we would need to create one cgroup per process.)
-# So we just manually check the resource usage after each transform.
-
-rss_limit = 256 * (1024 ** 2)  # MB
-
-
-def reload_process(process):
-    return psutil.Process(process.pid).memory_info().rss > rss_limit
-
-node_env = os.environ.copy()
-node_env['NODE_PATH'] = ''
-
-page_or_json = SubprocessTween(
-    should_transform=should_transform,
-    after_transform=after_transform,
-    reload_process=reload_process,
-    args=['node', resource_filename(__name__, 'static/build/renderer.js')],
-    env=node_env,
-)
-
-
-debug_page_or_json = SubprocessTween(
-    should_transform=should_transform,
-    after_transform=after_transform,
-    reload_process=reload_process,
-    args=['node', resource_filename(__name__, 'static/server.js')],
-    env=node_env,
-)

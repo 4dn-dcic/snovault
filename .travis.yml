@@ -5,9 +5,6 @@ cache:
   pip: true
   directories:
   - eggs
-  - .npm
-  - ~/.npm
-  - node_modules
 addons:
   apt:
     packages:
@@ -59,9 +56,6 @@ notifications:
 before_install:
 - postgres --version
 - initdb --version
-- nvm install 10
-- node --version
-- npm config set python /usr/bin/python2.7
 install:
 # need to manually change the version of six used by Travis for some reason
 - pip uninstall -y six

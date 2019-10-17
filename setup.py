@@ -74,8 +74,6 @@ setup(
     long_description=README + '\n\n' + CHANGES,
     packages=find_packages('src'),
     package_dir={'': 'src'},
-    include_package_data=True,
-    package_data={'':['nginx-dev.conf']},
     zip_safe=False,
     author='Carl Vitzthum',
     author_email='carl_vitzthum@hms.harvard.edu',

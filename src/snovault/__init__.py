@@ -31,7 +31,6 @@ from .app import (
     app_version,
     session,
     configure_dbsession,
-    static_resources,
     changelogs,
     json_from_path,
     )
@@ -97,7 +96,6 @@ def main(global_config, **local_config):
     config.include('snovault')
     config.commit()  # commit so search can override listing
 
-    # Render an HTML page to browsers and a JSON document for API clients
     config.include('.renderers')
 
     # only include this stuff if we're testing
@@ -105,13 +103,12 @@ def main(global_config, **local_config):
         config.include('snovault.tests.testing_views')
         config.include('snovault.tests.authentication')
         config.include('snovault.tests.root')
+        if settings.get('elasticsearch.server'):
+            config.include('snovault.tests.search')
 
     if 'elasticsearch.server' in config.registry.settings:
         config.include('snovault.elasticsearch')
-        config.include('snovault.tests.search')
 
-
-    config.include(static_resources)
     config.include(changelogs)
 
     # TODO This is optional AWS only - possibly move to a plug-in
