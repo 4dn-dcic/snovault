@@ -1,5 +1,10 @@
 from pkg_resources import resource_filename
+from pyramid.events import (
+    BeforeRender,
+    subscriber,
+)
 from pyramid.httpexceptions import (
+    HTTPMovedPermanently,
     HTTPPreconditionFailed,
     HTTPUnauthorized,
     HTTPUnsupportedMediaType,
@@ -149,3 +154,42 @@ def set_x_request_url_tween_factory(handler, registry):
         return response
 
     return set_x_request_url_tween
+
+
+@subscriber(BeforeRender)
+def canonical_redirect(event):
+    request = event['request']
+
+    # Ignore subrequests
+    if len(manager.stack) > 1:
+        return
+
+    if request.method not in ('GET', 'HEAD'):
+        return
+    if request.response.status_int != 200:
+        return
+    if not request.environ.get('snowflakes.canonical_redirect', True):
+        return
+    if request.path_info == '/':
+        return
+
+    if not isinstance(event.rendering_val, dict):
+        return
+
+    canonical = event.rendering_val.get('@id', None)
+    if canonical is None:
+        return
+    canonical_path, _, canonical_qs = canonical.partition('?')
+
+    request_path = _join_path_tuple(('',) + split_path_info(request.path_info))
+    if (request_path == canonical_path.rstrip('/') and
+            request.path_info.endswith('/') == canonical_path.endswith('/') and
+            (canonical_qs in ('', request.query_string))):
+        return
+
+    if '/@@' in request.path_info:
+        return
+
+    qs = canonical_qs or request.query_string
+    location = canonical_path + ('?' if qs else '') + qs
+    raise HTTPMovedPermanently(location=location)
