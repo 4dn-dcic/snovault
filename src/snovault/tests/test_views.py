@@ -39,12 +39,6 @@ def test_home_json(testapp):
     assert res.json['@type']
 
 
-def test_vary_json(anontestapp):
-    res = anontestapp.get('/', status=200)
-    assert res.vary is not None
-    assert 'Accept' in res.vary
-
-
 def test_collection_post_bad_json(testapp):
     item = {'foo': 'bar'}
     res = testapp.post_json('/embedding-tests', item, status=422)
