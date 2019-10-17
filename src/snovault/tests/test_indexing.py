@@ -596,7 +596,6 @@ def test_queue_indexing_with_linked(app, testapp, indexer_testapp, dummy_request
     # make sure everything has updated on ES
     check_es_source = es.get(index=namespaced_link_source, doc_type='testing_link_source_sno',
                              id=source['uuid'], ignore=[404])
-    import pdb; pdb.set_trace()
     assert check_es_source['found'] == False
     # source uuid removed from the target uuid
     check_es_target = es.get(index=namespaced_link_target, doc_type='testing_link_target_sno',
