@@ -40,7 +40,7 @@ from snovault.elasticsearch.indexer import (
 )
 from pyramid.paster import get_appsettings
 
-pytestmark = [pytest.mark.indexing] #pytest.mark.flaky]
+pytestmark = [pytest.mark.indexing, pytest.mark.flaky]
 TEST_COLL = '/testing-post-put-patch-sno/'
 TEST_TYPE = 'testing_post_put_patch_sno'  # use one collection for testing
 
@@ -105,6 +105,22 @@ def setup_and_teardown(app):
     session.flush()
     mark_changed(session())
     transaction.commit()
+
+
+def test_indexer_namespacing(app, testapp, indexer_testapp):
+    """
+    Tests that namespacing indexes works as expected. This test has no real
+    effect on local but does on Travis
+    """
+    import os
+    jid = os.environ.get('TRAVIS_JOB_ID')
+    idx = indexer_utils.get_namespaced_index(app, TEST_TYPE)
+    testapp.post_json(TEST_COLL, {'required': ''})
+    indexer_testapp.post_json('/index', {'record': True})
+    es = app.registry[ELASTIC_SEARCH]
+    assert idx in es.indices.get(index=idx)
+    if jid:
+        assert jid in idx
 
 
 @pytest.mark.es
