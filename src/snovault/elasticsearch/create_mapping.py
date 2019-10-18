@@ -52,6 +52,8 @@ NON_SUBSTRING_FIELDS = ['uuid', '@id', 'submitted_by', 'md5sum', 'references', '
 NUM_SHARDS = 1
 NUM_REPLICAS = 1
 SEARCH_MAX = 100000
+# ignore above this number of kb when using mapping keyword fields
+KW_IGNORE_ABOVE = 512
 
 
 def determine_if_is_date_field(field, schema):
@@ -107,16 +109,13 @@ def schema_mapping(field, schema, top_level=False):
             'format': "date_optional_time",
             'fields': {
                 'raw': {
-                    'type': 'keyword'
+                    'type': 'keyword',
+                    'ignore_above': KW_IGNORE_ABOVE
                 },
                 'lower_case_sort': {
-                    'type': 'text',
-                    'analyzer': 'case_insensistive_sort',
-                    'fields': {
-                        'keyword': {
-                            'type': 'keyword'
-                        }
-                    }
+                    'type': 'keyword',
+                    'normalizer': 'case_insensistive_sort',
+                    'ignore_above': KW_IGNORE_ABOVE
                 }
             }
         }
@@ -130,16 +129,13 @@ def schema_mapping(field, schema, top_level=False):
                     'ignore_malformed': True,
                 },
                 'raw': {
-                    'type': 'keyword'
+                    'type': 'keyword',
+                    'ignore_above': KW_IGNORE_ABOVE
                 },
                 'lower_case_sort': {
-                    'type': 'text',
-                    'analyzer': 'case_insensistive_sort',
-                    'fields': {
-                        'keyword': {
-                            'type': 'keyword'
-                        }
-                    }
+                    'type': 'keyword',
+                    'normalizer': 'case_insensistive_sort',
+                    'ignore_above': KW_IGNORE_ABOVE
                 }
             }
         }
@@ -149,16 +145,13 @@ def schema_mapping(field, schema, top_level=False):
             'type': 'text',
             'fields': {
                 'raw': {
-                    'type': 'keyword'
+                    'type': 'keyword',
+                    'ignore_above': KW_IGNORE_ABOVE
                 },
                 'lower_case_sort': {
-                    'type': 'text',
-                    'analyzer': 'case_insensistive_sort',
-                    'fields': {
-                        'keyword': {
-                            'type': 'keyword'
-                        }
-                    }
+                    'type': 'keyword',
+                    'normalizer': 'case_insensistive_sort',
+                    'ignore_above': KW_IGNORE_ABOVE
                 }
             }
         }
@@ -172,16 +165,13 @@ def schema_mapping(field, schema, top_level=False):
             'type': 'text',
             'fields': {
                 'raw': {
-                    'type': 'keyword'
+                    'type': 'keyword',
+                    'ignore_above': KW_IGNORE_ABOVE
                 },
                 'lower_case_sort': {
-                    'type': 'text',
-                    'analyzer': 'case_insensistive_sort',
-                    'fields': {
-                        'keyword': {
-                            'type': 'keyword'
-                        }
-                    }
+                    'type': 'keyword',
+                    'normalizer': 'case_insensistive_sort',
+                    'ignore_above': KW_IGNORE_ABOVE
                 }
             }
         }
@@ -196,16 +186,13 @@ def schema_mapping(field, schema, top_level=False):
             'type': 'float',
             'fields': {
                 'raw': {
-                    'type': 'keyword'
+                    'type': 'keyword',
+                    'ignore_above': KW_IGNORE_ABOVE
                 },
                 'lower_case_sort': {
-                    'type': 'text',
-                    'analyzer': 'case_insensistive_sort',
-                    'fields': {
-                        'keyword': {
-                            'type': 'keyword'
-                        }
-                    }
+                    'type': 'keyword',
+                    'normalizer': 'case_insensistive_sort',
+                    'ignore_above': KW_IGNORE_ABOVE
                 }
             }
         }
@@ -215,16 +202,13 @@ def schema_mapping(field, schema, top_level=False):
             'type': 'long',
             'fields': {
                 'raw': {
-                    'type': 'keyword'
+                    'type': 'keyword',
+                    'ignore_above': KW_IGNORE_ABOVE
                 },
                 'lower_case_sort': {
-                    'type': 'text',
-                    'analyzer': 'case_insensistive_sort',
-                    'fields': {
-                        'keyword': {
-                            'type': 'keyword'
-                        }
-                    }
+                    'type': 'keyword',
+                    'normalizer': 'case_insensistive_sort',
+                    'ignore_above': KW_IGNORE_ABOVE
                 }
             }
         }
@@ -282,12 +266,6 @@ def index_settings():
                             'asciifolding'
                         ]
                     },
-                    'case_insensistive_sort': {
-                        'tokenizer': 'keyword',
-                        'filter': [
-                            'lowercase',
-                        ]
-                    },
                     'snovault_path_analyzer': {
                         'type': 'custom',
                         'tokenizer': 'snovault_path_tokenizer',
@@ -298,6 +276,12 @@ def index_settings():
                     'snovault_path_tokenizer': {
                         'type': 'path_hierarchy',
                         'reverse': True
+                    }
+                },
+                'normalizer': {
+                    'case_insensistive_sort': {
+                        'type': 'custom',
+                        'filter': ['lowercase']
                     }
                 }
             }
@@ -311,7 +295,8 @@ def validation_error_mapping():
             'type': 'text',
             'fields': {
                 'raw': {
-                    'type': 'keyword'
+                    'type': 'keyword',
+                    'ignore_above': KW_IGNORE_ABOVE
                 }
             }
         },
@@ -319,7 +304,8 @@ def validation_error_mapping():
             'type': 'text',
             'fields': {
                 'raw': {
-                    'type': 'keyword'
+                    'type': 'keyword',
+                    'ignore_above': KW_IGNORE_ABOVE
                 }
             }
         },
@@ -327,7 +313,8 @@ def validation_error_mapping():
             'type': 'text',
             'fields': {
                 'raw': {
-                    'type': 'keyword'
+                    'type': 'keyword',
+                    'ignore_above': KW_IGNORE_ABOVE
                 }
             }
         }
@@ -356,6 +343,7 @@ def es_mapping(mapping, agg_items_mapping):
                     'mapping': {
                         'index': True,
                         'type': 'keyword',
+                        'ignore_above': KW_IGNORE_ABOVE
                     },
                 },
             },
@@ -365,6 +353,7 @@ def es_mapping(mapping, agg_items_mapping):
                     'mapping': {
                         'index': True,
                         'type': 'keyword',
+                        'ignore_above': KW_IGNORE_ABOVE
                     },
                 },
             },
@@ -374,6 +363,7 @@ def es_mapping(mapping, agg_items_mapping):
                     'mapping': {
                         'index': True,
                         'type': 'keyword',
+                        'ignore_above': KW_IGNORE_ABOVE
                     },
                 },
             },
@@ -381,18 +371,22 @@ def es_mapping(mapping, agg_items_mapping):
         'properties': {
             'uuid': {
                 'type': 'keyword',
-                'include_in_all': False,
+                'ignore_above': KW_IGNORE_ABOVE,
+                'include_in_all': False
             },
             'sid': {
                 'type': 'keyword',
-                'include_in_all': False,
+                'ignore_above': KW_IGNORE_ABOVE,
+                'include_in_all': False
             },
             'max_sid': {
                 'type': 'keyword',
-                'include_in_all': False,
+                'ignore_above': KW_IGNORE_ABOVE,
+                'include_in_all': False
             },
             'item_type': {
                 'type': 'keyword',
+                'ignore_above': KW_IGNORE_ABOVE
             },
             'embedded': mapping,
             'object': {
@@ -414,10 +408,12 @@ def es_mapping(mapping, agg_items_mapping):
                 'include_in_all': False,
                 'properties': {
                     'view': {
-                        'type': 'keyword'
+                        'type': 'keyword',
+                        'ignore_above': KW_IGNORE_ABOVE
                     },
                     'edit': {
-                        'type': 'keyword'
+                        'type': 'keyword',
+                        'ignore_above': KW_IGNORE_ABOVE
                     }
                 }
             },
@@ -425,10 +421,12 @@ def es_mapping(mapping, agg_items_mapping):
             'linked_uuids_embedded': {
                 'properties': {
                     'uuid': {
-                        'type': 'keyword'
+                        'type': 'keyword',
+                        'ignore_above': KW_IGNORE_ABOVE
                     },
                     'sid': {
-                        'type': 'keyword'
+                        'type': 'keyword',
+                        'ignore_above': KW_IGNORE_ABOVE
                     }
                 },
                 'include_in_all': False
@@ -436,10 +434,12 @@ def es_mapping(mapping, agg_items_mapping):
             'linked_uuids_object': {
                 'properties': {
                     'uuid': {
-                        'type': 'keyword'
+                        'type': 'keyword',
+                        'ignore_above': KW_IGNORE_ABOVE
                     },
                     'sid': {
-                        'type': 'keyword'
+                        'type': 'keyword',
+                        'ignore_above': KW_IGNORE_ABOVE
                     }
                 },
                 'include_in_all': False
@@ -447,16 +447,19 @@ def es_mapping(mapping, agg_items_mapping):
             'rev_link_names': {
                 'properties': {
                     'name': {
-                        'type': 'keyword'
+                        'type': 'keyword',
+                        'ignore_above': KW_IGNORE_ABOVE
                     },
                     'uuids': {
-                        'type': 'keyword'
+                        'type': 'keyword',
+                        'ignore_above': KW_IGNORE_ABOVE
                     }
                 },
                 'include_in_all': False
             },
             'rev_linked_to_me': {
                 'type': 'keyword',
+                'ignore_above': KW_IGNORE_ABOVE,
                 'include_in_all': False
             },
             'validation_errors': {
@@ -473,6 +476,7 @@ def es_mapping(mapping, agg_items_mapping):
             },
             'paths': {
                 'type': 'keyword',
+                'ignore_above': KW_IGNORE_ABOVE,
                 'include_in_all': False
             },
             'indexing_stats': {
@@ -511,7 +515,8 @@ def aggregated_items_mapping(types, item_type):
                     'type': 'text',
                     'fields': {
                         'raw': {
-                            'type': 'keyword'
+                            'type': 'keyword',
+                            'ignore_above': KW_IGNORE_ABOVE
                         }
                     }
                 },
@@ -519,7 +524,8 @@ def aggregated_items_mapping(types, item_type):
                     'type': 'text',
                     'fields': {
                         'raw': {
-                            'type': 'keyword'
+                            'type': 'keyword',
+                            'ignore_above': KW_IGNORE_ABOVE
                         }
                     }
                 },
@@ -541,9 +547,11 @@ def aggregated_items_mapping(types, item_type):
                 if idx == len(split_field) - 1:
                     mapping_val = {
                         'type': 'keyword',
+                        'ignore_above': KW_IGNORE_ABOVE,
                         'fields': {
                             'raw': {
-                                'type': 'keyword'
+                                'type': 'keyword',
+                                'ignore_above': KW_IGNORE_ABOVE
                             }
                         }
                     }

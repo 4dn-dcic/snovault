@@ -85,7 +85,10 @@ def test_logging_basic(testapp, external_tx, capfd):
         for record in check_logs:
             if not record:
                 continue
-            proc_record = yaml.load(record.strip())
+            try:
+                proc_record = yaml.load('{' + record.strip().split('{', 1)[1])
+            except:
+                continue
             if not isinstance(proc_record, dict):
                 continue
             if proc_record.get('telemetry_id') == 'test':

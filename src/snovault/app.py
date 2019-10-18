@@ -24,28 +24,6 @@ def json_asset(spec, **kw):
     return json.load(utf8(asset.stream()), **kw)
 
 
-def static_resources(config):
-    from pkg_resources import resource_filename
-    import mimetypes
-    mimetypes.init()
-    mimetypes.init([resource_filename('snowflakes', 'static/mime.types')])
-    config.add_static_view('static', 'static', cache_max_age=STATIC_MAX_AGE)
-    config.add_static_view('profiles', 'schemas', cache_max_age=STATIC_MAX_AGE)
-
-    favicon_path = '/static/img/favicon.ico'
-    if config.route_prefix:
-        favicon_path = '/%s%s' % (config.route_prefix, favicon_path)
-    config.add_route('favicon.ico', 'favicon.ico')
-
-    def favicon(request):
-        subreq = request.copy()
-        subreq.path_info = favicon_path
-        response = request.invoke_subrequest(subreq)
-        return response
-
-    config.add_view(favicon, route_name='favicon.ico')
-
-
 def changelogs(config):
     config.add_static_view(
         'profiles/changelogs', 'schemas/changelogs', cache_max_age=STATIC_MAX_AGE)
@@ -177,11 +155,11 @@ def app_version(config):
 
 
 def main(global_config, **local_config):
-    """ This function returns a Pyramid WSGI application.
+    """
+    This function returns a Pyramid WSGI application.
     """
     settings = global_config
     settings.update(local_config)
-
     settings['snovault.jsonld.namespaces'] = json_asset('encoded:schemas/namespaces.json')
     settings['snovault.jsonld.terms_namespace'] = 'https://www.encodeproject.org/terms/'
     settings['snovault.jsonld.terms_prefix'] = 'encode'
@@ -208,26 +186,12 @@ def main(global_config, **local_config):
     config.include('snovault')
     config.commit()  # commit so search can override listing
 
-    # Render an HTML page to browsers and a JSON document for API clients
     config.include('.renderers')
-    config.include('.authentication')
-    config.include('.server_defaults')
-    config.include('.types')
-    config.include('.root')
-    config.include('.batch_download')
-    config.include('.visualization')
 
     if 'elasticsearch.server' in config.registry.settings:
         config.include('snovault.elasticsearch')
-        config.include('.search')
 
-    config.include(static_resources)
     config.include(changelogs)
-
-    config.registry['ontology'] = json_from_path(settings.get('ontology_path'), {})
-    aws_ip_ranges = json_from_path(settings.get('aws_ip_ranges_path'), {'prefixes': []})
-    config.registry['aws_ipset'] = netaddr.IPSet(
-        record['ip_prefix'] for record in aws_ip_ranges['prefixes'] if record['service'] == 'AMAZON')
 
     if asbool(settings.get('testing', False)):
         config.include('.tests.testing_views')

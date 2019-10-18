@@ -149,7 +149,6 @@ def render_item(request, context, render, return_uri_also=False):
              request_param=['validate=false'])
 def collection_add(context, request, render=None):
     '''Endpoint for adding a new Item.'''
-
     check_only = asbool(request.params.get('check_only', False))
     if check_only:
         return {

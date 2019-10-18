@@ -489,7 +489,7 @@ def build_default_embeds(embeds_to_add, processed_embeds):
 
 def find_default_embeds_for_schema(path_thus_far, subschema):
     """
-    For a given field and that field's subschema, return the an array of paths
+    For a given field and that field's subschema, return an array of paths
     to the objects in that subschema. This includes all linkTo's and any
     subobjects within the subschema. Recursive function.
     """

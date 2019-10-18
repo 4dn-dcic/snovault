@@ -9,7 +9,7 @@ from functools import partial
 from pyramid.request import apply_request_extensions
 from pyramid.threadlocal import (
     get_current_request,
-    manager,
+    manager
 )
 import atexit
 import structlog
@@ -122,18 +122,24 @@ def sync_update_helper(uuid):
 def queue_update_helper():
     """
     Used with the queue. Keeps a local counter and errors, which are returned
-    to the callback function and synchronized with overall values
+    to the callback function and synchronized with overall values.
+    `local_deferred` is True when the indexer hits an sid exception and must
+    defer the indexing; it should stay as the third returned value in the
+    tuple and is used in overall MPIndexer.update_objects function
     """
     with threadlocal_manager():
         local_counter = [0]
         request = get_current_request()
         indexer = request.registry[INDEXER]
-        local_errors = indexer.update_objects_queue(request, local_counter)
-        return (local_errors, local_counter)
+        local_errors, local_deferred = indexer.update_objects_queue(request, local_counter)
+        return (local_errors, local_counter, local_deferred)
 
 
 def queue_error_callback(cb_args, counter, errors):
-    local_errors, local_counter = cb_args
+    """
+    Update the counter and errors with the result of the given callback arguments
+    """
+    local_errors, local_counter, _ = cb_args
     if counter:
         counter[0] = local_counter[0] + counter[0]
     errors.extend(local_errors)
@@ -214,9 +220,12 @@ class MPIndexer(Indexer):
                 idxs_to_rm = []
                 for idx, res in enumerate(async_results):
                     if res.ready():
+                        # res_vals are returned from one run of `queue_update_helper`
+                        # in form: (errors <list>, counter <list>, deferred <bool>)
+                        res_vals = res.get()
                         idxs_to_rm.append(idx)
-                        # stop adding workers once counter has stopped
-                        if counter and counter[0] > last_count:
+                        # add worker if overall counter has increased OR process is deferred
+                        if (counter and counter[0] > last_count) or res_vals[2] is True:
                             last_count = counter[0]
                             res = pool.apply_async(queue_update_helper, callback=callback_w_errors)
                             results_to_add.append(res)

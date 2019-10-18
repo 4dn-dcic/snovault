@@ -7,6 +7,8 @@ from pyramid.httpexceptions import HTTPInternalServerError
 from pyramid.security import (
     Allow,
     Everyone,
+    Authenticated,
+    principals_allowed_by_permission
 )
 from pyramid.traversal import (
     resource_path,
@@ -39,6 +41,24 @@ def includeme(config):
     config.scan(__name__)
 
 
+# Migrated from snowflakes
+def calc_principals(context):
+    principals_allowed = {}
+    for permission in ('view', 'edit'):
+        principals = principals_allowed_by_permission(context, permission)
+        if principals is Everyone:
+            principals = [Everyone]
+        elif Everyone in principals:
+            principals = [Everyone]
+        elif Authenticated in principals:
+            principals = [Authenticated]
+        # Filter our roles
+        principals_allowed[permission] = [
+            p for p in sorted(principals) if not p.startswith('role.')
+        ]
+    return principals_allowed
+
+
 class Resource(object):
 
     @calculated_property(name='@id', schema={
@@ -62,11 +82,7 @@ class Resource(object):
 class Root(Resource):
     __name__ = ''
     __parent__ = None
-    __acl__ = [
-        (Allow, 'remoteuser.INDEXER', ['view', 'view_raw', 'list', 'index']),
-        (Allow, 'remoteuser.EMBED', ['view', 'view_raw', 'expand']),
-        (Allow, Everyone, ['visible_for_edit']),
-    ]
+    properties = {}
 
     def __init__(self, registry):
         self.registry = registry
@@ -508,7 +524,7 @@ class Item(Resource):
     })
     def principals_allowed(self):
         # importing at top of file requires many more relative imports
-        from .authentication import calc_principals
+        from .resources import calc_principals
         principals = calc_principals(self)
         return principals
 

@@ -1,0 +1,31 @@
+{
+    "type": "object",
+    "properties": {
+        "name": {
+            "type": "string"
+        },
+        "uuid": {
+            "type": "string"
+        },
+        "targets": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "test_description": {
+                        "type": "string"
+                    },
+                    "target":{
+                        "type": "string",
+                        "linkTo": "TestingLinkTargetSno"
+                    }
+                }
+            }
+        },
+        "status": {
+            "type": "string"
+        }
+    },
+    "required": ["targets"],
+    "additionalProperties": false
+}

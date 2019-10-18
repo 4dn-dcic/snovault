@@ -18,10 +18,6 @@
 /session-secret.b64
 /dist/
 /build/
-/src/snowflakes/static/css/bootstrap.css
-/src/snowflakes/static/css/responsive.css
-/src/snowflakes/static/css/style.css
-/src/snowflakes/static/scss/_variables.original.scss
 
 *.DS_Store
 *.egg-info

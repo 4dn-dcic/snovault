@@ -1,0 +1,25 @@
+{
+    "type": "object",
+    "properties": {
+        "name": {
+            "type": "string",
+            "uniqueKey": true
+        },
+        "uuid": {
+            "type": "string"
+        },
+        "target": {
+            "type": "string",
+            "linkTo": "TestingLinkTargetSno"
+        },
+        "ppp": {
+            "type": "string",
+            "linkTo": "TestingPostPutPatchSno"
+        },
+        "status": {
+            "type": "string"
+        }
+    },
+    "required": ["target"],
+    "additionalProperties": false
+}
