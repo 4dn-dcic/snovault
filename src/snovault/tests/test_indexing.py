@@ -313,6 +313,7 @@ def test_indexing_simple(app, testapp, indexer_testapp):
     assert testing_ppp_settings['settings']['index']['number_of_shards'] == '1'
 
 
+@pytest.mark.skip
 def test_indexing_logging(app, testapp, indexer_testapp, capfd):
     """
     This test is meant to do 2 things.
