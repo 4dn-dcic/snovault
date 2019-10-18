@@ -1009,7 +1009,7 @@ def test_create_mapping_index_diff(app, testapp, indexer_testapp):
     assert third_count == initial_count
 
 
-@pytest.mark.flaky(max_runs=3, rerun_filter=delay_rerun)
+#@pytest.mark.flaky(max_runs=3, rerun_filter=delay_rerun)
 def test_indexing_esstorage(app, testapp, indexer_testapp):
     """
     Test some esstorage methods (a.k.a. registry[STORAGE].read)
@@ -1037,7 +1037,7 @@ def test_indexing_esstorage(app, testapp, indexer_testapp):
     assert 'embedded_view' in es_res_direct['_source']['indexing_stats']
     assert 'total_indexing_view' in es_res_direct['_source']['indexing_stats']
     # db get_by_uuid direct returns None by design
-    db_res_direct = app.registry[STORAGE].write.get_by_uuid_direct(test_uuid, TEST_TYPE)
+    db_res_direct = app.registry[STORAGE].write.get_by_uuid_direct(test_uuid, namespaced_test_type, TEST_TYPE)
     assert db_res_direct == None
 
 
