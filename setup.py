@@ -87,7 +87,7 @@ setup(
         '''
         wipe-test-indices = snovault.commands.wipe_test_indices:main
         '''
-    ]
+    ],
     classifiers=[
         # How mature is this project? Common values are
         #   3 - Alpha
