@@ -710,6 +710,7 @@ def check_es_and_cache_linked_sids(context, request, view='embedded'):
     from snovault.elasticsearch.indexer_utils import get_namespaced_index
     index_name = get_namespaced_index(request, context.item_type)
     es_model = request.registry[STORAGE].read.get_by_uuid_direct(str(context.uuid), index_name, context.item_type)
+    print('util: %s' % request.registry[STORAGE].read)
     if es_model is None:
         return None
     es_res = es_model.get('_source')

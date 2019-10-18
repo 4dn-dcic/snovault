@@ -273,7 +273,7 @@ def test_queue_indexing_after_post_patch(app, testapp):
     indexer_queue.delete_messages(received)
 
 
-@pytest.mark.flaky
+#@pytest.mark.flaky
 def test_indexing_simple(app, testapp, indexer_testapp):
     # First post a single item so that subsequent indexing is incremental
     testapp.post_json(TEST_COLL, {'required': ''})

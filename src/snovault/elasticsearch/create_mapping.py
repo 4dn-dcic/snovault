@@ -667,10 +667,7 @@ def create_mapping_by_type(in_type, registry):
     Return a full mapping for a given doc_type of in_type
     """
     # build a schema-based hierarchical mapping for embedded view
-    try:
-        collection = registry[COLLECTIONS].by_item_type[in_type]
-    except: # in case we are namespacing
-        collection = registry[COLLECTIONS].by_item_type[in_type.split('/')[2]]
+    collection = registry[COLLECTIONS].by_item_type[in_type]
     embed_mapping = type_mapping(registry[TYPES], collection.type_info.item_type)
     agg_items_mapping = aggregated_items_mapping(registry[TYPES], collection.type_info.item_type)
     # finish up the mapping

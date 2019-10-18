@@ -5,6 +5,7 @@ _app_settings = {
     'item_datastore': 'database',
     'load_test_only': True,
     'testing': True,
+    'mpindexer': False,
     'pyramid.debug_authorization': True,
     'postgresql.statement_timeout': 20,
     'retry.attempts': 3,

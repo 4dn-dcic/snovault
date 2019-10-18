@@ -106,7 +106,7 @@ class RDBStorage(object):
             return default
         return model
 
-    def get_by_uuid_direct(self, rid, item_type, default=None):
+    def get_by_uuid_direct(self, rid, index_name, item_type, default=None):
         """
         This method is meant to only work with ES, so return None (default)
         for the DB implementation

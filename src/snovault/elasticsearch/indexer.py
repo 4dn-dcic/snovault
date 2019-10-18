@@ -151,7 +151,7 @@ class Indexer(object):
 
     def update_objects(self, request, counter=None):
         """
-        Top level indexing routing if single-process indexer is used
+        Top level update routing
         """
         session = request.registry[DBSESSION]()
         connection = session.connection()
@@ -165,7 +165,6 @@ class Indexer(object):
         if sync_uuids:
             errors = self.update_objects_sync(request, sync_uuids, counter)
         else:
-            # second returned variable is unused outside of MPIndexer
             errors, _ = self.update_objects_queue(request, counter)
         return errors
 
