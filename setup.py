@@ -85,6 +85,7 @@ setup(
     },
     entry_points=[
         '''
+        [console_scripts]
         wipe-test-indices = snovault.commands.wipe_test_indices:main
         '''
     ],
