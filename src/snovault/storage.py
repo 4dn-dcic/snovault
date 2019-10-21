@@ -1,6 +1,7 @@
 
 from pyramid.httpexceptions import (
     HTTPConflict,
+    HTTPLocked,
     HTTPInternalServerError
 )
 from sqlalchemy import (
@@ -212,6 +213,20 @@ class PickStorage(object):
         if datastore == 'elasticsearch':
             raise NotImplementedError
         return self.write.update(model, properties, sheets, unique_keys, links)
+
+    def get_sids_by_uuids(self, rids):
+        """
+        Only functional with self.write
+        """
+        return self.write.get_sids_by_uuids(rids)
+
+    def get_by_uuid_direct(self, rid, item_type, default=None):
+        """
+        Only functional with self.read
+        """
+        if self.read:
+            return self.read.get_by_uuid_direct(rid, item_type)
+        return self.write.get_by_uuid_direct(rid, item_type, default)
 
 
 class RDBStorage(object):

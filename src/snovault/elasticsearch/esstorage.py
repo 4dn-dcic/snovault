@@ -273,7 +273,7 @@ class ElasticSearchStorage(object):
             # Return list of { '@id', 'display_title', 'uuid' } in 'comment'
             # property of HTTPException response to assist with any manual unlinking.
             for linking_uuid in uuids_linking_to_item:
-                linking_dict = self.read.get_by_uuid(linking_uuid).source.get('embedded')
+                linking_dict = self.get_by_uuid(linking_uuid).source.get('embedded')
                 linking_property = find_linking_property(linking_dict, rid)
                 linked_info.append({
                     '@id' : linking_dict.get('@id', linking_dict['uuid']),
