@@ -2,6 +2,7 @@ import elasticsearch.exceptions
 from elasticsearch.helpers import scan
 from elasticsearch_dsl import Search, Q
 from pyramid.httpexceptions import HTTPLocked
+from pyramid.settings import asbool
 from zope.interface import alsoProvides
 from .interfaces import (
     ELASTIC_SEARCH,
@@ -215,27 +216,29 @@ class ElasticSearchStorage(object):
             self.es.delete(id=rid, index=item_type, doc_type=item_type)
         except elasticsearch.exceptions.NotFoundError:
             # Case: Not yet indexed
-            log.error('PURGE: Couldn\'t find %s in ElasticSearch. Continuing.' % rid)
+            log.error('PURGE: Could not find %s in ElasticSearch. Continuing.' % rid)
         except Exception as exc:
             log.error('PURGE: Cannot delete %s in ElasticSearch. Error: %s Continuing.' % (item_type, str(exc)))
+        else:
+            log.info('PURGE: successfully deleted %s in ElasticSearch' % rid)
 
         # queue related items for reindexing
         registry[INDEXER].find_and_queue_secondary_items(set([rid]), set(), sid=max_sid)
         # if configured, delete item from the mirrored ES
         if registry.settings.get('mirror.env.es'):
             mirror_es = registry.settings['mirror.env.es']
-            use_aws_auth = registry.settings.get('elasticsearch.aws_auth')
-            # make sure use_aws_auth is bool
-            if not isinstance(use_aws_auth, bool):
-                use_aws_auth = True if use_aws_auth == 'true' else False
+            use_aws_auth = asbool(registry.settings.get('elasticsearch.aws_auth'))
             mirror_client = es_utils.create_es_client(mirror_es, use_aws_auth=use_aws_auth)
             try:
                 mirror_client.delete(id=rid, index=item_type, doc_type=item_type)
             except elasticsearch.exceptions.NotFoundError:
                 # Case: Not yet indexed
-                log.error('PURGE: Couldn\'t find %s in mirrored ElasticSearch (%s). Continuing.' % (rid, mirror_es))
+                log.error('PURGE: Could not find %s in mirrored ElasticSearch (%s). Continuing.' % (rid, mirror_es))
             except Exception as exc:
-                log.error('PURGE: Cannot delete %s in mirrored ElasticSearch (%s). Error: %s Continuing.' % (item_type, mirror_es, str(exc))
+                log.error('PURGE: Cannot delete %s in mirrored ElasticSearch (%s). Error: %s Continuing.' % (item_type, mirror_es, str(exc)))
+            else:
+                log.info('PURGE: sucessfully deleted %s in mirrored ElasticSearch (%s)'
+                         % (item_type, mirror_es))
 
     def __iter__(self, *item_types):
         query = {'query': {
@@ -255,15 +258,15 @@ class ElasticSearchStorage(object):
         result = self.es.count(index=self.index, body=query)
         return result['count']
 
-    def find_uuids_linked_to_item(self, rid):
+    def find_uuids_linked_to_item(self, registry, rid):
         """
-        Given a resource id (rid), such as uuid, find all items in ES
+        Given a registry and resource id (uuid), find all items in ES
         that have a linkTo to that item.
         Returns some extra information about the fields/links that are present
         """
         linked_info = []
         # we only care about linkTos the item and not reverse links here
-        uuids_linking_to_item = find_uuids_for_indexing(self.registry, set([rid]))
+        uuids_linking_to_item = find_uuids_for_indexing(registry, set([rid]))
         # remove the item itself from the list
         uuids_linking_to_item = uuids_linking_to_item - set([rid])
         if len(uuids_linking_to_item) > 0:

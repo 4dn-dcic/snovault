@@ -40,14 +40,33 @@ import boto3
 import transaction
 import uuid
 import time
+import structlog
 
+log = structlog.getLogger(__name__)
 
 _DBSESSION = None
 
 
 def includeme(config):
     registry = config.registry
+    # add datastore attribute to request
+    config.add_request_method(datastore, 'datastore', reify=True)
     register_storage(registry)
+
+
+def datastore(request):
+    """
+    Function that is reified as `request.datastore`. Used with PickStorage
+    to determine whether to use RDBStorage or ElasticSearchStorage
+    """
+    if request.__parent__ is not None:
+        return request.__parent__.datastore
+    datastore = 'database'
+    if request.method in ('HEAD', 'GET'):
+        datastore = request.params.get('datastore') or \
+            request.headers.get('X-Datastore') or \
+            request.registry.settings.get('collection_datastore', 'elasticsearch')
+    return datastore
 
 
 def register_storage(registry):
@@ -153,20 +172,23 @@ class PickStorage(object):
         removing it from ES and DB.
         """
         if self.read:
-            uuids_linking_to_item = self.read.find_uuids_linked_to_item(rid)
-            if len(uuids_linking_to_item) > 0:
-                raise HTTPLocked(detail="Cannot purge item as other items still link to it",
-                                 comment=uuids_linking_to_item)
+            # model and max_sid are used later, in second `if self.read` block
+            model = self.get_by_uuid(rid)
+            if not item_type:
+                item_type = model.item_type
+            max_sid = model.max_sid
+            links_to_item = self.read.find_uuids_linked_to_item(self.registry, rid)
+            if len(links_to_item) > 0:
+                raise HTTPLocked(
+                    detail="Cannot purge item as other items still link to it",
+                    comment=links_to_item
+                )
         log.warning('PURGE: purging %s' % rid)
 
         # delete the item from DB
         self.write.purge_uuid(rid)
         # if using ES, delete item from ES and mirrored ES, and queue reindexing
         if self.read:
-            model = self.get_by_uuid(rid)
-            if not item_type:
-                item_type = model.item_type
-            max_sid = model.max_sid
             self.read.purge_uuid(self.registry, rid, item_type, max_sid)
 
     def get_rev_links(self, model, rel, *item_types, datastore=None):

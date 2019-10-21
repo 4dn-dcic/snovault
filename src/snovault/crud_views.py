@@ -229,7 +229,7 @@ def get_linking_items(context, request, render=None):
     Split the answer into linkTos and rev_links
     """
     item_uuid = str(context.uuid)
-    links = request.registry[STORAGE].find_uuids_linked_to_item(item_uuid)
+    links = request.registry[STORAGE].read.find_uuids_linked_to_item(request.registry, item_uuid)
     request.response.status = 200
     result = {
         'status': 'success',
