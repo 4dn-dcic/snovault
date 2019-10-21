@@ -9,13 +9,11 @@ from snovault.util import find_collection_subtypes
 def get_namespaced_index(config, index):
     """ Grabs indexer.namespace from settings and namespace the given index """
     settings = config.registry.settings
-    namespace = settings.get('indexer.namespace', None)
-    if namespace is None:
-        return index
+    namespace = settings.get('indexer.namespace', '')
     return namespace + index
 
 
-def find_uuids_for_indexing(registry, updated, find_index='_all'):
+def find_uuids_for_indexing(registry, updated, find_index=None):
     """
     Run a search to find uuids of objects with that contain the given set of
     updated uuids in their linked_uuids.
@@ -51,6 +49,8 @@ def find_uuids_for_indexing(registry, updated, find_index='_all'):
         },
         '_source': False
     }
+    if not find_index:
+        find_index = registry.settings['indexer.namespace'] + '*'
     results = scan(es, index=find_index, query=scan_query)
     invalidated = {res['_id'] for res in results}
     return invalidated | updated
