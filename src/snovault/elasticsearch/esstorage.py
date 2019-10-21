@@ -1,11 +1,7 @@
 import elasticsearch.exceptions
 from elasticsearch.helpers import scan
 from elasticsearch_dsl import Search, Q
-from pyramid.threadlocal import get_current_request
-from pyramid.httpexceptions import (
-    HTTPLocked,
-    HTTPInternalServerError
-)
+from pyramid.httpexceptions import HTTPLocked
 from zope.interface import alsoProvides
 from .interfaces import (
     ELASTIC_SEARCH,

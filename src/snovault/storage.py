@@ -1,5 +1,8 @@
 
-from pyramid.httpexceptions import HTTPConflict
+from pyramid.httpexceptions import (
+    HTTPConflict,
+    HTTPInternalServerError
+)
 from sqlalchemy import (
     Column,
     DDL,
@@ -32,6 +35,7 @@ from .interfaces import (
     DBSESSION,
     STORAGE,
 )
+from pyramid.threadlocal import get_current_request
 import boto3
 import transaction
 import uuid

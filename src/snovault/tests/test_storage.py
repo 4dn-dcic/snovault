@@ -297,15 +297,24 @@ def test_S3BlobStorage_get_blob_url_for_non_s3_file():
     assert url
 
 
-def test_pick_storage(session, registry):
+def test_pick_storage(session, registry, dummy_request):
     from snovault.storage import PickStorage, RDBStorage
-    storage = PickStorage(RDBStorage(registry[DBSESSION]), None, registry)
-    assert storage.write
-    assert storage.read is None
+    from snovault import DBSESSION
+    from pyramid.threadlocal import manager
+    # use a dummy value for ElasticSearchStorage
+    storage = PickStorage(RDBStorage(registry[DBSESSION]), 'dummy_es', registry)
+    assert isinstance(storage.write, RDBStorage)
+    assert storage.read == 'dummy_es'
     # test storage selection logic
     assert storage.storage('database') is storage.write
-    assert storage.storage('elasticsearch') is None
+    assert storage.storage('elasticsearch') == 'dummy_es'
     with pytest.raises(Exception) as exec_info:
         storage.storage('not_a_db')
     assert 'Invalid datastore not_a_db' in str(exec_info)
     assert storage.storage() is storage.write
+
+    # test with request.datastore = 'elasticsearch'. Should get None (no ES)
+    dummy_request.datastore = 'elasticsearch'
+    manager.push({'request': dummy_request, 'registry': registry})
+    assert storage.storage() == 'dummy_es'
+    manager.pop()
