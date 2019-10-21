@@ -48,18 +48,18 @@ def includeme(config):
 
 def register_storage(registry):
     """
-    Wrapper function to register a RDBStorage as registry[STORAGE]
+    Wrapper function to register a PickStorage as registry[STORAGE]
     """
     if not registry[DBSESSION]:
         registry[STORAGE] = None
         return
-    registry[STORAGE] = RDBStorage(registry[DBSESSION])
+    # use PickStorage without a read storage specified (None)
+    registry[STORAGE] = PickStorage(RDBStorage(registry[DBSESSION]), None, registry)
+
     global _DBSESSION
     _DBSESSION = registry[DBSESSION]
     if registry.settings.get('blob_bucket'):
-        registry[BLOBS] = S3BlobStorage(
-            registry.settings['blob_bucket'],
-        )
+        registry[BLOBS] = S3BlobStorage(registry.settings['blob_bucket'])
     else:
         registry[BLOBS] = RDBBlobStorage(registry[DBSESSION])
 
@@ -85,7 +85,114 @@ baked_query_sids = bakery(lambda session: session.query(CurrentPropertySheet))
 baked_query_sids += lambda q: q.filter(CurrentPropertySheet.rid.in_(bindparam('rids', expanding=True)))
 
 
+class PickStorage(object):
+    """
+    Class that directs storage methods to write storage (RDBStorage) or read
+    storage (ElasticSearchStorage)
+    """
+    def __init__(self, write, read, registry):
+        self.write = write
+        self.read = read
+        self.registry = registry
+
+    def storage(self, datastore=None):
+        """
+        Choose which storage to use. If a forced datastore is passed in through
+        the `datastore` parameter, always use that. Otherwise check
+        `request.datastore`
+        """
+        if datastore is not None:
+            if datastore == 'elasticsearch':
+                return self.read
+            elif datastore == 'database':
+                return self.write
+            else:
+                # invalid forced datastore. Throw a 500
+                raise HTTPInternalServerError('Invalid datastore %s in PickStorage' % datastore)
+
+        # usually check the datastore attribute on the request
+        request = get_current_request()
+        if request and request.datastore == 'elasticsearch':
+            return self.read
+        return self.write
+
+    def get_by_uuid(self, uuid, datastore=None):
+        storage = self.storage(datastore)
+        model = storage.get_by_uuid(uuid)
+        # unless forcing datastore, check write storage if not found in read
+        if datastore is None and storage is self.read:
+            if model is None:
+                return self.write.get_by_uuid(uuid)
+        return model
+
+    def get_by_unique_key(self, unique_key, name, datastore=None):
+        storage = self.storage(datastore)
+        model = storage.get_by_unique_key(unique_key, name)
+        # unless forcing datastore, check write storage if not found in read
+        if datastore is None and storage is self.read:
+            if model is None:
+                return self.write.get_by_unique_key(unique_key, name)
+        return model
+
+    def get_by_json(self, key, value, item_type, default=None, datastore=None):
+        storage = self.storage(datastore)
+        model = storage.get_by_json(key, value, item_type)
+        # unless forcing datastore, check write storage if not found in read
+        if datastore is None and storage is self.read:
+            if model is None:
+                return self.write.get_by_json(key, value, item_type)
+        return model
+
+    def purge_uuid(self, rid, item_type=None):
+        """
+        Attempt to purge an item by given resource id (rid), completely
+        removing it from ES and DB.
+        """
+        if self.read:
+            uuids_linking_to_item = self.read.find_uuids_linked_to_item(rid)
+            if len(uuids_linking_to_item) > 0:
+                raise HTTPLocked(detail="Cannot purge item as other items still link to it",
+                                 comment=uuids_linking_to_item)
+        log.warning('PURGE: purging %s' % rid)
+
+        # delete the item from DB
+        self.write.purge_uuid(rid)
+        # if using ES, delete item from ES and mirrored ES, and queue reindexing
+        if self.read:
+            model = self.get_by_uuid(rid)
+            if not item_type:
+                item_type = model.item_type
+            max_sid = model.max_sid
+            self.read.purge_uuid(self.registry, rid, item_type, max_sid)
+
+    def get_rev_links(self, model, rel, *item_types, datastore=None):
+        return self.storage(datastore).get_rev_links(model, rel, *item_types)
+
+    def __iter__(self, *item_types, datastore=None):
+        return self.storage(datastore).__iter__(*item_types)
+
+    def __len__(self, *item_types, datastore=None):
+        return self.storage(datastore).__len__(*item_types)
+
+    def create(self, item_type, uuid, datastore=None):
+        # should this case be handled?
+        if datastore == 'elasticsearch':
+            raise NotImplementedError
+        return self.write.create(item_type, uuid)
+
+    def update(self, model, properties=None, sheets=None, unique_keys=None,
+               links=None, datastore=None):
+        # should this case be handled?
+        if datastore == 'elasticsearch':
+            raise NotImplementedError
+        return self.write.update(model, properties, sheets, unique_keys, links)
+
+
 class RDBStorage(object):
+    """
+    Storage class used to interface with the relational database.
+    Corresponds to `PickStorage.write`
+    """
     batchsize = 1000
 
     def __init__(self, DBSession):

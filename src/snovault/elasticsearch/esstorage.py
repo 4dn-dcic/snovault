@@ -3,7 +3,8 @@ from elasticsearch.helpers import scan
 from elasticsearch_dsl import Search, Q
 from pyramid.threadlocal import get_current_request
 from pyramid.httpexceptions import (
-    HTTPLocked
+    HTTPLocked,
+    HTTPInternalServerError
 )
 from zope.interface import alsoProvides
 from .interfaces import (
@@ -12,7 +13,6 @@ from .interfaces import (
     INDEXER,
     ICachedItem,
 )
-from ..storage import RDBStorage
 from .indexer_utils import find_uuids_for_indexing
 from .create_mapping import SEARCH_MAX
 from dcicutils import es_utils
@@ -27,13 +27,13 @@ def includeme(config):
     es = registry[ELASTIC_SEARCH]
     # ES 5 change: 'snovault' index removed, search among '_all' instead
     es_index = '_all'
-    wrapped_storage = registry[STORAGE]
-    registry[STORAGE] = PickStorage(ElasticSearchStorage(es, es_index), wrapped_storage, registry)
+    # update read storage on PickStorage created in storage.py
+    registry[STORAGE].read = ElasticSearchStorage(es, es_index)
 
 
 def find_linking_property(our_dict, value_to_find):
     """
-    Helper function used in PickStorage.find_uuids_linked_to_item
+    Helper function used in ElasticSearchStorage.find_uuids_linked_to_item
     """
     def find_it(d, parent_key=None):
         if isinstance(d, list):
@@ -90,111 +90,11 @@ class CachedModel(object):
         alsoProvides(item, ICachedItem)
 
 
-class PickStorage(object):
-    def __init__(self, read, write, registry):
-        self.read = read
-        self.write = write
-        self.registry = registry
-
-    def storage(self):
-        request = get_current_request()
-        if request and request.datastore == 'elasticsearch':
-            return self.read
-        return self.write
-
-    def get_by_uuid(self, uuid):
-        storage = self.storage()
-        model = storage.get_by_uuid(uuid)
-        if storage is self.read:
-            if model is None:
-                return self.write.get_by_uuid(uuid)
-        return model
-
-    def get_by_unique_key(self, unique_key, name):
-        storage = self.storage()
-        model = storage.get_by_unique_key(unique_key, name)
-        if storage is self.read:
-            if model is None:
-                return self.write.get_by_unique_key(unique_key, name)
-        return model
-
-    def get_by_json(self, key, value, item_type, default=None):
-        storage = self.storage()
-        model = storage.get_by_json(key, value, item_type)
-        if storage is self.read:
-            if model is None:
-                return self.write.get_by_json(key, value, item_type)
-        return model
-
-    def find_uuids_linked_to_item(self, rid):
-        """
-        Given a resource id (rid), such as uuid, find all items in the DB
-        that have a linkTo to that item.
-        Returns some extra information about the fields/links that are
-        present
-        """
-        linked_info = []
-        # we only care about linkTos the item and not reverse links here
-        uuids_linking_to_item = find_uuids_for_indexing(self.registry, set([rid]))
-        # remove the item itself from the list
-        uuids_linking_to_item = uuids_linking_to_item - set([rid])
-        if len(uuids_linking_to_item) > 0:
-            # Return list of { '@id', 'display_title', 'uuid' } in 'comment'
-            # property of HTTPException response to assist with any manual unlinking.
-            for linking_uuid in uuids_linking_to_item:
-                linking_dict = self.read.get_by_uuid(linking_uuid).source.get('embedded')
-                linking_property = find_linking_property(linking_dict, rid)
-                linked_info.append({
-                    '@id' : linking_dict.get('@id', linking_dict['uuid']),
-                    'display_title' : linking_dict.get('display_title', linking_dict['uuid']),
-                    'uuid' : linking_uuid,
-                    'field' : linking_property or "Not Embedded"
-                })
-        return linked_info
-
-    def purge_uuid(self, rid, item_type=None):
-        """
-        Attempt to purge an item by given resource id (rid), completely
-        removing it from ES and DB.
-        """
-        model = self.get_by_uuid(rid)
-        # ES deletion requires index & doc_type, which are both == item_type
-        if not item_type:
-            item_type = model.item_type
-        max_sid = model.max_sid
-        uuids_linking_to_item = self.find_uuids_linked_to_item(rid)
-        if len(uuids_linking_to_item) > 0:
-            raise HTTPLocked(detail="Cannot purge item as other items still link to it",
-                             comment=uuids_linking_to_item)
-        log.warning('PURGE: purging %s' % rid)
-
-        # delete the item from DB
-        self.write.purge_uuid(rid)
-        # delete the item from ES and also the mirrored ES if present
-        self.read.purge_uuid(rid, item_type, self.registry)
-        # queue related items for reindexing
-        self.registry[INDEXER].find_and_queue_secondary_items(set([rid]), set(),
-                                                              sid=max_sid)
-
-    def get_rev_links(self, model, rel, *item_types):
-        return self.storage().get_rev_links(model, rel, *item_types)
-
-    def __iter__(self, *item_types):
-        return self.storage().__iter__(*item_types)
-
-    def __len__(self, *item_types):
-        return self.storage().__len__(*item_types)
-
-    def create(self, item_type, uuid):
-        return self.write.create(item_type, uuid)
-
-    def update(self, model, properties=None, sheets=None, unique_keys=None, links=None):
-        return self.write.update(model, properties, sheets, unique_keys, links)
-
-
 class ElasticSearchStorage(object):
-    writeable = False
-
+    """
+    Storage class used to interface with Elasticsearch.
+    Corresponds to `PickStorage.read`
+    """
     def __init__(self, es, index):
         self.es = es
         self.index = index
@@ -306,7 +206,7 @@ class ElasticSearchStorage(object):
         """
         return None
 
-    def purge_uuid(self, rid, item_type=None, registry=None):
+    def purge_uuid(self, registry, rid, item_type=None, max_sid=None):
         """
         Purge a uuid from the write storage (Elasticsearch)
         If there is a mirror environment set up for the indexer, also attempt
@@ -322,10 +222,10 @@ class ElasticSearchStorage(object):
             log.error('PURGE: Couldn\'t find %s in ElasticSearch. Continuing.' % rid)
         except Exception as exc:
             log.error('PURGE: Cannot delete %s in ElasticSearch. Error: %s Continuing.' % (item_type, str(exc)))
-        if not registry:
-            log.error('PURGE: Registry not available for ESStorage purge_uuid')
-            return
-        # if configured, delete the item from the mirrored ES as well
+
+        # queue related items for reindexing
+        registry[INDEXER].find_and_queue_secondary_items(set([rid]), set(), sid=max_sid)
+        # if configured, delete item from the mirrored ES
         if registry.settings.get('mirror.env.es'):
             mirror_es = registry.settings['mirror.env.es']
             use_aws_auth = registry.settings.get('elasticsearch.aws_auth')
@@ -339,7 +239,7 @@ class ElasticSearchStorage(object):
                 # Case: Not yet indexed
                 log.error('PURGE: Couldn\'t find %s in mirrored ElasticSearch (%s). Continuing.' % (rid, mirror_es))
             except Exception as exc:
-                log.error('PURGE: Cannot delete %s in mirrored ElasticSearch (%s). Error: %s Continuing.' % (item_type, mirror_es, str(exc)))
+                log.error('PURGE: Cannot delete %s in mirrored ElasticSearch (%s). Error: %s Continuing.' % (item_type, mirror_es, str(exc))
 
     def __iter__(self, *item_types):
         query = {'query': {
@@ -358,3 +258,28 @@ class ElasticSearchStorage(object):
         }}
         result = self.es.count(index=self.index, body=query)
         return result['count']
+
+    def find_uuids_linked_to_item(self, rid):
+        """
+        Given a resource id (rid), such as uuid, find all items in ES
+        that have a linkTo to that item.
+        Returns some extra information about the fields/links that are present
+        """
+        linked_info = []
+        # we only care about linkTos the item and not reverse links here
+        uuids_linking_to_item = find_uuids_for_indexing(self.registry, set([rid]))
+        # remove the item itself from the list
+        uuids_linking_to_item = uuids_linking_to_item - set([rid])
+        if len(uuids_linking_to_item) > 0:
+            # Return list of { '@id', 'display_title', 'uuid' } in 'comment'
+            # property of HTTPException response to assist with any manual unlinking.
+            for linking_uuid in uuids_linking_to_item:
+                linking_dict = self.read.get_by_uuid(linking_uuid).source.get('embedded')
+                linking_property = find_linking_property(linking_dict, rid)
+                linked_info.append({
+                    '@id' : linking_dict.get('@id', linking_dict['uuid']),
+                    'display_title' : linking_dict.get('display_title', linking_dict['uuid']),
+                    'uuid' : linking_uuid,
+                    'field' : linking_property or "Not Embedded"
+                })
+        return linked_info
