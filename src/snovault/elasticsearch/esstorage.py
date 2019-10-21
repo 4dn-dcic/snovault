@@ -26,7 +26,11 @@ def includeme(config):
     registry = config.registry
     es = registry[ELASTIC_SEARCH]
     # ES 5 change: 'snovault' index removed, search among '_all' instead
-    es_index = '_all'
+    namespace = registry.settings['indexer.namespace']
+    if not namespace:
+        es_index = '_all'
+    else:
+        es_index = namespace + '*'
     wrapped_storage = registry[STORAGE]
     registry[STORAGE] = PickStorage(ElasticSearchStorage(es, es_index), wrapped_storage, registry)
 

@@ -70,6 +70,7 @@ def index(request):
     dry_run = request.json.get('dry_run', False)  # if True, do not actually index
     es = request.registry[ELASTIC_SEARCH]
     indexer = request.registry[INDEXER]
+    namespace_star = request.registry.settings['indexer.namespace'] + '*'
     namespaced_index = get_namespaced_index(request, 'indexing')
 
     if not dry_run:
@@ -95,7 +96,7 @@ def index(request):
         indexing_counter = [0]  # do this so I can pass it as a reference
         # actually index
         # try to ensure ES is reasonably up to date
-        es.indices.refresh(index='_all')
+        es.indices.refresh(index=namespace_star)
 
         # NOTE: the refresh interval is left as default because it doesn't seem
         # to help performance much.
@@ -137,7 +138,7 @@ def index(request):
                         item['error_message'] = "Error occured during indexing, check the logs"
 
         # this will make documents in all lucene buffers available to search
-        es.indices.refresh(index='_all')
+        es.indices.refresh(index=namespace_star)
         # resets the refresh_interval to the default value (must reset if disabled earlier)
         # es.indices.put_settings(index='_all', body={'index' : {'refresh_interval': '1s'}})
     return indexing_record
