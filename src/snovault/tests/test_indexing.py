@@ -315,7 +315,6 @@ def test_indexing_simple(app, testapp, indexer_testapp):
     assert testing_ppp_settings['settings']['index']['number_of_shards'] == '1'
 
 
-@pytest.mark.skip
 def test_indexing_logging(app, testapp, indexer_testapp, capfd):
     """
     This test is meant to do 2 things.
@@ -337,6 +336,10 @@ def test_indexing_logging(app, testapp, indexer_testapp, capfd):
     # log_index_name = calculate_log_index()
     # exists = check_if_index_exists(es, log_index_name)
     # assert exists
+
+    # Can't get log msgs when MPIndexer is running, so skip in this case
+    if app.registry.settings['mpindexer'] == True:
+        return
 
     # index an item and make sure logging to stdout occurs
     post_res = testapp.post_json(TEST_COLL, {'required': ''})
