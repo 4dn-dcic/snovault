@@ -19,7 +19,15 @@ class UnknownItemTypeError(Exception):
 
 
 class Connection(object):
-    ''' Intermediates between the storage and the rest of the system
+    '''
+    Intermediates between the storage and the rest of the system.
+    Storage class should be storage.PickStorage, which is used to interface
+    between different storage types (presumably RDS and ES)
+
+    Many methods of the class take `datastore` parameter. This can be used
+    to force which storage is used. Should be set to 'elasticsearch' to force
+    usage of `PickStorage.read` or 'database' for usage of `PickStorage.write`.
+    See `PickStorage.storage` for more info
     '''
     def __init__(self, registry):
         self.registry = registry
@@ -36,8 +44,8 @@ class Connection(object):
     def types(self):
         return self.registry[TYPES]
 
-    def get_by_json(self, key, value, item_type, default=None):
-        model = self.storage.get_by_json(key, value, item_type, default)
+    def get_by_json(self, key, value, item_type, default=None, datastore=None):
+        model = self.storage.get_by_json(key, value, item_type, default, datastore)
 
         if model is None:
             return default
@@ -52,7 +60,7 @@ class Connection(object):
         return item
 
 
-    def get_by_uuid(self, uuid, default=None):
+    def get_by_uuid(self, uuid, default=None, datastore=None):
         if isinstance(uuid, basestring):
             # some times we get @id type things here
             uuid = uuid.strip("/").split("/")[-1]
@@ -68,7 +76,7 @@ class Connection(object):
         if cached is not None:
             return cached
 
-        model = self.storage.get_by_uuid(uuid)
+        model = self.storage.get_by_uuid(uuid, datastore)
         if model is None:
             return default
 
@@ -82,14 +90,14 @@ class Connection(object):
         self.item_cache[uuid] = item
         return item
 
-    def get_by_unique_key(self, unique_key, name, default=None):
+    def get_by_unique_key(self, unique_key, name, default=None, datastore=None):
         pkey = (unique_key, name)
 
         cached = self.unique_key_cache.get(pkey)
         if cached is not None:
-            return self.get_by_uuid(cached)
+            return self.get_by_uuid(cached, datastore)
 
-        model = self.storage.get_by_unique_key(unique_key, name)
+        model = self.storage.get_by_unique_key(unique_key, name, datastore)
         if model is None:
             return default
 
@@ -109,34 +117,34 @@ class Connection(object):
         self.item_cache[uuid] = item
         return item
 
-    def get_rev_links(self, model, rel, *types):
+    def get_rev_links(self, model, rel, *types, datastore=None):
         item_types = [self.types[t].item_type for t in types]
-        return self.storage.get_rev_links(model, rel, *item_types)
+        return self.storage.get_rev_links(model, rel, *item_types, datastore=datastore)
 
-    def __iter__(self, *types):
+    def __iter__(self, *types, datastore=None):
         if not types:
             item_types = self.types.by_item_type.keys()
         else:
             item_types = [self.types[t].item_type for t in types]
-        for uuid in self.storage.__iter__(*item_types):
+        for uuid in self.storage.__iter__(*item_types, datastore=datastore):
             yield uuid
 
-    def __len__(self, *types):
+    def __len__(self, *types, datastore=None):
         if not types:
             item_types = self.types.by_item_type.keys()
         else:
             item_types = [self.types[t].item_type for t in types]
-        return self.storage.__len__(*item_types)
+        return self.storage.__len__(*item_types, datastore=datastore)
 
-    def __getitem__(self, uuid):
-        item = self.get_by_uuid(uuid)
+    def __getitem__(self, uuid, datastore=None):
+        item = self.get_by_uuid(uuid, datastore)
         if item is None:
             raise KeyError(uuid)
         return item
 
-    def create(self, type_, uuid):
+    def create(self, type_, uuid, datastore=None):
         ti = self.types[type_]
-        return self.storage.create(ti.item_type, uuid)
+        return self.storage.create(ti.item_type, uuid, datastore)
 
-    def update(self, model, properties, sheets=None, unique_keys=None, links=None):
-        self.storage.update(model, properties, sheets, unique_keys, links)
+    def update(self, model, properties, sheets=None, unique_keys=None, links=None, datastore=None):
+        self.storage.update(model, properties, sheets, unique_keys, links, datastore)
