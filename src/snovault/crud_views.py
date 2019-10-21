@@ -10,7 +10,6 @@ from uuid import (
 )
 from .interfaces import (
     COLLECTIONS,
-    CONNECTION,
     STORAGE,
     Created,
     BeforeModified,
