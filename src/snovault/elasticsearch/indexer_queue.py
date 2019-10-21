@@ -347,10 +347,11 @@ class QueueManager(object):
         Manually clears the queue by repeatedly calling receieve_messages then
         deleting those messages.
         """
-        msgs = self.receive_messages()
-        while msgs:
-            self.delete_messages(msgs)
-            msgs = self.receive_messages()
+        for target in self.queue_targets:
+            msgs = self.receive_messages(target)
+            while msgs:
+                self.delete_messages(msgs, target)
+                msgs = self.receive_messages(target)
 
     def delete_queue(self, queue_url):
         """
