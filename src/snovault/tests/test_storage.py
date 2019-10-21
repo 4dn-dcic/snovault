@@ -295,3 +295,17 @@ def test_S3BlobStorage_get_blob_url_for_non_s3_file():
     download_meta = {'blob_id': 'blob_id'}
     url = storage.get_blob_url(download_meta)
     assert url
+
+
+def test_pick_storage(session, registry):
+    from snovault.storage import PickStorage, RDBStorage
+    storage = PickStorage(RDBStorage(registry[DBSESSION]), None, registry)
+    assert storage.write
+    assert storage.read is None
+    # test storage selection logic
+    assert storage.storage('database') is storage.write
+    assert storage.storage('elasticsearch') is None
+    with pytest.raises(Exception) as exec_info:
+        storage.storage('not_a_db')
+    assert 'Invalid datastore not_a_db' in str(exec_info)
+    assert storage.storage() is storage.write
