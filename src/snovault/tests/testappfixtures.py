@@ -5,7 +5,7 @@ _app_settings = {
     'item_datastore': 'database',
     'load_test_only': True,
     'testing': True,
-    'mpindexer': True,
+    'mpindexer': False,
     'pyramid.debug_authorization': True,
     'postgresql.statement_timeout': 20,
     'retry.attempts': 3,
@@ -38,7 +38,7 @@ def app_settings(request, wsgi_server_host_port, conn, DBSession):
 
 
 @pytest.fixture(scope='session')
-def app(app_settings):
+def app(app_settings, request):
     '''WSGI application level functional testing.
        will have to make snovault dummy main app
     '''

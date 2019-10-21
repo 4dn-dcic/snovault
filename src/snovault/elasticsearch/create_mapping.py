@@ -704,7 +704,7 @@ def build_index(app, es, index_name, in_type, mapping, uuids_to_index, dry_run, 
     # otherwise, run if we are using the check-first or index_diff args
     if ((check_first or index_diff) and this_index_exists
         and compare_against_existing_mapping(es, index_name, in_type, this_index_record, True)):
-        check_and_reindex_existing(app, es, index_name, in_type, uuids_to_index, index_diff)
+        check_and_reindex_existing(app, es, in_type, uuids_to_index, index_diff)
         log.info('MAPPING: using existing index for collection %s' % (in_type), collection=in_type)
         return
 
