@@ -216,7 +216,7 @@ def test_queue_indexing_telemetry_id(app, testapp):
         if (msg_count['primary_waiting'] == 1 and
             msg_count['secondary_waiting'] == 2):
             break
-        tries_left -= 0
+        tries_left -= 1
         time.sleep(3)
     assert tries_left > 0
     # delete the messages
@@ -236,7 +236,7 @@ def test_queue_indexing_telemetry_id(app, testapp):
         if (msg_count['primary_waiting'] == 0 and
             msg_count['secondary_waiting'] == 0):
             break
-        tries_left -= 0
+        tries_left -= 1
         time.sleep(3)
     assert tries_left > 0
 
