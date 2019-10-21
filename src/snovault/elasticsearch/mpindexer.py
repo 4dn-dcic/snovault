@@ -225,7 +225,7 @@ class MPIndexer(Indexer):
                         res_vals = res.get()
                         idxs_to_rm.append(idx)
                         # add worker if overall counter has increased OR process is deferred
-                        if (counter and counter[0] > last_count):
+                        if (counter and counter[0] > last_count) or res_vals[2] is True:
                             last_count = counter[0]
                             res = pool.apply_async(queue_update_helper, callback=callback_w_errors)
                             results_to_add.append(res)
