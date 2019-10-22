@@ -32,8 +32,11 @@ _app_settings = {
 @pytest.fixture(scope='session')
 def app_settings(request, wsgi_server_host_port, conn, DBSession):
     from snovault import DBSESSION
+    import os
     settings = _app_settings.copy()
     settings[DBSESSION] = DBSession
+    # Set index namespace
+    settings['indexer.namespace'] = os.environ.get('TRAVIS_JOB_ID', '')
     return settings
 
 
