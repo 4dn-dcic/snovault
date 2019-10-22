@@ -19,13 +19,15 @@ log = structlog.getLogger(__name__)
 
 
 def includeme(config):
-    from snovault import STORAGE
+    from snovault import STORAGE, DBSESSION
+    from ..storage import register_storage
     registry = config.registry
     es = registry[ELASTIC_SEARCH]
     # ES 5 change: 'snovault' index removed, search among '_all' instead
     es_index = '_all'
     # update read storage on PickStorage created in storage.py
-    registry[STORAGE].read = ElasticSearchStorage(es, es_index)
+    read_storage = ElasticSearchStorage(es, es_index)
+    register_storage(registry, read_override=read_storage)
 
 
 def find_linking_property(our_dict, value_to_find):
