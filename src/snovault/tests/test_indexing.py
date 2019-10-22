@@ -951,7 +951,6 @@ def test_create_mapping_index_diff(app, testapp, indexer_testapp):
     testapp.post_json(TEST_COLL, {'required': ''})  # second item
     create_mapping.run(app, collections=[TEST_TYPE])
     indexer_queue = app.registry[INDEXER_QUEUE]
-    indexer_queue.clear_queue()
     indexer_testapp.post_json('/index', {'record': True})
     time.sleep(4)
     initial_count = es.count(index=TEST_TYPE, doc_type=TEST_TYPE).get('count')
