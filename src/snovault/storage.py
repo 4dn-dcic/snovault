@@ -136,7 +136,7 @@ class PickStorage(object):
 
         # usually check the datastore attribute on the request
         request = get_current_request()
-        if request and request.datastore == 'elasticsearch':
+        if self.read and request and request.datastore == 'elasticsearch':
             return self.read
         return self.write
 
