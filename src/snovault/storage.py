@@ -52,7 +52,9 @@ def includeme(config):
     registry = config.registry
     # add datastore attribute to request
     config.add_request_method(datastore, 'datastore', reify=True)
-    register_storage(registry)
+    # register PickStorage initialized with write storage
+    write_stg = RDBStorage(registry[DBSESSION]) if registry[DBSESSION] else None
+    register_storage(registry, write_override=write_stg)
 
 
 def datastore(request):
@@ -70,19 +72,34 @@ def datastore(request):
     return datastore
 
 
-def register_storage(registry):
+def register_storage(registry, write_override=None, read_override=None):
     """
-    Wrapper function to register a PickStorage as registry[STORAGE]
-    """
-    if not registry[DBSESSION]:
-        registry[STORAGE] = None
-        return
-    # use PickStorage without a read storage specified (None)
-    registry[STORAGE] = PickStorage(RDBStorage(registry[DBSESSION]), None, registry)
+    Wrapper function to register a PickStorage as registry[STORAGE].
+    Attempts to reuse an existing PickStorage if possible, including read/write
+    connections. If `write_override` or `read_override` are provided, will
+    override PickStorage attributes with the given values
 
+    Also sets up global DBSESSION config for this file and initializes
+    blob storage
+    """
+    write_storage = None
+    read_storage = None
+    if isinstance(registry.get(STORAGE), PickStorage):
+        write_storage = registry[STORAGE].write
+        read_storage = registry[STORAGE].read
+    if write_override is not None:
+        write_storage = write_override
+    if read_override is not None:
+        read_storage = read_override
+    # set PickStorage with correct write/read
+    registry[STORAGE] = PickStorage(write_storage, read_storage, registry)
+
+    # global config needed for some storage-related properties
     global _DBSESSION
     _DBSESSION = registry[DBSESSION]
-    if registry.settings.get('blob_bucket'):
+
+    # set up blob storage if not configured already
+    if not registry.get(BLOBS) and registry.settings.get('blob_bucket'):
         registry[BLOBS] = S3BlobStorage(registry.settings['blob_bucket'])
     else:
         registry[BLOBS] = RDBBlobStorage(registry[DBSESSION])
