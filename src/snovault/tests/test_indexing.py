@@ -127,12 +127,12 @@ def test_indexer_namespacing(app, testapp, indexer_testapp):
     assert idx in es.indices.get(index=idx)
     if jid:
         assert jid in idx
-    del os.environ['TRAVIS_JOB_ID'] # unset jid, make sure raw is given back
+    app.registry.settings['indexer.namespace'] = '' # unset namespace, check raw is given
     raw_idx = indexer_utils.get_namespaced_index(app, TEST_TYPE)
-    star_idx = indexer_utils.get_namespaced_index(app, '*')
+    star_idx = indexer_utils.get_namespaced_index(app.registry, '*') # registry should work as well
     assert raw_idx == TEST_TYPE
     assert star_idx == '*'
-    os.environ['TRAVIS_JOB_ID'] = jid # reset jid
+    app.registry.settings['indexer.namespace'] = jid # reset jid
 
 
 @pytest.mark.es
