@@ -21,8 +21,10 @@ def main():
 
     try:
         client.indices.delete(index=jid+'*')
+        logger.info('Successfully deleted indices with prefix %s' % jid)
     except Exception as exc:
-        logger.info('Failed to delete indices with exception: %s\n' % str(exc))
-
+        logger.error('Failed to delete indices with exception: %s\n' % str(exc))
+        exit(1)
+        
 if __name__ == '__main__':
     main()

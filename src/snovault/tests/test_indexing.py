@@ -982,11 +982,11 @@ def test_create_mapping_check_first(app, testapp, indexer_testapp):
 
 def delay_rerun(*args):
     """ Rerun function for flaky """
-    time.sleep(60)
+    time.sleep(30)
     return True
 
 
-@pytest.mark.flaky(max_runs=3, rerun_filter=delay_rerun)
+@pytest.mark.flaky(max_runs=2, rerun_filter=delay_rerun)
 def test_create_mapping_index_diff(app, testapp, indexer_testapp):
     es = app.registry[ELASTIC_SEARCH]
     # post a couple items, index, then remove one
@@ -995,8 +995,8 @@ def test_create_mapping_index_diff(app, testapp, indexer_testapp):
     testapp.post_json(TEST_COLL, {'required': ''})  # second item
     create_mapping.run(app, collections=[TEST_TYPE])
     indexer_queue = app.registry[INDEXER_QUEUE]
-    indexer_queue.clear_queue()
     indexer_testapp.post_json('/index', {'record': True})
+    indexer_queue.clear_queue()
     time.sleep(4)
     namespaced_index = indexer_utils.get_namespaced_index(app, TEST_TYPE)
     initial_count = es.count(index=namespaced_index, doc_type=TEST_TYPE).get('count')
@@ -1018,7 +1018,7 @@ def test_create_mapping_index_diff(app, testapp, indexer_testapp):
     assert third_count == initial_count
 
 
-#@pytest.mark.flaky(max_runs=3, rerun_filter=delay_rerun)
+@pytest.mark.flaky(max_runs=2, rerun_filter=delay_rerun)
 def test_indexing_esstorage(app, testapp, indexer_testapp):
     """
     Test some esstorage methods (a.k.a. registry[STORAGE].read)
@@ -1050,7 +1050,7 @@ def test_indexing_esstorage(app, testapp, indexer_testapp):
     assert db_res_direct == None
 
 
-@pytest.mark.flaky(max_runs=3, rerun_filter=delay_rerun)
+@pytest.mark.flaky(max_runs=2, rerun_filter=delay_rerun)
 def test_aggregated_items(app, testapp, indexer_testapp):
     """
     Test that the item aggregation works, which only occurs when indexing
@@ -1163,7 +1163,7 @@ def test_aggregated_items(app, testapp, indexer_testapp):
     indexer_testapp.post_json('/index', {'record': True})
 
 
-@pytest.mark.flaky(max_runs=3, rerun_filter=delay_rerun)
+@pytest.mark.flaky(max_runs=2, rerun_filter=delay_rerun)
 def test_indexing_info(app, testapp, indexer_testapp):
     """
     Test the information on indexing-info for a given uuid and make sure that
@@ -1225,7 +1225,7 @@ def test_indexing_info(app, testapp, indexer_testapp):
     assert 'indexing_stats' not in src_idx_info4.json
 
 
-@pytest.mark.flaky(max_runs=3, rerun_filter=delay_rerun)
+@pytest.mark.flaky(max_runs=2, rerun_filter=delay_rerun)
 def test_validators_on_indexing(app, testapp, indexer_testapp):
     """
     We now run PATCH validators for an indexed item using check_only=True
