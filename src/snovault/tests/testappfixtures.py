@@ -5,6 +5,7 @@ _app_settings = {
     'item_datastore': 'database',
     'load_test_only': True,
     'testing': True,
+    'mpindexer': False,
     'pyramid.debug_authorization': True,
     'postgresql.statement_timeout': 20,
     'retry.attempts': 3,
@@ -31,6 +32,7 @@ _app_settings = {
 @pytest.fixture(scope='session')
 def app_settings(request, wsgi_server_host_port, conn, DBSession):
     from snovault import DBSESSION
+    import os
     settings = _app_settings.copy()
     settings[DBSESSION] = DBSession
     return settings

@@ -46,7 +46,6 @@ def includeme(config):
         config.include('.mpindexer')
 
 
-
 def datastore(request):
     if request.__parent__ is not None:
         return request.__parent__.datastore

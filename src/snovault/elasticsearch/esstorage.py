@@ -13,7 +13,7 @@ from .interfaces import (
     ICachedItem,
 )
 from ..storage import RDBStorage
-from .indexer_utils import find_uuids_for_indexing
+from .indexer_utils import get_namespaced_index, find_uuids_for_indexing
 from .create_mapping import SEARCH_MAX
 from dcicutils import es_utils
 import structlog
@@ -26,7 +26,7 @@ def includeme(config):
     registry = config.registry
     es = registry[ELASTIC_SEARCH]
     # ES 5 change: 'snovault' index removed, search among '_all' instead
-    es_index = '_all'
+    es_index = get_namespaced_index(config, '*')
     wrapped_storage = registry[STORAGE]
     registry[STORAGE] = PickStorage(ElasticSearchStorage(es, es_index), wrapped_storage, registry)
 
@@ -152,7 +152,7 @@ class PickStorage(object):
                 })
         return linked_info
 
-    def purge_uuid(self, rid, item_type=None):
+    def purge_uuid(self, rid, index_name, item_type=None):
         """
         Attempt to purge an item by given resource id (rid), completely
         removing it from ES and DB.
@@ -171,7 +171,7 @@ class PickStorage(object):
         # delete the item from DB
         self.write.purge_uuid(rid)
         # delete the item from ES and also the mirrored ES if present
-        self.read.purge_uuid(rid, item_type, self.registry)
+        self.read.purge_uuid(rid, index_name, item_type, self.registry)
         # queue related items for reindexing
         self.registry[INDEXER].find_and_queue_secondary_items(set([rid]), set(),
                                                               sid=max_sid)
@@ -223,7 +223,7 @@ class ElasticSearchStorage(object):
         search = search.query(id_query)
         return self._one(search)
 
-    def get_by_uuid_direct(self, uuid, item_type):
+    def get_by_uuid_direct(self, uuid, index_name, item_type):
         """
         See if a document exists under the index/doc_type given by item_type.
         self.es.get calls a GET request, which will refresh the given
@@ -254,7 +254,7 @@ class ElasticSearchStorage(object):
         #     model = CachedModel(res)
         # return model
         try:
-            res = self.es.get(index=item_type, doc_type=item_type, id=uuid,
+            res = self.es.get(index=index_name, doc_type=item_type, id=uuid,
                               _source=True, realtime=True, ignore=404)
         except elasticsearch.exceptions.NotFoundError:
             res = None
@@ -306,7 +306,7 @@ class ElasticSearchStorage(object):
         """
         return None
 
-    def purge_uuid(self, rid, item_type=None, registry=None):
+    def purge_uuid(self, rid, index_name, item_type=None, registry=None):
         """
         Purge a uuid from the write storage (Elasticsearch)
         If there is a mirror environment set up for the indexer, also attempt
@@ -316,7 +316,7 @@ class ElasticSearchStorage(object):
             model = self.get_by_uuid(rid)
             item_type = model.item_type
         try:
-            self.es.delete(id=rid, index=item_type, doc_type=item_type)
+            self.es.delete(id=rid, index=index_name, doc_type=item_type)
         except elasticsearch.exceptions.NotFoundError:
             # Case: Not yet indexed
             log.error('PURGE: Couldn\'t find %s in ElasticSearch. Continuing.' % rid)
@@ -334,7 +334,7 @@ class ElasticSearchStorage(object):
                 use_aws_auth = True if use_aws_auth == 'true' else False
             mirror_client = es_utils.create_es_client(mirror_es, use_aws_auth=use_aws_auth)
             try:
-                mirror_client.delete(id=rid, index=item_type, doc_type=item_type)
+                mirror_client.delete(id=rid, index=index_name, doc_type=item_type)
             except elasticsearch.exceptions.NotFoundError:
                 # Case: Not yet indexed
                 log.error('PURGE: Couldn\'t find %s in mirrored ElasticSearch (%s). Continuing.' % (rid, mirror_es))
