@@ -88,7 +88,7 @@ def search(context, request, search_type=None, return_generator=False, forced_ty
     # set ES index based on doc_type (one type per index)
     # if doc_type is item, search all indexes by setting es_index to None
     # If multiple, search all specified
-    namespaced_star = request.registry.settings['indexer.namespace'] + '*'
+    namespaced_star = get_namespaced_index(request, '*')
     if 'Item' in doc_types:
         es_index = namespaced_star
     else:

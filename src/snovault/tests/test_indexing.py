@@ -686,6 +686,7 @@ def test_indexing_invalid_sid_linked_items(app, testapp, indexer_testapp):
     add any items to the secondary queue
     """
     # invalid sid causes infinite loop in MPIndexer, so skip this test if enabled
+    # res_vals[2] is continuously True with invalid sid, see MPIndexer L228
     if app.registry.settings['mpindexer'] == True:
         return
     indexer_queue = app.registry[INDEXER_QUEUE]

@@ -39,7 +39,7 @@ def app_settings(request, wsgi_server_host_port, conn, DBSession):
 
 
 @pytest.fixture(scope='session')
-def app(app_settings, request):
+def app(app_settings):
     '''WSGI application level functional testing.
        will have to make snovault dummy main app
     '''

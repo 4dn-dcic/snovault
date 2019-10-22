@@ -8,7 +8,10 @@ from snovault.util import find_collection_subtypes
 
 def get_namespaced_index(config, index):
     """ Grabs indexer.namespace from settings and namespace the given index """
-    settings = config.registry.settings
+    try:
+        settings = config.registry.settings
+    except: # accept either config or registry as first arg
+        settings = config.settings
     namespace = settings.get('indexer.namespace', '')
     return namespace + index
 
@@ -50,7 +53,7 @@ def find_uuids_for_indexing(registry, updated, find_index=None):
         '_source': False
     }
     if not find_index:
-        find_index = registry.settings['indexer.namespace'] + '*'
+        find_index = get_namespaced_index(registry, '*')
     results = scan(es, index=find_index, query=scan_query)
     invalidated = {res['_id'] for res in results}
     return invalidated | updated

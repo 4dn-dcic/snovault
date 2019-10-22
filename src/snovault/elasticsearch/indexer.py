@@ -70,7 +70,7 @@ def index(request):
     dry_run = request.json.get('dry_run', False)  # if True, do not actually index
     es = request.registry[ELASTIC_SEARCH]
     indexer = request.registry[INDEXER]
-    namespace_star = request.registry.settings['indexer.namespace'] + '*'
+    namespace_star = get_namespaced_index(request, '*')
     namespaced_index = get_namespaced_index(request, 'indexing')
 
     if not dry_run:
