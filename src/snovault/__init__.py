@@ -75,9 +75,6 @@ def main(global_config, **local_config):
     settings.update(local_config)
 
     set_logging(in_prod=settings.get('production'))
-
-    # Set index namespace
-    settings['indexer.namespace'] = os.environ.get('TRAVIS_JOB_ID', '')
     # set_logging(settings.get('elasticsearch.server'), settings.get('production'))
 
     # TODO - these need to be set for dummy app
