@@ -46,7 +46,7 @@ requires = [
     'bcrypt',
     'cryptacular',
     'aws-requests-auth',
-    'PyYaml==3.12',
+    'PyYaml==5.1',
     # for logging
     'colorama',
     'structlog',
