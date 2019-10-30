@@ -218,7 +218,7 @@ class ElasticSearchStorage(object):
         Returns:
             CachedModel of the hit or None
         """
-        search = Search(using=self.es)
+        search = Search(using=self.es, index=self.index)
         id_query = Q('ids', values=[str(uuid)])
         search = search.query(id_query)
         return self._one(search)
@@ -263,7 +263,7 @@ class ElasticSearchStorage(object):
     def get_by_json(self, key, value, item_type, default=None):
         # find the term with the specific type
         term = 'embedded.' + key + '.raw'
-        search = Search(using=self.es)
+        search = Search(using=self.es, index=self.index)
         search = search.filter('term', **{term: value})
         search = search.filter('type', value=item_type)
         return self._one(search)
@@ -271,13 +271,13 @@ class ElasticSearchStorage(object):
     def get_by_unique_key(self, unique_key, name):
         term = 'unique_keys.' + unique_key
         # had to use ** kw notation because of variable in field name
-        search = Search(using=self.es)
+        search = Search(using=self.es, index=self.index)
         search = search.filter('term', **{term: name})
         search = search.extra(version=True)
         return self._one(search)
 
     def get_rev_links(self, model, rel, *item_types):
-        search = Search(using=self.es)
+        search = Search(using=self.es, index=self.index)
         search = search.extra(size=SEARCH_MAX)
         # rel links use '~' instead of '.' due to ES field restraints
         proc_rel = rel.replace('.', '~')
@@ -347,7 +347,7 @@ class ElasticSearchStorage(object):
                 'filter': {'terms': {'item_type': item_types}} if item_types else {'match_all': {}}
             }
         }}
-        for hit in scan(self.es, query=query):
+        for hit in scan(self.es, index=self.index, query=query):
             yield hit.get('uuid', hit.get('_id'))
 
     def __len__(self, *item_types):
