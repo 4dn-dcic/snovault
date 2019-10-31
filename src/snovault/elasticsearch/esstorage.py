@@ -122,7 +122,7 @@ class ElasticSearchStorage(object):
         search = search.query(id_query)
         return self._one(search)
 
-    def get_by_uuid_direct(self, uuid, item_type):
+    def get_by_uuid_direct(self, registry, uuid, item_type):
         """
         See if a document exists under the index/doc_type given by item_type.
         self.es.get calls a GET request, which will refresh the given
@@ -136,13 +136,14 @@ class ElasticSearchStorage(object):
               is possibly called very often during indexing.
 
         Args:
+            reigstry: current Registry
             uuid (str): uuid of the item to GET
             item_type (str): item_type of the item to GET
 
         Returns:
             The _source value from the document, if it exists
         """
-        index_name = get_namespaced_index(request, item_type)
+        index_name = get_namespaced_index(registry, item_type)
         try:
             res = self.es.get(index=index_name, doc_type=item_type, id=uuid,
                               _source=True, realtime=True, ignore=404)

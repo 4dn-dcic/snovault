@@ -272,7 +272,6 @@ def edit_json(context, request):
         }
 
 
-
 @abstract_collection(
     name='abstractItemTests',
     unique_key='accession',
@@ -434,3 +433,22 @@ def testing_retry(context, request):
         'attempt': request.environ['_attempt'],
         'detached': inspect(model).detached,
     }
+
+
+@collection('testing-link-target-es', unique_key='testing_link_target_es:name')
+class TestingLinkTargetElasticSearch(TestingLinkTargetSno):
+    """
+    Like TestingLinkTargetSno, but leverages ElasticSearch storage exclusively
+    """
+    # used_datastore sets this as an ElasticSearch item
+    used_datastore = 'elasticsearch'
+    item_type = 'testing_link_target_es'
+    name_key = 'name'
+    schema = load_schema('snovault:test_schemas/TestingLinkTargetElasticSearch.json')
+    rev = {
+        'reverse': ('TestingLinkSourceSno', 'target'),
+    }
+    filtered_rev_statuses = ('deleted', 'replaced')
+    embedded_list = [
+        'reverse.name',
+    ]

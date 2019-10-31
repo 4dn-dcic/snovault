@@ -256,6 +256,8 @@ class Item(Resource):
     filtered_rev_statuses = ()
     schema = None
     # set used_datastore to override what storage is used by resource
+    # setting to "database" or "elasticsearch" will always force those storage
+    # types; see PickStorage.storage
     used_datastore = None
     AbstractCollection = AbstractCollection
     Collection = Collection
