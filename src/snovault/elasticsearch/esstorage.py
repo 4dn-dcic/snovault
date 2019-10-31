@@ -131,8 +131,8 @@ class ElasticSearchStorage(object):
 
         NOTE: this function DOES NOT use CachedModel, as it is used for direct
               querying of ES items during indexing only. It might be performant
-              to set the CachedModel from these results; see commented code
-              below. Right now, I'm not doing it because get_by_uuid_direct
+              to set the CachedModel from these results.
+              Right now, I'm not doing it because get_by_uuid_direct
               is possibly called very often during indexing.
 
         Args:
@@ -141,7 +141,7 @@ class ElasticSearchStorage(object):
             item_type (str): item_type of the item to GET
 
         Returns:
-            The _source value from the document, if it exists
+            dict: the Elasticsearch document if found, else None
         """
         index_name = get_namespaced_index(registry, item_type)
         try:

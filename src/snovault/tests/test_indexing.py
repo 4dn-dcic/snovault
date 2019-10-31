@@ -1046,7 +1046,7 @@ def test_indexing_esstorage(app, testapp, indexer_testapp):
     # test the following methods:
     es_res_by_uuid = esstorage.get_by_uuid(test_uuid)
     es_res_by_json = esstorage.get_by_json('required', 'some_value', TEST_TYPE)
-    es_res_direct = esstorage.get_by_uuid_direct(test_uuid, TEST_TYPE)
+    es_res_direct = esstorage.get_by_uuid_direct(app.registry, test_uuid, TEST_TYPE)
     assert es_res == es_res_by_uuid.source
     assert es_res == es_res_by_json.source
     assert es_res == es_res_direct['_source']
