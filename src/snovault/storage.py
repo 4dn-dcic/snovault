@@ -262,7 +262,7 @@ class PickStorage(object):
         """
         if self.read:
             return self.read.find_uuids_linked_to_item(registry, uuid)
-            
+
         return self.write.find_uuids_linked_to_item(registry, uuid)
 
 

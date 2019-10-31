@@ -435,7 +435,7 @@ def testing_retry(context, request):
     }
 
 
-@collection('testing-link-target-es', unique_key='testing_link_target_es:name')
+@collection('testing-link-targets-es', unique_key='testing_link_target_es:name')
 class TestingLinkTargetElasticSearch(TestingLinkTargetSno):
     """
     Like TestingLinkTargetSno, but leverages ElasticSearch storage exclusively
