@@ -320,17 +320,18 @@ def test_pick_storage(registry, dummy_request):
 
 
 def test_register_storage(registry):
+    from snovault.storage import register_storage
     # test storage.register_storage, used to configure registry[STORAGE]
     storage = PickStorage('dummy_db', 'dummy_es', registry)
     # store previous storage and use a dummy one for testing
     prev_storage = registry[STORAGE]
     registry[STORAGE] = storage
     # expect existing values to be used
-    register_storage(registy)
+    register_storage(registry)
     assert registry[STORAGE].write == 'dummy_db'
     assert registry[STORAGE].read == 'dummy_es'
     # expect overrides to be used
-    register_storage(registy, write_override='override_db',
+    register_storage(registry, write_override='override_db',
                      read_override='override_es')
     assert registry[STORAGE].write == 'override_db'
     assert registry[STORAGE].read == 'override_es'
