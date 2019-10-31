@@ -2,6 +2,7 @@
 from pyramid.httpexceptions import (
     HTTPConflict,
     HTTPLocked,
+    HTTPUnprocessableEntity,
     HTTPInternalServerError
 )
 from sqlalchemy import (
@@ -61,6 +62,8 @@ def datastore(request):
     """
     Function that is reified as `request.datastore`. Used with PickStorage
     to determine whether to use RDBStorage or ElasticSearchStorage
+
+    TODO: Need to set datastore=elasticsearch for ES-based items...
     """
     if request.__parent__ is not None:
         return request.__parent__.datastore
@@ -189,13 +192,14 @@ class PickStorage(object):
         Attempt to purge an item by given resource id (rid), completely
         removing it from ES and DB.
         """
+        # requires ES for searching item links
         if self.read:
             # model and max_sid are used later, in second `if self.read` block
             model = self.get_by_uuid(rid)
             if not item_type:
                 item_type = model.item_type
             max_sid = model.max_sid
-            links_to_item = self.read.find_uuids_linked_to_item(self.registry, rid)
+            links_to_item = self.find_uuids_linked_to_item(self.registry, rid)
             if len(links_to_item) > 0:
                 raise HTTPLocked(
                     detail="Cannot purge item as other items still link to it",
@@ -219,31 +223,45 @@ class PickStorage(object):
         return self.storage(datastore).__len__(*item_types)
 
     def create(self, item_type, uuid, datastore=None):
-        # should this case be handled?
         if datastore == 'elasticsearch':
-            raise NotImplementedError
+            if self.read is None:
+                raise HTTPUnprocessableEntity('Cannot create read-only item without read storage configured')
+            max_sid = self.write.get_max_sid() if self.write else 0
+            return self.read.create(item_type, uuid, max_sid)
+
         return self.write.create(item_type, uuid)
 
     def update(self, model, properties=None, sheets=None, unique_keys=None,
                links=None, datastore=None):
-        # should this case be handled?
         if datastore == 'elasticsearch':
-            raise NotImplementedError
+            if self.read is None:
+                raise HTTPUnprocessableEntity('Cannot update read-only item without read storage configured')
+            return self.read.update(model, properties, sheets, unique_keys, links)
+
         return self.write.update(model, properties, sheets, unique_keys, links)
 
-    def get_sids_by_uuids(self, rids):
+    def get_sids_by_uuids(self, uuids):
         """
         Only functional with self.write
         """
-        return self.write.get_sids_by_uuids(rids)
+        return self.write.get_sids_by_uuids(uuids)
 
-    def get_by_uuid_direct(self, rid, item_type, default=None):
+    def get_by_uuid_direct(self, uuid, item_type, default=None):
         """
         Only functional with self.read
         """
         if self.read:
-            return self.read.get_by_uuid_direct(rid, item_type)
-        return self.write.get_by_uuid_direct(rid, item_type, default)
+            return self.read.get_by_uuid_direct(uuid, item_type)
+        return self.write.get_by_uuid_direct(uuid, item_type, default)
+
+    def find_uuids_linked_to_item(registry, uuid):
+        """
+        Only functional with self.read
+        """
+        if self.read:
+            return self.read.find_uuids_linked_to_item(registry, uuid)
+        return self.write.find_uuids_linked_to_item(registry, uuid)
+
 
 
 class RDBStorage(object):
@@ -285,6 +303,13 @@ class RDBStorage(object):
             default
         """
         return default
+
+    def find_uuids_linked_to_item(self, registry, rid):
+        """
+        This method is meant to only work with ES, so return empty list for
+        DB implementation. See ElasticSearchStorage.find_uuids_linked_to_item
+        """
+        return []
 
     def get_by_unique_key(self, unique_key, name, default=None):
         session = self.DBSession()
@@ -340,7 +365,7 @@ class RDBStorage(object):
     def get_max_sid(self):
         """
         Return the current max sid from the `current_propsheet` table.
-        Not specific to a given uuid (i.e. rid)
+        Not specific to a given uuid (i.e. rid). If no sid found, return 0
 
         Returns:
             int: maximum sid found
@@ -348,7 +373,7 @@ class RDBStorage(object):
         session = self.DBSession()
         # first element of the first result or None if no rows present.
         # If multiple rows are returned, raises MultipleResultsFound.
-        data = session.query(func.max(CurrentPropertySheet.sid)).scalar()
+        data = session.query(func.max(CurrentPropertySheet.sid)).scalar() or 0
         return data
 
     def __iter__(self, *item_types):
@@ -746,8 +771,10 @@ class Resource(Base):
 
     @property
     def max_sid(self):
-        # data = session.query(func.max(CurrentPropertySheet.sid)).scalar()
-        return _DBSESSION.query(func.max(CurrentPropertySheet.sid)).scalar()
+        """
+        See `RDBStorage.get_max_sid`
+        """
+        return _DBSESSION.query(func.max(CurrentPropertySheet.sid)).scalar() or 0
 
     def used_for(self, item):
         pass

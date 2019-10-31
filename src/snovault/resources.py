@@ -255,6 +255,8 @@ class Item(Resource):
     embedded_list = []
     filtered_rev_statuses = ()
     schema = None
+    # set used_datastore to override what storage is used by resource
+    used_datastore = None
     AbstractCollection = AbstractCollection
     Collection = Collection
 
@@ -327,7 +329,8 @@ class Item(Resource):
         type_name, rel = self.rev[name]
         types = types[type_name].subtypes
         # if we are indexing, update the following request attributes
-        return self.registry[CONNECTION].get_rev_links(self.model, rel, *types)
+        return self.registry[CONNECTION].get_rev_links(self.model, rel, *types,
+                                                       datastore=self.used_datastore)
 
     def get_filtered_rev_links(self, request, name):
         """
@@ -420,7 +423,7 @@ class Item(Resource):
         This method instantiates a new Item class instance from provided `uuid` and `properties`,
         then runs the `_update` (instance method) to save the Item to the database.
         '''
-        model = registry[CONNECTION].create(cls.__name__, uuid)
+        model = registry[CONNECTION].create(cls.__name__, uuid, datastore=cls.used_datastore)
         item_instance = cls(registry, model)
         item_instance._update(properties, sheets)
         return item_instance
@@ -476,7 +479,8 @@ class Item(Resource):
 
         # actually propogate the update to the DB
         connection = self.registry[CONNECTION]
-        connection.update(self.model, properties, sheets, unique_keys, links)
+        connection.update(self.model, properties, sheets, unique_keys, links,
+                          datastore=self.used_datastore)
 
     @reify
     def embedded(self):

@@ -19,7 +19,6 @@ log = structlog.getLogger(__name__)
 
 
 def includeme(config):
-    from snovault import STORAGE, DBSESSION
     from ..storage import register_storage
     registry = config.registry
     es = registry[ELASTIC_SEARCH]
@@ -57,9 +56,11 @@ def find_linking_property(our_dict, value_to_find):
 
 
 class CachedModel(object):
-    def __init__(self, hit):
-        self.source = hit.to_dict()
-        self.meta = hit.meta.to_dict()
+    def __init__(self, source):
+        """
+        Takes a dictionary document `source`
+        """
+        self.source = source
 
     @property
     def item_type(self):
@@ -103,7 +104,7 @@ class ElasticSearchStorage(object):
         hits = search.execute()
         if len(hits) != 1:
             return None
-        model = CachedModel(hits[0])
+        model = CachedModel(hits[0].to_dict())
         return model
 
     def get_by_uuid(self, uuid):
@@ -284,3 +285,34 @@ class ElasticSearchStorage(object):
                     'field' : linking_property or "Not Embedded"
                 })
         return linked_info
+
+    def create(self, item_type, uuid, max_sid):
+        source = {
+            'item_type': item_type,
+            'uuid': str(uuid),
+            'max_sid': max_sid,
+            'sid': max_sid,
+            'properties': {},
+            'propsheets': {}
+        }
+        return CachedModel(source)
+
+    def update(self, model, properties, sheets, unique_keys, links):
+        import time
+        # handle indexing item to ES here, since `create` method is just
+        # used to initialize the model
+        model.source['properties'] = properties
+
+        # handle these? definitely propsheets, maybe not the other two
+        # model.source['propsheets'] = sheets
+        # model.source['unique_keys']
+        # model.source['links']
+
+        # will need to handle namespacing
+        self.es.index(
+            index=model.source['item_type'], doc_type=model.source['item_type'],
+            body=model.source, id=model.source['uuid'], version=model.source['sid'],
+            version_type='external_gte'
+        )
+        time.sleep(2)
+        return model

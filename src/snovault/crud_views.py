@@ -134,6 +134,7 @@ def render_item(request, context, render, return_uri_also=False):
 
     if asbool(render) is True:
         rendered = request.embed(item_uri, '@@object', as_user=True)
+        rendered_emb = request.embed(item_uri, '@@embedded', as_user=True)
     else:
         rendered = item_uri
     return (rendered, item_uri) if return_uri_also else rendered
@@ -157,6 +158,10 @@ def collection_add(context, request, render=None):
         render = request.params.get('render', True)
 
     item = create_item(context.type_info, request, request.validated)
+
+    # testing
+    if item.used_datastore == 'elasticsearch':
+        request.datastore = 'elasticsearch'
 
     rendered, item_uri = render_item(request, item, render, True)
     request.response.status = 201
@@ -229,7 +234,9 @@ def get_linking_items(context, request, render=None):
     Split the answer into linkTos and rev_links
     """
     item_uuid = str(context.uuid)
-    links = request.registry[STORAGE].read.find_uuids_linked_to_item(request.registry, item_uuid)
+    links = request.registry[STORAGE].find_uuids_linked_to_item(
+        request.registry, item_uuid, datastore='elasticsearch'
+    )
     request.response.status = 200
     result = {
         'status': 'success',

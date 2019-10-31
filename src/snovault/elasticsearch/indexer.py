@@ -65,7 +65,7 @@ def check_sid(sid, max_sid):
 @view_config(route_name='index', request_method='POST', permission="index")
 def index(request):
     # Setting request.datastore here only works because routed views are not traversed.
-    request.datastore = 'database'
+    request.datastore = 'elasticsearch'
     record = request.json.get('record', False)  # if True, make a record in es
     dry_run = request.json.get('dry_run', False)  # if True, do not actually index
     es = request.registry[ELASTIC_SEARCH]
