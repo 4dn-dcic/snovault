@@ -6,7 +6,17 @@ from snovault import COLLECTIONS, STORAGE
 from snovault.util import find_collection_subtypes
 
 
-def find_uuids_for_indexing(registry, updated, find_index='_all'):
+def get_namespaced_index(config, index):
+    """ Grabs indexer.namespace from settings and namespace the given index """
+    try:
+        settings = config.registry.settings
+    except: # accept either config or registry as first arg
+        settings = config.settings
+    namespace = settings.get('indexer.namespace', '')
+    return namespace + index
+
+
+def find_uuids_for_indexing(registry, updated, find_index=None):
     """
     Run a search to find uuids of objects with that contain the given set of
     updated uuids in their linked_uuids.
@@ -42,6 +52,8 @@ def find_uuids_for_indexing(registry, updated, find_index='_all'):
         },
         '_source': False
     }
+    if not find_index:
+        find_index = get_namespaced_index(registry, '*')
     results = scan(es, index=find_index, query=scan_query)
     invalidated = {res['_id'] for res in results}
     return invalidated | updated

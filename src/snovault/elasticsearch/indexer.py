@@ -15,7 +15,7 @@ from snovault import (
     DBSESSION,
     STORAGE
 )
-from .indexer_utils import find_uuids_for_indexing
+from .indexer_utils import get_namespaced_index, find_uuids_for_indexing
 import datetime
 import structlog
 import time
@@ -70,6 +70,8 @@ def index(request):
     dry_run = request.json.get('dry_run', False)  # if True, do not actually index
     es = request.registry[ELASTIC_SEARCH]
     indexer = request.registry[INDEXER]
+    namespace_star = get_namespaced_index(request, '*')
+    namespaced_index = get_namespaced_index(request, 'indexing')
 
     if not dry_run:
         index_start_time = datetime.datetime.now()
@@ -94,7 +96,7 @@ def index(request):
         indexing_counter = [0]  # do this so I can pass it as a reference
         # actually index
         # try to ensure ES is reasonably up to date
-        es.indices.refresh(index='_all')
+        es.indices.refresh(index=namespace_star)
 
         # NOTE: the refresh interval is left as default because it doesn't seem
         # to help performance much.
@@ -122,21 +124,21 @@ def index(request):
 
         if record:
             try:
-                es.index(index='indexing', doc_type='indexing', body=indexing_record, id=index_start_str)
-                es.index(index='indexing', doc_type='indexing', body=indexing_record, id='latest_indexing')
+                es.index(index=namespaced_index, doc_type='indexing', body=indexing_record, id=index_start_str)
+                es.index(index=namespaced_index, doc_type='indexing', body=indexing_record, id='latest_indexing')
             except:
                 indexing_record['indexing_status'] = 'errored'
                 error_messages = copy.deepcopy(indexing_record['errors'])
                 del indexing_record['errors']
-                es.index(index='indexing', doc_type='indexing', body=indexing_record, id=index_start_str)
-                es.index(index='indexing', doc_type='indexing', body=indexing_record, id='latest_indexing')
+                es.index(index=namespaced_index, doc_type='indexing', body=indexing_record, id=index_start_str)
+                es.index(index=namespaced_index, doc_type='indexing', body=indexing_record, id='latest_indexing')
                 for item in error_messages:
                     if 'error_message' in item:
                         log.error('Indexing error', **item)
                         item['error_message'] = "Error occured during indexing, check the logs"
 
         # this will make documents in all lucene buffers available to search
-        es.indices.refresh(index='_all')
+        es.indices.refresh(index=namespace_star)
         # resets the refresh_interval to the default value (must reset if disabled earlier)
         # es.indices.put_settings(index='_all', body={'index' : {'refresh_interval': '1s'}})
     return indexing_record
@@ -150,7 +152,7 @@ class Indexer(object):
 
     def update_objects(self, request, counter=None):
         """
-        Top level indexing routing if single-process indexer is used
+        Top level update routing
         """
         session = request.registry[DBSESSION]()
         connection = session.connection()
@@ -164,7 +166,6 @@ class Indexer(object):
         if sync_uuids:
             errors = self.update_objects_sync(request, sync_uuids, counter)
         else:
-            # second returned variable is unused outside of MPIndexer
             errors, _ = self.update_objects_queue(request, counter)
         return errors
 
@@ -411,8 +412,9 @@ class Indexer(object):
         for backoff in [0, 1, 2]:
             time.sleep(backoff)
             try:
+                namespaced_index = get_namespaced_index(request, result['item_type'])
                 self.es.index(
-                    index=result['item_type'], doc_type=result['item_type'], body=result,
+                    index=namespaced_index, doc_type=result['item_type'], body=result,
                     id=str(uuid), version=result['sid'], version_type='external_gte',
                     request_timeout=30
                 )

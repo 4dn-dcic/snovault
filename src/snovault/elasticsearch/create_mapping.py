@@ -35,7 +35,7 @@ import time
 import datetime
 import sys
 from snovault.commands.es_index_data import run as run_index_data
-from .indexer_utils import find_uuids_for_indexing, get_uuids_for_types
+from .indexer_utils import get_namespaced_index, find_uuids_for_indexing, get_uuids_for_types
 import transaction
 import os
 import argparse
@@ -674,7 +674,7 @@ def create_mapping_by_type(in_type, registry):
     return es_mapping(embed_mapping, agg_items_mapping)
 
 
-def build_index(app, es, in_type, mapping, uuids_to_index, dry_run, check_first,
+def build_index(app, es, index_name, in_type, mapping, uuids_to_index, dry_run, check_first,
                 index_diff=False, print_count_only=False):
     """
     Creates an es index for the given in_type with the given mapping and
@@ -698,12 +698,12 @@ def build_index(app, es, in_type, mapping, uuids_to_index, dry_run, check_first,
         return
 
     # determine if index already exists for this type
-    this_index_exists = check_if_index_exists(es, in_type)
+    this_index_exists = check_if_index_exists(es, index_name)
 
     # if the index exists, we might not need to delete it
     # otherwise, run if we are using the check-first or index_diff args
     if ((check_first or index_diff) and this_index_exists
-        and compare_against_existing_mapping(es, in_type, this_index_record, True)):
+        and compare_against_existing_mapping(es, index_name, in_type, this_index_record, True)):
         check_and_reindex_existing(app, es, in_type, uuids_to_index, index_diff)
         log.info('MAPPING: using existing index for collection %s' % (in_type), collection=in_type)
         return
@@ -716,21 +716,21 @@ def build_index(app, es, in_type, mapping, uuids_to_index, dry_run, check_first,
 
     # delete the index
     if this_index_exists:
-        res = es_safe_execute(es.indices.delete, index=in_type, ignore=[400,404])
+        res = es_safe_execute(es.indices.delete, index=index_name, ignore=[400,404])
         if res:
             log.info('MAPPING: index successfully deleted for %s' % in_type, collection=in_type)
         else:
             log.error('MAPPING: could not delete index for %s' % in_type, collection=in_type)
 
     # first, create the mapping. adds settings and mappings in the body
-    res = es_safe_execute(es.indices.create, index=in_type, body=this_index_record, ignore=[400])
+    res = es_safe_execute(es.indices.create, index=index_name, body=this_index_record, ignore=[400])
     if res:
         log.info('MAPPING: new index created for %s' % (in_type), collection=in_type)
     else:
         log.error('MAPPING: new index failed for %s' % (in_type), collection=in_type)
 
     # check to debug create-mapping issues and ensure correct mappings
-    confirm_mapping(es, in_type, this_index_record)
+    confirm_mapping(es, index_name, in_type, this_index_record)
 
     # we need to queue items in the index for indexing
     # if check_first and we've made it here, nothing has been queued yet
@@ -788,14 +788,15 @@ def get_db_es_counts_and_db_uuids(app, es, in_type, index_diff=False):
     the list of collection uuids from the database, and the list of uuids
     found in the DB but not in the ES store.
     """
-    if check_if_index_exists(es, in_type):
+    namespaced_index = get_namespaced_index(app, in_type)
+    if check_if_index_exists(es, namespaced_index):
         if index_diff:
-            search = Search(using=es, index=in_type, doc_type=in_type)
+            search = Search(using=es, index=namespaced_index, doc_type=in_type)
             search_source = search.source([])
             es_uuids = set([h.meta.id for h in search_source.scan()])
             es_count = len(es_uuids)
         else:
-            count_res = es.count(index=in_type, doc_type=in_type)
+            count_res = es.count(index=namespaced_index, doc_type=in_type)
             es_count = count_res.get('count')
             es_uuids = set()
     else:
@@ -850,7 +851,7 @@ def find_and_replace_dynamic_mappings(new_mapping, found_mapping):
             find_and_replace_dynamic_mappings(new_val['properties'], found_val.get('properties', {}))
 
 
-def compare_against_existing_mapping(es, in_type, this_index_record, live_mapping=False):
+def compare_against_existing_mapping(es, index_name, in_type, this_index_record, live_mapping=False):
     """
     Compare the given index mapping and compare it to the existing mapping
     in an index. Return True if they are the same, False otherwise.
@@ -870,7 +871,7 @@ def compare_against_existing_mapping(es, in_type, this_index_record, live_mappin
     Returns:
         bool: True if new mapping is the same as the live mapping
     """
-    found_mapping = es.indices.get_mapping(index=in_type).get(in_type, {}).get('mappings')
+    found_mapping = es.indices.get_mapping(index=index_name).get(index_name).get('mappings', {})
     new_mapping = this_index_record['mappings']
     if live_mapping:
         find_and_replace_dynamic_mappings(new_mapping[in_type]['properties'],
@@ -883,7 +884,7 @@ def compare_against_existing_mapping(es, in_type, this_index_record, live_mappin
     return found_map_json == new_map_json
 
 
-def confirm_mapping(es, in_type, this_index_record):
+def confirm_mapping(es, index_name, in_type, this_index_record):
     """
     The mapping put to ES can be incorrect, most likely due to residual
     items getting indexed at the time of index creation. This loop serves
@@ -894,16 +895,16 @@ def confirm_mapping(es, in_type, this_index_record):
     mapping_check = False
     tries = 0
     while not mapping_check and tries < 5:
-        if compare_against_existing_mapping(es, in_type, this_index_record):
+        if compare_against_existing_mapping(es, index_name, in_type, this_index_record):
             mapping_check = True
         else:
-            count = es.count(index=in_type, doc_type=in_type).get('count', 0)
+            count = es.count(index=index_name, doc_type=in_type).get('count', 0)
             log.info('___BAD MAPPING FOUND FOR %s. RETRYING___\nDocument count in that index is %s.'
                         % (in_type, count), collection=in_type, count=count, cat='bad mapping')
-            es_safe_execute(es.indices.delete, index=in_type)
+            es_safe_execute(es.indices.delete, index=index_name)
             # do not increment tries if an error arises from creating the index
             try:
-                es_safe_execute(es.indices.create, index=in_type, body=this_index_record)
+                es_safe_execute(es.indices.create, index=index_name, body=this_index_record)
             except (TransportError, RequestError) as e:
                 log.info('___COULD NOT CREATE INDEX FOR %s AS IT ALREADY EXISTS.\nError: %s\nRETRYING___'
                             % (in_type, str(e)), collection=in_type, cat='index already exists')
@@ -1039,18 +1040,19 @@ def run(app, collections=None, dry_run=False, check_first=False, skip_indexing=F
         collections = list(registry[COLLECTIONS].by_item_type)
 
     # clear the indexer queue on a total reindex
+    namespaced_index = get_namespaced_index(app, 'indexing')
     if total_reindex or purge_queue:
         log.info('___PURGING THE QUEUE AND CLEARING INDEXING RECORDS BEFORE MAPPING___\n', cat=cat)
         indexer_queue.purge_queue()
         # we also want to remove the 'indexing' index, which stores old records
         # it's not guaranteed to be there, though
-        es_safe_execute(es.indices.delete, index='indexing', ignore=[400,404])
+        es_safe_execute(es.indices.delete, index=namespaced_index, ignore=[400,404])
 
     # if 'indexing' index doesn't exist, initialize it with some basic settings
     # but no mapping. this is where indexing_records go
-    if not check_if_index_exists(es, 'indexing'):
+    if not check_if_index_exists(es, namespaced_index):
         idx_settings = {'settings': index_settings()}
-        es_safe_execute(es.indices.create, index='indexing', body=idx_settings)
+        es_safe_execute(es.indices.create, index=namespaced_index, body=idx_settings)
 
     greatest_mapping_time = {'collection': '', 'duration': 0}
     greatest_index_creation_time = {'collection': '', 'duration': 0}
@@ -1062,7 +1064,8 @@ def run(app, collections=None, dry_run=False, check_first=False, skip_indexing=F
         end = timer()
         mapping_time = end - start
         start = timer()
-        build_index(app, es, collection_name, mapping, uuids_to_index,
+        namespaced_index = get_namespaced_index(app, collection_name)
+        build_index(app, es, namespaced_index, collection_name, mapping, uuids_to_index,
                     dry_run, check_first, index_diff, print_count_only)
         end = timer()
         index_time = end - start

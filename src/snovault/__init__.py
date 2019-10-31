@@ -35,6 +35,7 @@ from .app import (
     json_from_path,
     )
 import logging
+import os
 from dcicutils.log_utils import set_logging
 
 
@@ -80,7 +81,7 @@ def main(global_config, **local_config):
             logging.getLogger(name).setLevel(logging.WARNING)
             
     set_logging(in_prod=settings.get('production'))
-    #set_logging(settings.get('elasticsearch.server'), settings.get('production'))
+    # set_logging(settings.get('elasticsearch.server'), settings.get('production'))
 
     # TODO - these need to be set for dummy app
     # settings['snovault.jsonld.namespaces'] = json_asset('snovault:schemas/namespaces.json')

@@ -83,6 +83,11 @@ setup(
     extras_require={
         'test': tests_require,
     },
+    entry_points='''
+        [console_scripts]
+        wipe-test-indices = snovault.commands.wipe_test_indices:main
+        '''
+    ,
     classifiers=[
         # How mature is this project? Common values are
         #   3 - Alpha

@@ -10,7 +10,7 @@ from .interfaces import (
     INDEXER,
     ICachedItem,
 )
-from .indexer_utils import find_uuids_for_indexing
+from .indexer_utils import get_namespaced_index, find_uuids_for_indexing
 from .create_mapping import SEARCH_MAX
 from dcicutils import es_utils
 import structlog
@@ -22,8 +22,7 @@ def includeme(config):
     from ..storage import register_storage
     registry = config.registry
     es = registry[ELASTIC_SEARCH]
-    # ES 5 change: 'snovault' index removed, search among '_all' instead
-    es_index = '_all'
+    es_index = get_namespaced_index(config, '*')
     # update read storage on PickStorage created in storage.py
     read_storage = ElasticSearchStorage(es, es_index)
     register_storage(registry, read_override=read_storage)
@@ -118,7 +117,7 @@ class ElasticSearchStorage(object):
         Returns:
             CachedModel of the hit or None
         """
-        search = Search(using=self.es)
+        search = Search(using=self.es, index=self.index)
         id_query = Q('ids', values=[str(uuid)])
         search = search.query(id_query)
         return self._one(search)
@@ -143,18 +142,9 @@ class ElasticSearchStorage(object):
         Returns:
             The _source value from the document, if it exists
         """
-        # use the CachedModel. Would need to change usage of get_by_uuid_direct
-        # in snovault to res.source from res['_source']
-        # try:
-        #     res = self.es.get(index=item_type, doc_type=item_type, id=uuid,
-        #                       _source=True, realtime=True, ignore=404)
-        # except elasticsearch.exceptions.NotFoundError:
-        #     model = None
-        # else:
-        #     model = CachedModel(res)
-        # return model
+        index_name = get_namespaced_index(request, item_type)
         try:
-            res = self.es.get(index=item_type, doc_type=item_type, id=uuid,
+            res = self.es.get(index=index_name, doc_type=item_type, id=uuid,
                               _source=True, realtime=True, ignore=404)
         except elasticsearch.exceptions.NotFoundError:
             res = None
@@ -163,7 +153,7 @@ class ElasticSearchStorage(object):
     def get_by_json(self, key, value, item_type, default=None):
         # find the term with the specific type
         term = 'embedded.' + key + '.raw'
-        search = Search(using=self.es)
+        search = Search(using=self.es, index=self.index)
         search = search.filter('term', **{term: value})
         search = search.filter('type', value=item_type)
         return self._one(search)
@@ -171,13 +161,13 @@ class ElasticSearchStorage(object):
     def get_by_unique_key(self, unique_key, name):
         term = 'unique_keys.' + unique_key
         # had to use ** kw notation because of variable in field name
-        search = Search(using=self.es)
+        search = Search(using=self.es, index=self.index)
         search = search.filter('term', **{term: name})
         search = search.extra(version=True)
         return self._one(search)
 
     def get_rev_links(self, model, rel, *item_types):
-        search = Search(using=self.es)
+        search = Search(using=self.es, index=self.index)
         search = search.extra(size=SEARCH_MAX)
         # rel links use '~' instead of '.' due to ES field restraints
         proc_rel = rel.replace('.', '~')
@@ -215,8 +205,10 @@ class ElasticSearchStorage(object):
         if not item_type:
             model = self.get_by_uuid(rid)
             item_type = model.item_type
+        index_name = get_namespaced_index(request, item_type)
+
         try:
-            self.es.delete(id=rid, index=item_type, doc_type=item_type)
+            self.es.delete(id=rid, index=index_name, doc_type=item_type)
         except elasticsearch.exceptions.NotFoundError:
             # Case: Not yet indexed
             log.error('PURGE: Could not find %s in ElasticSearch. Continuing.' % rid)
@@ -233,7 +225,7 @@ class ElasticSearchStorage(object):
             use_aws_auth = asbool(registry.settings.get('elasticsearch.aws_auth'))
             mirror_client = es_utils.create_es_client(mirror_es, use_aws_auth=use_aws_auth)
             try:
-                mirror_client.delete(id=rid, index=item_type, doc_type=item_type)
+                mirror_client.delete(id=rid, index=index_name, doc_type=item_type)
             except elasticsearch.exceptions.NotFoundError:
                 # Case: Not yet indexed
                 log.error('PURGE: Could not find %s in mirrored ElasticSearch (%s). Continuing.' % (rid, mirror_es))
@@ -249,7 +241,7 @@ class ElasticSearchStorage(object):
                 'filter': {'terms': {'item_type': item_types}} if item_types else {'match_all': {}}
             }
         }}
-        for hit in scan(self.es, query=query):
+        for hit in scan(self.es, index=self.index, query=query):
             yield hit.get('uuid', hit.get('_id'))
 
     def __len__(self, *item_types):
