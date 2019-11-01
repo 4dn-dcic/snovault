@@ -717,14 +717,21 @@ def build_index(app, es, index_name, in_type, mapping, uuids_to_index, dry_run, 
     # delete the index. Ignore 404 because new item types will not be present
     if this_index_exists:
         res = es_safe_execute(es.indices.delete, index=index_name, ignore=[404])
-        if res:
-            log.info('MAPPING: index successfully deleted for %s' % in_type, collection=in_type)
+        if res is not None:
+            if res.get('status') == 404:
+                log.info('MAPPING: index %s not found and cannot be deleted' % in_type,
+                         collection=in_type)
+            else:
+                assert res.get('acknowledged') is True
+                log.info('MAPPING: index successfully deleted for %s' % in_type,
+                         collection=in_type)
         else:
-            log.error('MAPPING: could not delete index for %s' % in_type, collection=in_type)
+            log.error('MAPPING: error on delete index for %s' % in_type, collection=in_type)
 
     # first, create the mapping. adds settings and mappings in the body
     res = es_safe_execute(es.indices.create, index=index_name, body=this_index_record)
-    if res:
+    if res is not None:
+        assert res.get('acknowledged') is True
         log.info('MAPPING: new index created for %s' % (in_type), collection=in_type)
     else:
         log.error('MAPPING: new index failed for %s' % (in_type), collection=in_type)
@@ -746,13 +753,7 @@ def build_index(app, es, index_name, in_type, mapping, uuids_to_index, dry_run, 
 
 
 def check_if_index_exists(es, in_type):
-    try:
-        this_index_exists = es.indices.exists(index=in_type)
-        if this_index_exists:
-            return this_index_exists
-    except ConnectionTimeout:
-        this_index_exists = False
-    return this_index_exists
+    return es_safe_execute(es.indices.exists, index=in_type)
 
 
 def check_and_reindex_existing(app, es, in_type, uuids_to_index, index_diff=False, print_counts=False):
@@ -917,16 +918,21 @@ def confirm_mapping(es, index_name, in_type, this_index_record):
 
 
 def es_safe_execute(function, **kwargs):
+    """
+    Tries to execute the function 3 times, handling ES ConnectionTimeout
+    Returns the response or None if could not execute
+    """
     exec_count = 0
+    res = None
     while exec_count < 3:
         try:
-            function(**kwargs)
+            res = function(**kwargs)
         except ConnectionTimeout:
             exec_count += 1
             log.info('ES connection issue! Retrying.')
         else:
-            return True
-    return False
+            break
+    return res
 
 
 def flatten_and_sort_uuids(registry, uuids_to_index, item_order):
