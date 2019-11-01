@@ -714,16 +714,16 @@ def build_index(app, es, index_name, in_type, mapping, uuids_to_index, dry_run, 
                   % (in_type), collection=in_type)
         return
 
-    # delete the index
+    # delete the index. Ignore 404 because new item types will not be present
     if this_index_exists:
-        res = es_safe_execute(es.indices.delete, index=index_name, ignore=[400,404])
+        res = es_safe_execute(es.indices.delete, index=index_name, ignore=[404])
         if res:
             log.info('MAPPING: index successfully deleted for %s' % in_type, collection=in_type)
         else:
             log.error('MAPPING: could not delete index for %s' % in_type, collection=in_type)
 
     # first, create the mapping. adds settings and mappings in the body
-    res = es_safe_execute(es.indices.create, index=index_name, body=this_index_record, ignore=[400])
+    res = es_safe_execute(es.indices.create, index=index_name, body=this_index_record)
     if res:
         log.info('MAPPING: new index created for %s' % (in_type), collection=in_type)
     else:
@@ -1046,7 +1046,7 @@ def run(app, collections=None, dry_run=False, check_first=False, skip_indexing=F
         indexer_queue.purge_queue()
         # we also want to remove the 'indexing' index, which stores old records
         # it's not guaranteed to be there, though
-        es_safe_execute(es.indices.delete, index=namespaced_index, ignore=[400,404])
+        es_safe_execute(es.indices.delete, index=namespaced_index, ignore=[404])
 
     # if 'indexing' index doesn't exist, initialize it with some basic settings
     # but no mapping. this is where indexing_records go
