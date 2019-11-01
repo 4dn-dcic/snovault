@@ -206,7 +206,7 @@ class ElasticSearchStorage(object):
         if not item_type:
             model = self.get_by_uuid(rid)
             item_type = model.item_type
-        index_name = get_namespaced_index(request, item_type)
+        index_name = get_namespaced_index(registry, item_type)
 
         try:
             self.es.delete(id=rid, index=index_name, doc_type=item_type)
