@@ -256,7 +256,7 @@ class PickStorage(object):
 
         return self.write.get_by_uuid_direct(uuid, item_type, default)
 
-    def find_uuids_linked_to_item(registry, uuid):
+    def find_uuids_linked_to_item(self, registry, uuid):
         """
         Only functional with self.read
         """
