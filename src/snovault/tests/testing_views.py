@@ -435,14 +435,15 @@ def testing_retry(context, request):
     }
 
 
-@collection('testing-link-targets-es', unique_key='testing_link_target_es:name')
+@collection('testing-link-targets-elastic-search',
+            unique_key='testing_link_target_elastic_search:name')
 class TestingLinkTargetElasticSearch(TestingLinkTargetSno):
     """
     Like TestingLinkTargetSno, but leverages ElasticSearch storage exclusively
     """
     # used_datastore sets this as an ElasticSearch item
     used_datastore = 'elasticsearch'
-    item_type = 'testing_link_target_es'
+    item_type = 'testing_link_target_elastic_search'
     name_key = 'name'
     schema = load_schema('snovault:test_schemas/TestingLinkTargetElasticSearch.json')
     rev = {
