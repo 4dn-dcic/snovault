@@ -336,7 +336,7 @@ class ElasticSearchStorage(object):
             mirror_client = es_utils.create_es_client(mirror_health['elasticsearch'], use_aws_auth=use_aws_auth)
             try:
                 # assume index is <namespace> + item_type
-                mirror_index = mirror_health['namespace'] + item_type
+                mirror_index = mirror_health.get('namespace', '') + item_type
                 mirror_client.delete(id=rid, index=mirror_index, doc_type=item_type)
             except elasticsearch.exceptions.NotFoundError:
                 # Case: Not yet indexed
