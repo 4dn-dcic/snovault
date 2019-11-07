@@ -15,7 +15,7 @@ from .interfaces import (
 from ..storage import RDBStorage
 from .indexer_utils import get_namespaced_index, find_uuids_for_indexing
 from .create_mapping import SEARCH_MAX
-from dcicutils import es_utils
+from dcicutils import es_utils, ff_utils
 import structlog
 
 log = structlog.getLogger(__name__)
@@ -326,15 +326,18 @@ class ElasticSearchStorage(object):
             log.error('PURGE: Registry not available for ESStorage purge_uuid')
             return
         # if configured, delete the item from the mirrored ES as well
-        if registry.settings.get('mirror.env.es'):
-            mirror_es = registry.settings['mirror.env.es']
+        if registry.settings.get('mirror.env.name'):
+            mirror_env = registry.settings['mirror.env.name']
             use_aws_auth = registry.settings.get('elasticsearch.aws_auth')
+            mirror_health = ff_utils.get_health_page(ff_env=mirror_env)
             # make sure use_aws_auth is bool
             if not isinstance(use_aws_auth, bool):
                 use_aws_auth = True if use_aws_auth == 'true' else False
-            mirror_client = es_utils.create_es_client(mirror_es, use_aws_auth=use_aws_auth)
+            mirror_client = es_utils.create_es_client(mirror_health['elasticsearch'], use_aws_auth=use_aws_auth)
             try:
-                mirror_client.delete(id=rid, index=index_name, doc_type=item_type)
+                # assume index is <namespace> + item_type
+                mirror_index = mirror_health.get('namespace', '') + item_type
+                mirror_client.delete(id=rid, index=mirror_index, doc_type=item_type)
             except elasticsearch.exceptions.NotFoundError:
                 # Case: Not yet indexed
                 log.error('PURGE: Couldn\'t find %s in mirrored ElasticSearch (%s). Continuing.' % (rid, mirror_es))
