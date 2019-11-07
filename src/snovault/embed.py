@@ -165,7 +165,6 @@ def _embed(request, path, as_user='EMBED'):
     subreq._aggregate_for = request._aggregate_for
     subreq._aggregated_items = request._aggregated_items
     subreq._sid_cache = request._sid_cache
-    # subreq.force_datastore = request.force_datastore
     if as_user is not True:
         if 'HTTP_COOKIE' in subreq.environ:
             del subreq.environ['HTTP_COOKIE']

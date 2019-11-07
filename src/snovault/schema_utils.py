@@ -128,14 +128,18 @@ def linkTo(validator, linkTo, instance, schema):
         return
 
     request = get_current_request()
-    root = request.root  # use Root to find the resource
+    collections = request.registry[COLLECTIONS]
     if validator.is_type(linkTo, "string"):
+        base = collections.get(linkTo, request.root)
         linkTo = [linkTo] if linkTo else []
-    elif not validator.is_type(linkTo, "array"):
+    elif validator.is_type(linkTo, "array"):
+        base = request.root
+    else:
         raise Exception("Bad schema")  # raise some sort of schema error
     try:
         # leverage Root.__get_item__
-        item = root[instance.replace(':', '%3A')]
+        # item = root[instance.replace(':', '%3A')]
+        item = find_resource(base, instance.replace(':', '%3A'))
     except KeyError:
         error = "%r not found" % instance
         yield ValidationError(error)

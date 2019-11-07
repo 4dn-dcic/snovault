@@ -52,8 +52,6 @@ def includeme(config):
     registry = config.registry
     # add `datastore` attribute to request
     config.add_request_method(datastore, 'datastore', reify=True)
-    # add `force_datastore` attribute to request
-    # config.add_request_method(lambda request: None, 'force_datastore', reify=True)
     # register PickStorage initialized with write storage
     write_stg = RDBStorage(registry[DBSESSION]) if registry[DBSESSION] else None
     register_storage(registry, write_override=write_stg)
@@ -63,8 +61,7 @@ def datastore(request):
     """
     Function that is reified as `request.datastore`. Used with PickStorage
     to determine whether to use RDBStorage or ElasticSearchStorage. Can be
-    overriden by `request.force_datastore` or by passing a storage argument
-    to `PickStorage.storage` directly
+    overriden by storage argument to `PickStorage.storage` directly
     """
     if request.__parent__ is not None:
         return request.__parent__.datastore
@@ -139,7 +136,7 @@ class PickStorage(object):
         self.write = write
         self.read = read
         self.registry = registry
-        self.used_datastores = {
+        self.used_datastore = {
             'database': self.write,
             'elasticsearch': self.read
         }
@@ -147,22 +144,18 @@ class PickStorage(object):
     def storage(self, datastore=None):
         """
         Choose which storage to use. If a forced datastore is passed in through
-        the `datastore` parameter or on `request.force_datastore`, use that.
-        Otherwise check `request.datastore`
+        the `datastore` parameter, use that. Else check `request.datastore`
         """
         request = get_current_request()
-        # if datastore is not None or (request and request.force_datastore is not None):
-        #     force_datastore = datastore or request.force_datastore
         if datastore is not None:
-            force_datastore = datastore  # simplify once request.force_datastore is fully removed
-            if force_datastore in self.used_datastores:
-                if self.used_datastores[force_datastore] is None:
+            if datastore in self.used_datastore:
+                if self.used_datastore[datastore] is None:
                     raise HTTPInternalServerError('Forced datastore %s is not'
                                                   ' configured' % datastore)
-                return self.used_datastores[force_datastore]
+                return self.used_datastore[datastore]
             else:
                 raise HTTPInternalServerError('Invalid forced datastore %s. Must be one of: %s'
-                                              % (datastore, list(self.used_datastores.keys())))
+                                              % (datastore, list(self.used_datastore.keys())))
 
         # usually check the datastore attribute on the request
         if self.read and request and request.datastore == 'elasticsearch':
@@ -222,16 +215,16 @@ class PickStorage(object):
         if self.read:
             self.read.purge_uuid(rid, item_type, max_sid)
 
-    def get_rev_links(self, model, rel, *item_types, datastore=None):
-        return self.storage(datastore).get_rev_links(model, rel, *item_types)
+    def get_rev_links(self, model, rel, *item_types):
+        return self.storage().get_rev_links(model, rel, *item_types)
 
-    def __iter__(self, *item_types, datastore=None):
-        return self.storage(datastore).__iter__(*item_types)
+    def __iter__(self, *item_types):
+        return self.storage().__iter__(*item_types)
 
-    def __len__(self, *item_types, datastore=None):
-        return self.storage(datastore).__len__(*item_types)
+    def __len__(self, *item_types):
+        return self.storage().__len__(*item_types)
 
-    def create(self, item_type, uuid, datastore=None):
+    def create(self, item_type, uuid):
         """
         Always use self.write to create Resource model
         """
@@ -240,7 +233,7 @@ class PickStorage(object):
     def update(self, model, properties=None, sheets=None, unique_keys=None,
                links=None, datastore=None):
         """
-        model is storage.Resource
+        model should always be write storage.Resource
         """
         storage = self.storage(datastore)
         if storage is self.read:

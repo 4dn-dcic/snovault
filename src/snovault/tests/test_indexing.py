@@ -11,6 +11,7 @@ import json
 import uuid
 import yaml
 import os
+import webtest
 from datetime import datetime
 from snovault.elasticsearch.interfaces import (
     ELASTIC_SEARCH,
@@ -69,12 +70,11 @@ def app_settings(wsgi_server_host_port, elasticsearch_server, postgresql_server,
 
     return settings
 
-@pytest.yield_fixture(scope='session')
-# @pytest.yield_fixture(scope='session', params=[True, False])
+@pytest.yield_fixture(scope='session', params=[True, False])
 def app(app_settings, request):
     from snovault import main
-    # if request.param: # run tests both with and without mpindexer
-    #     app_settings['mpindexer'] = True
+    if request.param: # run tests both with and without mpindexer
+        app_settings['mpindexer'] = True
     app = main({}, **app_settings)
 
     yield app
@@ -1073,7 +1073,6 @@ def test_aggregated_items(app, testapp, indexer_testapp):
     - Ensure that duplicate aggregated_items are deduplicated
     - Check aggregated-items view; should now match ES results
     """
-    import webtest
     es = app.registry[ELASTIC_SEARCH]
     indexer_queue = app.registry[INDEXER_QUEUE]
     # first, run create mapping with the indices we will use
@@ -1265,7 +1264,7 @@ def test_validators_on_indexing(app, testapp, indexer_testapp):
 def test_elasticsearch_item(app, testapp, indexer_testapp):
     """
     Test creating + indexing a TestingLinkTargetElasticSearch item, which
-    uses `force_datastore='elasticsearch'`. Ensure that all standard
+    uses `used_datastore='elasticsearch'`. Ensure that all standard
     functionality on this item works, including linking to a regular DB item
     """
     es = app.registry[ELASTIC_SEARCH]
@@ -1284,25 +1283,28 @@ def test_elasticsearch_item(app, testapp, indexer_testapp):
     target_uuid = target_res.json['@graph'][0]['uuid']
     target_es = es.get(index=namespaced_target, doc_type='testing_link_target_elastic_search',
                        id=target_uuid)
+    # initial document before indexing will not have object/embedded views
     assert target_es['_source']['properties']['name'] == 'es_one'
-    res = indexer_testapp.post_json('/index', {'record': True})
+    assert 'object' not in target_es['_source']
+    assert 'embedded' not in target_es['_source']
+    indexer_testapp.post_json('/index', {'record': True})
     time.sleep(3)
     target_es = es.get(index=namespaced_target, doc_type='testing_link_target_elastic_search',
                        id=target_uuid)
     assert target_es['_source']['embedded']['name'] == 'es_one'
     assert target_es['_source']['paths'] == ["/testing-link-targets-elastic-search/" + target['name']]
-    assert target_es['_source']['embedded']['reverse'] == []
+    assert target_es['_source']['embedded']['reverse_es'] == []
 
     # add a source and make sure target gets updated correctly
     source = {'name': 'db_one', 'target_es': target_uuid, 'status': 'current',
               'uuid': '225cdaea-5e38-4d39-b27a-05fe293d06a4'}
     source_res = testapp.post_json('/testing-link-sources-sno/', source, status=201)
     source_uuid = source_res.json['@graph'][0]['uuid']
-    res = indexer_testapp.post_json('/index', {'record': True})
+    indexer_testapp.post_json('/index', {'record': True})
     time.sleep(3)
     target_es = es.get(index=namespaced_target, doc_type='testing_link_target_elastic_search',
                        id=target_uuid)
-    assert target_es['_source']['embedded']['reverse'][0]['name'] == source['name']
+    assert target_es['_source']['embedded']['reverse_es'][0]['name'] == source['name']
     assert source_uuid in [x['uuid'] for x in target_es['_source']['linked_uuids_embedded']]
     source_es = es.get(index=namespaced_source, doc_type='testing_link_source_sno',
                        id=source_uuid)
@@ -1311,7 +1313,21 @@ def test_elasticsearch_item(app, testapp, indexer_testapp):
 
     # make sure patches/invalidation work on the target and source
     testapp.patch_json(target_res.json['@graph'][0]['@id'], {'status': 'deleted'})
-    res = indexer_testapp.post_json('/index', {'record': True})
+    # before indexing, ES document should have some old views and new sid/properties
+    target_es_pre = es.get(index=namespaced_target, doc_type='testing_link_target_elastic_search',
+                           id=target_uuid)
+    # properties will be updated on patch
+    assert target_es_pre['_source']['properties'] != target_es['_source']['properties']
+    assert target_es_pre['_source']['properties']['status'] == 'deleted'
+    # object/embedded are not updated on patch
+    assert target_es_pre['_source']['object']['status'] != 'deleted'
+    assert target_es_pre['_source']['object'] == target_es['_source']['object']
+    assert target_es_pre['_source']['embedded'] == target_es['_source']['embedded']
+    # sid/max_sid will have increased on the patch
+    assert target_es_pre['_source']['sid'] > target_es['_source']['sid']
+    assert target_es_pre['_source']['max_sid'] > target_es['_source']['max_sid']
+
+    indexer_testapp.post_json('/index', {'record': True})
     time.sleep(3)
     target_es = es.get(index=namespaced_target, doc_type='testing_link_target_elastic_search',
                        id=target_uuid)
@@ -1322,9 +1338,44 @@ def test_elasticsearch_item(app, testapp, indexer_testapp):
 
     # remove reverse link by patching source status
     testapp.patch_json(source_res.json['@graph'][0]['@id'], {'status': 'deleted'})
-    res = indexer_testapp.post_json('/index', {'record': True})
+    indexer_testapp.post_json('/index', {'record': True})
     time.sleep(3)
     target_es = es.get(index=namespaced_target, doc_type='testing_link_target_elastic_search',
                        id=target_uuid)
-    assert target_es['_source']['embedded']['reverse'] == []
+    assert target_es['_source']['embedded']['reverse_es'] == []
     assert source_uuid not in [x['uuid'] for x in target_es['_source']['linked_uuids_embedded']]
+
+    # do some other common operations with the ES item
+    res = testapp.get(target_res.json['@graph'][0]['@id'])
+    res_db = testapp.get(target_res.json['@graph'][0]['@id'] + '?datastore=database')
+    assert res.json == res_db.json
+
+    res = testapp.get(target_res.json['@graph'][0]['@id'] + '?frame=object')
+    assert res.json == target_es['_source']['object']
+
+    res = testapp.get(target_res.json['@graph'][0]['@id'] + '?frame=raw')
+    # 'raw' view contains properties; es 'properties' does not
+    assert res.json != target_es['_source']['properties']
+    es_props_copy = target_es['_source']['properties'].copy()
+    es_props_copy.update({'uuid': target_uuid})
+    assert res.json == es_props_copy
+
+    res = testapp.get(target_res.json['@graph'][0]['@id'] + '@@links')
+    assert source_uuid in [x['uuid'] for x in res.json['uuids_linking_to']]
+
+    with pytest.raises(webtest.AppError) as excinfo:
+        testapp.delete_json(target_res.json['@graph'][0]['@id'] + '?purge=True')
+    assert 'Cannot purge item as other items still link to it' in str(excinfo.value)
+
+    testapp.patch_json(source_res.json['@graph'][0]['@id'] + '?delete_fields=target_es', {})
+    indexer_testapp.post_json('/index', {'record': True})
+    time.sleep(3)
+    res = testapp.get(target_res.json['@graph'][0]['@id'] + '@@links')
+    assert source_uuid not in [x['uuid'] for x in res.json['uuids_linking_to']]
+
+    res = testapp.delete_json(target_res.json['@graph'][0]['@id'] + '?purge=True')
+    assert res.json['status'] == 'success'
+    assert res.json['notification'] == 'Permanently deleted ' + target['uuid']
+    time.sleep(3)
+    testapp.get(target_res.json['@graph'][0]['@id'], status=404)
+    testapp.get(target_res.json['@graph'][0]['@id'] + '?datastore=database', status=404)

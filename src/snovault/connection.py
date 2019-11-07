@@ -46,6 +46,9 @@ class Connection(object):
         return self.registry[TYPES]
 
     def get_by_json(self, key, value, item_type, default=None, datastore=None):
+        """
+        Gets model from storage and returns Item. Does not use item cache
+        """
         model = self.storage.get_by_json(key, value, item_type, default, datastore)
 
         if model is None:
@@ -62,6 +65,9 @@ class Connection(object):
 
 
     def get_by_uuid(self, uuid, default=None, datastore=None):
+        """
+        Gets model from storage and returns Item. Uses item cache
+        """
         if isinstance(uuid, basestring):
             # some times we get @id type things here
             uuid = uuid.strip("/").split("/")[-1]
@@ -92,6 +98,10 @@ class Connection(object):
         return item
 
     def get_by_unique_key(self, unique_key, name, default=None, datastore=None):
+        """
+        Gets model from storage and returns Item.
+        Uses unique_key_cache and item_cache
+        """
         pkey = (unique_key, name)
 
         cached = self.unique_key_cache.get(pkey)
@@ -118,46 +128,38 @@ class Connection(object):
         self.item_cache[uuid] = item
         return item
 
-    def get_rev_links(self, model, rel, *types, datastore=None):
+    def get_rev_links(self, model, rel, *types):
         item_types = [self.types[t].item_type for t in types]
-        return self.storage.get_rev_links(model, rel, *item_types, datastore=datastore)
+        return self.storage.get_rev_links(model, rel, *item_types)
 
-    def __iter__(self, *types, datastore=None):
+    def __iter__(self, *types):
         if not types:
             item_types = self.types.by_item_type.keys()
         else:
             item_types = [self.types[t].item_type for t in types]
-        for uuid in self.storage.__iter__(*item_types, datastore=datastore):
+        for uuid in self.storage.__iter__(*item_types):
             yield uuid
 
-    def __len__(self, *types, datastore=None):
+    def __len__(self, *types):
         if not types:
             item_types = self.types.by_item_type.keys()
         else:
             item_types = [self.types[t].item_type for t in types]
-        return self.storage.__len__(*item_types, datastore=datastore)
+        return self.storage.__len__(*item_types)
 
-    def __getitem__(self, uuid, datastore=None):
-        item = self.get_by_uuid(uuid, datastore=datastore)
+    def __getitem__(self, uuid):
+        """
+        Gets Item using `self.get_by_uuid`. If the Item has a `used_datastore`
+        set, this function will clear item_cache and use the specified model
+        """
+        item = self.get_by_uuid(uuid)
         # may need to get the item from an alternate datastore
-        if (item and item.force_datastore is not None
-            and datastore != item.force_datastore):
+        if (item and item.used_datastore is not None
+            and item.model.used_datastore != item.used_datastore):
             # clear cache so that alternate storage result is returned
             if self.item_cache.get(uuid):
                 del self.item_cache[uuid]
-            item = self.get_by_uuid(uuid, datastore=item.force_datastore)
-
-        # if item is None:
-        #     # Override the datastore to find items that may use an alternate
-        #     # storage type, if applicable.
-        #     # Need to check the request to get this info
-        #     request = get_current_request()
-        #     if request and request.force_datastore is None:
-        #         for try_datastore in self.used_datastores:
-        #             if try_datastore != datastore and try_datastore != request.datastore:
-        #                 item = self.get_by_uuid(uuid, datastore=try_datastore)
-        #                 if item is not None:
-        #                     break
+            item = self.get_by_uuid(uuid, datastore=item.used_datastore)
         if item is None:
             raise KeyError(uuid)
         return item

@@ -13,6 +13,7 @@ from pyramid.security import (
 from pyramid.traversal import (
     resource_path,
     traverse,
+    find_resource
 )
 from pyramid.events import (
     ContextFound,
@@ -44,22 +45,6 @@ logger = logging.getLogger(__name__)
 
 def includeme(config):
     config.scan(__name__)
-
-
-# @subscriber(ContextFound)
-# def override_datastore_by_context(event):
-#     """
-#     Hook into the Pyramid event to set request.datastore if there is a
-#     `force_datastore` on the context with associated event
-#     """
-#     request = event.request
-#     context = request.context
-#     if isinstance(context, Item):
-#         request.force_datastore = context.force_datastore
-#         print('=1=> set request.force_datastore to %s' % request.force_datastore)
-#     elif isinstance(context, AbstractCollection):
-#         request.force_datastore = context.type_info.factory.force_datastore
-#         print('=2=> set request.force_datastore to %s' % request.force_datastore)
 
 
 class Resource(object):
@@ -125,6 +110,8 @@ class Root(Resource):
         try:
             resource = self.connection[name]  # Connection.__getitem__
         except KeyError:
+            # try with `find_resource`. Performance considerations?
+            # resource = find_resource(self, name)
             resource = default
         return resource
 
@@ -208,16 +195,16 @@ class AbstractCollection(Resource, Mapping):
 
     def get(self, name, default=None):
         # see if there is a forced datastore for the associated item type
-        force_datastore = self.type_info.factory.force_datastore
+        used_datastore = self.type_info.factory.used_datastore
         resource = self.connection.get_by_uuid(name, default=None,
-                                               datastore=force_datastore)
+                                               datastore=used_datastore)
         if resource is not None:
             if not self._allow_contained(resource):
                 return default
             return resource
         if self.unique_key is not None:
             resource = self.connection.get_by_unique_key(self.unique_key, name,
-                                                         datastore=force_datastore)
+                                                         datastore=used_datastore)
             if resource is not None:
                 if not self._allow_contained(resource):
                     return default
@@ -274,8 +261,8 @@ class Item(Resource):
     embedded_list = []
     filtered_rev_statuses = ()
     schema = None
-    # `force_datastore` can be used to resrict the datastore used for this item
-    force_datastore = None
+    # `used_datastore` can be used to resrict the datastore used for this item
+    used_datastore = None
     AbstractCollection = AbstractCollection
     Collection = Collection
 
@@ -323,11 +310,23 @@ class Item(Resource):
 
     @property
     def sid(self):
-        return self.model.sid
+        return self.db_model.sid
 
     @property
     def max_sid(self):
-        return self.model.max_sid
+        return self.db_model.max_sid
+
+    @property
+    def db_model(self):
+        """
+        Always returns the resouce model from write storage, which is needed
+        for operations like getting current sid/max_sid, rev_links, and
+        updating. Leverage `model.used_datastore` to determine source
+        """
+        if self.model.used_datastore != 'database':
+            connection = self.registry[CONNECTION]
+            return connection.storage.write.get_by_uuid(str(self.uuid))
+        return self.model
 
     def links(self, properties):
         return {
@@ -350,15 +349,7 @@ class Item(Resource):
         types = self.registry[TYPES]
         type_name, rel = self.rev[name]
         types = types[type_name].subtypes
-        # if we are indexing, update the following request attributes
-
-        # need to get rev links with write Resource model
-        if self.model.used_datastore != 'datastore':
-            use_model = self.registry[CONNECTION].storage.write.get_by_uuid(str(self.uuid))
-        else:
-            use_model = self.model
-
-        return self.registry[CONNECTION].get_rev_links(use_model, rel, *types)
+        return self.registry[CONNECTION].get_rev_links(self.db_model, rel, *types)
 
     def get_filtered_rev_links(self, request, name):
         """
@@ -507,15 +498,8 @@ class Item(Resource):
 
         # actually propogate the update to the DB
         connection = self.registry[CONNECTION]
-
-        # need to update with write Resource model
-        if self.model.used_datastore != 'database':
-            use_model = self.registry[CONNECTION].storage.write.get_by_uuid(str(self.uuid))
-        else:
-            use_model = self.model
-
-        connection.update(use_model, properties, sheets, unique_keys, links,
-                          datastore=self.force_datastore)
+        connection.update(self.db_model, properties, sheets, unique_keys, links,
+                          datastore=self.used_datastore)
 
     @reify
     def embedded(self):

@@ -52,10 +52,9 @@ def filter_embedded(embedded, effective_principals):
 @view_config(context=ICachedItem, permission='view', request_method='GET',
              name='embedded')
 def cached_view_embedded(context, request):
-
     source = context.model.source
-    # generate object view if using a read-only item
-    if (context.force_datastore == 'elasticsearch' and
+    # generate view if this item uses ES as primary datastore or indexing
+    if (context.used_datastore == 'elasticsearch' and
         ('embedded' not in source or request._indexing_view is True)):
         embedded = item_view_embedded(context, request)
     else:
@@ -72,8 +71,8 @@ def cached_view_embedded(context, request):
              name='object')
 def cached_view_object(context, request):
     source = context.model.source
-    # generate object view if using a forced datastore and indexing is needed
-    if (context.force_datastore == 'elasticsearch' and
+    # generate view if this item uses ES as primary datastore or indexing
+    if (context.used_datastore == 'elasticsearch' and
         ('object' not in source or request._indexing_view is True)):
         object = item_view_object(context, request)
     else:
@@ -99,16 +98,19 @@ def cached_view_raw(context, request):
 @view_config(context=ICachedItem, permission='view', request_method='GET',
              name='page')
 def cached_view_page(context, request):
+    # must generate this view because it's not stored in ES source
     return item_view_page(context, request)
 
 
 @view_config(context=ICachedItem, permission='expand', request_method='GET',
              name='expand')
 def cached_view_expand(context, request):
+    # must generate this view because it's not stored in ES source
     return item_view_expand(context, request)
 
 
 @view_config(context=ICachedItem, permission='index', request_method='GET',
              name='index-data', )
 def cached_index_data(context, request):
+    # must generate this view because it's not stored in ES source
     return item_index_data(context, request)

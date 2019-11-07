@@ -288,10 +288,17 @@ class ElasticSearchStorage(object):
 
     def update(self, model, properties, sheets, unique_keys, links):
         """
-        model is storage.Resource
-        handle indexing base item to ES here
+        Update the ES contents for an ElasticSearch-based item.
+        `model` is database model (storage.Resource), which is needed for
+        getting correct sid/max_sid.
+        This function gets existing ES document for the given item and updates
+        the fields contained in `document` below. If there is no existing item,
+        create an ES document with the minimal information.
+        This will create a discrepancy between the
+        new attributes and the indexed ones, like `properties` vs `embedded`.
+        However, this is consistent with the database approach of indexing
+        and the document will be updated after it is indexed
         """
-        # TODO: will there be issues with successive updates? Should we disallow?
         document = {
             'item_type': model.item_type,
             'uuid': str(model.uuid),
@@ -304,6 +311,12 @@ class ElasticSearchStorage(object):
         }
         if sheets is not None:
             document['propsheets'] = sheets
+
+        # get existing document if it exists
+        existing_doc = self.get_by_uuid(document['uuid'])
+        if existing_doc is not None:
+            existing_doc.source.update(document)
+            document = existing_doc.source
 
         index_name = get_namespaced_index(self.registry, document['item_type'])
         # use `refresh='waitfor'` so that the ES model is immediately available

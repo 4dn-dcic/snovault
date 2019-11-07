@@ -342,7 +342,7 @@ class TestingDownload(ItemWithAttachment):
 class TestingLinkSourceSno(Item):
     item_type = 'testing_link_source_sno'
     schema = load_schema('snovault:test_schemas/TestingLinkSourceSno.json')
-    embedded_list = ['target_es.status']
+    embedded_list = ['target_es.status', 'target.status']
 
 
 @collection('testing-link-aggregates-sno')
@@ -438,21 +438,21 @@ def testing_retry(context, request):
 
 @collection('testing-link-targets-elastic-search',
             unique_key='testing_link_target_elastic_search:name')
-class TestingLinkTargetElasticSearch(TestingLinkTargetSno):
+class TestingLinkTargetElasticSearch(Item):
     """
     Like TestingLinkTargetSno, but leverages ElasticSearch storage exclusively
     """
-    # force_datastore sets this as an ElasticSearch item
-    force_datastore = 'elasticsearch'
+    # used_datastore sets this as an ElasticSearch item
+    used_datastore = 'elasticsearch'
     item_type = 'testing_link_target_elastic_search'
     name_key = 'name'
     schema = load_schema('snovault:test_schemas/TestingLinkTargetElasticSearch.json')
     rev = {
-        'reverse': ('TestingLinkSourceSno', 'target_es'),
+        'reverse_es': ('TestingLinkSourceSno', 'target_es'),
     }
     filtered_rev_statuses = ('deleted', 'replaced')
     embedded_list = [
-        'reverse.name',
+        'reverse_es.name',
     ]
 
     def rev_link_atids(self, request, rev_name):
@@ -468,5 +468,5 @@ class TestingLinkTargetElasticSearch(TestingLinkTargetSno):
             "linkTo": "TestingLinkSourceSno",
         },
     })
-    def reverse(self, request):
-        return self.rev_link_atids(request, "reverse")
+    def reverse_es(self, request):
+        return self.rev_link_atids(request, "reverse_es")
