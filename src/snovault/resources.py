@@ -14,6 +14,10 @@ from pyramid.traversal import (
     resource_path,
     traverse,
 )
+from pyramid.events import (
+    ContextFound,
+    subscriber,
+)
 from .calculated import (
     calculate_properties,
     calculated_property,
@@ -33,6 +37,7 @@ from .util import (
 )
 from past.builtins import basestring
 from .util import add_default_embeds
+from pyramid.threadlocal import get_current_request
 
 logger = logging.getLogger(__name__)
 
@@ -41,26 +46,26 @@ def includeme(config):
     config.scan(__name__)
 
 
-# Migrated from snowflakes
-def calc_principals(context):
-    principals_allowed = {}
-    for permission in ('view', 'edit'):
-        principals = principals_allowed_by_permission(context, permission)
-        if principals is Everyone:
-            principals = [Everyone]
-        elif Everyone in principals:
-            principals = [Everyone]
-        elif Authenticated in principals:
-            principals = [Authenticated]
-        # Filter our roles
-        principals_allowed[permission] = [
-            p for p in sorted(principals) if not p.startswith('role.')
-        ]
-    return principals_allowed
+# @subscriber(ContextFound)
+# def override_datastore_by_context(event):
+#     """
+#     Hook into the Pyramid event to set request.datastore if there is a
+#     `force_datastore` on the context with associated event
+#     """
+#     request = event.request
+#     context = request.context
+#     if isinstance(context, Item):
+#         request.force_datastore = context.force_datastore
+#         print('=1=> set request.force_datastore to %s' % request.force_datastore)
+#     elif isinstance(context, AbstractCollection):
+#         request.force_datastore = context.type_info.factory.force_datastore
+#         print('=2=> set request.force_datastore to %s' % request.force_datastore)
 
 
 class Resource(object):
-
+    """
+    Just used to add global calculated properties
+    """
     @calculated_property(name='@id', schema={
         "title": "ID",
         "type": "string",
@@ -110,13 +115,18 @@ class Root(Resource):
         return self.get(name, None) is not None
 
     def get(self, name, default=None):
-        resource = self.collections.get(name, None)
+        """
+        Underlying get function used in traversal. Handles Collections (by
+        direct `get`) and Items (through `Connection.__getitem__`)
+        """
+        resource = self.collections.get(name)
         if resource is not None:
             return resource
-        resource = self.connection.get_by_uuid(name, None)
-        if resource is not None:
-            return resource
-        return default
+        try:
+            resource = self.connection[name]  # Connection.__getitem__
+        except KeyError:
+            resource = default
+        return resource
 
     def __json__(self, request=None):
         return self.properties.copy()
@@ -147,7 +157,9 @@ class AbstractCollection(Resource, Mapping):
     properties = {}
     unique_key = None
 
-    def __init__(self, registry, name, type_info, properties=None, acl=None, unique_key=None):
+
+    def __init__(self, registry, name, type_info, properties=None, acl=None,
+                 unique_key=None):
         self.registry = registry
         self.__name__ = name
         self.type_info = type_info
@@ -195,13 +207,17 @@ class AbstractCollection(Resource, Mapping):
             resource.type_info.name in resource.type_info.subtypes
 
     def get(self, name, default=None):
-        resource = self.connection.get_by_uuid(name, None)
+        # see if there is a forced datastore for the associated item type
+        force_datastore = self.type_info.factory.force_datastore
+        resource = self.connection.get_by_uuid(name, default=None,
+                                               datastore=force_datastore)
         if resource is not None:
             if not self._allow_contained(resource):
                 return default
             return resource
         if self.unique_key is not None:
-            resource = self.connection.get_by_unique_key(self.unique_key, name)
+            resource = self.connection.get_by_unique_key(self.unique_key, name,
+                                                         datastore=force_datastore)
             if resource is not None:
                 if not self._allow_contained(resource):
                     return default
@@ -247,6 +263,9 @@ display_title_schema = {
 
 
 class Item(Resource):
+    """
+    Base Item resouce that corresponds to a Collection or AbstractCollection
+    """
     item_type = None
     base_types = ['Item']
     name_key = None
@@ -255,10 +274,8 @@ class Item(Resource):
     embedded_list = []
     filtered_rev_statuses = ()
     schema = None
-    # set used_datastore to override what storage is used by resource
-    # setting to "database" or "elasticsearch" will always force those storage
-    # types; see PickStorage.storage
-    used_datastore = None
+    # `force_datastore` can be used to resrict the datastore used for this item
+    force_datastore = None
     AbstractCollection = AbstractCollection
     Collection = Collection
 
@@ -284,7 +301,10 @@ class Item(Resource):
 
     @property
     def __name__(self):
-
+        """
+        Used in the resource path for this item. Use `self.name_key` if
+        present, otherwise `self.uuid`
+        """
         if self.name_key is None:
             return str(self.uuid)
         return self.properties.get(self.name_key, None) or str(self.uuid)
@@ -331,8 +351,14 @@ class Item(Resource):
         type_name, rel = self.rev[name]
         types = types[type_name].subtypes
         # if we are indexing, update the following request attributes
-        return self.registry[CONNECTION].get_rev_links(self.model, rel, *types,
-                                                       datastore=self.used_datastore)
+
+        # need to get rev links with write Resource model
+        if self.model.used_datastore != 'datastore':
+            use_model = self.registry[CONNECTION].storage.write.get_by_uuid(str(self.uuid))
+        else:
+            use_model = self.model
+
+        return self.registry[CONNECTION].get_rev_links(use_model, rel, *types)
 
     def get_filtered_rev_links(self, request, name):
         """
@@ -355,7 +381,7 @@ class Item(Resource):
             if traverse(request.root, str(rev_id))['context'].__json__(request).get('status')
             not in self.filtered_rev_statuses
         ]
-        if getattr(request, '_indexing_view', False) is True:
+        if request._indexing_view is True:
             to_update = {name: filtered_uuids}
             if str(self.uuid) in request._rev_linked_uuids_by_item:
                 request._rev_linked_uuids_by_item[str(self.uuid)].update(to_update)
@@ -408,7 +434,7 @@ class Item(Resource):
 
         # if indexing, add the uuid of this object to request._linked_uuids
         # and add the sid to _sid_cache if not already present
-        if getattr(request, '_indexing_view', False) is True:
+        if request._indexing_view is True:
             request._linked_uuids.add(str(self.uuid))
             if str(self.uuid) not in request._sid_cache:
                 request._sid_cache[str(self.uuid)] = self.sid
@@ -425,7 +451,7 @@ class Item(Resource):
         This method instantiates a new Item class instance from provided `uuid` and `properties`,
         then runs the `_update` (instance method) to save the Item to the database.
         '''
-        model = registry[CONNECTION].create(cls.__name__, uuid, datastore=cls.used_datastore)
+        model = registry[CONNECTION].create(cls.__name__, uuid)
         item_instance = cls(registry, model)
         item_instance._update(properties, sheets)
         return item_instance
@@ -481,8 +507,15 @@ class Item(Resource):
 
         # actually propogate the update to the DB
         connection = self.registry[CONNECTION]
-        connection.update(self.model, properties, sheets, unique_keys, links,
-                          datastore=self.used_datastore)
+
+        # need to update with write Resource model
+        if self.model.used_datastore != 'database':
+            use_model = self.registry[CONNECTION].storage.write.get_by_uuid(str(self.uuid))
+        else:
+            use_model = self.model
+
+        connection.update(use_model, properties, sheets, unique_keys, links,
+                          datastore=self.force_datastore)
 
     @reify
     def embedded(self):
@@ -529,10 +562,21 @@ class Item(Resource):
         }
     })
     def principals_allowed(self):
-        # importing at top of file requires many more relative imports
-        from .resources import calc_principals
-        principals = calc_principals(self)
-        return principals
+        allowed = {}
+        # these are the relevant Item permissions
+        for permission in ('view', 'edit'):
+            principals = principals_allowed_by_permission(self, permission)
+            if principals is Everyone:
+                principals = [Everyone]
+            elif Everyone in principals:
+                principals = [Everyone]
+            elif Authenticated in principals:
+                principals = [Authenticated]
+            # Filter our roles
+            allowed[permission] = [
+                p for p in sorted(principals) if not p.startswith('role.')
+            ]
+        return allowed
 
     @calculated_property(schema=display_title_schema)
     def display_title(self):

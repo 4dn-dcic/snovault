@@ -2,7 +2,6 @@
 from pyramid.httpexceptions import (
     HTTPConflict,
     HTTPLocked,
-    HTTPUnprocessableEntity,
     HTTPInternalServerError
 )
 from sqlalchemy import (
@@ -51,8 +50,10 @@ _DBSESSION = None
 
 def includeme(config):
     registry = config.registry
-    # add datastore attribute to request
+    # add `datastore` attribute to request
     config.add_request_method(datastore, 'datastore', reify=True)
+    # add `force_datastore` attribute to request
+    # config.add_request_method(lambda request: None, 'force_datastore', reify=True)
     # register PickStorage initialized with write storage
     write_stg = RDBStorage(registry[DBSESSION]) if registry[DBSESSION] else None
     register_storage(registry, write_override=write_stg)
@@ -61,9 +62,9 @@ def includeme(config):
 def datastore(request):
     """
     Function that is reified as `request.datastore`. Used with PickStorage
-    to determine whether to use RDBStorage or ElasticSearchStorage
-
-    TODO: Need to set datastore=elasticsearch for ES-based items...
+    to determine whether to use RDBStorage or ElasticSearchStorage. Can be
+    overriden by `request.force_datastore` or by passing a storage argument
+    to `PickStorage.storage` directly
     """
     if request.__parent__ is not None:
         return request.__parent__.datastore
@@ -138,24 +139,32 @@ class PickStorage(object):
         self.write = write
         self.read = read
         self.registry = registry
+        self.used_datastores = {
+            'database': self.write,
+            'elasticsearch': self.read
+        }
 
     def storage(self, datastore=None):
         """
         Choose which storage to use. If a forced datastore is passed in through
-        the `datastore` parameter, always use that. Otherwise check
-        `request.datastore`
+        the `datastore` parameter or on `request.force_datastore`, use that.
+        Otherwise check `request.datastore`
         """
+        request = get_current_request()
+        # if datastore is not None or (request and request.force_datastore is not None):
+        #     force_datastore = datastore or request.force_datastore
         if datastore is not None:
-            if datastore == 'elasticsearch':
-                return self.read
-            elif datastore == 'database':
-                return self.write
+            force_datastore = datastore  # simplify once request.force_datastore is fully removed
+            if force_datastore in self.used_datastores:
+                if self.used_datastores[force_datastore] is None:
+                    raise HTTPInternalServerError('Forced datastore %s is not'
+                                                  ' configured' % datastore)
+                return self.used_datastores[force_datastore]
             else:
-                # invalid forced datastore. Throw a 500
-                raise HTTPInternalServerError('Invalid datastore %s in PickStorage' % datastore)
+                raise HTTPInternalServerError('Invalid forced datastore %s. Must be one of: %s'
+                                              % (datastore, list(self.used_datastores.keys())))
 
         # usually check the datastore attribute on the request
-        request = get_current_request()
         if self.read and request and request.datastore == 'elasticsearch':
             return self.read
         return self.write
@@ -199,7 +208,7 @@ class PickStorage(object):
             if not item_type:
                 item_type = model.item_type
             max_sid = model.max_sid
-            links_to_item = self.find_uuids_linked_to_item(self.registry, rid)
+            links_to_item = self.find_uuids_linked_to_item(rid)
             if len(links_to_item) > 0:
                 raise HTTPLocked(
                     detail="Cannot purge item as other items still link to it",
@@ -211,7 +220,7 @@ class PickStorage(object):
         self.write.purge_uuid(rid)
         # if using ES, delete item from ES and mirrored ES, and queue reindexing
         if self.read:
-            self.read.purge_uuid(self.registry, rid, item_type, max_sid)
+            self.read.purge_uuid(rid, item_type, max_sid)
 
     def get_rev_links(self, model, rel, *item_types, datastore=None):
         return self.storage(datastore).get_rev_links(model, rel, *item_types)
@@ -223,22 +232,25 @@ class PickStorage(object):
         return self.storage(datastore).__len__(*item_types)
 
     def create(self, item_type, uuid, datastore=None):
-        if datastore == 'elasticsearch':
-            if self.read is None:
-                raise HTTPUnprocessableEntity('Cannot create read-only item without read storage configured')
-            max_sid = self.write.get_max_sid() if self.write else 0
-            return self.read.create(item_type, uuid, max_sid)
-
+        """
+        Always use self.write to create Resource model
+        """
         return self.write.create(item_type, uuid)
 
     def update(self, model, properties=None, sheets=None, unique_keys=None,
                links=None, datastore=None):
-        if datastore == 'elasticsearch':
-            if self.read is None:
-                raise HTTPUnprocessableEntity('Cannot update read-only item without read storage configured')
-            return self.read.update(model, properties, sheets, unique_keys, links)
+        """
+        model is storage.Resource
+        """
+        storage = self.storage(datastore)
+        if storage is self.read:
+            # must update links and such in write RDS. However, don't update
+            # properties and sheets, as those are exclusively stored in ES
+            self.write.update(model, {}, None, unique_keys, links)
+            # update contents of the ES documents
+            return storage.update(model, properties, sheets, unique_keys, links)
 
-        return self.write.update(model, properties, sheets, unique_keys, links)
+        return storage.update(model, properties, sheets, unique_keys, links)
 
     def get_sids_by_uuids(self, uuids):
         """
@@ -252,18 +264,18 @@ class PickStorage(object):
         """
         if self.read:
             # must pass registry for access to settings
-            return self.read.get_by_uuid_direct(self.registry, uuid, item_type)
+            return self.read.get_by_uuid_direct(uuid, item_type)
 
         return self.write.get_by_uuid_direct(uuid, item_type, default)
 
-    def find_uuids_linked_to_item(self, registry, uuid):
+    def find_uuids_linked_to_item(self, uuid):
         """
         Only functional with self.read
         """
         if self.read:
-            return self.read.find_uuids_linked_to_item(registry, uuid)
+            return self.read.find_uuids_linked_to_item(uuid)
 
-        return self.write.find_uuids_linked_to_item(registry, uuid)
+        return self.write.find_uuids_linked_to_item(uuid)
 
 
 
@@ -307,7 +319,7 @@ class RDBStorage(object):
         """
         return default
 
-    def find_uuids_linked_to_item(self, registry, rid):
+    def find_uuids_linked_to_item(self, rid):
         """
         This method is meant to only work with ES, so return empty list for
         DB implementation. See ElasticSearchStorage.find_uuids_linked_to_item
@@ -707,6 +719,7 @@ class CurrentPropertySheet(Base):
 class Resource(Base):
     '''Resources are described by multiple propsheets
     '''
+    used_datastore = 'database'
     __tablename__ = 'resources'
     rid = Column(UUID, primary_key=True)
     item_type = Column(types.String, nullable=False)

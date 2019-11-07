@@ -12,6 +12,10 @@
             "type": "string",
             "linkTo": "TestingLinkTargetSno"
         },
+        "target_es": {
+            "type": "string",
+            "linkTo": "TestingLinkTargetElasticSearch"
+        },
         "ppp": {
             "type": "string",
             "linkTo": "TestingPostPutPatchSno"
@@ -20,6 +24,5 @@
             "type": "string"
         }
     },
-    "required": ["target"],
     "additionalProperties": false
 }

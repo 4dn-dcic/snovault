@@ -9,7 +9,7 @@ from pyramid.view import view_config
 from pyramid.settings import asbool
 from timeit import default_timer as timer
 from contextlib import contextmanager
-from .resources import Item, calc_principals
+from .resources import Item
 from .interfaces import STORAGE
 from .embed import make_subrequest
 from .validation import ValidationFailure
@@ -95,6 +95,7 @@ def item_index_data(context, request):
     indexing_stats = {}  # hold timing details for this view
 
     uuid = str(context.uuid)
+
     # upgrade_properties calls necessary upgraders based on schema_version
     with indexing_timer(indexing_stats, 'upgrade_properties'):
         properties = context.upgrade_properties()
@@ -105,7 +106,7 @@ def item_index_data(context, request):
         new_links['~'.join(key.split('.'))] = val
     links = new_links
 
-    principals_allowed = calc_principals(context)
+    principals_allowed = context.principals_allowed()
     path = resource_path(context)
     paths = {path}
     collection = context.collection

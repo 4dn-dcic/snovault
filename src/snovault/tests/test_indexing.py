@@ -69,12 +69,12 @@ def app_settings(wsgi_server_host_port, elasticsearch_server, postgresql_server,
 
     return settings
 
-
-@pytest.yield_fixture(scope='session', params=[True, False])
+@pytest.yield_fixture(scope='session')
+# @pytest.yield_fixture(scope='session', params=[True, False])
 def app(app_settings, request):
     from snovault import main
-    if request.param: # run tests both with and without mpindexer
-        app_settings['mpindexer'] = True
+    # if request.param: # run tests both with and without mpindexer
+    #     app_settings['mpindexer'] = True
     app = main({}, **app_settings)
 
     yield app
@@ -1046,7 +1046,7 @@ def test_indexing_esstorage(app, testapp, indexer_testapp):
     # test the following methods:
     es_res_by_uuid = esstorage.get_by_uuid(test_uuid)
     es_res_by_json = esstorage.get_by_json('required', 'some_value', TEST_TYPE)
-    es_res_direct = esstorage.get_by_uuid_direct(app.registry, test_uuid, TEST_TYPE)
+    es_res_direct = esstorage.get_by_uuid_direct(test_uuid, TEST_TYPE)
     assert es_res == es_res_by_uuid.source
     assert es_res == es_res_by_json.source
     assert es_res == es_res_direct['_source']
@@ -1260,3 +1260,71 @@ def test_validators_on_indexing(app, testapp, indexer_testapp):
     val_err_view = testapp.get(ppp_id + '@@validation-errors', status=200).json
     assert val_err_view['@id'] == ppp_id
     assert val_err_view['validation_errors'] == es_res['_source']['validation_errors']
+
+
+def test_elasticsearch_item(app, testapp, indexer_testapp):
+    """
+    Test creating + indexing a TestingLinkTargetElasticSearch item, which
+    uses `force_datastore='elasticsearch'`. Ensure that all standard
+    functionality on this item works, including linking to a regular DB item
+    """
+    es = app.registry[ELASTIC_SEARCH]
+    indexer_queue = app.registry[INDEXER_QUEUE]
+    create_mapping.run(
+        app,
+        collections=['testing_link_target_elastic_search',
+                     'testing_link_source_sno'],
+        skip_indexing=True
+    )
+    target  = {'name': 'es_one', 'status': 'current', 'uuid': '2a7e3c17-8da0-4dc9-b001-4084419a82b6'}
+
+    namespaced_target = indexer_utils.get_namespaced_index(app, 'testing_link_target_elastic_search')
+    namespaced_source = indexer_utils.get_namespaced_index(app, 'testing_link_source_sno')
+    target_res = testapp.post_json('/testing-link-targets-elastic-search/', target, status=201)
+    target_uuid = target_res.json['@graph'][0]['uuid']
+    target_es = es.get(index=namespaced_target, doc_type='testing_link_target_elastic_search',
+                       id=target_uuid)
+    assert target_es['_source']['properties']['name'] == 'es_one'
+    res = indexer_testapp.post_json('/index', {'record': True})
+    time.sleep(3)
+    target_es = es.get(index=namespaced_target, doc_type='testing_link_target_elastic_search',
+                       id=target_uuid)
+    assert target_es['_source']['embedded']['name'] == 'es_one'
+    assert target_es['_source']['paths'] == ["/testing-link-targets-elastic-search/" + target['name']]
+    assert target_es['_source']['embedded']['reverse'] == []
+
+    # add a source and make sure target gets updated correctly
+    source = {'name': 'db_one', 'target_es': target_uuid, 'status': 'current',
+              'uuid': '225cdaea-5e38-4d39-b27a-05fe293d06a4'}
+    source_res = testapp.post_json('/testing-link-sources-sno/', source, status=201)
+    source_uuid = source_res.json['@graph'][0]['uuid']
+    res = indexer_testapp.post_json('/index', {'record': True})
+    time.sleep(3)
+    target_es = es.get(index=namespaced_target, doc_type='testing_link_target_elastic_search',
+                       id=target_uuid)
+    assert target_es['_source']['embedded']['reverse'][0]['name'] == source['name']
+    assert source_uuid in [x['uuid'] for x in target_es['_source']['linked_uuids_embedded']]
+    source_es = es.get(index=namespaced_source, doc_type='testing_link_source_sno',
+                       id=source_uuid)
+    assert source_es['_source']['embedded']['target_es']['status'] == 'current'
+    assert target_uuid in [x['uuid'] for x in source_es['_source']['linked_uuids_embedded']]
+
+    # make sure patches/invalidation work on the target and source
+    testapp.patch_json(target_res.json['@graph'][0]['@id'], {'status': 'deleted'})
+    res = indexer_testapp.post_json('/index', {'record': True})
+    time.sleep(3)
+    target_es = es.get(index=namespaced_target, doc_type='testing_link_target_elastic_search',
+                       id=target_uuid)
+    assert target_es['_source']['embedded']['status'] == 'deleted'
+    source_es = es.get(index=namespaced_source, doc_type='testing_link_source_sno',
+                       id=source_uuid)
+    assert source_es['_source']['embedded']['target_es']['status'] == 'deleted'
+
+    # remove reverse link by patching source status
+    testapp.patch_json(source_res.json['@graph'][0]['@id'], {'status': 'deleted'})
+    res = indexer_testapp.post_json('/index', {'record': True})
+    time.sleep(3)
+    target_es = es.get(index=namespaced_target, doc_type='testing_link_target_elastic_search',
+                       id=target_uuid)
+    assert target_es['_source']['embedded']['reverse'] == []
+    assert source_uuid not in [x['uuid'] for x in target_es['_source']['linked_uuids_embedded']]

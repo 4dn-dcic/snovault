@@ -1,6 +1,7 @@
 from past.builtins import basestring
 from pyramid.decorator import reify
 from uuid import UUID
+from pyramid.threadlocal import get_current_request
 from .cache import ManagerLRUCache
 from .interfaces import (
     CONNECTION,
@@ -76,7 +77,7 @@ class Connection(object):
         if cached is not None:
             return cached
 
-        model = self.storage.get_by_uuid(uuid, datastore)
+        model = self.storage.get_by_uuid(uuid, datastore=datastore)
         if model is None:
             return default
 
@@ -95,7 +96,7 @@ class Connection(object):
 
         cached = self.unique_key_cache.get(pkey)
         if cached is not None:
-            return self.get_by_uuid(cached, datastore)
+            return self.get_by_uuid(cached, datastore=datastore)
 
         model = self.storage.get_by_unique_key(unique_key, name, datastore)
         if model is None:
@@ -137,14 +138,34 @@ class Connection(object):
         return self.storage.__len__(*item_types, datastore=datastore)
 
     def __getitem__(self, uuid, datastore=None):
-        item = self.get_by_uuid(uuid, datastore)
+        item = self.get_by_uuid(uuid, datastore=datastore)
+        # may need to get the item from an alternate datastore
+        if (item and item.force_datastore is not None
+            and datastore != item.force_datastore):
+            # clear cache so that alternate storage result is returned
+            if self.item_cache.get(uuid):
+                del self.item_cache[uuid]
+            item = self.get_by_uuid(uuid, datastore=item.force_datastore)
+
+        # if item is None:
+        #     # Override the datastore to find items that may use an alternate
+        #     # storage type, if applicable.
+        #     # Need to check the request to get this info
+        #     request = get_current_request()
+        #     if request and request.force_datastore is None:
+        #         for try_datastore in self.used_datastores:
+        #             if try_datastore != datastore and try_datastore != request.datastore:
+        #                 item = self.get_by_uuid(uuid, datastore=try_datastore)
+        #                 if item is not None:
+        #                     break
         if item is None:
             raise KeyError(uuid)
         return item
 
-    def create(self, type_, uuid, datastore=None):
+    def create(self, type_, uuid):
         ti = self.types[type_]
-        return self.storage.create(ti.item_type, uuid, datastore)
+        return self.storage.create(ti.item_type, uuid)
 
-    def update(self, model, properties, sheets=None, unique_keys=None, links=None, datastore=None):
+    def update(self, model, properties, sheets=None, unique_keys=None,
+               links=None, datastore=None):
         self.storage.update(model, properties, sheets, unique_keys, links, datastore)

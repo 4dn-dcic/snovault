@@ -55,7 +55,8 @@ def cached_view_embedded(context, request):
 
     source = context.model.source
     # generate object view if using a read-only item
-    if 'object' not in source and context.used_datastore == 'elasticsearch':
+    if (context.force_datastore == 'elasticsearch' and
+        ('embedded' not in source or request._indexing_view is True)):
         embedded = item_view_embedded(context, request)
     else:
         embedded = source['embedded']
@@ -71,8 +72,9 @@ def cached_view_embedded(context, request):
              name='object')
 def cached_view_object(context, request):
     source = context.model.source
-    # generate object view if using a read-only item
-    if 'object' not in source and context.used_datastore == 'elasticsearch':
+    # generate object view if using a forced datastore and indexing is needed
+    if (context.force_datastore == 'elasticsearch' and
+        ('object' not in source or request._indexing_view is True)):
         object = item_view_object(context, request)
     else:
         object = source['object']

@@ -159,10 +159,6 @@ def collection_add(context, request, render=None):
 
     item = create_item(context.type_info, request, request.validated)
 
-    # testing
-    if item.used_datastore == 'elasticsearch':
-        request.datastore = 'elasticsearch'
-
     rendered, item_uri = render_item(request, item, render, True)
     request.response.status = 201
     request.response.location = item_uri
@@ -234,8 +230,7 @@ def get_linking_items(context, request, render=None):
     Split the answer into linkTos and rev_links
     """
     item_uuid = str(context.uuid)
-    links = request.registry[STORAGE].find_uuids_linked_to_item(request.registry,
-                                                                item_uuid)
+    links = request.registry[STORAGE].find_uuids_linked_to_item(item_uuid)
     request.response.status = 200
     result = {
         'status': 'success',
