@@ -335,11 +335,8 @@ class ElasticSearchStorage(object):
                 use_aws_auth = True if use_aws_auth == 'true' else False
             mirror_client = es_utils.create_es_client(mirror_health['elasticsearch'], use_aws_auth=use_aws_auth)
             try:
-                # do some gymnastics to strip the current env namespace from
-                # index_name and replace it with that on the mirror env
-                non_mirror_namespace = registry.settings.get('indexer.namespace')
-                bare_index = index_name[index_name.index(non_mirror_namespace) + len(non_mirror_namespace):]
-                mirror_index = mirror_health['namespace'] + bare_index
+                # assume index is <namespace> + item_type
+                mirror_index = mirror_health['namespace'] + item_type
                 mirror_client.delete(id=rid, index=mirror_index, doc_type=item_type)
             except elasticsearch.exceptions.NotFoundError:
                 # Case: Not yet indexed
