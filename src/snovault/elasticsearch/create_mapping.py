@@ -76,10 +76,7 @@ def schema_mapping(field, schema, top_level=False):
     objects (*), but can handle specific fields using the field parameter.
     This allows for the mapping to match the selective embedding.
     """
-    if 'linkFrom' in schema:
-        type_ = 'string'
-    else:
-        type_ = schema['type']
+    type_ = schema['type']
 
     # Elasticsearch handles multiple values for a field
     if type_ == 'array' and schema['items']:
@@ -158,7 +155,7 @@ def schema_mapping(field, schema, top_level=False):
 
     if type_ == 'string':
         # don't make a mapping for non-embedded objects
-        if 'linkTo' in schema or 'linkFrom' in schema:
+        if 'linkTo' in schema:
             return
 
         sub_mapping = {
@@ -617,10 +614,7 @@ def merge_schemas(subschema, types):
     # we don't care that they're flattened during mapping
     ref_types = None
     subschema = subschema.get('items', subschema)
-    if 'linkFrom' in subschema:
-        _ref_type, _ = subschema['linkFrom'].split('.', 1)
-        ref_types = [_ref_type]
-    elif 'linkTo' in subschema:
+    if 'linkTo' in subschema:
         ref_types = subschema['linkTo']
         if not isinstance(ref_types, list):
             ref_types = [ref_types]

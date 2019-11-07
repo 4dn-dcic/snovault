@@ -124,9 +124,8 @@ class CalculatedProperty(object):
         if schema is not None:
             if 'default' in schema:
                 raise ValueError('schema may not specify default for calculated property')
-            if 'linkFrom' not in schema.get('items', {}):
-                schema = schema.copy()
-                schema['calculatedProperty'] = True
+            schema = schema.copy()
+            schema['calculatedProperty'] = True
         self.schema = schema
 
     def __call__(self, namespace):

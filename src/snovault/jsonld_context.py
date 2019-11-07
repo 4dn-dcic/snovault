@@ -200,7 +200,7 @@ def context_from_schema(schema, prefix, class_name, base_types):
         subschema = subschema.get('items', subschema)
         if '@type' in prop_ld:
             pass
-        elif 'linkTo' in subschema or 'linkFrom' in subschema:
+        elif 'linkTo' in subschema:
             prop_ld['@type'] = '@id'
         elif subschema.get('anyOf') == [{"format": "date-time"}, {"format": "date"}]:
             prop_ld['@type'] = 'xsd:dateTime'
@@ -268,8 +268,6 @@ def ontology_from_schema(schema, prefix, term_path, item_type, class_name, base_
             prop_ld['rdfs:comment'] = subschema['description']
 
         links = ensurelist(subschema.get('linkTo', []))
-        if subschema.get('linkFrom'):
-            links.append(subschema['linkFrom'].split('.')[0])
         if len(links) == 1:
             links, = links
             prop_ld['rdfs:range'] = term_path + links
