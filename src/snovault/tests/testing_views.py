@@ -440,7 +440,8 @@ def testing_retry(context, request):
             unique_key='testing_link_target_elastic_search:name')
 class TestingLinkTargetElasticSearch(Item):
     """
-    Like TestingLinkTargetSno, but leverages ElasticSearch storage exclusively
+    Like TestingLinkTargetSno, but leverages ElasticSearch storage exclusively.
+    Includes a linkTo and a rev_link to test multiple behaviors.
     """
     # used_datastore sets this as an ElasticSearch item
     used_datastore = 'elasticsearch'
@@ -453,6 +454,7 @@ class TestingLinkTargetElasticSearch(Item):
     filtered_rev_statuses = ('deleted', 'replaced')
     embedded_list = [
         'reverse_es.name',
+        'ppp.simple1'
     ]
 
     def rev_link_atids(self, request, rev_name):

@@ -1272,7 +1272,7 @@ def test_elasticsearch_item(app, testapp, indexer_testapp):
     create_mapping.run(
         app,
         collections=['testing_link_target_elastic_search',
-                     'testing_link_source_sno'],
+                     'testing_link_source_sno', TEST_TYPE],
         skip_indexing=True
     )
     target  = {'name': 'es_one', 'status': 'current', 'uuid': '2a7e3c17-8da0-4dc9-b001-4084419a82b6'}
@@ -1344,6 +1344,24 @@ def test_elasticsearch_item(app, testapp, indexer_testapp):
                        id=target_uuid)
     assert target_es['_source']['embedded']['reverse_es'] == []
     assert source_uuid not in [x['uuid'] for x in target_es['_source']['linked_uuids_embedded']]
+
+    # test embedding an item in the ES item
+    ppp_res = testapp.post_json(TEST_COLL, {'required': ''}, status=201)
+    ppp_uuid = ppp_res.json['@graph'][0]['uuid']
+    testapp.patch_json(target_res.json['@graph'][0]['@id'], {'ppp': ppp_uuid})
+    # properties now contains updated link; embedded does not (until indexing)
+    target_es_pre = es.get(index=namespaced_target, doc_type='testing_link_target_elastic_search',
+                           id=target_uuid)
+    # properties will be updated on patch
+    assert target_es_pre['_source']['properties']['ppp'] == ppp_uuid
+    assert 'ppp' not in target_es_pre['_source']['embedded']
+    indexer_testapp.post_json('/index', {'record': True})
+    time.sleep(3)
+    target_es = es.get(index=namespaced_target, doc_type='testing_link_target_elastic_search',
+                       id=target_uuid)
+    assert 'simple1' in target_es['_source']['embedded']['ppp']
+    res = testapp.get(ppp_res.json['@graph'][0]['@id'] + '@@links')
+    assert target_uuid in [x['uuid'] for x in res.json['uuids_linking_to']]
 
     # do some other common operations with the ES item
     res = testapp.get(target_res.json['@graph'][0]['@id'])

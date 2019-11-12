@@ -10,6 +10,10 @@
         },
         "status": {
             "type": "string"
+        },
+        "ppp": {
+            "type": "string",
+            "linkTo": "TestingPostPutPatchSno"
         }
     },
     "additionalProperties": false
