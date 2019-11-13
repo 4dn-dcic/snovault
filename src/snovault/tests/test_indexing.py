@@ -1275,7 +1275,7 @@ def test_elasticsearch_item(app, testapp, indexer_testapp):
                      'testing_link_source_sno', TEST_TYPE],
         skip_indexing=True
     )
-    target  = {'name': 'es_one', 'status': 'current', 'uuid': '2a7e3c17-8da0-4dc9-b001-4084419a82b6'}
+    target  = {'name': 'es_one', 'status': 'current'}
 
     namespaced_target = indexer_utils.get_namespaced_index(app, 'testing_link_target_elastic_search')
     namespaced_source = indexer_utils.get_namespaced_index(app, 'testing_link_source_sno')
@@ -1296,8 +1296,7 @@ def test_elasticsearch_item(app, testapp, indexer_testapp):
     assert target_es['_source']['embedded']['reverse_es'] == []
 
     # add a source and make sure target gets updated correctly
-    source = {'name': 'db_one', 'target_es': target_uuid, 'status': 'current',
-              'uuid': '225cdaea-5e38-4d39-b27a-05fe293d06a4'}
+    source = {'name': 'db_one', 'target_es': target_uuid, 'status': 'current'}
     source_res = testapp.post_json('/testing-link-sources-sno/', source, status=201)
     source_uuid = source_res.json['@graph'][0]['uuid']
     indexer_testapp.post_json('/index', {'record': True})

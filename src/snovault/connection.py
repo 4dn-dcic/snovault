@@ -1,7 +1,6 @@
 from past.builtins import basestring
 from pyramid.decorator import reify
 from uuid import UUID
-from pyramid.threadlocal import get_current_request
 from .cache import ManagerLRUCache
 from .interfaces import (
     CONNECTION,
