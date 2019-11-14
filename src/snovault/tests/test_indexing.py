@@ -1392,7 +1392,7 @@ def test_elasticsearch_item(app, testapp, indexer_testapp):
 
     res = testapp.delete_json(target_res.json['@graph'][0]['@id'] + '?purge=True')
     assert res.json['status'] == 'success'
-    assert res.json['notification'] == 'Permanently deleted ' + target['uuid']
+    assert res.json['notification'] == 'Permanently deleted ' + target_uuid
     time.sleep(3)
     testapp.get(target_res.json['@graph'][0]['@id'], status=404)
     testapp.get(target_res.json['@graph'][0]['@id'] + '?datastore=database', status=404)

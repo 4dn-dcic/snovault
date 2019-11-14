@@ -26,32 +26,6 @@ def includeme(config):
     register_storage(registry, read_override=read_storage)
 
 
-def find_linking_property(our_dict, value_to_find):
-    """
-    Helper function used in ElasticSearchStorage.find_uuids_linked_to_item
-    """
-    def find_it(d, parent_key=None):
-        if isinstance(d, list):
-            for idx, v in enumerate(d):
-                if isinstance(v, dict) or isinstance(v, list):
-                    found = find_it(v, parent_key)
-                    if found:
-                        return (parent_key if parent_key else '') + '[' + str(idx) + '].' + found
-                elif v == value_to_find:
-                    return '[' + str(idx) + ']'
-        elif isinstance(d, dict):
-            for k, v in d.items():
-                if isinstance(v, dict) or isinstance(v, list):
-                    found = find_it(v, k)
-                    if found:
-                        return found
-                elif v == value_to_find:
-                    return k
-        return None
-
-    return find_it(our_dict)
-
-
 class CachedModel(object):
     used_datastore = 'elasticsearch'
 
@@ -114,6 +88,32 @@ class ElasticSearchStorage(object):
             return None
         model = CachedModel(hits[0].to_dict())
         return model
+
+    @staticmethod
+    def find_linking_property(our_dict, value_to_find):
+        """
+        Helper function used in ElasticSearchStorage.find_uuids_linked_to_item
+        """
+        def find_it(d, parent_key=None):
+            if isinstance(d, list):
+                for idx, v in enumerate(d):
+                    if isinstance(v, dict) or isinstance(v, list):
+                        found = find_it(v, parent_key)
+                        if found:
+                            return (parent_key if parent_key else '') + '[' + str(idx) + '].' + found
+                    elif v == value_to_find:
+                        return '[' + str(idx) + ']'
+            elif isinstance(d, dict):
+                for k, v in d.items():
+                    if isinstance(v, dict) or isinstance(v, list):
+                        found = find_it(v, k)
+                        if found:
+                            return found
+                    elif v == value_to_find:
+                        return k
+            return None
+
+        return find_it(our_dict)
 
     def get_by_uuid(self, uuid):
         """
@@ -277,7 +277,7 @@ class ElasticSearchStorage(object):
             # property of HTTPException response to assist with any manual unlinking.
             for linking_uuid in uuids_linking_to_item:
                 linking_dict = self.get_by_uuid(linking_uuid).source.get('embedded')
-                linking_property = find_linking_property(linking_dict, rid)
+                linking_property = self.find_linking_property(linking_dict, rid)
                 linked_info.append({
                     '@id' : linking_dict.get('@id', linking_dict['uuid']),
                     'display_title' : linking_dict.get('display_title', linking_dict['uuid']),
