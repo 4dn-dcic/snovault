@@ -21,13 +21,20 @@ log = structlog.getLogger(__name__)
 def includeme(config):
     from ..storage import register_storage
     registry = config.registry
-    # update read storage on PickStorage created in storage.py
+    # IMPORTANT: update read storage on PickStorage created in storage.py
+    # Without `register_storage` call, cannot read from ES in the portal
     read_storage = ElasticSearchStorage(registry)
     register_storage(registry, read_override=read_storage)
 
 
 class CachedModel(object):
-    used_datastore = 'elasticsearch'
+    """
+    Model used by resources returned from ElasticSearchStorage.
+    Leverages cached_views.ICachedItem to create different item views
+    that use this model.
+    Analogous to storage.Resource, the model used for database resources
+    """
+    used_datastore = 'elasticsearch'  # datastore used by this model
 
     def __init__(self, source):
         """
@@ -74,7 +81,8 @@ class CachedModel(object):
 class ElasticSearchStorage(object):
     """
     Storage class used to interface with Elasticsearch.
-    Corresponds to `PickStorage.read`
+    Corresponds to storage.PickStorage.read and is analagous to
+    storage.RDBStorage, which is used when working with DB models
     """
     def __init__(self, registry):
         self.registry = registry
@@ -160,6 +168,10 @@ class ElasticSearchStorage(object):
         return res
 
     def get_by_json(self, key, value, item_type, default=None):
+        """
+        Perform a search with an given key and value.
+        Returns CachedModel if found, otherwise None
+        """
         # find the term with the specific type
         term = 'embedded.' + key + '.raw'
         search = Search(using=self.es, index=self.index)
@@ -168,6 +180,11 @@ class ElasticSearchStorage(object):
         return self._one(search)
 
     def get_by_unique_key(self, unique_key, name):
+        """
+        Perform a search against unique keys with given unique_key (field) and
+        name (value).
+        Returns CachedModel if found, otherwise None
+        """
         term = 'unique_keys.' + unique_key
         # had to use ** kw notation because of variable in field name
         search = Search(using=self.es, index=self.index)
@@ -176,6 +193,11 @@ class ElasticSearchStorage(object):
         return self._one(search)
 
     def get_rev_links(self, model, rel, *item_types):
+        """
+        Get the reverse links given a item model and a rev link name (rel), as
+        well as the applicable item types of the reverse links.
+        Perform a search and return a list of uuids of the resulting documents
+        """
         search = Search(using=self.es, index=self.index)
         search = search.extra(size=SEARCH_MAX)
         # rel links use '~' instead of '.' due to ES field restraints
@@ -245,6 +267,10 @@ class ElasticSearchStorage(object):
                          % (item_type, mirror_es))
 
     def __iter__(self, *item_types):
+        """
+        Return a generator that yields string uuids of all documents matching
+        given item types (through kwargs). Use all item types if none provided
+        """
         query = {'query': {
             'bool': {
                 'filter': {'terms': {'item_type': item_types}} if item_types else {'match_all': {}}
@@ -254,6 +280,11 @@ class ElasticSearchStorage(object):
             yield hit.get('uuid', hit.get('_id'))
 
     def __len__(self, *item_types):
+        """
+        Return an integer count of the number of documents resulting for a
+        search across all given item types (through kwargs). Use all item types
+        if none provided
+        """
         query = {'query': {
             'bool': {
                 'filter': {'terms': {'item_type': item_types}} if item_types else {'match_all': {}}
