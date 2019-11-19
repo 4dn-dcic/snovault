@@ -9,5 +9,6 @@ INDEXER_QUEUE_MIRROR = 'indexer_queue_mirror'
 
 
 class ICachedItem(Interface):
-    """ Marker for cached Item
+    """
+    Marker for cached Item
     """
