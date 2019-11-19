@@ -452,6 +452,9 @@ class TestingLinkTargetElasticSearch(Item):
         'reverse_es': ('TestingLinkSourceSno', 'target_es'),
     }
     filtered_rev_statuses = ('deleted', 'replaced')
+    aggregated_items = {
+        "ppp": ['simple1', 'uuid']
+    }
     embedded_list = [
         'reverse_es.name',
         'ppp.simple1'

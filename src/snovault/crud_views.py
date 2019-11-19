@@ -134,7 +134,6 @@ def render_item(request, context, render, return_uri_also=False):
 
     if asbool(render) is True:
         rendered = request.embed(item_uri, '@@object', as_user=True)
-        rendered_emb = request.embed(item_uri, '@@embedded', as_user=True)
     else:
         rendered = item_uri
     return (rendered, item_uri) if return_uri_also else rendered

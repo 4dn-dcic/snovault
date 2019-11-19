@@ -20,14 +20,16 @@ class UnknownItemTypeError(Exception):
 
 class Connection(object):
     '''
-    Intermediates between the storage and the rest of the system.
+    Intermediary between the storage and the rest of the system.
     Storage class should be storage.PickStorage, which is used to interface
-    between different storage types (presumably RDS and ES)
+    between different storage types (presumably Postgres and ES)
 
     Many methods of the class take `datastore` parameter. This can be used
     to force which storage is used. Should be set to 'elasticsearch' to force
     usage of `PickStorage.read` or 'database' for usage of `PickStorage.write`.
     See `PickStorage.storage` for more info
+
+    The class also sets a number of caches that are used throughout snovault
     '''
     def __init__(self, registry):
         self.registry = registry
@@ -46,7 +48,8 @@ class Connection(object):
 
     def get_by_json(self, key, value, item_type, default=None, datastore=None):
         """
-        Gets model from storage and returns Item. Does not use item cache
+        Gets model from storage and returns Item. Does not use item cache.
+        Finds the item using a key (i.e. field) and value
         """
         model = self.storage.get_by_json(key, value, item_type, default, datastore)
 
@@ -58,6 +61,7 @@ class Connection(object):
         except KeyError:
             raise UnknownItemTypeError(model.item_type)
 
+        # build Item from storage model
         item = Item(self.registry, model)
         model.used_for(item)
         return item
@@ -65,7 +69,8 @@ class Connection(object):
 
     def get_by_uuid(self, uuid, default=None, datastore=None):
         """
-        Gets model from storage and returns Item. Uses item cache
+        Gets model from storage and returns Item. Uses item cache.
+        Get the item by uuid (will not work for other name keys)
         """
         if isinstance(uuid, basestring):
             # some times we get @id type things here
@@ -91,6 +96,7 @@ class Connection(object):
         except KeyError:
             raise UnknownItemTypeError(model.item_type)
 
+        # build Item from storage model
         item = Item(self.registry, model)
         model.used_for(item)
         self.item_cache[uuid] = item
@@ -99,7 +105,8 @@ class Connection(object):
     def get_by_unique_key(self, unique_key, name, default=None, datastore=None):
         """
         Gets model from storage and returns Item.
-        Uses unique_key_cache and item_cache
+        Uses unique_key_cache and item_cache.
+        Finds the item using a unique_key field and value
         """
         pkey = (unique_key, name)
 
@@ -122,6 +129,7 @@ class Connection(object):
         except KeyError:
             raise UnknownItemTypeError(model.item_type)
 
+        # build Item from storage model
         item = Item(self.registry, model)
         model.used_for(item)
         self.item_cache[uuid] = item

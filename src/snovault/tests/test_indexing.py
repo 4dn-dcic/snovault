@@ -1344,8 +1344,8 @@ def test_elasticsearch_item(app, testapp, indexer_testapp):
     assert target_es['_source']['embedded']['reverse_es'] == []
     assert source_uuid not in [x['uuid'] for x in target_es['_source']['linked_uuids_embedded']]
 
-    # test embedding an item in the ES item
-    ppp_res = testapp.post_json(TEST_COLL, {'required': ''}, status=201)
+    # test embedding and aggregated_items
+    ppp_res = testapp.post_json(TEST_COLL, {'required': '', 'simple1': 'abc'}, status=201)
     ppp_uuid = ppp_res.json['@graph'][0]['uuid']
     testapp.patch_json(target_res.json['@graph'][0]['@id'], {'ppp': ppp_uuid})
     # properties now contains updated link; embedded does not (until indexing)
@@ -1354,11 +1354,22 @@ def test_elasticsearch_item(app, testapp, indexer_testapp):
     # properties will be updated on patch
     assert target_es_pre['_source']['properties']['ppp'] == ppp_uuid
     assert 'ppp' not in target_es_pre['_source']['embedded']
+    assert target_es_pre['_source']['aggregated_items']['ppp'] == []
     indexer_testapp.post_json('/index', {'record': True})
     time.sleep(3)
     target_es = es.get(index=namespaced_target, doc_type='testing_link_target_elastic_search',
                        id=target_uuid)
-    assert 'simple1' in target_es['_source']['embedded']['ppp']
+    assert target_es['_source']['embedded']['ppp']['simple1'] == 'abc'
+    # check aggregated_items
+    assert 'aggregated_items' in target_es['_source']
+    target_es_aggs = target_es['_source']['aggregated_items']
+    assert 'ppp' in target_es_aggs
+    assert len(target_es_aggs['ppp']) == 1
+    assert target_es_aggs['ppp'][0]['parent'] == target_res.json['@graph'][0]['@id']
+    assert target_es_aggs['ppp'][0]['embedded_path'] == 'ppp'
+    assert target_es_aggs['ppp'][0]['item']['simple1'] == 'abc'
+    assert target_es_aggs['ppp'][0]['item']['uuid'] == ppp_uuid
+    # check @@links on the ppp page to ensure it contains ES item
     res = testapp.get(ppp_res.json['@graph'][0]['@id'] + '@@links')
     assert target_uuid in [x['uuid'] for x in res.json['uuids_linking_to']]
 
