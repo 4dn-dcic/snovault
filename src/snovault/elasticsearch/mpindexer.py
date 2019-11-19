@@ -42,7 +42,8 @@ app = None
 
 def initializer(app_factory, settings):
     """
-    Need to initialize the app for the subprocess
+    Need to initialize the app for the subprocess.
+    As part of this, configue a new database engine and set logging
     """
     from snovault.app import configure_engine
     signal.signal(signal.SIGINT, signal.SIG_IGN)
@@ -87,11 +88,11 @@ def threadlocal_manager():
     # configure a sqlalchemy session and set isolation level
     DBSession = orm.scoped_session(orm.sessionmaker(bind=db_engine))
     request.registry[DBSESSION] = DBSession
-    # configue RDBStorage with new DBESSION
-    register_storage(request.registry, write_override=RDBStorage(registry[DBSESSION]))
+    # configue RDBStorage. Overide write storage to use new DBSession
+    register_storage(request.registry, write_override=RDBStorage(DBSession))
     zope.sqlalchemy.register(DBSession)
     snovault.storage.register(DBSession)  # adds transactions-table listeners
-    connection = request.registry[DBSESSION]().connection()
+    connection = DBSession().connection()
     connection.execute('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY')
 
     # add the newly created request to the pyramid threadlocal manager
