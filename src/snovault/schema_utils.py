@@ -137,8 +137,6 @@ def linkTo(validator, linkTo, instance, schema):
     else:
         raise Exception("Bad schema")  # raise some sort of schema error
     try:
-        # leverage Root.__get_item__
-        # item = root[instance.replace(':', '%3A')]
         item = find_resource(base, instance.replace(':', '%3A'))
     except KeyError:
         error = "%r not found" % instance

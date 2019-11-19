@@ -136,7 +136,7 @@ class PickStorage(object):
         self.write = write
         self.read = read
         self.registry = registry
-        self.used_datastore = {
+        self.used_datastores = {
             'database': self.write,
             'elasticsearch': self.read
         }
@@ -148,14 +148,14 @@ class PickStorage(object):
         """
         request = get_current_request()
         if datastore is not None:
-            if datastore in self.used_datastore:
-                if self.used_datastore[datastore] is None:
+            if datastore in self.used_datastores:
+                if self.used_datastores[datastore] is None:
                     raise HTTPInternalServerError('Forced datastore %s is not'
                                                   ' configured' % datastore)
-                return self.used_datastore[datastore]
+                return self.used_datastores[datastore]
             else:
                 raise HTTPInternalServerError('Invalid forced datastore %s. Must be one of: %s'
-                                              % (datastore, list(self.used_datastore.keys())))
+                                              % (datastore, list(self.used_datastores.keys())))
 
         # usually check the datastore attribute on the request
         if self.read and request and request.datastore == 'elasticsearch':
@@ -163,6 +163,9 @@ class PickStorage(object):
         return self.write
 
     def get_by_uuid(self, uuid, datastore=None):
+        """
+        Get write/read model by uuid
+        """
         storage = self.storage(datastore)
         model = storage.get_by_uuid(uuid)
         # unless forcing datastore, check write storage if not found in read
@@ -172,6 +175,9 @@ class PickStorage(object):
         return model
 
     def get_by_unique_key(self, unique_key, name, datastore=None):
+        """
+        Get write/read model by given unique key with value (name)
+        """
         storage = self.storage(datastore)
         model = storage.get_by_unique_key(unique_key, name)
         # unless forcing datastore, check write storage if not found in read
@@ -181,6 +187,9 @@ class PickStorage(object):
         return model
 
     def get_by_json(self, key, value, item_type, default=None, datastore=None):
+        """
+        Get write/read model by given key:value
+        """
         storage = self.storage(datastore)
         model = storage.get_by_json(key, value, item_type)
         # unless forcing datastore, check write storage if not found in read
@@ -192,7 +201,9 @@ class PickStorage(object):
     def purge_uuid(self, rid, item_type=None):
         """
         Attempt to purge an item by given resource id (rid), completely
-        removing it from ES and DB.
+        removing all propsheets, links, and keys from the DB. If read storage
+        is configured, will check to ensure no items link to the given item
+        and also remove the given item from Elasticsearch
         """
         # requires ES for searching item links
         if self.read:
@@ -216,24 +227,37 @@ class PickStorage(object):
             self.read.purge_uuid(rid, item_type, max_sid)
 
     def get_rev_links(self, model, rel, *item_types):
+        """
+        Return a list of reverse links for the given model and item types using
+        a certain reverse link type (rel)
+        """
         return self.storage().get_rev_links(model, rel, *item_types)
 
     def __iter__(self, *item_types):
+        """
+        Return a generator that yields all uuids for given item types
+        """
         return self.storage().__iter__(*item_types)
 
     def __len__(self, *item_types):
+        """
+        Return an integer count of number of items among given item types
+        """
         return self.storage().__len__(*item_types)
 
     def create(self, item_type, uuid):
         """
-        Always use self.write to create Resource model
+        Always use self.write to create Resource model. Responsible for
+        generating the initial DB entries for the item, regardless of storage
+        used
         """
         return self.write.create(item_type, uuid)
 
     def update(self, model, properties=None, sheets=None, unique_keys=None,
                links=None, datastore=None):
         """
-        model should always be write storage.Resource
+        model should always be write storage.Resource. If storage used is read,
+        then this will both update DB tables and the item properties in ES
         """
         storage = self.storage(datastore)
         if storage is self.read:
@@ -247,12 +271,14 @@ class PickStorage(object):
 
     def get_sids_by_uuids(self, uuids):
         """
+        Return a dict containing current sids keyed by uuid for given uuids
         Only functional with self.write
         """
         return self.write.get_sids_by_uuids(uuids)
 
     def get_by_uuid_direct(self, uuid, item_type, default=None):
         """
+        Get the ES document by uuid directly for Elasticsearch
         Only functional with self.read
         """
         if self.read:
@@ -263,6 +289,8 @@ class PickStorage(object):
 
     def find_uuids_linked_to_item(self, uuid):
         """
+        Returns a list of info about other items linked to item with given uuid.
+        See esstorage.ElasticSearchStorage.find_uuids_linked_to_item
         Only functional with self.read
         """
         if self.read:
@@ -275,7 +303,7 @@ class PickStorage(object):
 class RDBStorage(object):
     """
     Storage class used to interface with the relational database.
-    Corresponds to `PickStorage.write`
+    Corresponds to PickStorage.write
     """
     batchsize = 1000
 
@@ -578,10 +606,10 @@ class S3BlobStorage(object):
         self.s3 = session.client('s3')
 
     def store_blob(self, data, download_meta, blob_id=None):
-        '''
+        """
         create a new s3 key = blob_id
         upload the contents and return the meta in download_meta
-        '''
+        """
         if blob_id is None:
             blob_id = str(uuid.uuid4())
 
@@ -621,8 +649,9 @@ class S3BlobStorage(object):
 
 
 class Key(Base):
-    ''' indexed unique tables for accessions and other unique keys
-    '''
+    """
+    indexed unique tables for accessions and other unique keys
+    """
     __tablename__ = 'keys'
 
     # typically the field that is unique, i.e. accession
@@ -659,8 +688,9 @@ class Link(Base):
 
 
 class PropertySheet(Base):
-    '''A triple describing a resource
-    '''
+    """
+    A triple describing a resource
+    """
     __tablename__ = 'propsheets'
     __table_args__ = (
         schema.ForeignKeyConstraint(
@@ -710,9 +740,10 @@ class CurrentPropertySheet(Base):
 
 
 class Resource(Base):
-    '''Resources are described by multiple propsheets
-    '''
-    used_datastore = 'database'
+    """
+    Resources are described by multiple propsheets
+    """
+    used_datastore = 'database'  # datastore used by this model
     __tablename__ = 'resources'
     rid = Column(UUID, primary_key=True)
     item_type = Column(types.String, nullable=False)
@@ -930,11 +961,12 @@ _set_transaction_snapshot = text(
 
 
 def set_transaction_isolation_level(session, sqla_txn, connection):
-    ''' Set appropriate transaction isolation level.
+    """
+    Set appropriate transaction isolation level.
     Doomed transactions can be read-only.
     ``transaction.doom()`` must be called before the connection is used.
     Othewise assume it is a write which must be REPEATABLE READ.
-    '''
+    """
     if connection.engine.url.drivername != 'postgresql':
         return
 

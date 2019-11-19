@@ -12,12 +12,7 @@ from pyramid.security import (
 )
 from pyramid.traversal import (
     resource_path,
-    traverse,
-    find_resource
-)
-from pyramid.events import (
-    ContextFound,
-    subscriber,
+    traverse
 )
 from .calculated import (
     calculate_properties,
@@ -38,7 +33,6 @@ from .util import (
 )
 from past.builtins import basestring
 from .util import add_default_embeds
-from pyramid.threadlocal import get_current_request
 
 logger = logging.getLogger(__name__)
 
@@ -110,8 +104,6 @@ class Root(Resource):
         try:
             resource = self.connection[name]  # Connection.__getitem__
         except KeyError:
-            # try with `find_resource`. Performance considerations?
-            # resource = find_resource(self, name)
             resource = default
         return resource
 
@@ -194,7 +186,12 @@ class AbstractCollection(Resource, Mapping):
             resource.type_info.name in resource.type_info.subtypes
 
     def get(self, name, default=None):
-        # see if there is a forced datastore for the associated item type
+        """
+        Get an item by name using this collection. First try uuid and then
+        unique key. If neither are found, return default, which is usually None.
+        used_datastore is checked on the item class and used with Connection
+        to force a certain datastore if needed
+        """
         used_datastore = self.type_info.factory.used_datastore
         resource = self.connection.get_by_uuid(name, default=None,
                                                datastore=used_datastore)
@@ -251,7 +248,7 @@ display_title_schema = {
 
 class Item(Resource):
     """
-    Base Item resouce that corresponds to a Collection or AbstractCollection
+    Base Item resource that corresponds to a Collection or AbstractCollection
     """
     item_type = None
     base_types = ['Item']
@@ -261,8 +258,8 @@ class Item(Resource):
     embedded_list = []
     filtered_rev_statuses = ()
     schema = None
-    # `used_datastore` can be used to resrict the datastore used for this item
-    used_datastore = None
+    # `used_datastore` can be used to force the datastore for this item
+    used_datastore = None  # None means basic DB/ES setup
     AbstractCollection = AbstractCollection
     Collection = Collection
 
@@ -416,9 +413,14 @@ class Item(Resource):
         return self.upgrade_properties()
 
     def item_with_links(self, request):
+        """
+        Key function that transforms uuids into resource paths in properties.
+        It is also responsible for calling upgraders using the __json__ method
+        Lastly, adds this items' uuid to request._linked_uuids when indexing
+        """
+        # *** context.__json__ CALLS THE UPGRADER (upgrade_properties) ***
         # This works from the schema rather than the links table
         # so that upgrade on GET can work.
-        # context.__json__ CALLS THE UPGRADER (upgrade_properties)
         properties = self.__json__(request)
         for path in self.type_info.schema_links:
             uuid_to_path(request, properties, path)
