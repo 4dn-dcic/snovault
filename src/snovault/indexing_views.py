@@ -223,7 +223,9 @@ def indexing_info(request):
         return {'status': 'error', 'title': 'Error', 'message': 'ERROR! Provide a uuid to the query.'}
 
     db_sid = request.registry[STORAGE].write.get_by_uuid(uuid).sid
-    es_sid = request.registry[STORAGE].read.get_by_uuid(uuid).sid
+    # es_model will be None if the item is not yet indexed
+    es_model = request.registry[STORAGE].read.get_by_uuid(uuid)
+    es_sid = es_model.sid if es_model is not None else None
     response = {'sid_db': db_sid, 'sid_es': es_sid, 'title': 'Indexing Info for %s' % uuid}
     if asbool(request.params.get('run', True)):
         request._indexing_view = True
