@@ -227,17 +227,13 @@ class ElasticSearchStorage(object):
         """
         return None
 
-    def purge_uuid(self, rid, item_type=None, max_sid=None):
+    def purge_uuid(self, rid, item_type, max_sid=None):
         """
         Purge a uuid from the write storage (Elasticsearch)
         If there is a mirror environment set up for the indexer, also attempt
         to remove the uuid from the mirror Elasticsearch
         """
-        if not item_type:
-            model = self.get_by_uuid(rid)
-            item_type = model.item_type
         index_name = get_namespaced_index(self.registry, item_type)
-
         try:
             self.es.delete(id=rid, index=index_name, doc_type=item_type)
         except elasticsearch.exceptions.NotFoundError:

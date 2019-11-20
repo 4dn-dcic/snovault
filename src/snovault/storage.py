@@ -205,6 +205,7 @@ class PickStorage(object):
         is configured, will check to ensure no items link to the given item
         and also remove the given item from Elasticsearch
         """
+        log.warning('PURGE: purging %s' % rid)
         # requires ES for searching item links
         if self.read:
             # model and max_sid are used later, in second `if self.read` block
@@ -218,13 +219,13 @@ class PickStorage(object):
                     detail="Cannot purge item as other items still link to it",
                     comment=links_to_item
                 )
-        log.warning('PURGE: purging %s' % rid)
+
+            # delete item from ES and mirrored ES, and queue reindexing
+            self.read.purge_uuid(rid, item_type, max_sid)
 
         # delete the item from DB
         self.write.purge_uuid(rid)
-        # if using ES, delete item from ES and mirrored ES, and queue reindexing
-        if self.read:
-            self.read.purge_uuid(rid, item_type, max_sid)
+
 
     def get_rev_links(self, model, rel, *item_types):
         """
