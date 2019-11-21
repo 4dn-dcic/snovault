@@ -16,4 +16,6 @@ To get started, read the following documentation on setting up and developing Sn
   :titlesonly:
 
   local_installation
+  storage_overview
   testing
+  snowflakes

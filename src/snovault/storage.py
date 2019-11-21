@@ -226,7 +226,6 @@ class PickStorage(object):
         # delete the item from DB
         self.write.purge_uuid(rid)
 
-
     def get_rev_links(self, model, rel, *item_types):
         """
         Return a list of reverse links for the given model and item types using
