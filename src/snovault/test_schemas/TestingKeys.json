@@ -23,6 +23,5 @@
             "description": "Unique System ID for this object that is not marked as unique in schema",
             "type": "string"
         }
-    },
-    "name_key": "obj_id"
+    }
 }

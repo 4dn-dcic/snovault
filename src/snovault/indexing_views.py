@@ -106,28 +106,11 @@ def item_index_data(context, request):
     links = new_links
 
     principals_allowed = calc_principals(context)
-    path = resource_path(context)
-    paths = {path}
+    path = resource_path(context) + '/'
     collection = context.collection
-
     with indexing_timer(indexing_stats, 'unique_keys'):
         unique_keys = context.unique_keys(properties)
-        if collection.unique_key in unique_keys:
-            paths.update(
-                resource_path(collection, key)
-                for key in unique_keys[collection.unique_key])
 
-    with indexing_timer(indexing_stats, 'paths'):
-        for base in (collection, request.root):
-            for key_name in ('accession', 'alias'):
-                if key_name not in unique_keys:
-                    continue
-                paths.add(resource_path(base, uuid))
-                paths.update(
-                    resource_path(base, key)
-                    for key in unique_keys[key_name])
-
-    path = path + '/'
     # setting _indexing_view enables the embed_cache and cause population of
     # request._linked_uuids and request._rev_linked_uuids_by_item
     request._indexing_view = True
@@ -182,7 +165,6 @@ def item_index_data(context, request):
         'links': links,
         'max_sid': context.max_sid,
         'object': object_view,
-        'paths': sorted(paths),
         'principals_allowed': principals_allowed,
         'properties': properties,
         'propsheets': {

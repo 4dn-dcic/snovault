@@ -174,12 +174,12 @@ class Item(BaseItem):
 
     @property
     def __name__(self):
-        if self.type_info.name_key is None:
+        if self.name_key is None:
             return self.uuid
         properties = self.upgrade_properties()
         if properties.get('status') == 'replaced':
             return self.uuid
-        return properties.get(self.type_info.name_key, None) or self.uuid
+        return properties.get(self.name_key, None) or self.uuid
 
     def __acl__(self):
         # Don't finalize to avoid validation here.
@@ -275,7 +275,7 @@ def edit_json(context, request):
 
 @abstract_collection(
     name='abstractItemTests',
-    unique_key='accession',
+    traversal_key='accession',
     properties={
         'title': "AbstractItemTests",
         'description': "Abstract Item that is inherited for testing",
@@ -283,11 +283,12 @@ def edit_json(context, request):
 class AbstractItemTest(Item):
     item_type = 'AbstractItemTest'
     base_types = ['AbstractItemTest'] + Item.base_types
+    name_key = 'accession'
 
 
 @collection(
     name='abstract-item-test-sub-items',
-    unique_key='accession',
+    traversal_key='accession',
     properties={
         'title': "AbstractItemTestSubItems",
         'description': "Item based off of AbstractItemTest"
@@ -299,7 +300,7 @@ class AbstractItemTestSubItem(AbstractItemTest):
 
 @collection(
     name='abstract-item-test-second-sub-items',
-    unique_key='accession',
+    traversal_key='accession',
     properties={
         'title': 'AbstractItemTestSecondSubItems',
         'description': "Second item based off of AbstractItemTest"
@@ -311,7 +312,7 @@ class AbstractItemTestSecondSubItem(AbstractItemTest):
 
 @collection(
     name='embedding-tests',
-    unique_key='accession',
+    traversal_key='accession',
     properties={
         'title': 'EmbeddingTests',
         'description': 'Listing of EmbeddingTests'
@@ -319,6 +320,7 @@ class AbstractItemTestSecondSubItem(AbstractItemTest):
 class EmbeddingTest(Item):
     item_type = 'embedding_test'
     schema = load_schema('snovault:test_schemas/EmbeddingTest.json')
+    name_key = 'accession'
 
     # use TestingDownload to test
     embedded_list = [
@@ -337,7 +339,7 @@ class TestingDownload(ItemWithAttachment):
     schema = load_schema('snovault:test_schemas/TestingDownload.json')
 
 
-@collection('testing-link-sources-sno', unique_key='testing_link_sources-sno:name')
+@collection('testing-link-sources-sno', traversal_key='testing_link_sources-sno:name')
 class TestingLinkSourceSno(Item):
     item_type = 'testing_link_source_sno'
     schema = load_schema('snovault:test_schemas/TestingLinkSourceSno.json')
@@ -352,10 +354,11 @@ class TestingLinkAggregateSno(Item):
     }
 
 
-@collection('testing-link-targets-sno', unique_key='testing_link_target_sno:name')
+@collection('testing-link-targets-sno', traversal_key='testing_link_target_sno:name')
 class TestingLinkTargetSno(Item):
     item_type = 'testing_link_target_sno'
     schema = load_schema('snovault:test_schemas/TestingLinkTargetSno.json')
+    name_key = 'name'
     rev = {
         'reverse': ('TestingLinkSourceSno', 'target'),
     }
@@ -414,25 +417,39 @@ class TestingKeys(Item):
     schema = load_schema('snovault:test_schemas/TestingKeys.json')
 
 
-@collection('testing-keys-def')
+@collection('testing-keys-def', traversal_key='testing_keys_def:obj_id')
 class TestingKeysDef(Item):
     """
-    Intended to test the behavior of the unique_key setting when it overlaps with
-    uniqueKey setting in the schema
+    Intended to test the behavior of setting a traversal key equal to one of the
+    uniqueKey's specified in the schema. This should allow us to get the object
+    via obj_id whereas before we could not.
     """
     item_type = 'testing_keys_def'
     schema = load_schema('snovault:test_schemas/TestingKeys.json')
 
 
-@collection('testing-keys-name')
+@collection('testing-keys-name', traversal_key='testing_keys_name:name')
 class TestingKeysName(Item):
     """
-    We set obj_id as a unique key so that it can be used as a name_key in the
+    We set name as a traversal key so that it can be used as a name_key in the
     resource path. We should now see the name key in the @id field instead of
     the uuid
     """
     item_type = 'testing_keys_name'
     schema = load_schema('snovault:test_schemas/TestingKeys.json')
+    name_key = 'name'
+
+
+@collection('testing-keys-mismatch', traversal_key='testing_keys_mismatch:name')
+class TestingKeysMismatch(Item):
+    """
+    Tests behavior when we set a traversal key to one value and name key to
+    another. In this case posting anything should fail since the traversal key
+    and name key must match.
+    """
+    item_type = 'testing_keys_mismatch'
+    schema = load_schema('snovault:test_schemas/TestingKeys.json')
+    name_key = 'obj_id'
 
 
 @view_config(name='testing-render-error', request_method='GET')
