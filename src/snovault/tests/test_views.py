@@ -153,7 +153,7 @@ def test_jsonld_context(testapp):
 
 
 @pytest.mark.slow
-@pytest.mark.parametrize('item_type', PARAMETERIZED_NAMES)
+@pytest.mark.parametrize('item_type', [k for k in PARAMETERIZED_NAMES if k != 'TestingKeys'])
 def test_index_data_workbook(testapp, indexer_testapp, item_type):
     res = testapp.get('/%s?limit=all' % item_type).follow(status=200)
     for item in res.json['@graph']:

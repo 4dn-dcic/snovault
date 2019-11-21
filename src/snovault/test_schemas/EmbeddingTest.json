@@ -16,6 +16,7 @@
             "type": "string"
         }
     },
+    "name_key": "accession",
     "columns": {
         "title": {
             "title": "Title"

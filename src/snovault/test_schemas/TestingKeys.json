@@ -1,0 +1,28 @@
+{
+    "type": "object",
+    "properties": {
+        "name": {
+            "title": "Common Name",
+            "description": "Unique name for this object",
+            "type": "string",
+            "uniqueKey": true
+        },
+        "grouping": {
+            "title": "Grouping",
+            "description": "String name of a group that this item belongs to (not unique)",
+            "type": "string"
+        },
+        "obj_id": {
+            "title": "Object ID",
+            "description": "Unique ID of this object",
+            "type": "string",
+            "uniqueKey": true
+        },
+        "system_id": {
+            "title": "System ID",
+            "description": "Unique System ID for this object that is not marked as unique in schema",
+            "type": "string"
+        }
+    },
+    "name_key": "obj_id"
+}

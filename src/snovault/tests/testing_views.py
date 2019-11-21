@@ -174,12 +174,12 @@ class Item(BaseItem):
 
     @property
     def __name__(self):
-        if self.name_key is None:
+        if self.type_info.name_key is None:
             return self.uuid
         properties = self.upgrade_properties()
         if properties.get('status') == 'replaced':
             return self.uuid
-        return properties.get(self.name_key, None) or self.uuid
+        return properties.get(self.type_info.name_key, None) or self.uuid
 
     def __acl__(self):
         # Don't finalize to avoid validation here.
@@ -283,7 +283,6 @@ def edit_json(context, request):
 class AbstractItemTest(Item):
     item_type = 'AbstractItemTest'
     base_types = ['AbstractItemTest'] + Item.base_types
-    name_key = 'accession'
 
 
 @collection(
@@ -320,7 +319,6 @@ class AbstractItemTestSecondSubItem(AbstractItemTest):
 class EmbeddingTest(Item):
     item_type = 'embedding_test'
     schema = load_schema('snovault:test_schemas/EmbeddingTest.json')
-    name_key = 'accession'
 
     # use TestingDownload to test
     embedded_list = [
@@ -357,7 +355,6 @@ class TestingLinkAggregateSno(Item):
 @collection('testing-link-targets-sno', unique_key='testing_link_target_sno:name')
 class TestingLinkTargetSno(Item):
     item_type = 'testing_link_target_sno'
-    name_key = 'name'
     schema = load_schema('snovault:test_schemas/TestingLinkTargetSno.json')
     rev = {
         'reverse': ('TestingLinkSourceSno', 'target'),
@@ -408,6 +405,34 @@ class TestingServerDefault(Item):
 class TestingDependencies(Item):
     item_type = 'testing_dependencies'
     schema = load_schema('snovault:test_schemas/TestingDependencies.json')
+
+
+@collection('testing-keys')
+class TestingKeys(Item):
+    """ Intended to test the behavior of uniqueKey value in schema """
+    item_type = 'testing_keys'
+    schema = load_schema('snovault:test_schemas/TestingKeys.json')
+
+
+@collection('testing-keys-def')
+class TestingKeysDef(Item):
+    """
+    Intended to test the behavior of the unique_key setting when it overlaps with
+    uniqueKey setting in the schema
+    """
+    item_type = 'testing_keys_def'
+    schema = load_schema('snovault:test_schemas/TestingKeys.json')
+
+
+@collection('testing-keys-name')
+class TestingKeysName(Item):
+    """
+    We set obj_id as a unique key so that it can be used as a name_key in the
+    resource path. We should now see the name key in the @id field instead of
+    the uuid
+    """
+    item_type = 'testing_keys_name'
+    schema = load_schema('snovault:test_schemas/TestingKeys.json')
 
 
 @view_config(name='testing-render-error', request_method='GET')

@@ -200,8 +200,8 @@ class AbstractCollection(Resource, Mapping):
             if not self._allow_contained(resource):
                 return default
             return resource
-        if self.unique_key is not None:
-            resource = self.connection.get_by_unique_key(self.unique_key, name)
+        for unique_key in self.type_info.schema_keys.keys():
+            resource = self.connection.get_by_unique_key(unique_key, name)
             if resource is not None:
                 if not self._allow_contained(resource):
                     return default
@@ -249,7 +249,6 @@ display_title_schema = {
 class Item(Resource):
     item_type = None
     base_types = ['Item']
-    name_key = None
     rev = {}
     aggregated_items = {}
     embedded_list = []
@@ -280,10 +279,9 @@ class Item(Resource):
 
     @property
     def __name__(self):
-
-        if self.name_key is None:
+        if self.type_info.name_key is None:
             return str(self.uuid)
-        return self.properties.get(self.name_key, None) or str(self.uuid)
+        return self.properties.get(self.type_info.name_key, None) or str(self.uuid)
 
     @property
     def properties(self):
@@ -461,8 +459,8 @@ class Item(Resource):
                 del properties['uuid']
 
             # validation on name key and unique keys
-            nk_val = properties.get(self.name_key, '')
-            self.validate_path_characters(self.name_key, nk_val)
+            nk_val = properties.get(self.type_info.name_key, '')
+            self.validate_path_characters(self.type_info.name_key, nk_val)
 
             unique_keys = self.unique_keys(properties)
             for k, values in unique_keys.items():

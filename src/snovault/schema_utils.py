@@ -287,6 +287,24 @@ def calculatedProperty(validator, linkTo, instance, schema):
     yield ValidationError('submission of calculatedProperty disallowed')
 
 
+def nameKey(validator, name_key, instance, schema):
+    """
+    Validates name key field in schema is a property field that is marked as
+    a uniqueKey
+    """
+    if not validator.is_type(name_key, "string"):
+        raise Exception("Bad schema")  # keeping convention for now
+    if name_key not in schema:
+        if name_key not in schema['properties']:
+            yield ValidationError('Given name key is not a schema field!')
+        else:
+            prop = schema['properties'][name_key]
+    else:
+        prop = schema[name_key]
+    if not prop.get('uniqueKey', False):
+        yield ValidationError('Given name key is not a uniqueKey!')
+
+
 class SchemaValidator(Draft4Validator):
     VALIDATORS = Draft4Validator.VALIDATORS.copy()
     VALIDATORS['calculatedProperty'] = calculatedProperty
@@ -295,6 +313,7 @@ class SchemaValidator(Draft4Validator):
     VALIDATORS['permission'] = permission
     VALIDATORS['requestMethod'] = requestMethod
     VALIDATORS['validators'] = validators
+    VALIDATORS['name_key'] = nameKey
     SERVER_DEFAULTS = SERVER_DEFAULTS
 
 
