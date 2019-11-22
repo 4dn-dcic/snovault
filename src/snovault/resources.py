@@ -76,7 +76,7 @@ class Resource(object):
     def actions(self, request):
         actions = calculate_properties(self, request, category='action')
         if actions:
-            return sorted(list(actions.values()))
+            return sorted(list(actions.values()), key=lambda d: d.get('name'))
 
 
 class Root(Resource):
