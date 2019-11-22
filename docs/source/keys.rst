@@ -39,13 +39,14 @@ These two keys are bundled together because they are closely related. A unique k
 Name Key
 ^^^^^^^^
 
-The name key is a special field specified on the item type definition. It augments the resource path so that the '@id' field of the item contains a path using the name_key instead of the uuid. See final example below.
+The name key is a special field specified on the item type definition. It augments the resource path so that the '@id' field of the item contains a path using the name_key instead of the uuid. To be explicit, the name key must match the traversal key and is only really useful for changing the resource path. See final example below.
 
 .. code-block:: python
 
   # In this case we specify matching traversal_key and name_key. This means that
   # the resource path is augmented to show the name_key instead of the uuid AND
   # you can get the item via resource path ie: Get /testing-keys-name/<name>
+  # and that is what always shows up when you access that item
   @collection('testing-keys-name', traversal_key='testing_keys_name:name')
   class TestingKeysName(Item):
       """
