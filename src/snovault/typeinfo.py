@@ -151,11 +151,6 @@ class TypeInfo(AbstractTypeInfo):
                 schema['properties'][name] = prop.schema
         return schema
 
-    @reify
-    def name_key(self):
-        schema = self.factory.schema
-        return schema.get('name_key', None)
-
 
 class TypesTool(object):
     """
