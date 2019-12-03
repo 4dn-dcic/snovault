@@ -258,8 +258,9 @@ class Item(Resource):
     embedded_list = []
     filtered_rev_statuses = ()
     schema = None
-    # `used_datastore` can be used to force the datastore for this item
-    used_datastore = None  # None means basic DB/ES setup
+    # `used_datastore` determines where the properties of the item are store.
+    # None for traditional Postgres setup or "elasticsearch" to use ES document
+    used_datastore = None
     AbstractCollection = AbstractCollection
     Collection = Collection
 
