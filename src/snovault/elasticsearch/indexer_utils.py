@@ -12,7 +12,7 @@ def get_namespaced_index(config, index):
         settings = config.registry.settings
     except: # accept either config or registry as first arg
         settings = config.settings
-    namespace = settings.get('indexer.namespace', '')
+    namespace = settings.get('indexer.namespace') or ''
     return namespace + index
 
 

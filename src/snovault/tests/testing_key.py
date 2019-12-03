@@ -16,7 +16,7 @@ def includeme(config):
         'title': 'Test keys',
         'description': 'Testing. Testing. 1, 2, 3.',
     },
-    traversal_key='testing_accession',
+    identification_key='testing_accession',
 )
 class TestingKey(Item):
     item_type = 'testing_key'

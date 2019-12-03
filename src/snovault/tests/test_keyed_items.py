@@ -100,7 +100,7 @@ def test_definition_unique_key(TestKeyDefinition, testapp):
     testapp.post_json(url, duplicate_system_id, status=201)
     # obj_id should succeed since it is a unique_key
     resp = testapp.get(url + '/' + duplicate_system_id['obj_id']).follow(status=200).json
-    # since obj_id is a traversal_key but not a name_key we still expect uuid
+    # since obj_id is a identification_key but not a name_key we still expect uuid
     assert resp['uuid'] in resp['@id']
     # should fail since name is not a name_key
     testapp.get(url + '/' + duplicate_system_id['name'], status=404)
@@ -132,7 +132,7 @@ def test_name_key(TestKeyName, testapp):
     testapp.get(url + '/' + correct['obj_id'], status=404)
 
 
-def test_name_key_traversal_key_mismatch(testapp):
+def test_name_key_identification_key_mismatch(testapp):
     """
     Tries to post an item to a type with mismatched traversal and name key
     which will fail

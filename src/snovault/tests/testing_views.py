@@ -275,7 +275,7 @@ def edit_json(context, request):
 
 @abstract_collection(
     name='abstractItemTests',
-    traversal_key='accession',
+    identification_key='accession',
     properties={
         'title': "AbstractItemTests",
         'description': "Abstract Item that is inherited for testing",
@@ -288,7 +288,7 @@ class AbstractItemTest(Item):
 
 @collection(
     name='abstract-item-test-sub-items',
-    traversal_key='accession',
+    identification_key='accession',
     properties={
         'title': "AbstractItemTestSubItems",
         'description': "Item based off of AbstractItemTest"
@@ -300,7 +300,7 @@ class AbstractItemTestSubItem(AbstractItemTest):
 
 @collection(
     name='abstract-item-test-second-sub-items',
-    traversal_key='accession',
+    identification_key='accession',
     properties={
         'title': 'AbstractItemTestSecondSubItems',
         'description': "Second item based off of AbstractItemTest"
@@ -312,7 +312,7 @@ class AbstractItemTestSecondSubItem(AbstractItemTest):
 
 @collection(
     name='embedding-tests',
-    traversal_key='accession',
+    identification_key='accession',
     properties={
         'title': 'EmbeddingTests',
         'description': 'Listing of EmbeddingTests'
@@ -339,7 +339,7 @@ class TestingDownload(ItemWithAttachment):
     schema = load_schema('snovault:test_schemas/TestingDownload.json')
 
 
-@collection('testing-link-sources-sno', traversal_key='testing_link_sources-sno:name')
+@collection('testing-link-sources-sno', identification_key='testing_link_sources-sno:name')
 class TestingLinkSourceSno(Item):
     item_type = 'testing_link_source_sno'
     schema = load_schema('snovault:test_schemas/TestingLinkSourceSno.json')
@@ -354,7 +354,7 @@ class TestingLinkAggregateSno(Item):
     }
 
 
-@collection('testing-link-targets-sno', traversal_key='testing_link_target_sno:name')
+@collection('testing-link-targets-sno', identification_key='testing_link_target_sno:name')
 class TestingLinkTargetSno(Item):
     item_type = 'testing_link_target_sno'
     schema = load_schema('snovault:test_schemas/TestingLinkTargetSno.json')
@@ -417,7 +417,7 @@ class TestingKeys(Item):
     schema = load_schema('snovault:test_schemas/TestingKeys.json')
 
 
-@collection('testing-keys-def', traversal_key='testing_keys_def:obj_id')
+@collection('testing-keys-def', identification_key='testing_keys_def:obj_id')
 class TestingKeysDef(Item):
     """
     Intended to test the behavior of setting a traversal key equal to one of the
@@ -428,7 +428,7 @@ class TestingKeysDef(Item):
     schema = load_schema('snovault:test_schemas/TestingKeys.json')
 
 
-@collection('testing-keys-name', traversal_key='testing_keys_name:name')
+@collection('testing-keys-name', identification_key='testing_keys_name:name')
 class TestingKeysName(Item):
     """
     We set name as a traversal key so that it can be used as a name_key in the
@@ -440,7 +440,7 @@ class TestingKeysName(Item):
     name_key = 'name'
 
 
-@collection('testing-keys-mismatch', traversal_key='testing_keys_mismatch:name')
+@collection('testing-keys-mismatch', identification_key='testing_keys_mismatch:name')
 class TestingKeysMismatch(Item):
     """
     Tests behavior when we set a traversal key to one value and name key to

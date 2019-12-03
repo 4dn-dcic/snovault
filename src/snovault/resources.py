@@ -142,12 +142,12 @@ class AbstractCollection(Resource, Mapping):
     And some other info as well.
 
     Collections allow retrieval of specific items with them by using the `get`
-    method with uuid or the traversal_key (which must be a unique key)
+    method with uuid or the identification_key (which must be a unique key)
     """
     properties = {}
-    traversal_key = None
+    identification_key = None
 
-    def __init__(self, registry, name, type_info, properties=None, acl=None, traversal_key=None):
+    def __init__(self, registry, name, type_info, properties=None, acl=None, identification_key=None):
         self.registry = registry
         self.__name__ = name
         self.type_info = type_info
@@ -155,8 +155,8 @@ class AbstractCollection(Resource, Mapping):
             self.properties = properties
         if acl is not None:
             self.__acl__ = acl
-        if traversal_key is not None:
-            self.traversal_key = traversal_key
+        if identification_key is not None:
+            self.identification_key = identification_key
 
     @reify
     def connection(self):
@@ -200,8 +200,8 @@ class AbstractCollection(Resource, Mapping):
             if not self._allow_contained(resource):
                 return default
             return resource
-        if self.traversal_key is not None:
-            resource = self.connection.get_by_unique_key(self.traversal_key, name)
+        if self.identification_key is not None:
+            resource = self.connection.get_by_unique_key(self.identification_key, name)
             if resource is not None:
                 if not self._allow_contained(resource):
                     return default
