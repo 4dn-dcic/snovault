@@ -263,12 +263,12 @@ class ElasticSearchStorage(object):
                 mirror_client.delete(id=rid, index=mirror_index, doc_type=item_type)
             except elasticsearch.exceptions.NotFoundError:
                 # Case: Not yet indexed
-                log.error('PURGE: Could not find %s in mirrored ElasticSearch (%s). Continuing.' % (rid, mirror_es))
+                log.error('PURGE: Cannot find %s in mirrored Elasticsearch (%s). Continuing.' % (rid, mirror_env))
             except Exception as exc:
-                log.error('PURGE: Cannot delete %s in mirrored ElasticSearch (%s). Error: %s Continuing.' % (item_type, mirror_es, str(exc)))
+                log.error('PURGE: Cannot delete %s in mirrored Elasticsearch (%s). Error: %s Continuing.' % (item_type, mirror_env, str(exc)))
             else:
-                log.info('PURGE: sucessfully deleted %s in mirrored ElasticSearch (%s)'
-                         % (item_type, mirror_es))
+                log.info('PURGE: sucessfully deleted %s in mirrored Elasticsearch (%s)'
+                         % (item_type, mirror_env))
 
     def __iter__(self, *item_types):
         """
