@@ -57,5 +57,5 @@ html_static_path = ['_static']
 # Read the Docs configuration.
 # See: https://sphinx-rtd-theme.readthedocs.io/en/stable/configuring.html
 html_theme_options = {
-    'navigation_depth': 1
+    'navigation_depth': 2
 }

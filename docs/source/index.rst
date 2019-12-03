@@ -14,8 +14,10 @@ To get started, read the following documentation on setting up and developing Sn
 
 .. toctree::
   :titlesonly:
-
   local_installation
-  storage_overview
   testing
+  resources
+  storage_overview
+  traversal
+  resource_views
   snowflakes

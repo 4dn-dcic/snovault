@@ -1,6 +1,5 @@
-#######
 Testing
-#######
+========================
 
 Since there is no deployable application using solely Snovault, tests are extra important and can be used to learn about the features on Snovault. We use the PyTest framework. Below is a brief walkthrough on several important aspects of how Snovault is tested.
 
