@@ -128,6 +128,7 @@ class AbstractCollection(Resource, Mapping):
     - type_info (TypeInfo for a certain item type, see snovault.typeinfo.py)
     - __acl__
     - uniqueKey for the collection (e.g. item_name:key)
+    - properties_datastore for items in the collection (defaults to 'database')
     And some other info as well.
 
     Collections allow retrieval of specific items with them by using the `get`
@@ -138,7 +139,7 @@ class AbstractCollection(Resource, Mapping):
 
 
     def __init__(self, registry, name, type_info, properties=None, acl=None,
-                 unique_key=None):
+                 unique_key=None, properties_datastore='database'):
         self.registry = registry
         self.__name__ = name
         self.type_info = type_info
@@ -148,6 +149,7 @@ class AbstractCollection(Resource, Mapping):
             self.__acl__ = acl
         if unique_key is not None:
             self.unique_key = unique_key
+        self.properties_datastore = properties_datastore
 
     @reify
     def connection(self):
@@ -189,19 +191,18 @@ class AbstractCollection(Resource, Mapping):
         """
         Get an item by name using this collection. First try uuid and then
         unique key. If neither are found, return default, which is usually None.
-        used_datastore is checked on the item class and used with Connection
-        to force a certain datastore if needed
+        self.properties_datastore is checked on the item class and used with
+        Connection to force a certain datastore if needed to retrieve item
         """
-        used_datastore = self.type_info.factory.used_datastore
         resource = self.connection.get_by_uuid(name, default=None,
-                                               datastore=used_datastore)
+                                               datastore=self.properties_datastore)
         if resource is not None:
             if not self._allow_contained(resource):
                 return default
             return resource
         if self.unique_key is not None:
             resource = self.connection.get_by_unique_key(self.unique_key, name,
-                                                         datastore=used_datastore)
+                                                         datastore=self.properties_datastore)
             if resource is not None:
                 if not self._allow_contained(resource):
                     return default
@@ -258,9 +259,6 @@ class Item(Resource):
     embedded_list = []
     filtered_rev_statuses = ()
     schema = None
-    # `used_datastore` determines where the properties of the item are store.
-    # None for traditional Postgres setup or "elasticsearch" to use ES document
-    used_datastore = None
     AbstractCollection = AbstractCollection
     Collection = Collection
 
@@ -279,6 +277,10 @@ class Item(Resource):
     def collection(self):
         collections = self.registry[COLLECTIONS]
         return collections[self.type_info.name]
+
+    @reify
+    def properties_datastore(self):
+        return self.collection.properties_datastore
 
     @property
     def __parent__(self):
@@ -328,7 +330,7 @@ class Item(Resource):
 
     def links(self, properties):
         return {
-            path: set(simple_path_ids(properties, path))
+            path: list(set(simple_path_ids(properties, path)))
             for path in self.type_info.schema_links
         }
 
@@ -502,7 +504,7 @@ class Item(Resource):
         # actually propogate the update to the DB
         connection = self.registry[CONNECTION]
         connection.update(self.db_model, properties, sheets, unique_keys, links,
-                          datastore=self.used_datastore)
+                          datastore=self.properties_datastore)
 
     @reify
     def embedded(self):
