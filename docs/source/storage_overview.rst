@@ -10,7 +10,7 @@ Resources
 -----------------
 The base Snovault resources are outlined in `another document <https://snovault.readthedocs.io/en/latest/resources.html>`_. Snovault resources use the Connection class as an interface for reading and writing from PostgreSQL and Elasticsearch. The Root and AbstractCollection classes interface with Connection (see below) for traversal purposes when getting specific items. The base Item class uses Connection in its create and update methods to write to the underlying DB tables.
 
-In the context of storage, one important Item attribute is ``used_datastore``. It can be set per Item-type to determine which database is used to store properties of the item (i.e. PostgreSQL or Elasticsearch). This attribute is passed directly to some Connetion methods through the ``datastore`` parameter.
+In the context of storage, one important AbstractCollection attribute is ``properties_datastore``. It can be set to determine which database is used to store properties of the item (i.e. PostgreSQL or Elasticsearch). This attribute is passed directly to some Connection methods through the ``datastore`` parameter.
 
 
 Connection
@@ -103,9 +103,9 @@ It's important to keep in mind that Elasticsearch acts as a cache for the more c
 
 Elasticsearch-Based Items
 -----------------
-As outlined above, usually the properties of items are stored using the RDBStorage. However, you can leverage the ``used_datastore`` parameter of the Item class to specify that the properties are stored in Elasticsearch instead. This technique is useful for items that have an alternative "source of truth" than Postgres, e.g. rows from an external spreadsheet. Features for these items are exactly the same as traditional items; they support everything from indexing to updating to calculated properties. However, the propsheets of the "write" Resource model will be empty, since the Item properties are stored directly in the Elasticsearch document.
+As outlined above, usually the properties of items are stored using the RDBStorage. However, you can leverage the ``properties_datastore`` parameter of the AbstractCollection class to specify that the properties are stored in Elasticsearch instead. This technique is useful for items that have an alternative "source of truth" than Postgres, e.g. rows from an external spreadsheet. Features for these items are exactly the same as traditional items; they support everything from indexing to updating to calculated properties. However, the propsheets of the "write" Resource model will be empty, since the Item properties are stored directly in the Elasticsearch document.
 
-Setting ``Item.used_datastore = None`` is the **default** setup, which will cause properties to be stored in the PostgreSQL propsheets table. Setting ``Item.used_datastore = "elasticsearch"`` will cause properties to be stored in Elasticsearch.
+Setting ``properties_datastore = 'database'`` in the ``@collection`` decorator is the **default** setup, which will cause properties to be stored in the PostgreSQL propsheets table. Setting ``properties_datastore = "elasticsearch"`` will cause properties to be stored in Elasticsearch.
 
 For the most part, this is done by setting the ``datastore`` parameter when calling Connection methods through the item. However, there are a couple tricky things to keep in mind when developing this feature:
 
