@@ -57,13 +57,13 @@ def filter_embedded(embedded, effective_principals):
 def cached_view_embedded(context, request):
     """
     Use the 'embedded' view that is stored the ElasticSearch unless we
-    are using an Item with 'elasticsearch' used_datastore, in which case we
-    may have to generate the view dynamically if indexing or it doesn't yet
+    are using an Item with 'elasticsearch' properties_datastore, in which case
+    we may have to generate the view dynamically if indexing or it doesn't yet
     exist
     """
     source = context.model.source
     # generate view if this item uses ES as primary datastore or indexing
-    if (context.used_datastore == 'elasticsearch' and
+    if (context.properties_datastore == 'elasticsearch' and
         ('embedded' not in source or request._indexing_view is True)):
         embedded = item_view_embedded(context, request)
     else:
@@ -87,7 +87,7 @@ def cached_view_object(context, request):
     """
     source = context.model.source
     # generate view if this item uses ES as primary datastore or indexing
-    if (context.used_datastore == 'elasticsearch' and
+    if (context.properties_datastore == 'elasticsearch' and
         ('object' not in source or request._indexing_view is True)):
         object = item_view_object(context, request)
     else:

@@ -1,9 +1,8 @@
 import elasticsearch.exceptions
 from elasticsearch.helpers import scan
 from elasticsearch_dsl import Search, Q
-from pyramid.httpexceptions import HTTPLocked
-from pyramid.settings import asbool
 from zope.interface import alsoProvides
+from uuid import UUID
 from .interfaces import (
     ELASTIC_SEARCH,
     INDEXER_QUEUE_MIRROR,
@@ -64,7 +63,10 @@ class CachedModel(object):
 
     @property
     def uuid(self):
-        return self.source['uuid']
+        """
+        Return UUID object to be consistent with Resource.uuid
+        """
+        return UUID(self.source['uuid'])
 
     @property
     def sid(self):
@@ -334,6 +336,11 @@ class ElasticSearchStorage(object):
         However, this is consistent with the database approach of indexing
         and the document will be updated after it is indexed
         """
+        # links in ES use "~" instead of "."
+        es_links = {}
+        for key, val in links.items():
+            es_links['~'.join(key.split('.'))] = val
+
         document = {
             'item_type': model.item_type,
             'uuid': str(model.uuid),
@@ -342,7 +349,7 @@ class ElasticSearchStorage(object):
             'properties': properties,
             'propsheets': {},
             'unique_keys': unique_keys,
-            'links': links
+            'links': es_links
         }
         if sheets is not None:
             document['propsheets'] = sheets
