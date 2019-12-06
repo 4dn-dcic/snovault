@@ -113,19 +113,23 @@ def setup_and_teardown(app):
     transaction.commit()
 
 
-@pytest.fixture(scope='function')
+@pytest.yield_fixture(scope='function')
 def es_based_target(app, testapp):
     # must run create mapping BEFORE posting the ES-based item, since it will
     # cause the underlying item properties in the index to be lost
     create_mapping.run(
         app,
-        collections=['testing_link_target_elastic_search',
-                     'testing_link_source_sno'],
+        collections=['testing_link_target_elastic_search'],
         skip_indexing=True
     )
     target  = {'name': 'es_one', 'status': 'current'}
     target_res = testapp.post_json('/testing-link-targets-elastic-search/', target, status=201)
-    return target_res.json['@graph'][0]
+    yield target_res.json['@graph'][0]
+
+    # clean up by deleting the index
+    es = app.registry[ELASTIC_SEARCH]
+    namespaced_indexing = indexer_utils.get_namespaced_index(app, 'testing_link_target_elastic_search')
+    es.indices.delete(index=namespaced_indexing)
 
 
 def test_indexer_namespacing(app, testapp, indexer_testapp):
@@ -1308,12 +1312,20 @@ def test_elasticsearch_item_basic(app, testapp, indexer_testapp, es_based_target
     res = testapp.patch_json(es_based_target['@id'], {'status': 123}, status=422)
     assert res.json['errors'][0]['name'] == 'Schema: status'
 
+    # running create mapping again does not remove the es-based index
+    initial_count = es.count(index=namespaced_target, doc_type='testing_link_target_elastic_search')['count']
+    create_mapping.run(app, collections=['testing_link_target_elastic_search'])
+    after_count = es.count(index=namespaced_target, doc_type='testing_link_target_elastic_search')['count']
+    assert initial_count == after_count
+
 
 def test_elasticsearch_item_with_source(app, testapp, indexer_testapp, es_based_target):
     """
     Test rev_linking with a TestingLinkTargetElasticSearch item, including
     invalidation, @@links, and purging
     """
+    # run create mapping for this type to get a fresh index
+    create_mapping.run(app, collections=['testing_link_source_sno'], skip_indexing=True)
     es = app.registry[ELASTIC_SEARCH]
     namespaced_target = indexer_utils.get_namespaced_index(app, 'testing_link_target_elastic_search')
     namespaced_source = indexer_utils.get_namespaced_index(app, 'testing_link_source_sno')
@@ -1411,6 +1423,7 @@ def test_elasticsearch_item_embedded_agg(app, testapp, indexer_testapp, es_based
     Test embedding items in TestingLinkTargetElasticSearch and using
     aggregated-items view
     """
+    # no need to run create mapping for PPP since teardown takes care of it
     es = app.registry[ELASTIC_SEARCH]
     namespaced_target = indexer_utils.get_namespaced_index(app, 'testing_link_target_elastic_search')
     target_uuid = es_based_target['uuid']

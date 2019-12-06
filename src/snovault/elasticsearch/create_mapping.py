@@ -668,13 +668,17 @@ def create_mapping_by_type(in_type, registry):
     return es_mapping(embed_mapping, agg_items_mapping)
 
 
-def build_index(app, es, index_name, in_type, mapping, uuids_to_index, dry_run, check_first,
-                index_diff=False, print_count_only=False):
+def build_index(app, es, index_name, in_type, mapping, uuids_to_index, dry_run,
+                check_first=False,index_diff=False, print_count_only=False):
     """
-    Creates an es index for the given in_type with the given mapping and
-    settings defined by item_settings(). If check_first is True, will compare
-    the given mapping with the found mapping for the index and skip creating
-    it if possible.
+    Creates an es index for the given `in_type` with the given mapping and
+    settings defined by item_settings(). Delete existing index first.
+    Adds uuids from the given collection to `uuids_to_index`.
+    Some options:
+    - If `check_first` is True, will compare the given mapping with the found
+      mapping and item counts for the index, and skip creating it if possible.
+    - If `index_diff` is True, do not remove the existing index and instead
+      only add any missing items to `uuids_to_index`
     """
     uuids_to_index[in_type] = set()
     if print_count_only:
@@ -1059,16 +1063,24 @@ def run(app, collections=None, dry_run=False, check_first=False, skip_indexing=F
     timings = {}
     log.info('\n___FOUND COLLECTIONS___:\n %s\n' % (str(collections)), cat=cat)
     for collection_name in collections:
+        # do NOT redo indices for collections that use ES as a primary datastore,
+        # since this will cause loss of data. Only run in such cases if the index is empty
+        if registry[COLLECTIONS][collection_name].properties_datastore == 'elasticsearch':
+            namespaced_index = get_namespaced_index(app, collection_name)
+            if check_if_index_exists(es, namespaced_index):
+                count_res = es.count(index=namespaced_index, doc_type=collection_name)
+                if count_res.get('count', 0) > 0:
+                    log.info('Skipping %s mapping since it is an ES-based '
+                             'collection with items in it' % collection_name)
+                    continue
         start = timer()
         mapping = create_mapping_by_type(collection_name, registry)
-        end = timer()
-        mapping_time = end - start
+        mapping_time =timer() - start
         start = timer()
         namespaced_index = get_namespaced_index(app, collection_name)
         build_index(app, es, namespaced_index, collection_name, mapping, uuids_to_index,
                     dry_run, check_first, index_diff, print_count_only)
-        end = timer()
-        index_time = end - start
+        index_time = timer() - start
         log.info('___FINISHED %s___\n' % (collection_name))
         log.info('___Mapping Time: %s  Index time %s ___\n' % (mapping_time, index_time),
                     cat='index mapping time', collection=collection_name, map_time=mapping_time,
@@ -1087,14 +1099,15 @@ def run(app, collections=None, dry_run=False, check_first=False, skip_indexing=F
     log.info('\n___FINISHED CREATE-MAPPING___\n', cat=cat)
 
 
-    log.info('\n___GREATEST MAPPING TIME: %s\n' % str(greatest_mapping_time),
+    log.info('\n___GREATEST MAPPING TIME: %s\n' % greatest_mapping_time,
                 cat='max mapping time', **greatest_mapping_time)
-    log.info('\n___GREATEST INDEX CREATION TIME: %s\n' % str(greatest_index_creation_time),
+    log.info('\n___GREATEST INDEX CREATION TIME: %s\n' % greatest_index_creation_time,
                 cat='max index create time', **greatest_index_creation_time)
-    log.info('\n___TIME FOR ALL COLLECTIONS: %s\n' % str(overall_end - overall_start),
+    log.info('\n___TIME FOR ALL COLLECTIONS: %s\n' % (overall_end - overall_start),
                 cat='overall mapping time', duration=str(overall_end - overall_start))
     if skip_indexing or print_count_only:
         return timings
+
     # now, queue items for indexing in the secondary queue
     # get a total list of all uuids to index among types for invalidation checking
     len_all_uuids = sum([len(uuids_to_index[i_type]) for i_type in uuids_to_index])
@@ -1106,7 +1119,8 @@ def run(app, collections=None, dry_run=False, check_first=False, skip_indexing=F
             # for now
             if not strict:
                  # arbitrary large number, that hopefully is within ES limits
-                if len_all_uuids > 30000 or total_reindex:
+                if len_all_uuids > 50000 or total_reindex:
+                    log.warning('___MAPPING ALL ITEMS WITH STRICT=TRUE TO SAVE TIME___')
                     # get all the uuids from EVERY item type
                     for i_type in registry[COLLECTIONS].by_item_type:
                         uuids_to_index[i_type] = set(get_uuids_for_types(registry, types=[i_type]))
@@ -1133,8 +1147,8 @@ def run(app, collections=None, dry_run=False, check_first=False, skip_indexing=F
             # if non-strict and attempting to reindex a ton, it is faster
             # just to strictly reindex all items
             use_strict = strict or total_reindex
-            if len_all_uuids > 30000 and not use_strict:
-                log.error('___MAPPING ALL ITEMS WITH STRICT=TRUE TO SAVE TIME___')
+            if len_all_uuids > 50000 and not use_strict:
+                log.warning('___MAPPING ALL ITEMS WITH STRICT=TRUE TO SAVE TIME___')
                 # get all the uuids from EVERY item type
                 for i_type in registry[COLLECTIONS].by_item_type:
                     uuids_to_index[i_type] = set(get_uuids_for_types(registry, types=[i_type]))
