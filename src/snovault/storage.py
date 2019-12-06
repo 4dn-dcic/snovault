@@ -266,10 +266,9 @@ class PickStorage(object):
         storage = self.storage(datastore)
         if storage is self.read:
             # must update links and such in write RDS. However, don't update
-            # properties and sheets, as those are exclusively stored in ES
+            # properties and sheets, as those are exclusively stored in ES.
+            # Still call `storage.update` below to update contents of ES doc
             self.write.update(model, {}, None, unique_keys, links)
-            # update contents of the ES documents
-            return storage.update(model, properties, sheets, unique_keys, links)
 
         return storage.update(model, properties, sheets, unique_keys, links)
 

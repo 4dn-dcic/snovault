@@ -26,11 +26,11 @@ sources = [
 def content(testapp):
     url = '/testing-link-targets-sno/'
     for item in targets:
-        res = testapp.post_json(url, item, status=201)
+        testapp.post_json(url, item, status=201)
 
     url = '/testing-link-sources-sno/'
     for item in sources:
-        res = testapp.post_json(url, item)
+        testapp.post_json(url, item, status=201)
 
 
 def test_links_add(content, session):
