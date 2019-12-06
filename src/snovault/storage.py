@@ -402,6 +402,11 @@ class S3BlobStorage(object):
     def store_blob(self, data, download_meta, blob_id=None):
         """
         Create a new s3 key = blob_id and upload the contents
+
+        Args:
+            data: raw blob to store
+            download_meta: unused beyond setting some meta data fields
+            blob_id: optional ID if you want to provide it, one will be generated
         """
         if blob_id is None:
             blob_id = str(uuid.uuid4())
@@ -417,15 +422,24 @@ class S3BlobStorage(object):
         download_meta['blob_id'] = str(blob_id)
 
     def _get_bucket_key(self, download_meta):
-        # Assume files have been migrated
+        """ Helper for the below two methods """
         if 'bucket' in download_meta:
             return download_meta['bucket'], download_meta['key']
         else:
             return self.bucket, download_meta['blob_id']
 
     def get_blob_url(self, download_meta):
-        bucket_name, key = self._get_bucket_key(download_meta)
+        """ Locates a blob on S3 storage
 
+        Args:
+            download_meta: dictionary containing meta data, can specify the bucket
+            itself if it stored elsewhere otherwise defaults to self.bucket and
+            the blob_id
+
+        Returns:
+            url to the data
+        """
+        bucket_name, key = self._get_bucket_key(download_meta)
         location = self.s3.generate_presigned_url(
             ClientMethod='get_object',
             ExpiresIn=36*60*60,
@@ -433,8 +447,15 @@ class S3BlobStorage(object):
         return location
 
     def get_blob(self, download_meta):
-        bucket_name, key = self._get_bucket_key(download_meta)
+        """ Locates and gets a blob on S3 storage
 
+        Args:
+            download_meta: see above
+
+        Returns:
+            data from S3
+        """
+        bucket_name, key = self._get_bucket_key(download_meta)
         response = self.s3.get_object(Bucket=bucket_name,
                                  Key=key)
         return response['Body'].read().decode()

@@ -32,12 +32,7 @@ class ItemWithAttachment(Item):
     Item base class with attachment blob.
     Handles validation, storage, and downloading of attachments given in the
     `attachment` field of the given item.
-
-    The `mimetype_map` attribute can be used to override mimetype comparisons,
-    which may be required in some cases with python-magic. Use with care!
     """
-    # specify in form: {some mimetype: [one or more equivalent mimetypes]}
-    mimetype_map = {}
 
     @staticmethod
     def parse_data_uri(uri):
@@ -81,9 +76,6 @@ class ItemWithAttachment(Item):
 
     def mimetypes_are_equal(self, m1, m2):
         """ Checks that mime_type m1 and m2 are equal """
-        if m2 in self.mimetype_map.get(m1, []):
-            return True
-
         major1 = m1.split('/')[0]
         major2 = m2.split('/')[0]
         if major1 == 'text' and major2 == 'text':
@@ -104,6 +96,7 @@ class ItemWithAttachment(Item):
         attachment = properties[prop_name]
         href = attachment['href']
 
+        # verify data format
         if not href.startswith('data:'):
             msg = "Expected data URI."
             raise ValidationFailure('body', [prop_name, 'href'], msg)
@@ -111,6 +104,7 @@ class ItemWithAttachment(Item):
         properties[prop_name] = attachment = attachment.copy()
         download_meta = downloads[prop_name] = {}
 
+        # parse the data
         try:
             mime_type, charset, data = self.parse_data_uri(href)
         except (ValueError, TypeError):
@@ -263,12 +257,10 @@ def download(context, request):
     if mimetype is None:
         mimetype = 'application/octet-stream'
 
-    # If blob is external, serve via proxy using X-Accel-Redirect
+    # If blob is on s3, redirect us there
     blob_storage = request.registry[BLOBS]
     if hasattr(blob_storage, 'get_blob_url'):
         blob_url = blob_storage.get_blob_url(download_meta)
-        # we don't use nginx in production
-        # return Response(headers={'X-Accel-Redirect': '/_proxy/' + str(blob_url)})
         raise HTTPFound(location=str(blob_url))
 
     # Otherwise serve the blob data ourselves
