@@ -436,15 +436,15 @@ def testing_retry(context, request):
     }
 
 
+# properties_datastore sets makes this collection stored in ES
 @collection('testing-link-targets-elastic-search',
-            unique_key='testing_link_target_elastic_search:name')
+            unique_key='testing_link_target_elastic_search:name',
+            properties_datastore='elasticsearch')
 class TestingLinkTargetElasticSearch(Item):
     """
     Like TestingLinkTargetSno, but leverages ElasticSearch storage exclusively.
     Includes a linkTo and a rev_link to test multiple behaviors.
     """
-    # used_datastore sets this as an ElasticSearch item
-    used_datastore = 'elasticsearch'
     item_type = 'testing_link_target_elastic_search'
     name_key = 'name'
     schema = load_schema('snovault:test_schemas/TestingLinkTargetElasticSearch.json')

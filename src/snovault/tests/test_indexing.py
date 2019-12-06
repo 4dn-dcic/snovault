@@ -1264,7 +1264,7 @@ def test_validators_on_indexing(app, testapp, indexer_testapp):
 def test_elasticsearch_item(app, testapp, indexer_testapp):
     """
     Test creating + indexing a TestingLinkTargetElasticSearch item, which
-    uses `used_datastore='elasticsearch'`. Ensure that all standard
+    uses `properties_datastore='elasticsearch'`. Ensure that all standard
     functionality on this item works, including linking to a regular DB item
     """
     es = app.registry[ELASTIC_SEARCH]
