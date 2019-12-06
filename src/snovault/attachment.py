@@ -27,31 +27,6 @@ def includeme(config):
     config.scan(__name__)
 
 
-def parse_data_uri(uri):
-    if not uri.startswith('data:'):
-        raise ValueError(uri)
-    meta, data = uri[len('data:'):].split(',', 1)
-    meta = meta.split(';')
-    mime_type = meta[0] or None
-    charset = None
-    is_base64 = False
-    for part in meta[1:]:
-        if part == 'base64':
-            is_base64 = True
-            continue
-        if part.startswith('charset='):
-            charset = part[len('charset='):]
-            continue
-        raise ValueError(uri)
-
-    if is_base64:
-        data = b64decode(data)
-    else:
-        data = unquote(data)
-
-    return mime_type, charset, data
-
-
 class ItemWithAttachment(Item):
     """
     Item base class with attachment blob.
@@ -64,9 +39,49 @@ class ItemWithAttachment(Item):
     # specify in form: {some mimetype: [one or more equivalent mimetypes]}
     mimetype_map = {}
 
-    @classmethod
-    def mimetypes_are_equal(cls, m1, m2):
-        if m2 in cls.mimetype_map.get(m1, []):
+    @staticmethod
+    def parse_data_uri(uri):
+        """ Proceses a raw download string returning the mime_type, charset
+            and raw data associated with this download
+
+        Args:
+            uri: raw download string, see test_attachment.py for format
+
+        Returns:
+            mime_type: type of download, such as 'image/png'
+            charset: set of characters associated with this encoding, if necessary
+            but for the most part is unused
+            data: decoded raw image data
+        """
+        if not uri.startswith('data:'):
+            raise ValueError(uri)
+        meta, data = uri[len('data:'):].split(',', 1)
+        meta = meta.split(';')
+        mime_type = meta[0] or None
+        charset = None
+        is_base64 = False
+
+        # figure out encoding
+        for part in meta[1:]:
+            if part == 'base64':
+                is_base64 = True
+                continue
+            if part.startswith('charset='):
+                charset = part[len('charset='):]
+                continue
+            raise ValueError(uri)
+
+        # decode as appropriate
+        if is_base64:
+            data = b64decode(data)
+        else:
+            data = unquote(data)
+
+        return mime_type, charset, data
+
+    def mimetypes_are_equal(self, m1, m2):
+        """ Checks that mime_type m1 and m2 are equal """
+        if m2 in self.mimetype_map.get(m1, []):
             return True
 
         major1 = m1.split('/')[0]
@@ -76,6 +91,16 @@ class ItemWithAttachment(Item):
         return m1 == m2
 
     def _process_downloads(self, prop_name, properties, downloads):
+        """ Processes, validates and stores the download in RDBS blob storage
+            Helper for _update
+
+        Args:
+            prop_name: name of property containing attachment
+            properties: item properties where property containing attachment is
+            located
+            downloads: metadata for downloads, used by _update and reset to {}
+            for the given prop_name
+        """
         attachment = properties[prop_name]
         href = attachment['href']
 
@@ -87,7 +112,7 @@ class ItemWithAttachment(Item):
         download_meta = downloads[prop_name] = {}
 
         try:
-            mime_type, charset, data = parse_data_uri(href)
+            mime_type, charset, data = self.parse_data_uri(href)
         except (ValueError, TypeError):
             msg = 'Could not parse data URI.'
             raise ValidationFailure('body', [prop_name, 'href'], msg)
@@ -148,6 +173,7 @@ class ItemWithAttachment(Item):
         else:
             download_meta['md5sum'] = attachment['md5sum'] = md5sum
 
+        # store blob in blobstorage
         registry = find_root(self).registry
         blob_id = str(uuid.uuid4())
         registry[BLOBS].store_blob(data, download_meta, blob_id)
@@ -156,10 +182,19 @@ class ItemWithAttachment(Item):
         attachment['blob_id'] = blob_id
 
     def _update(self, properties, sheets=None):
+        """ Updates an attachment in the S3BlobStorage using the above method
+            as a helper, then propagates the change by calling the parent update
+
+        Args:
+            properties: props of the item we are updating
+            sheets: propsheets (?)
+        """
         changed = []
         unchanged = []
-        removed = []  # unused?
+        removed = []  # used if you remove an attachment property
         forced = []  # allow POST/PATCH of already uploaded attachment info
+
+        # detect changes to any attachments on this item
         for prop_name, prop in self.schema['properties'].items():
             if not prop.get('attachment', False):
                 continue
@@ -193,6 +228,7 @@ class ItemWithAttachment(Item):
             else:
                 changed.append(prop_name)
 
+        # process the changes, if any, keeping 'downloads' up to date
         if changed or unchanged or forced:
             properties = properties.copy()
             sheets = {} if sheets is None else sheets.copy()

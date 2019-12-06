@@ -351,10 +351,20 @@ class UUID(types.TypeDecorator):
 
 
 class RDBBlobStorage(object):
+    """ Handlers to blobs we store in RDB """
     def __init__(self, DBSession):
         self.DBSession = DBSession
 
     def store_blob(self, data, download_meta, blob_id=None):
+        """ Initializes a db session and stores the data
+
+        Args:
+            data: raw attachment data
+            download_meta: metadata associated with 'data', not actually used
+            unless the caller wants to retain the blob_id
+            blob_id: optional arg specifying the id, will be generated if not
+            provided
+        """
         if blob_id is None:
             blob_id = uuid.uuid4()
         elif isinstance(blob_id, str):
@@ -365,6 +375,15 @@ class RDBBlobStorage(object):
         download_meta['blob_id'] = str(blob_id)
 
     def get_blob(self, download_meta):
+        """ Gets a blob given from RDB
+
+        Args:
+            download_meta: metadata associated with the blob, all that is required
+            is an entry for 'blob_id'
+
+        Returns:
+            data from the DB
+        """
         blob_id = download_meta['blob_id']
         if isinstance(blob_id, str):
             blob_id = uuid.UUID(blob_id)
@@ -374,21 +393,20 @@ class RDBBlobStorage(object):
 
 
 class S3BlobStorage(object):
+    """ Handler to blobs we store in S3 """
     def __init__(self, bucket):
         self.bucket = bucket
         session = boto3.session.Session(region_name='us-east-1')
         self.s3 = session.client('s3')
 
     def store_blob(self, data, download_meta, blob_id=None):
-        '''
-        create a new s3 key = blob_id
-        upload the contents and return the meta in download_meta
-        '''
+        """
+        Create a new s3 key = blob_id and upload the contents
+        """
         if blob_id is None:
             blob_id = str(uuid.uuid4())
 
         content_type = download_meta.get('type','binary/octet-stream')
-
         self.s3.put_object(Bucket=self.bucket,
                            Key=blob_id,
                            Body=data,
