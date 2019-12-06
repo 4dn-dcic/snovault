@@ -113,6 +113,21 @@ def setup_and_teardown(app):
     transaction.commit()
 
 
+@pytest.fixture(scope='function')
+def es_based_target(app, testapp):
+    # must run create mapping BEFORE posting the ES-based item, since it will
+    # cause the underlying item properties in the index to be lost
+    create_mapping.run(
+        app,
+        collections=['testing_link_target_elastic_search',
+                     'testing_link_source_sno'],
+        skip_indexing=True
+    )
+    target  = {'name': 'es_one', 'status': 'current'}
+    target_res = testapp.post_json('/testing-link-targets-elastic-search/', target, status=201)
+    return target_res.json['@graph'][0]
+
+
 def test_indexer_namespacing(app, testapp, indexer_testapp):
     """
     Tests that namespacing indexes works as expected. This test has no real
@@ -1261,26 +1276,49 @@ def test_validators_on_indexing(app, testapp, indexer_testapp):
     assert val_err_view['validation_errors'] == es_res['_source']['validation_errors']
 
 
-def test_elasticsearch_item(app, testapp, indexer_testapp):
+def test_elasticsearch_item_basic(app, testapp, indexer_testapp, es_based_target):
+    es = app.registry[ELASTIC_SEARCH]
+    namespaced_target = indexer_utils.get_namespaced_index(app, 'testing_link_target_elastic_search')
+    target_uuid = es_based_target['uuid']
+
+    indexer_testapp.post_json('/index', {'record': True})
+    time.sleep(3)
+    target_es = es.get(index=namespaced_target, doc_type='testing_link_target_elastic_search',
+                       id=target_uuid)
+
+    # do some common operations with the ES item
+    res = testapp.get(es_based_target['@id'])
+    res_db = testapp.get(es_based_target['@id'] + '?datastore=database')
+    assert res.json == res_db.json
+
+    res = testapp.get(es_based_target['@id'] + '?frame=object')
+    assert res.json == target_es['_source']['object']
+
+    res = testapp.get(es_based_target['@id'] + '?frame=raw')
+    # 'raw' view contains uuid in properties; es 'properties' does not
+    assert res.json != target_es['_source']['properties']
+    es_props_copy = target_es['_source']['properties'].copy()
+    es_props_copy.update({'uuid': target_uuid})
+    assert res.json == es_props_copy
+
+    # validation errors work with es-based items
+    res = testapp.patch_json(es_based_target['@id'],
+                             {'uuid': str(uuid.uuid4())}, status=422)
+    assert res.json['errors'][0]['description'] == 'uuid may not be changed'
+    res = testapp.patch_json(es_based_target['@id'], {'status': 123}, status=422)
+    assert res.json['errors'][0]['name'] == 'Schema: status'
+
+
+def test_elasticsearch_item_with_source(app, testapp, indexer_testapp, es_based_target):
     """
-    Test creating + indexing a TestingLinkTargetElasticSearch item, which
-    uses `properties_datastore='elasticsearch'`. Ensure that all standard
-    functionality on this item works, including linking to a regular DB item
+    Test rev_linking with a TestingLinkTargetElasticSearch item, including
+    invalidation, @@links, and purging
     """
     es = app.registry[ELASTIC_SEARCH]
-    indexer_queue = app.registry[INDEXER_QUEUE]
-    create_mapping.run(
-        app,
-        collections=['testing_link_target_elastic_search',
-                     'testing_link_source_sno', TEST_TYPE],
-        skip_indexing=True
-    )
-    target  = {'name': 'es_one', 'status': 'current'}
-
     namespaced_target = indexer_utils.get_namespaced_index(app, 'testing_link_target_elastic_search')
     namespaced_source = indexer_utils.get_namespaced_index(app, 'testing_link_source_sno')
-    target_res = testapp.post_json('/testing-link-targets-elastic-search/', target, status=201)
-    target_uuid = target_res.json['@graph'][0]['uuid']
+    target_uuid = es_based_target['uuid']
+
     target_es = es.get(index=namespaced_target, doc_type='testing_link_target_elastic_search',
                        id=target_uuid)
     # initial document before indexing will not have object/embedded views
@@ -1292,7 +1330,7 @@ def test_elasticsearch_item(app, testapp, indexer_testapp):
     target_es = es.get(index=namespaced_target, doc_type='testing_link_target_elastic_search',
                        id=target_uuid)
     assert target_es['_source']['embedded']['name'] == 'es_one'
-    assert target_es['_source']['paths'] == ["/testing-link-targets-elastic-search/" + target['name']]
+    assert target_es['_source']['paths'] == ["/testing-link-targets-elastic-search/" + es_based_target['name']]
     assert target_es['_source']['embedded']['reverse_es'] == []
 
     # add a source and make sure target gets updated correctly
@@ -1311,7 +1349,7 @@ def test_elasticsearch_item(app, testapp, indexer_testapp):
     assert target_uuid in [x['uuid'] for x in source_es['_source']['linked_uuids_embedded']]
 
     # make sure patches/invalidation work on the target and source
-    testapp.patch_json(target_res.json['@graph'][0]['@id'], {'status': 'deleted'})
+    testapp.patch_json(es_based_target['@id'], {'status': 'deleted'})
     # before indexing, ES document should have some old views and new sid/properties
     target_es_pre = es.get(index=namespaced_target, doc_type='testing_link_target_elastic_search',
                            id=target_uuid)
@@ -1344,66 +1382,87 @@ def test_elasticsearch_item(app, testapp, indexer_testapp):
     assert target_es['_source']['embedded']['reverse_es'] == []
     assert source_uuid not in [x['uuid'] for x in target_es['_source']['linked_uuids_embedded']]
 
+    res = testapp.get(es_based_target['@id'] + '@@links')
+    assert source_uuid in [x['uuid'] for x in res.json['uuids_linking_to']]
+
+    # test purging with source still linked (item locked)
+    with pytest.raises(webtest.AppError) as excinfo:
+        testapp.delete_json(es_based_target['@id'] + '?purge=True')
+    assert 'Cannot purge item as other items still link to it' in str(excinfo.value)
+
+    # remove source
+    testapp.patch_json(source_res.json['@graph'][0]['@id'] + '?delete_fields=target_es', {})
+    indexer_testapp.post_json('/index', {'record': True})
+    time.sleep(3)
+    res = testapp.get(es_based_target['@id'] + '@@links')
+    assert source_uuid not in [x['uuid'] for x in res.json['uuids_linking_to']]
+
+    # test purging with source removed (should work)
+    res = testapp.delete_json(es_based_target['@id'] + '?purge=True')
+    assert res.json['status'] == 'success'
+    assert res.json['notification'] == 'Permanently deleted ' + target_uuid
+    time.sleep(3)
+    testapp.get(es_based_target['@id'], status=404)
+    testapp.get(es_based_target['@id'] + '?datastore=database', status=404)
+
+
+def test_elasticsearch_item_embedded_agg(app, testapp, indexer_testapp, es_based_target):
+    """
+    Test embedding items in TestingLinkTargetElasticSearch and using
+    aggregated-items view
+    """
+    es = app.registry[ELASTIC_SEARCH]
+    namespaced_target = indexer_utils.get_namespaced_index(app, 'testing_link_target_elastic_search')
+    target_uuid = es_based_target['uuid']
+
+    indexer_testapp.post_json('/index', {'record': True})
+    time.sleep(3)
+    # get sid/max_sid from original ES doc
+    target_es_init = es.get(index=namespaced_target, doc_type='testing_link_target_elastic_search',
+                            id=target_uuid)
+    target_init_sid = target_es_init['_source']['sid']
+    target_init_max_sid = target_es_init['_source']['max_sid']
+
     # test embedding and aggregated_items
     ppp_res = testapp.post_json(TEST_COLL, {'required': '', 'simple1': 'abc'}, status=201)
     ppp_uuid = ppp_res.json['@graph'][0]['uuid']
-    testapp.patch_json(target_res.json['@graph'][0]['@id'], {'ppp': ppp_uuid})
-    # properties now contains updated link; embedded does not (until indexing)
+    testapp.patch_json(es_based_target['@id'], {'ppp': ppp_uuid})
+
+    # check es document before indexing, where only some fields will be updated
+    # by ElasticSearchStorage.update (other updated at time of indexing)
     target_es_pre = es.get(index=namespaced_target, doc_type='testing_link_target_elastic_search',
                            id=target_uuid)
-    # properties will be updated on patch
+    # properties, links, sid, and max_sid will be updated on patch
     assert target_es_pre['_source']['properties']['ppp'] == ppp_uuid
+    assert ppp_uuid in target_es_pre['_source']['links']['ppp']
+    assert target_es_pre['_source']['sid'] > target_init_sid
+    assert target_es_pre['_source']['max_sid'] > target_init_max_sid
+    # but not yet in object, embedded, or aggregated items
+    assert 'ppp' not in target_es_pre['_source']['object']
     assert 'ppp' not in target_es_pre['_source']['embedded']
     assert target_es_pre['_source']['aggregated_items']['ppp'] == []
+
+    # index and check all updated fields
     indexer_testapp.post_json('/index', {'record': True})
     time.sleep(3)
     target_es = es.get(index=namespaced_target, doc_type='testing_link_target_elastic_search',
                        id=target_uuid)
+    # these fields were unchanged by indexing
+    assert target_es_pre['_source']['properties'] == target_es['_source']['properties']
+    assert target_es_pre['_source']['links'] == target_es['_source']['links']
+    assert target_es_pre['_source']['sid'] == target_es['_source']['sid']
+    assert target_es_pre['_source']['max_sid'] == target_es['_source']['max_sid']
+
+    # these fields were updated by indexing
     assert target_es['_source']['embedded']['ppp']['simple1'] == 'abc'
-    # check aggregated_items
     assert 'aggregated_items' in target_es['_source']
     target_es_aggs = target_es['_source']['aggregated_items']
     assert 'ppp' in target_es_aggs
     assert len(target_es_aggs['ppp']) == 1
-    assert target_es_aggs['ppp'][0]['parent'] == target_res.json['@graph'][0]['@id']
+    assert target_es_aggs['ppp'][0]['parent'] == es_based_target['@id']
     assert target_es_aggs['ppp'][0]['embedded_path'] == 'ppp'
     assert target_es_aggs['ppp'][0]['item']['simple1'] == 'abc'
     assert target_es_aggs['ppp'][0]['item']['uuid'] == ppp_uuid
     # check @@links on the ppp page to ensure it contains ES item
     res = testapp.get(ppp_res.json['@graph'][0]['@id'] + '@@links')
     assert target_uuid in [x['uuid'] for x in res.json['uuids_linking_to']]
-
-    # do some other common operations with the ES item
-    res = testapp.get(target_res.json['@graph'][0]['@id'])
-    res_db = testapp.get(target_res.json['@graph'][0]['@id'] + '?datastore=database')
-    assert res.json == res_db.json
-
-    res = testapp.get(target_res.json['@graph'][0]['@id'] + '?frame=object')
-    assert res.json == target_es['_source']['object']
-
-    res = testapp.get(target_res.json['@graph'][0]['@id'] + '?frame=raw')
-    # 'raw' view contains properties; es 'properties' does not
-    assert res.json != target_es['_source']['properties']
-    es_props_copy = target_es['_source']['properties'].copy()
-    es_props_copy.update({'uuid': target_uuid})
-    assert res.json == es_props_copy
-
-    res = testapp.get(target_res.json['@graph'][0]['@id'] + '@@links')
-    assert source_uuid in [x['uuid'] for x in res.json['uuids_linking_to']]
-
-    with pytest.raises(webtest.AppError) as excinfo:
-        testapp.delete_json(target_res.json['@graph'][0]['@id'] + '?purge=True')
-    assert 'Cannot purge item as other items still link to it' in str(excinfo.value)
-
-    testapp.patch_json(source_res.json['@graph'][0]['@id'] + '?delete_fields=target_es', {})
-    indexer_testapp.post_json('/index', {'record': True})
-    time.sleep(3)
-    res = testapp.get(target_res.json['@graph'][0]['@id'] + '@@links')
-    assert source_uuid not in [x['uuid'] for x in res.json['uuids_linking_to']]
-
-    res = testapp.delete_json(target_res.json['@graph'][0]['@id'] + '?purge=True')
-    assert res.json['status'] == 'success'
-    assert res.json['notification'] == 'Permanently deleted ' + target_uuid
-    time.sleep(3)
-    testapp.get(target_res.json['@graph'][0]['@id'], status=404)
-    testapp.get(target_res.json['@graph'][0]['@id'] + '?datastore=database', status=404)
