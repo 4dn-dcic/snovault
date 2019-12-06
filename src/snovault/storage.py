@@ -143,10 +143,16 @@ class PickStorage(object):
 
     def storage(self, datastore=None):
         """
-        Choose which storage to use. If a forced datastore is passed in through
-        the `datastore` parameter, use that. Else check `request.datastore`
+        Choose which storage to use.
+        1. First check `request.datastore` to see if using self.read
+        2. Check `datastore` parameter to see if a certain storage is forced
+        3. If neither 1. or 2. result in a storage, use self.write
         """
         request = get_current_request()
+        # usually check the datastore attribute on the request
+        if self.read and request and request.datastore == 'elasticsearch':
+            return self.read
+
         if datastore is not None:
             if datastore in self.used_datastores:
                 if self.used_datastores[datastore] is None:
@@ -157,9 +163,6 @@ class PickStorage(object):
                 raise HTTPInternalServerError('Invalid forced datastore %s. Must be one of: %s'
                                               % (datastore, list(self.used_datastores.keys())))
 
-        # usually check the datastore attribute on the request
-        if self.read and request and request.datastore == 'elasticsearch':
-            return self.read
         return self.write
 
     def get_by_uuid(self, uuid, datastore=None):
