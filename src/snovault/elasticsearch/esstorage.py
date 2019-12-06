@@ -33,7 +33,7 @@ class CachedModel(object):
     that use this model.
     Analogous to storage.Resource, the model used for database resources
     """
-    used_datastore = 'elasticsearch'  # datastore used by this model
+    used_datastore = 'elasticsearch'
 
     def __init__(self, source):
         """

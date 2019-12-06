@@ -298,9 +298,8 @@ def item_delete_full(context, request, render=None):
              name='validation-errors')
 def item_view_validation_errors(context, request):
     """
-    View config for validation_errors. If the current model does not have
-    `source`, it means we are using write (RDS) storage and not ES. In that
-    case, do not calculate the validation errors as it would require an extra
+    View config for validation_errors. If the current model is not using ES,
+    do not calculate the validation errors as it would require an extra
     request and some tricky permission handling.
 
     Args:
@@ -310,7 +309,7 @@ def item_view_validation_errors(context, request):
     Returns:
         A dictionary including item path and validation errors from ES
     """
-    if not hasattr(context.model, 'source'):
+    if context.model.used_datastore != 'elasticsearch':
         return {
             '@id': request.resource_path(context),
             'validation_errors': [],

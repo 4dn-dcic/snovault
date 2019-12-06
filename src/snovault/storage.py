@@ -148,11 +148,12 @@ class PickStorage(object):
         2. Check `datastore` parameter to see if a certain storage is forced
         3. If neither 1. or 2. result in a storage, use self.write
         """
+        # usually check the datastore attribute on request (set on GET/HEAD)
         request = get_current_request()
-        # usually check the datastore attribute on the request
         if self.read and request and request.datastore == 'elasticsearch':
             return self.read
 
+        # check the datastore specified by Connection (not always used)
         if datastore is not None:
             if datastore in self.used_datastores:
                 if self.used_datastores[datastore] is None:
@@ -162,7 +163,7 @@ class PickStorage(object):
             else:
                 raise HTTPInternalServerError('Invalid forced datastore %s. Must be one of: %s'
                                               % (datastore, list(self.used_datastores.keys())))
-
+        # return write as a fallback
         return self.write
 
     def get_by_uuid(self, uuid, datastore=None):
@@ -171,8 +172,8 @@ class PickStorage(object):
         """
         storage = self.storage(datastore)
         model = storage.get_by_uuid(uuid)
-        # unless forcing datastore, check write storage if not found in read
-        if datastore is None and storage is self.read:
+        # unless forcing ES datastore, check write storage if not found in read
+        if datastore == 'database' and storage is self.read:
             if model is None:
                 return self.write.get_by_uuid(uuid)
         return model
@@ -183,8 +184,8 @@ class PickStorage(object):
         """
         storage = self.storage(datastore)
         model = storage.get_by_unique_key(unique_key, name)
-        # unless forcing datastore, check write storage if not found in read
-        if datastore is None and storage is self.read:
+        # unless forcing ES datastore, check write storage if not found in read
+        if datastore == 'database' and storage is self.read:
             if model is None:
                 return self.write.get_by_unique_key(unique_key, name)
         return model
@@ -195,8 +196,8 @@ class PickStorage(object):
         """
         storage = self.storage(datastore)
         model = storage.get_by_json(key, value, item_type)
-        # unless forcing datastore, check write storage if not found in read
-        if datastore is None and storage is self.read:
+        # unless forcing ES datastore, check write storage if not found in read
+        if datastore == 'database' and storage is self.read:
             if model is None:
                 return self.write.get_by_json(key, value, item_type)
         return model
@@ -746,7 +747,7 @@ class Resource(Base):
     """
     Resources are described by multiple propsheets
     """
-    used_datastore = 'database'  # datastore used by this model
+    used_datastore = 'database'
     __tablename__ = 'resources'
     rid = Column(UUID, primary_key=True)
     item_type = Column(types.String, nullable=False)
