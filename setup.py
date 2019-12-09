@@ -50,7 +50,7 @@ requires = [
     # for logging
     'colorama',
     'structlog',
-    'dcicutils'
+    'dcicutils==0.8.5'
 ]
 
 if sys.version_info.major == 2:
