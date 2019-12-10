@@ -183,7 +183,8 @@ class ItemWithAttachment(Item):
 
         Args:
             properties: props of the item we are updating
-            sheets: propsheets (?)
+            sheets: any extra entries in propsheets used by the item that are
+            separate from normal properties. See file.py:486
         """
         changed = []
         unchanged = []
