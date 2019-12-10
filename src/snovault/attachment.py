@@ -32,6 +32,8 @@ class ItemWithAttachment(Item):
     Item base class with attachment blob.
     Handles validation, storage, and downloading of attachments given in the
     `attachment` field of the given item.
+
+    NOTE: in production, the datastore we use is S3BlobStorage
     """
 
     @staticmethod
