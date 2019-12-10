@@ -12,6 +12,7 @@ from pyramid.view import view_config
 from pyramid.decorator import reify
 from .interfaces import INDEXER_QUEUE, INDEXER_QUEUE_MIRROR
 from .indexer_utils import get_uuids_for_types
+from collections import OrderedDict
 
 log = structlog.getLogger(__name__)
 
@@ -66,16 +67,19 @@ def queue_indexing(request):
     queue_indexer = request.registry[INDEXER_QUEUE]
     # strict mode means uuids should be indexed without finding associates
     strict = request.json.get('strict', False)
-    # target queue can also be specified: 'primary', 'secondary', 'deferred'
+    # target queue can also be specified, e.g. 'primary', 'secondary'
     target = request.json.get('target_queue', 'primary')
     if req_uuids:
         # queue these as secondary
-        queued, failed = queue_indexer.add_uuids(request.registry, req_uuids, strict=strict,
-                                                 target_queue=target, telemetry_id=telemetry_id)
+        queued, failed = queue_indexer.add_uuids(request.registry, req_uuids,
+                                                 strict=strict, target_queue=target,
+                                                 telemetry_id=telemetry_id)
         response['requested_uuids'] = req_uuids
     else:
         # queue these as secondary
-        queued, failed = queue_indexer.add_collections(request.registry, req_collections, strict=strict,
+        queued, failed = queue_indexer.add_collections(request.registry,
+                                                       req_collections,
+                                                       strict=strict,
                                                        target_queue=target,
                                                        telemetry_id=telemetry_id)
         response['requested_collections'] = req_collections
@@ -104,6 +108,7 @@ def indexing_status(request):
     else:
         for queue in numbers:
             response[queue] = numbers[queue]
+        response['display_title'] = 'Indexing Status'
         response['status'] = 'Success'
     return response
 
@@ -114,12 +119,10 @@ class QueueManager(object):
     Contains methods to inititalize queues, add both uuids and collections of
     uuids to the queue, and also various helper methods to receive/delete/replace
     messages on the queue.
-    Currently the set up uses 4 queues:
+    Currently the set up uses 3 queues:
     1. Primary queue for items that are directly posted, patched, or added.
     2. Secondary queue for associated items of those in the primary queue.
-    3. Deferred queue for items that are outside of the transaction scope
-       of any indexing process and need to be tracked separately.
-    4. Dead letter queue (dlq) for handling items that have issues processing
+    3. Dead letter queue (dlq) for handling items that have issues processing
        from either the primary or secondary queues.
     """
     def __init__(self, registry, mirror_env=None):
@@ -144,8 +147,6 @@ class QueueManager(object):
         self.queue_name = self.env_name + '-indexer-queue'
         # secondary queue name
         self.second_queue_name = self.env_name + '-secondary-indexer-queue'
-        # deferred queue name
-        self.defer_queue_name = self.env_name + '-deferred-indexer-queue'
         self.dlq_name = self.queue_name + '-dlq'
         # dictionary storing attributes for each queue, keyed by name
         # set VisibilityTimeout high because messages are batched and some items are slow
@@ -161,11 +162,6 @@ class QueueManager(object):
                 'MessageRetentionPeriod': '1209600',  # 14 days, in seconds
                 'ReceiveMessageWaitTimeSeconds': '2',  # 2 seconds of long polling
             },
-            self.defer_queue_name: {
-                'VisibilityTimeout': '600',
-                'MessageRetentionPeriod': '1209600',  # 14 days, in seconds
-                'ReceiveMessageWaitTimeSeconds': '2',  # 2 seconds of long polling
-            },
             self.dlq_name: {
                 'VisibilityTimeout': '600',  # increase if messages going to dlq
                 'MessageRetentionPeriod': '1209600',  # 14 days, in seconds
@@ -177,15 +173,19 @@ class QueueManager(object):
             response_urls = self.initialize(dlq=True)
             self.queue_url = response_urls.get(self.queue_name)
             self.second_queue_url = response_urls.get(self.second_queue_name)
-            self.defer_queue_url = response_urls.get(self.defer_queue_name)
             self.dlq_url = response_urls.get(self.dlq_name)
         else:  # assume the urls exist
             self.queue_url = self.get_queue_url(self.queue_name)
             self.second_queue_url = self.get_queue_url(self.second_queue_name)
-            self.defer_queue_url = self.get_queue_url(self.defer_queue_name)
             self.dlq_url = self.get_queue_url(self.dlq_name)
+        # short names for queues. Use OrderedDict to preserve order in Py < 3.6
+        self.queue_targets = OrderedDict([
+            ('primary', self.queue_url),
+            ('secondary', self.second_queue_url)
+        ])
 
-    def add_uuids(self, registry, uuids, strict=False, target_queue='primary', telemetry_id=None):
+    def add_uuids(self, registry, uuids, strict=False, target_queue='primary',
+                  sid=None, telemetry_id=None):
         """
         Takes a list of string uuids queues them up. Also requires a registry,
         which is passed in automatically when using the /queue_indexing route.
@@ -194,15 +194,17 @@ class QueueManager(object):
         uuids NOT to be queued. If the secondary queue is targeted, strict
         should be true (though this is not enforced).
 
+        Can optionally take an sid to add to the bodies of all messages.
+
         Returns a list of queued uuids and a list of any uuids that failed to
         be queued.
         """
         curr_time = datetime.datetime.utcnow().isoformat()
         items = []
         for uuid in uuids:
-            temp = {'uuid': uuid, 'sid': None, 'strict': strict, 'timestamp': curr_time}
+            temp = {'uuid': uuid, 'sid': sid, 'strict': strict, 'timestamp': curr_time}
             if telemetry_id:
-                temp['telemetry_id']= telemetry_id
+                temp['telemetry_id'] = telemetry_id
             items.append(temp)
         failed = self.send_messages(items, target_queue=target_queue)
         return uuids, failed
@@ -265,9 +267,9 @@ class QueueManager(object):
         """
         # dlq MUST be initialized first if used
         if dlq:
-            queue_names = [self.dlq_name, self.queue_name, self.second_queue_name, self.defer_queue_name]
+            queue_names = [self.dlq_name, self.queue_name, self.second_queue_name]
         else:
-            queue_names = [self.queue_name, self.second_queue_name, self.defer_queue_name]
+            queue_names = [self.queue_name, self.second_queue_name]
         queue_urls = {}
         for queue_name in queue_names:
             queue_attrs = self.queue_attrs[queue_name]
@@ -313,8 +315,8 @@ class QueueManager(object):
                     'deadLetterTargetArn': dlq_arn,
                     'maxReceiveCount': 4  # num of fails before sending to dlq
                 }
-                # set redrive policy for three main queues
-                for redrive_queue in [self.queue_name, self.second_queue_name, self.defer_queue_name]:
+                # set redrive policy for queues
+                for redrive_queue in [self.queue_name, self.second_queue_name]:
                     self.queue_attrs[redrive_queue]['RedrivePolicy'] = json.dumps(redrive_policy)
 
             # set attributes on an existing queue. not hit if queue was just created
@@ -326,13 +328,12 @@ class QueueManager(object):
             queue_urls[queue_name] = queue_url
         return queue_urls
 
-
-    def clear_queue(self):
+    def purge_queue(self):
         """
         Clear out the queue and dlq completely. You can no longer retrieve
         these messages. Takes up to 60 seconds.
         """
-        for queue_url in [self.queue_url, self.second_queue_url, self.defer_queue_url, self.dlq_url]:
+        for queue_url in [self.queue_url, self.second_queue_url, self.dlq_url]:
             try:
                 self.client.purge_queue(
                     QueueUrl=queue_url
@@ -340,6 +341,17 @@ class QueueManager(object):
             except self.client.exceptions.PurgeQueueInProgress:
                 log.warning('\n___QUEUE IS ALREADY BEING PURGED: %s___\n' % queue_url,
                             queue_url=queue_url)
+
+    def clear_queue(self):
+        """
+        Manually clears the queue by repeatedly calling receieve_messages then
+        deleting those messages.
+        """
+        for target in self.queue_targets:
+            msgs = self.receive_messages(target)
+            while msgs:
+                self.delete_messages(msgs, target)
+                msgs = self.receive_messages(target)
 
     def delete_queue(self, queue_url):
         """
@@ -361,15 +373,9 @@ class QueueManager(object):
 
     def choose_queue_url(self, name):
         """
-        Simple utility function given a string name parameter. Used to select
-        between primary, secondary, and deferred queues
+        Simple utility function get queue url given a target name (e.g. 'primary')
         """
-        if name.lower() == 'secondary':
-            return self.second_queue_url
-        elif name.lower() == 'deferred':
-            return self.defer_queue_url
-        else:
-            return self.queue_url
+        return self.queue_targets.get(name.lower(), self.queue_url)
 
     def send_messages(self, items, target_queue='primary', retries=0):
         """
@@ -506,7 +512,7 @@ class QueueManager(object):
         Also returns info on items in the dlq.
         """
         responses = []
-        for queue_url in [self.queue_url, self.second_queue_url, self.defer_queue_url, self.dlq_url]:
+        for queue_url in [self.queue_url, self.second_queue_url, self.dlq_url]:
             response = self.client.get_queue_attributes(
                 QueueUrl=queue_url,
                 AttributeNames=[
@@ -520,10 +526,8 @@ class QueueManager(object):
             'primary_inflight': responses[0].get('Attributes', {}).get('ApproximateNumberOfMessagesNotVisible'),
             'secondary_waiting': responses[1].get('Attributes', {}).get('ApproximateNumberOfMessages'),
             'secondary_inflight': responses[1].get('Attributes', {}).get('ApproximateNumberOfMessagesNotVisible'),
-            'deferred_waiting': responses[2].get('Attributes', {}).get('ApproximateNumberOfMessages'),
-            'deferred_inflight': responses[2].get('Attributes', {}).get('ApproximateNumberOfMessagesNotVisible'),
-            'dlq_waiting': responses[3].get('Attributes', {}).get('ApproximateNumberOfMessages'),
-            'dlq_inflight': responses[3].get('Attributes', {}).get('ApproximateNumberOfMessagesNotVisible')
+            'dlq_waiting': responses[2].get('Attributes', {}).get('ApproximateNumberOfMessages'),
+            'dlq_inflight': responses[2].get('Attributes', {}).get('ApproximateNumberOfMessagesNotVisible')
         }
         # transform in integers
         for entry in formatted:

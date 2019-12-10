@@ -10,12 +10,6 @@ from pyramid.config import Configurator
 from pyramid.settings import (
     asbool,
 )
-
-
-from .auditor import (  # noqa
-    AuditFailure,
-    audit_checker,
-)
 from .calculated import calculated_property  # noqa
 from .config import (  # noqa
     abstract_collection,
@@ -29,6 +23,7 @@ from .resources import (  # noqa
     Item,
     Resource,
     Root,
+    display_title_schema
 )
 from .schema_utils import load_schema  # noqa
 from .upgrader import upgrade_step  # noqa
@@ -36,16 +31,17 @@ from .app import (
     app_version,
     session,
     configure_dbsession,
-    static_resources,
     changelogs,
     json_from_path,
     )
 import logging
+import os
 from dcicutils.log_utils import set_logging
 
 
 
 def includeme(config):
+    config.include('pyramid_retry')
     config.include('pyramid_tm')
     config.include('.util')
     config.include('.stats')
@@ -59,7 +55,7 @@ def includeme(config):
     config.include('.predicates')
     config.include('.invalidation')
     config.include('.upgrader')
-    config.include('.auditor')
+    config.include('.aggregated_items')
     config.include('.storage')
     config.include('.typeinfo')
     config.include('.resources')
@@ -78,8 +74,8 @@ def main(global_config, **local_config):
     settings = global_config
     settings.update(local_config)
 
-    # TODO: move to dcicutils
-    set_logging(settings.get('production'))
+    set_logging(in_prod=settings.get('production'))
+    # set_logging(settings.get('elasticsearch.server'), settings.get('production'))
 
     # TODO - these need to be set for dummy app
     # settings['snovault.jsonld.namespaces'] = json_asset('snovault:schemas/namespaces.json')
@@ -101,18 +97,19 @@ def main(global_config, **local_config):
     config.include('snovault')
     config.commit()  # commit so search can override listing
 
-    # Render an HTML page to browsers and a JSON document for API clients
-    config.include('snowflakes.renderers')
-    # these two should be application specific
-    config.include('.authentication')
-    config.include('snowflakes.root')
+    config.include('.renderers')
+
+    # only include this stuff if we're testing
+    if asbool(settings.get('testing', False)):
+        config.include('snovault.tests.testing_views')
+        config.include('snovault.tests.authentication')
+        config.include('snovault.tests.root')
+        if settings.get('elasticsearch.server'):
+            config.include('snovault.tests.search')
 
     if 'elasticsearch.server' in config.registry.settings:
         config.include('snovault.elasticsearch')
-        # needed for /search/?
-        config.include('snowflakes.search')
 
-    config.include(static_resources)
     config.include(changelogs)
 
     # TODO This is optional AWS only - possibly move to a plug-in
@@ -120,14 +117,9 @@ def main(global_config, **local_config):
     config.registry['aws_ipset'] = netaddr.IPSet(
         record['ip_prefix'] for record in aws_ip_ranges['prefixes'] if record['service'] == 'AMAZON')
 
-    if asbool(settings.get('testing', False)):
-        config.include('.tests.testing_views')
-
     # Load upgrades last so that all views (including testing views) are
     # registered.
-    # TODO we would need a generic upgrade audit PACKAGE (__init__)
-    # config.include('.audit)
-    # config.include('.upgrade')
+    #config.include('.upgrade')
 
     app = config.make_wsgi_app()
 

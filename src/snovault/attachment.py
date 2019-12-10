@@ -52,17 +52,28 @@ def parse_data_uri(uri):
     return mime_type, charset, data
 
 
-def mimetypes_are_equal(m1, m2):
-    major1 = m1.split('/')[0]
-    major2 = m2.split('/')[0]
-    if major1 == 'text' and major2 == 'text':
-        return True
-    return m1 == m2
-
-
 class ItemWithAttachment(Item):
-    """ Item base class with attachment blob
     """
+    Item base class with attachment blob.
+    Handles validation, storage, and downloading of attachments given in the
+    `attachment` field of the given item.
+
+    The `mimetype_map` attribute can be used to override mimetype comparisons,
+    which may be required in some cases with python-magic. Use with care!
+    """
+    # specify in form: {some mimetype: [one or more equivalent mimetypes]}
+    mimetype_map = {}
+
+    @classmethod
+    def mimetypes_are_equal(cls, m1, m2):
+        if m2 in cls.mimetype_map.get(m1, []):
+            return True
+
+        major1 = m1.split('/')[0]
+        major2 = m2.split('/')[0]
+        if major1 == 'text' and major2 == 'text':
+            return True
+        return m1 == m2
 
     def _process_downloads(self, prop_name, properties, downloads):
         attachment = properties[prop_name]
@@ -89,7 +100,7 @@ class ItemWithAttachment(Item):
         if mime_type_from_filename is None:
             mime_type_from_filename = 'application/octet-stream'
         if mime_type:
-            if not mimetypes_are_equal(mime_type, mime_type_from_filename):
+            if not self.mimetypes_are_equal(mime_type, mime_type_from_filename):
                 raise ValidationFailure(
                     'body', [prop_name, 'href'],
                     'Wrong file extension for %s mimetype.' % mime_type)
@@ -103,7 +114,7 @@ class ItemWithAttachment(Item):
         except AttributeError:
             mime_type_detected = magic.from_buffer(data, mime=True)
 
-        if not mimetypes_are_equal(mime_type, mime_type_detected):
+        if not self.mimetypes_are_equal(mime_type, mime_type_detected):
             msg = "Incorrect file type. (Appears to be %s)" % mime_type_detected
             raise ValidationFailure('body', [prop_name, 'href'], msg)
 

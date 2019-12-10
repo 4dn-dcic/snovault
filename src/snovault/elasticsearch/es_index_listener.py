@@ -6,7 +6,10 @@ Example.
 """
 
 from webtest import TestApp
-from snovault.elasticsearch import ELASTIC_SEARCH
+from snovault.elasticsearch.interfaces import (
+    ELASTIC_SEARCH,
+    INDEXER_QUEUE
+)
 import atexit
 import datetime
 import elasticsearch.exceptions
@@ -44,14 +47,19 @@ def run(testapp, interval=DEFAULT_INTERVAL, dry_run=False, path='/index', update
     )
 
     # Make sure elasticsearch is up before trying to index.
-    if path == '/index_file':
-        return
-    else:
-        es = testapp.app.registry[ELASTIC_SEARCH]
+    es = testapp.app.registry[ELASTIC_SEARCH]
     es.info()
+
+    queue = testapp.app.registry[INDEXER_QUEUE]
 
     # main listening loop
     while True:
+        # if not messages to index, skip the /index call. Counts are approximate
+        queue_counts = queue.number_of_messages()
+        if (not queue_counts['primary_waiting'] and not queue_counts['secondary_waiting']):
+            time.sleep(interval)
+            continue
+
         try:
             res = testapp.post_json(path, {
                 'record': True,
@@ -170,6 +178,7 @@ def composite(loader, global_conf, **settings):
     if 'interval' in settings:
         kwargs['interval'] = float(settings['interval'])
 
+    # daemon thread that actually executes `run` method to call /index
     listener = ErrorHandlingThread(target=run, name='listener', kwargs=kwargs)
     listener.daemon = True
     log.debug('starting listener')
@@ -204,6 +213,7 @@ def internal_app(configfile, app_name=None, username=None):
 
 def main():
     import argparse
+    from snovault import set_logging
     parser = argparse.ArgumentParser(
         description="Listen for changes from postgres and index in elasticsearch",
         epilog=EPILOG,
@@ -221,7 +231,7 @@ def main():
         help="Poll interval between notifications")
     parser.add_argument(
         '--path', default='/index',
-        help="Path of indexing view (/index or /index_file)")
+        help="Path of indexing view")
     parser.add_argument('config_uri', help="path to configfile")
     args = parser.parse_args()
 
@@ -234,13 +244,9 @@ def main():
     if args.verbose or args.dry_run:
         level = logging.DEBUG
 
-    set_logging(app.registry.settings.get('production'), level=level)
-    #global log
-    #log = structlog.get_logger(__name__)
-
     # Loading app will have configured from config file. Reconfigure here:
-    #logging.getLogger('snovault').setLevel(logging.DEBUG)
-
+    # Use `es_server=app.registry.settings.get('elasticsearch.server')` when ES logging is working
+    set_logging(in_prod=app.registry.settings.get('production'), level=logging.INFO)
     return run(testapp, args.poll_interval, args.dry_run, args.path)
 
 

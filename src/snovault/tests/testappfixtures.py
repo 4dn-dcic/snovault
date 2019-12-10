@@ -5,32 +5,34 @@ _app_settings = {
     'item_datastore': 'database',
     'load_test_only': True,
     'testing': True,
+    'mpindexer': False,
     'pyramid.debug_authorization': True,
     'postgresql.statement_timeout': 20,
-    'tm.attempts': 3,
+    'retry.attempts': 3,
     'production': True,
     'structlog.dir': '/tmp/',
     'multiauth.policies': 'session remoteuser accesskey webuser',
-    'multiauth.groupfinder': 'snowflakes.authorization.groupfinder',
-    'multiauth.policy.session.use': 'snovault.authentication.NamespacedAuthenticationPolicy',
+    'multiauth.groupfinder': 'snovault.tests.authorization.groupfinder',
+    'multiauth.policy.session.use': 'snovault.tests.authentication.NamespacedAuthenticationPolicy',
     'multiauth.policy.session.base': 'pyramid.authentication.SessionAuthenticationPolicy',
     'multiauth.policy.session.namespace': 'mailto',
-    'multiauth.policy.remoteuser.use': 'snovault.authentication.NamespacedAuthenticationPolicy',
+    'multiauth.policy.remoteuser.use': 'snovault.tests.authentication.NamespacedAuthenticationPolicy',
     'multiauth.policy.remoteuser.namespace': 'remoteuser',
     'multiauth.policy.remoteuser.base': 'pyramid.authentication.RemoteUserAuthenticationPolicy',
-    'multiauth.policy.accesskey.use': 'snovault.authentication.NamespacedAuthenticationPolicy',
+    'multiauth.policy.accesskey.use': 'snovault.tests.authentication.NamespacedAuthenticationPolicy',
     'multiauth.policy.accesskey.namespace': 'accesskey',
-    'multiauth.policy.accesskey.base': 'snovault.authentication.BasicAuthAuthenticationPolicy',
-    'multiauth.policy.accesskey.check': 'snovault.authentication.basic_auth_check',
-    'multiauth.policy.webuser.use':  'snovault.authentication.NamespacedAuthenticationPolicy',
+    'multiauth.policy.accesskey.base': 'snovault.tests.authentication.BasicAuthAuthenticationPolicy',
+    'multiauth.policy.accesskey.check': 'snovault.tests.authentication.basic_auth_check',
+    'multiauth.policy.webuser.use':  'snovault.tests.authentication.NamespacedAuthenticationPolicy',
     'multiauth.policy.webuser.namespace': 'webuser',
-    'multiauth.policy.webuser.base': 'snovault.authentication.WebUserAuthenticationPolicy'
+    'multiauth.policy.webuser.base': 'snovault.tests.authentication.WebUserAuthenticationPolicy'
 }
 
 
 @pytest.fixture(scope='session')
 def app_settings(request, wsgi_server_host_port, conn, DBSession):
     from snovault import DBSESSION
+    import os
     settings = _app_settings.copy()
     settings[DBSESSION] = DBSession
     return settings

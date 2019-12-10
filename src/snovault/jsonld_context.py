@@ -285,6 +285,9 @@ def ontology_from_schema(schema, prefix, term_path, item_type, class_name, base_
 @view_config(route_name='jsonld_context_no_slash', request_method='GET')
 @view_config(route_name='jsonld_context', request_method='GET')
 def jsonld_context(context, request):
+    """
+    Basically a view that list all the terms used on the site in JSON-ld format
+    """
     return request.registry['snovault.jsonld.context']
 
 

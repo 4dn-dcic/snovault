@@ -22,9 +22,11 @@ from .resources import (
 from .util import (
     expand_path,
     build_embedded_model,
-    expand_embedded_model
+    expand_embedded_model,
+    process_aggregated_items,
+    check_es_and_cache_linked_sids,
+    validate_es_content
 )
-
 
 def includeme(config):
     config.scan(__name__)
@@ -131,23 +133,88 @@ def item_view_object(context, request):
     Render json structure. This is the most basic view and contains the scope
     of only one item. The steps to generate it are:
     1. Fetch stored properties, possibly upgrading.
-    2. Link canonicalization (overwriting uuids.) with item_with_links
+    2. Link canonicalization (overwriting uuids with links)
        - adds uuid to request._linked_uuids if request._indexing_view
     3. Calculated properties
+
+    On a DB request, will use the Elasticsearch result for the view if the ES
+    result passes `validate_es_content` (has valid sids and rev_links)
+
+    Args:
+        context: current Item
+        request: current Request
+
+    Returns:
+        Dictionary item properties
     """
+    if hasattr(request, 'datastore') and request.datastore != 'elasticsearch':
+        es_res = check_es_and_cache_linked_sids(context, request, 'object')
+        # validate_es_content also checks/updates rev links
+        if es_res and validate_es_content(context, request, es_res, 'object'):
+            # if indexing, handle linked_uuids
+            if getattr(request, '_indexing_view', False) is True:
+                request._linked_uuids = [link['uuid'] for link in es_res['linked_uuids_object']]
+            return es_res['object']
+
     properties = context.item_with_links(request)
     calculated = calculate_properties(context, request, properties)
     properties.update(calculated)
     return properties
 
 
-@view_config(context=Item, permission='view', request_method='GET',
-             name='embedded')
+@view_config(context=Item, permission='view', request_method='GET', name='embedded')
 def item_view_embedded(context, request):
+    """
+    Calculate and return the embedded view for an item. This is an intensive
+    process that requires an embedded model to be created from the
+    context.embedded_list and then build from traversal of individual object
+    views from the items needed.
+    This function also takes care of processing aggregated_items, which are
+    held on the request object (and transferred to subrequests in embed.py)
+
+    On a DB request, will use the Elasticsearch result for the view if the ES
+    result passes `validate_es_content` (has valid sids and rev_links)
+
+    Args:
+        context: current Item
+        request: current Request
+
+    Returns:
+        Dictionary item properties
+    """
+    if hasattr(request, 'datastore') and request.datastore != 'elasticsearch':
+        es_res = check_es_and_cache_linked_sids(context, request, 'embedded')
+        # validate_es_content also checks/updates rev links
+        if es_res and validate_es_content(context, request, es_res, 'embedded'):
+            # if indexing, handle aggregated_items and linked_uuids
+            if getattr(request, '_indexing_view', False) is True:
+                request._linked_uuids = [link['uuid'] for link in es_res['linked_uuids_embedded']]
+            if getattr(request, '_aggregate_for').get('uuid') == str(context.uuid):
+                # format this in a specific way to work with further processing
+                request._aggregated_items = {agg: {'items': val} for agg, val in
+                                             es_res['aggregated_items'].items()}
+                request._aggregate_for['uuid'] = None
+            return es_res['embedded']
+
+    # set up _aggregated_items if we want to aggregate this target
+    will_aggregate = getattr(request, '_aggregate_for').get('uuid') == str(context.uuid)
+    if will_aggregate:
+        parent_path = request.resource_path(context)
+    else:
+        parent_path = None
+
     item_path = request.resource_path(context)
     properties = request.embed(item_path, '@@object', as_user=True)
     embedded_model = build_embedded_model(context.embedded)
-    embedded = expand_embedded_model(request, properties, embedded_model)
+    embedded = expand_embedded_model(request, properties, embedded_model,
+                                     parent_path=parent_path)
+    if will_aggregate:
+        process_aggregated_items(request)
+        # we don't want to aggregate this item again, such as if the same item
+        # is used in a frame=embedded calc property.
+        # use a list here so that the reference is maintained through subreq
+        request._aggregate_for['uuid'] = None
+
     return embedded
 
 
@@ -226,6 +293,7 @@ def item_view_columns(context, request):
              name='raw')
 def item_view_raw(context, request):
     props = context.properties
+    # only upgrade properties if explicitly requested
     if asbool(request.params.get('upgrade', True)):
         props =  context.upgrade_properties()
     # add uuid to raw view

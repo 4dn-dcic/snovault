@@ -46,13 +46,10 @@ def includeme(config):
         config.include('.mpindexer')
 
 
-
 def datastore(request):
     if request.__parent__ is not None:
         return request.__parent__.datastore
     datastore = 'database'
-    if request.params.get('frame') == 'edit':
-        return datastore
     if request.method in ('HEAD', 'GET'):
         datastore = request.params.get('datastore') or \
             request.headers.get('X-Datastore') or \
@@ -94,6 +91,8 @@ class TimedRequestsHttpConnection(RequestsHttpConnection):
             return
 
         duration = int(duration * 1e6)
+        if not hasattr(request, "_stats"):
+            request._stats = {}
         stats = request._stats
         stats[self.stats_count_key] = stats.get(self.stats_count_key, 0) + 1
         stats[self.stats_time_key] = stats.get(self.stats_time_key, 0) + duration

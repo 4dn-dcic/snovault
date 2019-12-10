@@ -1,0 +1,61 @@
+{
+    "required": ["required"],
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+        "schema_version": {
+            "type": "string",
+            "pattern": "^\\d+(\\.\\d+)*$",
+            "requestMethod": [],
+            "default": "1"
+        },
+        "uuid": {
+            "title": "UUID",
+            "description": "",
+            "type": "string",
+            "format": "uuid",
+            "permission": "import_items",
+            "requestMethod": "POST"
+        },
+        "required": {
+            "type": "string"
+        },
+        "simple1": {
+            "type": "string",
+            "default": "simple1 default"
+        },
+        "simple2": {
+            "type": "string",
+            "default": "simple2 default"
+        },
+        "field_no_default": {
+            "type": "string"
+        },
+        "enum_no_default": {
+            "type": "string",
+            "enum": [
+                "1",
+                "2"
+            ]
+        },
+        "protected": {
+            "type": "string",
+            "default": "protected default",
+            "permission": "import_items"
+        },
+        "protected_link": {
+            "type": "string",
+            "linkTo": "TestingLinkTargetSno",
+            "permission": "import_items"
+        },
+        "custom_object": {
+            "type": "object",
+            "additionalProperties": true,
+            "properties": {
+                "mapped_property": {
+                    "type": "string"
+                }
+            }
+        }
+    }
+}

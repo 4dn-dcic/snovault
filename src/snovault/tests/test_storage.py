@@ -1,4 +1,7 @@
 import pytest
+from snovault.tests.toolfixtures import registry, storage
+from snovault.tests.serverfixtures import session
+
 pytestmark = pytest.mark.storage
 
 
@@ -223,6 +226,21 @@ def test_keys(session):
     session.add(key3)
     with pytest.raises(FlushError):
         session.flush()
+
+
+def test_get_sids_by_uuids(session, storage):
+    from snovault.storage import (
+        CurrentPropertySheet,
+        Resource,
+        PropertySheet,
+    )
+    props1 = {'foo': 'bar'}
+    resource = Resource('test_item', {'': props1})
+    session.add(resource)
+    session.flush()
+    resource = session.query(Resource).one()
+    sids = storage.get_sids_by_uuids([str(resource.rid)])
+    assert set(sids) == {str(resource.rid)}
 
 
 def test_S3BlobStorage():

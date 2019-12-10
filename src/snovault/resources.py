@@ -7,8 +7,13 @@ from pyramid.httpexceptions import HTTPInternalServerError
 from pyramid.security import (
     Allow,
     Everyone,
+    Authenticated,
+    principals_allowed_by_permission
 )
-from pyramid.traversal import resource_path
+from pyramid.traversal import (
+    resource_path,
+    traverse,
+)
 from .calculated import (
     calculate_properties,
     calculated_property,
@@ -26,14 +31,32 @@ from .util import (
     simple_path_ids,
     uuid_to_path
 )
-
-from .fourfront_utils import add_default_embeds
+from past.builtins import basestring
+from .util import add_default_embeds
 
 logger = logging.getLogger(__name__)
 
 
 def includeme(config):
     config.scan(__name__)
+
+
+# Migrated from snowflakes
+def calc_principals(context):
+    principals_allowed = {}
+    for permission in ('view', 'edit'):
+        principals = principals_allowed_by_permission(context, permission)
+        if principals is Everyone:
+            principals = [Everyone]
+        elif Everyone in principals:
+            principals = [Everyone]
+        elif Authenticated in principals:
+            principals = [Authenticated]
+        # Filter our roles
+        principals_allowed[permission] = [
+            p for p in sorted(principals) if not p.startswith('role.')
+        ]
+    return principals_allowed
 
 
 class Resource(object):
@@ -59,11 +82,7 @@ class Resource(object):
 class Root(Resource):
     __name__ = ''
     __parent__ = None
-    __acl__ = [
-        (Allow, 'remoteuser.INDEXER', ['view', 'list', 'index']),
-        (Allow, 'remoteuser.EMBED', ['view', 'expand', 'audit']),
-        (Allow, Everyone, ['visible_for_edit']),
-    ]
+    properties = {}
 
     def __init__(self, registry):
         self.registry = registry
@@ -114,6 +133,17 @@ class Root(Resource):
 
 
 class AbstractCollection(Resource, Mapping):
+    """
+    Collection for a certain type of resource that stores the following info:
+    - registry (pyramid registry)
+    - type_info (TypeInfo for a certain item type, see snovault.typeinfo.py)
+    - __acl__
+    - uniqueKey for the collection (e.g. item_name:key)
+    And some other info as well.
+
+    Collections allow retrieval of specific items with them by using the `get`
+    method with uuid or the unique_key
+    """
     properties = {}
     unique_key = None
 
@@ -178,6 +208,14 @@ class AbstractCollection(Resource, Mapping):
                 return resource
         return default
 
+    def iter_no_subtypes(self):
+        """
+        Make a generator that yields all items in the collection, but not
+        subtypes
+        """
+        for uuid in self.connection.__iter__(self.type_info.item_type):
+            yield uuid
+
     def __json__(self, request):
         return self.properties.copy()
 
@@ -199,13 +237,23 @@ class Collection(AbstractCollection):
     ''' Separate class so add views do not apply to AbstractCollection '''
 
 
+# Almost every single display_title should have the same
+# schema definition, so we define it here to import & re-use.
+display_title_schema = {
+    "title": "Display Title",
+    "description": "A calculated title for every object",
+    "type": "string",
+}
+
+
 class Item(Resource):
     item_type = None
     base_types = ['Item']
     name_key = None
     rev = {}
+    aggregated_items = {}
     embedded_list = []
-    audit_inherit = None
+    filtered_rev_statuses = ()
     schema = None
     AbstractCollection = AbstractCollection
     Collection = Collection
@@ -232,6 +280,7 @@ class Item(Resource):
 
     @property
     def __name__(self):
+
         if self.name_key is None:
             return str(self.uuid)
         return self.properties.get(self.name_key, None) or str(self.uuid)
@@ -252,6 +301,10 @@ class Item(Resource):
     def sid(self):
         return self.model.sid
 
+    @property
+    def max_sid(self):
+        return self.model.max_sid
+
     def links(self, properties):
         return {
             path: set(simple_path_ids(properties, path))
@@ -260,23 +313,50 @@ class Item(Resource):
 
     def get_rev_links(self, request, name):
         """
-        Return all rev links for this item under field with <name>
-        Requires a request; if request._indexing view, add these uuids
-        to request._rev_linked_uuids_by_item, which controls invalidation of
-        newly created rev links.
-        _rev_linked_uuids_by_item is a list of dictionaries in form:
-        {<item uuid originating rev link>: <item uuid that is rev linked to>}
+        Return a list of uuid rev_links for the given rev name (in self.rev)
+        from the given item.
+
+        Args:
+            request: current Request
+            name (str): name of the rev (must be in self.rev)
+
+        Returns:
+            list of str uuids of the given rev_link
         """
         types = self.registry[TYPES]
         type_name, rel = self.rev[name]
         types = types[type_name].subtypes
-        uuids = self.registry[CONNECTION].get_rev_links(self.model, rel, *types)
+        # if we are indexing, update the following request attributes
+        return self.registry[CONNECTION].get_rev_links(self.model, rel, *types)
+
+    def get_filtered_rev_links(self, request, name):
+        """
+        Run get_rev_links, but only return items that do not have a status
+        in self.filtered_rev_statuses (a tuple defined on the Item)
+        If we are indexing, add rev_link info to _rev_linked_uuids_by_item.
+
+        Args:
+            request: current Request
+            name (str): name of the rev (must be in self.rev)
+
+        Returns:
+            list of str uuids of the given rev_link, filtered by status
+        """
+        # Consider caching rev links on the request? Would save DB requests
+        # May not be worth it because they are quite fast
+        rev_uuids = self.get_rev_links(request, name)
+        filtered_uuids = [
+            str(rev_id) for rev_id in rev_uuids
+            if traverse(request.root, str(rev_id))['context'].__json__(request).get('status')
+            not in self.filtered_rev_statuses
+        ]
         if getattr(request, '_indexing_view', False) is True:
+            to_update = {name: filtered_uuids}
             if str(self.uuid) in request._rev_linked_uuids_by_item:
-                request._rev_linked_uuids_by_item[str(self.uuid)].update([str(id) for id in uuids])
+                request._rev_linked_uuids_by_item[str(self.uuid)].update(to_update)
             else:
-                request._rev_linked_uuids_by_item[str(self.uuid)] = set([str(id) for id in uuids])
-        return uuids
+                request._rev_linked_uuids_by_item[str(self.uuid)] = to_update
+        return filtered_uuids
 
     def unique_keys(self, properties):
         return {
@@ -285,6 +365,9 @@ class Item(Resource):
         }
 
     def upgrade_properties(self):
+        """
+        Calls the upgrader on the Item if properties.schema_version is not current
+        """
         try:
             properties = deepcopy(self.properties)
         except KeyError:
@@ -313,14 +396,17 @@ class Item(Resource):
     def item_with_links(self, request):
         # This works from the schema rather than the links table
         # so that upgrade on GET can work.
-        ### context.__json__ CALLS THE UPGRADER ###
+        # context.__json__ CALLS THE UPGRADER (upgrade_properties)
         properties = self.__json__(request)
         for path in self.type_info.schema_links:
             uuid_to_path(request, properties, path)
 
         # if indexing, add the uuid of this object to request._linked_uuids
+        # and add the sid to _sid_cache if not already present
         if getattr(request, '_indexing_view', False) is True:
             request._linked_uuids.add(str(self.uuid))
+            if str(self.uuid) not in request._sid_cache:
+                request._sid_cache[str(self.uuid)] = self.sid
         return properties
 
     def __resource_url__(self, request, info):
@@ -338,6 +424,22 @@ class Item(Resource):
         item_instance = cls(registry, model)
         item_instance._update(properties, sheets)
         return item_instance
+
+    def validate_path_characters(self, field, value):
+        """
+        Check that the field with given value does not contain any characters
+        that interfere with the resource_path. Currently, we allow all
+        alphanumeric characters and few others
+        """
+        also_allowed = ['_', '-', ':', ',', '.', ' ', '@']
+        if not isinstance(value, basestring):
+            raise ValueError('Identifying property %s must be a string. Value: %s' % (field, value))
+        forbidden = [char for char in value
+                     if (not char.isalnum() and char not in also_allowed)]
+        if any(forbidden):
+            msg = ("Forbidden character(s) %s are not allowed in field: %s. Value: %s"
+                   % (set(forbidden), field, value))
+            raise ValidationFailure('body', 'Item: path characters', msg)
 
     def update(self, properties, sheets=None):
         '''Alias of _update, called in crud_views.py - `update_item` (method)'''
@@ -358,14 +460,21 @@ class Item(Resource):
                 properties = properties.copy()
                 del properties['uuid']
 
+            # validation on name key and unique keys
+            nk_val = properties.get(self.name_key, '')
+            self.validate_path_characters(self.name_key, nk_val)
+
             unique_keys = self.unique_keys(properties)
             for k, values in unique_keys.items():
                 if len(set(values)) != len(values):
                     msg = "Duplicate keys for %r: %r" % (k, values)
-                    raise ValidationFailure('body', [], msg)
+                    raise ValidationFailure('body', 'Item: duplicate keys', msg)
+                for uk_val in values:
+                    self.validate_path_characters(k, uk_val)
 
             links = self.links(properties)
 
+        # actually propogate the update to the DB
         connection = self.registry[CONNECTION]
         connection.update(self.model, properties, sheets, unique_keys, links)
 
@@ -398,4 +507,27 @@ class Item(Resource):
 
     @calculated_property(name='uuid')
     def prop_uuid(self):
+        return str(self.uuid)
+
+    @calculated_property(schema={
+        "title": "principals_allowed",
+        "description": "Calculated permissions used for ES filtering",
+        "type": "object",
+        'properties': {
+            'view': {
+                'type': 'string'
+            },
+            'edit': {
+                'type': 'string'
+            }
+        }
+    })
+    def principals_allowed(self):
+        # importing at top of file requires many more relative imports
+        from .resources import calc_principals
+        principals = calc_principals(self)
+        return principals
+
+    @calculated_property(schema=display_title_schema)
+    def display_title(self):
         return str(self.uuid)
