@@ -136,10 +136,10 @@ class AbstractCollection(Resource, Mapping):
     """
     properties = {}
     unique_key = None
-
+    default_properties_datastore = 'database'
 
     def __init__(self, registry, name, type_info, properties=None, acl=None,
-                 unique_key=None, properties_datastore='database'):
+                 unique_key=None, properties_datastore=None):
         self.registry = registry
         self.__name__ = name
         self.type_info = type_info
@@ -149,7 +149,11 @@ class AbstractCollection(Resource, Mapping):
             self.__acl__ = acl
         if unique_key is not None:
             self.unique_key = unique_key
-        self.properties_datastore = properties_datastore
+        # use a default value configured on the class if not set
+        if properties_datastore is not None:
+            self.properties_datastore = properties_datastore
+        else:
+            self.properties_datastore = self.default_properties_datastore
 
     @reify
     def connection(self):
@@ -281,6 +285,10 @@ class Item(Resource):
     @reify
     def properties_datastore(self):
         return self.collection.properties_datastore
+
+    @reify
+    def default_properties_datastore(self):
+        return self.collection.default_properties_datastore
 
     @property
     def __parent__(self):

@@ -156,12 +156,13 @@ class Connection(object):
 
     def __getitem__(self, uuid):
         """
-        Gets Item using `self.get_by_uuid`. If the Item has a `properties_datastore`
-        set, this function will clear item_cache and use the specified model
+        Gets Item using `self.get_by_uuid`. If the Item has an alternate
+        `properties_datastore` set and the acquired model does not use it,
+        this function will clear item_cache and use the specified model
         """
         item = self.get_by_uuid(uuid)
         # may need to get the item from an alternate datastore
-        if (item and item.properties_datastore is not None
+        if (item and item.properties_datastore != item.default_properties_datastore
             and item.model.used_datastore != item.properties_datastore):
             # clear cache so that alternate storage result is returned
             if self.item_cache.get(uuid):
