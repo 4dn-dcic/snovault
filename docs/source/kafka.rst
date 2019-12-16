@@ -8,6 +8,7 @@ Overview
 This document describes a potential Apache Kafka architecture for managing Elasticsearch indexing. On the web application, when an item is uploaded/edited it must be indexed into Elasticsearch in order to show up in searches. It is not important that this search is immediately available - some delay is acceptable but it must eventually be processed exactly once.
 
 The Kafka cluster should be configured in the following way.
+
 - We define 3 topics: primary, secondary and deferred.
 - We augment the current Indexer setup to post indexing messages to the KafkaCluster. To do this we implement a Kafka Producer API in ``indexer_queue.py`` to replace the current ``QueueManager`` class. The idea is that the main application implements the Producer API and we split the current indexer that actually processes the messages into a separate, individually scalable application that implements the Kafka Consumer API.
 - We develop a search API specifically for the purpose of invalidation to be used by the Consumer API.
@@ -24,7 +25,8 @@ The indexer application will also implement a producer API, but is not strictly 
 Consumer API
 ^^^^^^^^^^^^
 
-The indexer application implements the consumer API and from this point on will be referred to as the consumer. We define a set of daemon processes as the index with three different purposes.
+The indexer application implements the consumer API and from this point on will be referred to as the consumer. We define a set of daemon processes as the indexer with three different purposes.
+
 - First, one process consumes messages from the primary topic and indexes them into Elasticsearch
 - Second, one process consumes messages from the secondary topic and indexes them (if necessary) into Elasticsearch.
 - Third, one process consumes messages from the deferred topic and either collecting the offending uuids for reporting or attempt to re-index.
