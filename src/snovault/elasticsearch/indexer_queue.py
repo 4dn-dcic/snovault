@@ -113,6 +113,12 @@ def indexing_status(request):
     return response
 
 
+class KafkaManager(object):
+    """
+    Class for handling Kafka - blank for now
+    """
+    pass
+
 class QueueManager(object):
     """
     Class for handling the queues responsible for coordinating indexing.
