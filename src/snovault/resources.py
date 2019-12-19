@@ -391,6 +391,10 @@ class Item(Resource):
         return properties
 
     def __json__(self, request):
+        """
+        This function is used to get the "complete" properties of the Item
+        after calling `upgrade_properties`
+        """
         return self.upgrade_properties()
 
     def item_with_links(self, request):
