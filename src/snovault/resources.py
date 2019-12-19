@@ -76,7 +76,7 @@ class Resource(object):
     def actions(self, request):
         actions = calculate_properties(self, request, category='action')
         if actions:
-            return list(actions.values())
+            return sorted(list(actions.values()), key=lambda d: d.get('name'))
 
 
 class Root(Resource):
@@ -142,12 +142,12 @@ class AbstractCollection(Resource, Mapping):
     And some other info as well.
 
     Collections allow retrieval of specific items with them by using the `get`
-    method with uuid or the unique_key
+    method with uuid or the identification_key (which must be a unique key)
     """
     properties = {}
-    unique_key = None
+    identification_key = None
 
-    def __init__(self, registry, name, type_info, properties=None, acl=None, unique_key=None):
+    def __init__(self, registry, name, type_info, properties=None, acl=None, identification_key=None):
         self.registry = registry
         self.__name__ = name
         self.type_info = type_info
@@ -155,8 +155,8 @@ class AbstractCollection(Resource, Mapping):
             self.properties = properties
         if acl is not None:
             self.__acl__ = acl
-        if unique_key is not None:
-            self.unique_key = unique_key
+        if identification_key is not None:
+            self.identification_key = identification_key
 
     @reify
     def connection(self):
@@ -200,8 +200,8 @@ class AbstractCollection(Resource, Mapping):
             if not self._allow_contained(resource):
                 return default
             return resource
-        if self.unique_key is not None:
-            resource = self.connection.get_by_unique_key(self.unique_key, name)
+        if self.identification_key is not None:
+            resource = self.connection.get_by_unique_key(self.identification_key, name)
             if resource is not None:
                 if not self._allow_contained(resource):
                     return default
@@ -248,8 +248,8 @@ display_title_schema = {
 
 class Item(Resource):
     item_type = None
-    base_types = ['Item']
     name_key = None
+    base_types = ['Item']
     rev = {}
     aggregated_items = {}
     embedded_list = []
@@ -280,7 +280,6 @@ class Item(Resource):
 
     @property
     def __name__(self):
-
         if self.name_key is None:
             return str(self.uuid)
         return self.properties.get(self.name_key, None) or str(self.uuid)
@@ -359,6 +358,7 @@ class Item(Resource):
         return filtered_uuids
 
     def unique_keys(self, properties):
+        """ Gets all schema fields defined to be uniqueKey's """
         return {
             name: [v for prop in props for v in ensurelist(properties.get(prop, ()))]
             for name, props in self.type_info.schema_keys.items()

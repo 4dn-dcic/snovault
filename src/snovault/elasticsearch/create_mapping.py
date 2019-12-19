@@ -474,11 +474,6 @@ def es_mapping(mapping, agg_items_mapping):
                 'type': 'object',
                 'include_in_all': False
             },
-            'paths': {
-                'type': 'keyword',
-                'ignore_above': KW_IGNORE_ABOVE,
-                'include_in_all': False
-            },
             'indexing_stats': {
                 'type': 'object',
                 'include_in_all': False
