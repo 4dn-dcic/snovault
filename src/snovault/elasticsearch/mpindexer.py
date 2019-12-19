@@ -2,7 +2,8 @@ from snovault import DBSESSION
 from contextlib import contextmanager
 from multiprocessing import (
     get_context,
-    cpu_count
+    cpu_count,
+    current_process
 )
 from multiprocessing.pool import Pool
 from functools import partial
@@ -42,7 +43,7 @@ app = None
 
 def initializer(app_factory, settings):
     """
-    Need to initialize the app for the subprocess
+    Initialize the app and database session for the subprocess
     """
     from snovault.app import configure_engine
     signal.signal(signal.SIGINT, signal.SIG_IGN)
@@ -71,8 +72,8 @@ def threadlocal_manager():
     import zope.sqlalchemy
     from sqlalchemy import orm
 
-    # clear threadlocal manager, though it should be clean
-    manager.pop()
+    # clear threadlocal manager to get a clean stack
+    manager.clear()
 
     registry = app.registry
     request = app.request_factory.blank('/_indexing_pool')
@@ -100,8 +101,8 @@ def threadlocal_manager():
 
 
 def clear_manager_and_dispose_engine(signum=None, frame=None):
-    manager.pop()
-    # manually dispose of db engines for garbage collection
+    manager.clear()
+    # manually dispose of db engine for garbage collection
     if db_engine is not None:
         db_engine.dispose()
 
@@ -155,19 +156,22 @@ class MPIndexer(Indexer):
         num_cpu = cpu_count()
         self.processes = num_cpu - 2 if num_cpu - 2 > 1 else 1
         self.initargs = (registry[APP_FACTORY], registry.settings,)
-        # workers in the pool will be replaced after finishing one task
-        self.maxtasks = 1
 
     def init_pool(self):
+        """
+        Initialize multiprocessing pool.
+        Originally, used `maxtasksperchild=1`, which caused the worker to
+        be recycled after finishing one round of indexing. This is not needed
+        due to handling txn scope with threadlocals
+        """
         return Pool(
             processes=self.processes,
             initializer=initializer,
             initargs=self.initargs,
-            maxtasksperchild=self.maxtasks,
             context=get_context('spawn'),
         )
 
-    def update_objects(self, request, counter=None):
+    def update_objects(self, request, counter):
         """
         Initializes a multiprocessing pool with args given in __init__ and
         indexes in one of two mode: synchronous or queued.
@@ -196,8 +200,8 @@ class MPIndexer(Indexer):
             for error in pool.imap_unordered(sync_update_helper, sync_uuids, chunkiness):
                 if error is not None:
                     errors.append(error)
-                elif counter:  # don't increment counter on an error
-                    counter[0] += 1
+                else:
+                    counter[0] += 1  # don't increment counter on an error
                 if counter[0] % 10 == 0:
                     log.info('Indexing %d (sync)', counter[0])
         else:
@@ -208,13 +212,14 @@ class MPIndexer(Indexer):
             # last_count used to track if there is "more" work to do
             last_count = 0
 
-            # create the initial workers (same as number of processes in pool)
+            # create the initial jobs (same as number of processes in pool)
             for i in range(workers):
-                res = pool.apply_async(queue_update_helper, callback=callback_w_errors)
+                res = pool.apply_async(queue_update_helper,
+                                       callback=callback_w_errors)
                 async_results.append(res)
 
-            # check worker statuses
-            # add more workers if any are finished and indexing is ongoing
+            # check job statuses
+            # add more jobs if any are finished and indexing is ongoing
             while True:
                 results_to_add = []
                 idxs_to_rm = []
@@ -224,10 +229,11 @@ class MPIndexer(Indexer):
                         # in form: (errors <list>, counter <list>, deferred <bool>)
                         res_vals = res.get()
                         idxs_to_rm.append(idx)
-                        # add worker if overall counter has increased OR process is deferred
-                        if (counter and counter[0] > last_count) or res_vals[2] is True:
+                        # add jobs if overall counter has increased OR process is deferred
+                        if (counter[0] > last_count) or res_vals[2] is True:
                             last_count = counter[0]
-                            res = pool.apply_async(queue_update_helper, callback=callback_w_errors)
+                            res = pool.apply_async(queue_update_helper,
+                                                   callback=callback_w_errors)
                             results_to_add.append(res)
 
                 for idx in sorted(idxs_to_rm, reverse=True):
