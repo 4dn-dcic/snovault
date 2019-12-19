@@ -2,7 +2,8 @@
 Snovault
 ========================
 
-Snovault is a JSON-LD Database Framework that serves as the backend for the 4DN Data portal and CGAP.
+Snovault is a JSON-LD Database Framework that serves as the backend for the 4DN Data portal and CGAP. Check out our full documentation `here
+<https://snovault.readthedocs.io/en/latest/>`_.
 
 |Build status|_
 

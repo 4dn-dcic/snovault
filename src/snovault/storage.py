@@ -351,10 +351,20 @@ class UUID(types.TypeDecorator):
 
 
 class RDBBlobStorage(object):
+    """ Handlers to blobs we store in RDB """
     def __init__(self, DBSession):
         self.DBSession = DBSession
 
     def store_blob(self, data, download_meta, blob_id=None):
+        """ Initializes a db session and stores the data
+
+        Args:
+            data: raw attachment data
+            download_meta: metadata associated with 'data', not actually used
+            unless the caller wants to retain the blob_id
+            blob_id: optional arg specifying the id, will be generated if not
+            provided
+        """
         if blob_id is None:
             blob_id = uuid.uuid4()
         elif isinstance(blob_id, str):
@@ -365,6 +375,15 @@ class RDBBlobStorage(object):
         download_meta['blob_id'] = str(blob_id)
 
     def get_blob(self, download_meta):
+        """ Gets a blob given from RDB
+
+        Args:
+            download_meta: metadata associated with the blob, all that is required
+            is an entry for 'blob_id'
+
+        Returns:
+            data from the DB
+        """
         blob_id = download_meta['blob_id']
         if isinstance(blob_id, str):
             blob_id = uuid.UUID(blob_id)
@@ -374,21 +393,25 @@ class RDBBlobStorage(object):
 
 
 class S3BlobStorage(object):
+    """ Handler to blobs we store in S3 """
     def __init__(self, bucket):
         self.bucket = bucket
         session = boto3.session.Session(region_name='us-east-1')
         self.s3 = session.client('s3')
 
     def store_blob(self, data, download_meta, blob_id=None):
-        '''
-        create a new s3 key = blob_id
-        upload the contents and return the meta in download_meta
-        '''
+        """
+        Create a new s3 key = blob_id and upload the contents
+
+        Args:
+            data: raw blob to store
+            download_meta: unused beyond setting some meta data fields
+            blob_id: optional ID if you want to provide it, one will be generated
+        """
         if blob_id is None:
             blob_id = str(uuid.uuid4())
 
         content_type = download_meta.get('type','binary/octet-stream')
-
         self.s3.put_object(Bucket=self.bucket,
                            Key=blob_id,
                            Body=data,
@@ -399,15 +422,24 @@ class S3BlobStorage(object):
         download_meta['blob_id'] = str(blob_id)
 
     def _get_bucket_key(self, download_meta):
-        # Assume files have been migrated
+        """ Helper for the below two methods """
         if 'bucket' in download_meta:
             return download_meta['bucket'], download_meta['key']
         else:
             return self.bucket, download_meta['blob_id']
 
     def get_blob_url(self, download_meta):
-        bucket_name, key = self._get_bucket_key(download_meta)
+        """ Locates a blob on S3 storage
 
+        Args:
+            download_meta: dictionary containing meta data, can specify the bucket
+            itself if it stored elsewhere otherwise defaults to self.bucket and
+            the blob_id
+
+        Returns:
+            url to the data
+        """
+        bucket_name, key = self._get_bucket_key(download_meta)
         location = self.s3.generate_presigned_url(
             ClientMethod='get_object',
             ExpiresIn=36*60*60,
@@ -415,8 +447,15 @@ class S3BlobStorage(object):
         return location
 
     def get_blob(self, download_meta):
-        bucket_name, key = self._get_bucket_key(download_meta)
+        """ Locates and gets a blob on S3 storage
 
+        Args:
+            download_meta: see above
+
+        Returns:
+            data from S3
+        """
+        bucket_name, key = self._get_bucket_key(download_meta)
         response = self.s3.get_object(Bucket=bucket_name,
                                  Key=key)
         return response['Body'].read().decode()
