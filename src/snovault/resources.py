@@ -402,7 +402,7 @@ class Item(Resource):
         """
         Used to get the "complete" properties of the Item after upgrading
         """
-        return self.upgraded_properties
+        return self.upgrade_properties
 
     def item_with_links(self, request):
         """
