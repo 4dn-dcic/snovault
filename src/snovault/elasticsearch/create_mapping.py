@@ -249,13 +249,12 @@ def index_settings():
                     },
                     'snovault_index_analyzer': {
                         'type': 'custom',
-                        'tokenizer': 'whitespace',
+                        'tokenizer': 'ngram_tokenizer',
                         'char_filter': 'html_strip',
                         'filter': [
                             'standard',
                             'lowercase',
                             'asciifolding',
-                            'substring'
                         ]
                     },
                     'snovault_search_analyzer': {
@@ -280,11 +279,12 @@ def index_settings():
                     },
                     'ngram_tokenizer': {
                         'type': 'ngram',
-                        'min_gram': 2,
-                        'max_gram': 12,
+                        'min_gram': 3,
+                        'max_gram': 8,
                         'token_chars': [
                             'letter',
-                            'digit'
+                            'digit',
+                            'whitespace'
                         ]
                     }
                 },
