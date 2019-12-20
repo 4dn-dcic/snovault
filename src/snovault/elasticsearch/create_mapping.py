@@ -54,6 +54,7 @@ NUM_REPLICAS = 1
 SEARCH_MAX = 100000
 # ignore above this number of kb when using mapping keyword fields
 KW_IGNORE_ABOVE = 512
+MAX_NGRAM = 12
 
 
 def determine_if_is_date_field(field, schema):
@@ -233,7 +234,7 @@ def index_settings():
                     'substring': {
                         'type': 'nGram',
                         'min_gram': 1,
-                        'max_gram': 12
+                        'max_gram': MAX_NGRAM
                     }
                 },
                 'analyzer': {
