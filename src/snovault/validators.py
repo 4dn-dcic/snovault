@@ -100,13 +100,13 @@ def validate_item_content_put(context, request):
     if 'uuid' in data and UUID(data['uuid']) != context.uuid:
         msg = 'uuid may not be changed'
         raise ValidationFailure('body', ['uuid'], msg)
-    current = context.upgraded_properties.copy()
+    current = context.upgrade_properties().copy()
     current['uuid'] = str(context.uuid)
     validate_request(schema, request, data, current)
 
 
 def validate_item_content_patch(context, request):
-    data = context.upgraded_properties.copy()
+    data = context.upgrade_properties().copy()
     if 'schema_version' in data:
         del data['schema_version']
     data.update(request.json)
@@ -115,7 +115,7 @@ def validate_item_content_patch(context, request):
     if 'uuid' in data and UUID(data['uuid']) != context.uuid:
         msg = 'uuid may not be changed'
         raise ValidationFailure('body', ['uuid'], msg)
-    current = context.upgraded_properties.copy()
+    current = context.upgrade_properties().copy()
     current['uuid'] = str(context.uuid)
     # this will add defaults values back to deleted fields with schema defaults
     validate_request(schema, request, data, current)

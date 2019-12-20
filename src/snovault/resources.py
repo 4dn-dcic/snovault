@@ -289,14 +289,6 @@ class Item(Resource):
     def properties(self):
         return self.model.properties
 
-    @reify
-    def upgraded_properties(self):
-        """
-        Upgraders should not change over the lifetime of the Item, so this
-        should used instead of repeatedly calling `self.upgrade_properties()`
-        """
-        return self.upgrade_properties()
-
     @property
     def propsheets(self):
         return self.model.propsheets
@@ -400,9 +392,10 @@ class Item(Resource):
 
     def __json__(self, request):
         """
-        Used to get the "complete" properties of the Item after upgrading
+        This function is used to get the "complete" properties of the Item
+        after calling `upgrade_properties`
         """
-        return self.upgrade_properties
+        return self.upgrade_properties()
 
     def item_with_links(self, request):
         """
@@ -411,7 +404,7 @@ class Item(Resource):
         Additionally, if indexing, this method adds the current Item's uuid/sid
         to `_linked_uuids` and `_sid_cache` on the request
         """
-        properties = self.upgraded_properties
+        properties = self.upgrade_properties()
         # use schema_links rather than DB links so upgrades work on ES GETs
         for path in self.type_info.schema_links:
             uuid_to_path(request, properties, path)
