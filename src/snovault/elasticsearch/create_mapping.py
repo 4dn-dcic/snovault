@@ -277,6 +277,15 @@ def index_settings():
                     'snovault_path_tokenizer': {
                         'type': 'path_hierarchy',
                         'reverse': True
+                    },
+                    'ngram_tokenizer': {
+                        'type': 'ngram',
+                        'min_gram': 2,
+                        'max_gram': 12,
+                        'token_chars': [
+                            'letter',
+                            'digit'
+                        ]
                     }
                 },
                 'normalizer': {
