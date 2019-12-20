@@ -114,7 +114,7 @@ def schema_mapping(field, schema, top_level=False):
                 },
                 'lower_case_sort': {
                     'type': 'keyword',
-                    'normalizer': 'case_insensistive_sort',
+                    'normalizer': 'case_insensitive',
                     'ignore_above': KW_IGNORE_ABOVE
                 }
             }
@@ -134,7 +134,7 @@ def schema_mapping(field, schema, top_level=False):
                 },
                 'lower_case_sort': {
                     'type': 'keyword',
-                    'normalizer': 'case_insensistive_sort',
+                    'normalizer': 'case_insensitive',
                     'ignore_above': KW_IGNORE_ABOVE
                 }
             }
@@ -150,7 +150,7 @@ def schema_mapping(field, schema, top_level=False):
                 },
                 'lower_case_sort': {
                     'type': 'keyword',
-                    'normalizer': 'case_insensistive_sort',
+                    'normalizer': 'case_insensitive',
                     'ignore_above': KW_IGNORE_ABOVE
                 }
             }
@@ -170,7 +170,7 @@ def schema_mapping(field, schema, top_level=False):
                 },
                 'lower_case_sort': {
                     'type': 'keyword',
-                    'normalizer': 'case_insensistive_sort',
+                    'normalizer': 'case_insensitive',
                     'ignore_above': KW_IGNORE_ABOVE
                 }
             }
@@ -191,7 +191,7 @@ def schema_mapping(field, schema, top_level=False):
                 },
                 'lower_case_sort': {
                     'type': 'keyword',
-                    'normalizer': 'case_insensistive_sort',
+                    'normalizer': 'case_insensitive',
                     'ignore_above': KW_IGNORE_ABOVE
                 }
             }
@@ -207,7 +207,7 @@ def schema_mapping(field, schema, top_level=False):
                 },
                 'lower_case_sort': {
                     'type': 'keyword',
-                    'normalizer': 'case_insensistive_sort',
+                    'normalizer': 'case_insensitive',
                     'ignore_above': KW_IGNORE_ABOVE
                 }
             }
@@ -233,7 +233,7 @@ def index_settings():
                     'substring': {
                         'type': 'nGram',
                         'min_gram': 1,
-                        'max_gram': 33
+                        'max_gram': 12
                     }
                 },
                 'analyzer': {
@@ -279,7 +279,7 @@ def index_settings():
                     }
                 },
                 'normalizer': {
-                    'case_insensistive_sort': {
+                    'case_insensitive': {
                         'type': 'custom',
                         'filter': ['lowercase']
                     }
