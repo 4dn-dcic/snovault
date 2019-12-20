@@ -54,7 +54,7 @@ NUM_REPLICAS = 1
 SEARCH_MAX = 100000
 # ignore above this number of kb when using mapping keyword fields
 KW_IGNORE_ABOVE = 512
-MAX_NGRAM = 12
+MAX_NGRAM = 8
 
 
 def determine_if_is_date_field(field, schema):
@@ -230,13 +230,6 @@ def index_settings():
                 }
             },
             'analysis': {
-                'filter': {
-                    'substring': {
-                        'type': 'nGram',
-                        'min_gram': 1,
-                        'max_gram': MAX_NGRAM
-                    }
-                },
                 'analyzer': {
                     'default': {
                         'type': 'custom',
@@ -247,7 +240,7 @@ def index_settings():
                             'lowercase',
                         ]
                     },
-                    'snovault_index_analyzer': {
+                    'snovault_index_analyzer': {  # use this for search as well
                         'type': 'custom',
                         'tokenizer': 'ngram_tokenizer',
                         'char_filter': 'html_strip',
@@ -255,15 +248,6 @@ def index_settings():
                             'standard',
                             'lowercase',
                             'asciifolding',
-                        ]
-                    },
-                    'snovault_search_analyzer': {
-                        'type': 'custom',
-                        'tokenizer': 'whitespace',
-                        'filter': [
-                            'standard',
-                            'lowercase',
-                            'asciifolding'
                         ]
                     },
                     'snovault_path_analyzer': {
@@ -342,8 +326,7 @@ def es_mapping(mapping, agg_items_mapping):
     return {
         '_all': {
             'enabled': True,
-            'analyzer': 'snovault_index_analyzer',
-            'search_analyzer': 'snovault_search_analyzer'
+            'analyzer': 'snovault_index_analyzer'
         },
         'dynamic_templates': [
             {
