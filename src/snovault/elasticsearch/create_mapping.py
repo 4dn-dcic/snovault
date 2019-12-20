@@ -278,13 +278,12 @@ def index_settings():
                         'reverse': True
                     },
                     'ngram_tokenizer': {
-                        'type': 'ngram',
+                        'type': 'edge_ngram',
                         'min_gram': 3,
-                        'max_gram': 8,
+                        'max_gram': MAX_NGRAM,
                         'token_chars': [
                             'letter',
-                            'digit',
-                            'whitespace'
+                            'digit'
                         ]
                     }
                 },
