@@ -97,7 +97,7 @@ def item_index_data(context, request):
     uuid = str(context.uuid)
     # upgrade_properties calls necessary upgraders based on schema_version
     with indexing_timer(indexing_stats, 'upgrade_properties'):
-        properties = context.upgrade_properties()
+        properties = context.upgraded_properties
 
     # ES versions 2 and up don't allow dots in links. Update these to use ~s
     new_links = {}

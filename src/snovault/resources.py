@@ -289,6 +289,14 @@ class Item(Resource):
     def properties(self):
         return self.model.properties
 
+    @reify
+    def upgraded_properties(self):
+        """
+        Upgraders should not change over the lifetime of the Item, so this
+        should used instead of repeatedly calling `self.upgrade_properties()`
+        """
+        return self.upgrade_properties()
+
     @property
     def propsheets(self):
         return self.model.propsheets
@@ -392,16 +400,14 @@ class Item(Resource):
 
     def __json__(self, request):
         """
-        This function is used to get the "complete" properties of the Item
-        after calling `upgrade_properties`
+        Used to get the "complete" properties of the Item after upgrading
         """
-        return self.upgrade_properties()
+        return self.upgrade_properties
 
     def item_with_links(self, request):
         # This works from the schema rather than the links table
         # so that upgrade on GET can work.
-        # context.__json__ CALLS THE UPGRADER (upgrade_properties)
-        properties = self.__json__(request)
+        properties = self.upgraded_properties
         for path in self.type_info.schema_links:
             uuid_to_path(request, properties, path)
 
