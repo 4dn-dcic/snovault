@@ -2,8 +2,7 @@ from snovault import DBSESSION
 from contextlib import contextmanager
 from multiprocessing import (
     get_context,
-    cpu_count,
-    current_process
+    cpu_count
 )
 from multiprocessing.pool import Pool
 from functools import partial
