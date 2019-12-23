@@ -54,7 +54,8 @@ NUM_REPLICAS = 1
 SEARCH_MAX = 100000
 # ignore above this number of kb when using mapping keyword fields
 KW_IGNORE_ABOVE = 512
-MAX_NGRAM = 8
+MIN_NGRAM = 2
+MAX_NGRAM = 10
 
 
 def determine_if_is_date_field(field, schema):
@@ -230,24 +231,39 @@ def index_settings():
                 }
             },
             'analysis': {
+                'filter': {
+                    # create tokens between size MIN_NGRAM and MAX_NGRAM
+                    'ngram_filter': {
+                        'type': 'edgeNGram',
+                         'min_gram': MIN_NGRAM,
+                         'max_gram': MAX_NGRAM
+                    },
+                    # truncate tokens to size MAX_NGRAM
+                    'truncate_to_ngram': {
+                         'type': 'truncate',
+                         'length': MAX_NGRAM
+                    }
+                },
                 'analyzer': {
-                    'default': {
+                    # used to analyze `_all` at index time
+                    'snovault_index_analyzer': {
                         'type': 'custom',
                         'tokenizer': 'whitespace',
                         'char_filter': 'html_strip',
                         'filter': [
-                            'standard',
-                            'lowercase',
-                        ]
-                    },
-                    'snovault_index_analyzer': {  # use this for search as well
-                        'type': 'custom',
-                        'tokenizer': 'ngram_tokenizer',
-                        'char_filter': 'html_strip',
-                        'filter': [
-                            'standard',
                             'lowercase',
                             'asciifolding',
+                            'ngram_filter'
+                        ]
+                    },
+                    # used to analyze `_all` at query time
+                    'snovault_search_analyzer': {
+                        'type': 'custom',
+                        'tokenizer': 'whitespace',
+                        'filter': [
+                            'lowercase',
+                            'asciifolding',
+                            'truncate_to_ngram'
                         ]
                     },
                     'snovault_path_analyzer': {
@@ -260,15 +276,6 @@ def index_settings():
                     'snovault_path_tokenizer': {
                         'type': 'path_hierarchy',
                         'reverse': True
-                    },
-                    'ngram_tokenizer': {
-                        'type': 'edge_ngram',
-                        'min_gram': 3,
-                        'max_gram': MAX_NGRAM,
-                        'token_chars': [
-                            'letter',
-                            'digit'
-                        ]
                     }
                 },
                 'normalizer': {
@@ -326,7 +333,8 @@ def es_mapping(mapping, agg_items_mapping):
     return {
         '_all': {
             'enabled': True,
-            'analyzer': 'snovault_index_analyzer'
+            'analyzer': 'snovault_index_analyzer',
+            'search_analyzer': 'snovault_search_analyzer'
         },
         'dynamic_templates': [
             {
