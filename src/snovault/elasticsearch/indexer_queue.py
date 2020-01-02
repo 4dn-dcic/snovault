@@ -19,6 +19,7 @@ log = structlog.getLogger(__name__)
 def includeme(config):
     config.add_route('queue_indexing', '/queue_indexing')
     config.add_route('indexing_status', '/indexing_status')
+    config.add_route('dlq_to_primary', '/dlq_to_primary')
     env_name = config.registry.settings.get('env.name')
     config.registry[INDEXER_QUEUE] = QueueManager(config.registry)
     # INDEXER_QUEUE_MIRROR is used because webprod and webprod2 share a DB
