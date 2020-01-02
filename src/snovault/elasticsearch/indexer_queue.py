@@ -113,6 +113,27 @@ def indexing_status(request):
     return response
 
 
+@view_config(route_name='dlq_to_primary', request_method='GET', permission='index')
+def dlq_to_primary(request):
+    """
+    Endpoint to move all uuids on the DLQ to the primary queue
+    """
+    queue_indexer = request.registry[INDEXER_QUEUE]
+    dlq_messages = queue_indexer.receive_messages(target_queue='dlq')
+    response = {}
+    if len(dlq_messages) == 0:
+        response['number_Migrated'] = 0
+        return response
+    # send messages if we got any
+    failed = queue_indexer.send_messages(dlq_messages)
+    if len(failed) != 0:
+        response['failed'] = failed
+        response['number_failed'] = len(failed)
+    response['number_migrated'] = len(dlq_messages) - len(failed)
+    response['migrated'] = set(dlq_messages) - set(failed)
+    return response
+
+
 class QueueManager(object):
     """
     Class for handling the queues responsible for coordinating indexing.
