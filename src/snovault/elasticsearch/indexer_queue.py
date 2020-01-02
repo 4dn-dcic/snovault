@@ -203,7 +203,8 @@ class QueueManager(object):
         # short names for queues. Use OrderedDict to preserve order in Py < 3.6
         self.queue_targets = OrderedDict([
             ('primary', self.queue_url),
-            ('secondary', self.second_queue_url)
+            ('secondary', self.second_queue_url),
+            ('dlq', self.dlq_url)
         ])
 
     def add_uuids(self, registry, uuids, strict=False, target_queue='primary',
