@@ -229,6 +229,8 @@ def test_queue_indexing_telemetry_id(app, testapp):
     assert tries_left > 0
     # delete the messages
     for target in indexer_queue.queue_targets:
+        if 'dlq' in target:  # skip if dlq
+            continue
         received = indexer_queue.receive_messages(target_queue=target)
         assert len(received) > 0
         for msg in received:
