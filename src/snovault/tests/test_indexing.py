@@ -308,6 +308,10 @@ def test_dlq_to_primary(app, indexer_testapp):
         body = msg["Body"]
         assert 'destined' in body
 
+    # hit route with no messages, should see 0 migrated
+    res = indexer_testapp.get('/dlq_to_primary').json
+    assert res['number_migrated'] == 0
+
 
 @pytest.mark.flaky
 def test_indexing_simple(app, testapp, indexer_testapp):

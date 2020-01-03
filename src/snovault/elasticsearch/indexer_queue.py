@@ -127,9 +127,8 @@ def dlq_to_primary(request):
         return response
     # send messages if we got any
     failed = queue_indexer.send_messages(dlq_messages)
-    response['failed'] = 0
+    response['number_failed'] = 0
     if len(failed) != 0:
-        response['failed'] = failed
         response['number_failed'] = len(failed)
     response['number_migrated'] = len(dlq_messages) - len(failed)
     return response
