@@ -285,7 +285,7 @@ def test_queue_indexing_after_post_patch(app, testapp):
     indexer_queue.delete_messages(received)
 
 
-def test_dlq_to_primary(app, indexer_testapp):
+def test_dlq_to_primary(app, testapp, indexer_testapp):
     """
     Tests the dlq_to_primary route
     Post some messages to the DLQ, hit the route, receive
@@ -301,7 +301,7 @@ def test_dlq_to_primary(app, indexer_testapp):
     assert len(success) == 2
     res = indexer_testapp.get('/dlq_to_primary').json
     assert res['number_migrated'] == 2
-    assert res['failed'] == 0
+    assert res['number_failed'] == 0
     msgs = indexer_queue.receive_messages()  # receive from primary
     assert len(msgs) == 2
     for msg in msgs:
@@ -311,6 +311,7 @@ def test_dlq_to_primary(app, indexer_testapp):
     # hit route with no messages, should see 0 migrated
     res = indexer_testapp.get('/dlq_to_primary').json
     assert res['number_migrated'] == 0
+    assert res['number_failed'] == 0
 
 
 @pytest.mark.flaky
