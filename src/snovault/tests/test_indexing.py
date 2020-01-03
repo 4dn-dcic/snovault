@@ -285,7 +285,7 @@ def test_queue_indexing_after_post_patch(app, testapp):
     indexer_queue.delete_messages(received)
 
 
-def test_dlq_to_primary(app, testapp, indexer_testapp):
+def test_dlq_to_primary(app, anontestapp, indexer_testapp):
     """
     Tests the dlq_to_primary route
     Post some messages to the DLQ, hit the route, receive
@@ -312,6 +312,9 @@ def test_dlq_to_primary(app, testapp, indexer_testapp):
     res = indexer_testapp.get('/dlq_to_primary').json
     assert res['number_migrated'] == 0
     assert res['number_failed'] == 0
+
+    # hit route from unauthenticated testapp, should fail
+    anontestapp.get('/dlq_to_primary', status=403)
 
 
 @pytest.mark.flaky
