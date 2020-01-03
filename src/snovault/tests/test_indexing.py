@@ -285,6 +285,30 @@ def test_queue_indexing_after_post_patch(app, testapp):
     indexer_queue.delete_messages(received)
 
 
+def test_dlq_to_primary(app, indexer_testapp):
+    """
+    Tests the dlq_to_primary route
+    Post some messages to the DLQ, hit the route, receive
+    those same messages from the primary queue
+    """
+    indexer_queue = app.registry[INDEXER_QUEUE]
+    indexer_queue.clear_queue()
+    test_message1 = "destined for primary!"
+    test_message2 = "i am also destined!"
+    success, failed = indexer_queue.add_uuids(app.registry, [test_message1, test_message2],
+                                        target_queue='dlq')
+    assert not failed
+    assert len(success) == 2
+    res = indexer_testapp.get('/dlq_to_primary').json
+    assert res['number_migrated'] == 2
+    assert res['failed'] == 0
+    msgs = indexer_queue.receive_messages()  # receive from primary
+    assert len(msgs) == 2
+    for msg in msgs:
+        body = msg["Body"]
+        assert 'destined' in body
+
+
 @pytest.mark.flaky
 def test_indexing_simple(app, testapp, indexer_testapp):
     # First post a single item so that subsequent indexing is incremental
