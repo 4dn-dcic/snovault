@@ -123,7 +123,7 @@ def dlq_to_primary(request):
     dlq_messages = queue_indexer.receive_messages(target_queue='dlq')
     response = {}
     if len(dlq_messages) == 0:
-        response['number_Migrated'] = 0
+        response['number_migrated'] = 0
         return response
     # send messages if we got any
     failed = queue_indexer.send_messages(dlq_messages)
