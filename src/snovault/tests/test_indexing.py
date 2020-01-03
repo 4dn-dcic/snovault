@@ -158,6 +158,7 @@ def test_indexer_queue_adds_telemetry_id(app):
 
 
 @pytest.mark.es
+@pytest.mark.flaky
 def test_indexer_queue(app):
     indexer_queue_mirror = app.registry[INDEXER_QUEUE_MIRROR]
     # this is only set up for webprod/webprod2
@@ -285,6 +286,7 @@ def test_queue_indexing_after_post_patch(app, testapp):
     indexer_queue.delete_messages(received)
 
 
+@pytest.mark.flaky
 def test_dlq_to_primary(app, anontestapp, indexer_testapp):
     """
     Tests the dlq_to_primary route
