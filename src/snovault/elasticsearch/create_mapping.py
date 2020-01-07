@@ -54,6 +54,8 @@ NUM_REPLICAS = 1
 SEARCH_MAX = 100000
 # ignore above this number of kb when using mapping keyword fields
 KW_IGNORE_ABOVE = 512
+MIN_NGRAM = 2
+MAX_NGRAM = 10
 
 
 def determine_if_is_date_field(field, schema):
@@ -114,7 +116,7 @@ def schema_mapping(field, schema, top_level=False):
                 },
                 'lower_case_sort': {
                     'type': 'keyword',
-                    'normalizer': 'case_insensistive_sort',
+                    'normalizer': 'case_insensitive',
                     'ignore_above': KW_IGNORE_ABOVE
                 }
             }
@@ -134,7 +136,7 @@ def schema_mapping(field, schema, top_level=False):
                 },
                 'lower_case_sort': {
                     'type': 'keyword',
-                    'normalizer': 'case_insensistive_sort',
+                    'normalizer': 'case_insensitive',
                     'ignore_above': KW_IGNORE_ABOVE
                 }
             }
@@ -150,7 +152,7 @@ def schema_mapping(field, schema, top_level=False):
                 },
                 'lower_case_sort': {
                     'type': 'keyword',
-                    'normalizer': 'case_insensistive_sort',
+                    'normalizer': 'case_insensitive',
                     'ignore_above': KW_IGNORE_ABOVE
                 }
             }
@@ -170,7 +172,7 @@ def schema_mapping(field, schema, top_level=False):
                 },
                 'lower_case_sort': {
                     'type': 'keyword',
-                    'normalizer': 'case_insensistive_sort',
+                    'normalizer': 'case_insensitive',
                     'ignore_above': KW_IGNORE_ABOVE
                 }
             }
@@ -191,7 +193,7 @@ def schema_mapping(field, schema, top_level=False):
                 },
                 'lower_case_sort': {
                     'type': 'keyword',
-                    'normalizer': 'case_insensistive_sort',
+                    'normalizer': 'case_insensitive',
                     'ignore_above': KW_IGNORE_ABOVE
                 }
             }
@@ -207,7 +209,7 @@ def schema_mapping(field, schema, top_level=False):
                 },
                 'lower_case_sort': {
                     'type': 'keyword',
-                    'normalizer': 'case_insensistive_sort',
+                    'normalizer': 'case_insensitive',
                     'ignore_above': KW_IGNORE_ABOVE
                 }
             }
@@ -230,40 +232,38 @@ def index_settings():
             },
             'analysis': {
                 'filter': {
-                    'substring': {
-                        'type': 'nGram',
-                        'min_gram': 1,
-                        'max_gram': 33
+                    # create tokens between size MIN_NGRAM and MAX_NGRAM
+                    'ngram_filter': {
+                        'type': 'edgeNGram',
+                         'min_gram': MIN_NGRAM,
+                         'max_gram': MAX_NGRAM
+                    },
+                    # truncate tokens to size MAX_NGRAM
+                    'truncate_to_ngram': {
+                         'type': 'truncate',
+                         'length': MAX_NGRAM
                     }
                 },
                 'analyzer': {
-                    'default': {
-                        'type': 'custom',
-                        'tokenizer': 'whitespace',
-                        'char_filter': 'html_strip',
-                        'filter': [
-                            'standard',
-                            'lowercase',
-                        ]
-                    },
+                    # used to analyze `_all` at index time
                     'snovault_index_analyzer': {
                         'type': 'custom',
                         'tokenizer': 'whitespace',
                         'char_filter': 'html_strip',
                         'filter': [
-                            'standard',
                             'lowercase',
                             'asciifolding',
-                            'substring'
+                            'ngram_filter'
                         ]
                     },
+                    # used to analyze `_all` at query time
                     'snovault_search_analyzer': {
                         'type': 'custom',
                         'tokenizer': 'whitespace',
                         'filter': [
-                            'standard',
                             'lowercase',
-                            'asciifolding'
+                            'asciifolding',
+                            'truncate_to_ngram'
                         ]
                     },
                     'snovault_path_analyzer': {
@@ -279,7 +279,7 @@ def index_settings():
                     }
                 },
                 'normalizer': {
-                    'case_insensistive_sort': {
+                    'case_insensitive': {
                         'type': 'custom',
                         'filter': ['lowercase']
                     }
