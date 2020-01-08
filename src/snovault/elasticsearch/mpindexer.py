@@ -88,7 +88,6 @@ def threadlocal_manager():
     request.registry[DBSESSION] = DBSession
     register_storage(request.registry)
     zope.sqlalchemy.register(DBSession)
-    snovault.storage.register(DBSession)  # adds transactions-table listeners
     connection = request.registry[DBSESSION]().connection()
     connection.execute('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY')
 
