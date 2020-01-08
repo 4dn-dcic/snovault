@@ -330,6 +330,11 @@ class ElasticSearchStorage(object):
             mirror_env = registry.settings['mirror.env.name']
             use_aws_auth = registry.settings.get('elasticsearch.aws_auth')
             mirror_health = ff_utils.get_health_page(ff_env=mirror_env)
+            # if we could not get mirror health, bail here
+            if 'error' in mirror_health:
+                log.error('PURGE: Tried to purge %s from mirror storage but couldn\'t get health page. Is staging up?' % rid)
+                log.error('PURGE: Mirror health error: %s' % mirror_health)
+                return
             # make sure use_aws_auth is bool
             if not isinstance(use_aws_auth, bool):
                 use_aws_auth = True if use_aws_auth == 'true' else False

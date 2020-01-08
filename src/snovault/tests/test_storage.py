@@ -9,38 +9,15 @@ def test_storage_creation(session):
     from snovault.storage import (
         PropertySheet,
         CurrentPropertySheet,
-        TransactionRecord,
         Blob,
         Key,
         Link,
     )
     assert session.query(PropertySheet).count() == 0
     assert session.query(CurrentPropertySheet).count() == 0
-    assert session.query(TransactionRecord).count() == 0
     assert session.query(Blob).count() == 0
     assert session.query(Key).count() == 0
     assert session.query(Link).count() == 0
-
-
-def test_transaction_record(session):
-    from snovault.storage import (
-        Resource,
-        PropertySheet,
-        TransactionRecord,
-    )
-    name = 'testdata'
-    props1 = {'foo': 'bar'}
-    resource = Resource('test_item')
-    session.add(resource)
-    propsheet = PropertySheet(name=name, properties=props1, rid=resource.rid)
-    session.add(propsheet)
-    session.flush()
-    assert session.query(PropertySheet).count() == 1
-    propsheet = session.query(PropertySheet).one()
-    assert session.query(TransactionRecord).count() == 1
-    record = session.query(TransactionRecord).one()
-    assert record.tid
-    assert propsheet.tid == record.tid
 
 
 def test_transaction_record_rollback(session):
@@ -68,7 +45,6 @@ def test_current_propsheet(session):
         CurrentPropertySheet,
         Resource,
         PropertySheet,
-        TransactionRecord,
     )
     name = 'testdata'
     props1 = {'foo': 'bar'}
@@ -84,9 +60,8 @@ def test_current_propsheet(session):
     current = session.query(CurrentPropertySheet).one()
     assert current.sid == propsheet.sid
     assert current.rid == resource.rid
-    record = session.query(TransactionRecord).one()
-    assert record.tid
-    assert propsheet.tid == record.tid
+    # tid is removed
+    assert not hasattr(current, 'tid')
 
 
 def test_current_propsheet_update(session):
@@ -111,6 +86,8 @@ def test_current_propsheet_update(session):
     assert [propsheet.properties for propsheet in resource.data[name].history] == [props1, props2]
     current = session.query(CurrentPropertySheet).one()
     assert current.sid
+    # tid is removed
+    assert not hasattr(current, 'tid')
 
 
 def test_get_by_json(session):
@@ -139,13 +116,12 @@ def test_get_by_json(session):
     assert data.propsheet.properties == props2
 
 
-def test_delete_simple(session, storage):
+def test_purge_uuid(session, storage):
     from snovault.storage import (
         Resource,
         Key,
         PropertySheet,
         CurrentPropertySheet,
-        TransactionRecord,
     )
     name = 'testdata'
     props1 = {'foo': 'bar'}

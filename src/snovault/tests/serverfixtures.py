@@ -113,7 +113,6 @@ def _DBSession(conn):
     # ``server`` thread must be in same scope
     DBSession = orm.scoped_session(orm.sessionmaker(bind=conn), scopefunc=lambda: 0)
     zope.sqlalchemy.register(DBSession)
-    snovault.storage.register(DBSession)
     return DBSession
 
 
