@@ -158,14 +158,21 @@ class MPIndexer(Indexer):
     def init_pool(self):
         """
         Initialize multiprocessing pool.
-        Originally, used `maxtasksperchild=1`, which caused the worker to
-        be recycled after finishing one round of indexing. This is not needed
-        due to handling txn scope with threadlocals
+        Use `maxtasksperchild=1`, which causes the worker to be recycled after
+        finishing one call to `queue_update_helper`.
+        It seems like this should not be needed due to requests being
+        created by `threadlocal_manager`, but the transaction scope is not
+        correctly reset on each call to `update_objects` without it.
+
+        TODO: figure out how to remove `maxtasksperchild=1` w.r.t. pyramid_tm
+              so that transaction scope is correctly handled and we can skip
+              work done by `initializer` for each `queue_update_helper` call
         """
         return Pool(
             processes=self.processes,
             initializer=initializer,
             initargs=self.initargs,
+            maxtasksperchild=1,
             context=get_context('spawn'),
         )
 
