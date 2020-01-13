@@ -70,7 +70,8 @@ def app_settings(wsgi_server_host_port, elasticsearch_server, postgresql_server,
     return settings
 
 
-@pytest.yield_fixture(scope='session', params=[True, False])
+# XXX: Revert double run for now, run only with mpindexer
+@pytest.yield_fixture(scope='session', params=[True])
 def app(app_settings, request):
     from snovault import main
     if request.param: # run tests both with and without mpindexer
