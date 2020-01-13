@@ -68,14 +68,13 @@ install:
 - pip install codacy-coverage
 - pip install elasticsearch==6.4.0
 - pip install elasticsearch-dsl==6.4.0
-- sudo echo "permission javax.management.MBeanTrustPermission "register";" >> $JAVA_HOME/jre/lib/security/java.policy
 script:
 - |
-  if test -n "$UNIT"; then bin/test -v -v --timeout=400 --aws-auth --cov src/snovault
+  if test -n "$UNIT"; then bin/test -v -v --timeout=400 --aws-auth --cov src/snovault --es search-fourfront-builds2-rh27qh5h3aw3zie3mmr4umxjwq.us-east-1.es.amazonaws.com:80
   fi
 - |
   if [[ $TRAVIS_BRANCH == 'master' ]]; then
   echo 'Triggering docs build'
   curl -X POST -d "branches=master" -d "token=$DOCS_TOKEN" https://readthedocs.org/api/v2/webhook/snovault/99596/
   fi
-- bin/wipe-test-indices $TRAVIS_JOB_ID search-fourfront-builds-uhevxdzfcv7mkm5pj5svcri3aq.us-east-1.es.amazonaws.com:80
+- bin/wipe-test-indices $TRAVIS_JOB_ID search-fourfront-builds2-rh27qh5h3aw3zie3mmr4umxjwq.us-east-1.es.amazonaws.com:80
