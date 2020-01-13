@@ -1,6 +1,5 @@
 dist: trusty
 language: python
-sudo: true
 cache:
   pip: true
   directories:
