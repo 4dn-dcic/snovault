@@ -16,7 +16,6 @@ def test_type_mapping(registry, item_type):
     mapping = type_mapping(registry[TYPES], item_type)
     assert mapping
     assert 'properties' in mapping
-    assert 'include_in_all' in mapping
 
 
 def test_merge_schemas(registry):

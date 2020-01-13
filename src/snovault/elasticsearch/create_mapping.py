@@ -122,16 +122,9 @@ def schema_mapping(field, schema, top_level=False):
             if mapping is not None:
                 if field == '*' or k == field:
                     properties[k] = mapping
-        if top_level:
-            # only include include_in_all: True in top level
-            return {
-                'include_in_all': True,
-                'properties': properties,
-            }
-        else:
-            return {
-                'properties': properties,
-            }
+        return {
+            'properties': properties,
+        }
 
     if determine_if_is_date_field(field, schema):
         return {
@@ -361,11 +354,6 @@ def es_mapping(mapping, agg_items_mapping):
     and aggregated item mapping as parameters, since those vary by item type
     """
     return {
-        '_all': {
-            'enabled': True,
-            'analyzer': 'snovault_index_analyzer',
-            'search_analyzer': 'snovault_search_analyzer'
-        },
         'dynamic_templates': [
             {
                 'template_principals_allowed': {
@@ -401,18 +389,15 @@ def es_mapping(mapping, agg_items_mapping):
         'properties': {
             'uuid': {
                 'type': 'keyword',
-                'ignore_above': KW_IGNORE_ABOVE,
-                'include_in_all': False
+                'ignore_above': KW_IGNORE_ABOVE
             },
             'sid': {
                 'type': 'keyword',
-                'ignore_above': KW_IGNORE_ABOVE,
-                'include_in_all': False
+                'ignore_above': KW_IGNORE_ABOVE
             },
             'max_sid': {
                 'type': 'keyword',
-                'ignore_above': KW_IGNORE_ABOVE,
-                'include_in_all': False
+                'ignore_above': KW_IGNORE_ABOVE
             },
             'item_type': {
                 'type': 'keyword',
@@ -421,21 +406,17 @@ def es_mapping(mapping, agg_items_mapping):
             'embedded': mapping,
             'object': {
                 'type': 'object',
-                'enabled': False,
-                'include_in_all': False,
+                'enabled': False
             },
             'properties': {
                 'type': 'object',
-                'enabled': False,
-                'include_in_all': False,
+                'enabled': False
             },
             'propsheets': {
                 'type': 'object',
-                'enabled': False,
-                'include_in_all': False,
+                'enabled': False
             },
             'principals_allowed': {
-                'include_in_all': False,
                 'properties': {
                     'view': {
                         'type': 'keyword',
@@ -458,8 +439,7 @@ def es_mapping(mapping, agg_items_mapping):
                         'type': 'keyword',
                         'ignore_above': KW_IGNORE_ABOVE
                     }
-                },
-                'include_in_all': False
+                }
             },
             'linked_uuids_object': {
                 'properties': {
@@ -471,8 +451,7 @@ def es_mapping(mapping, agg_items_mapping):
                         'type': 'keyword',
                         'ignore_above': KW_IGNORE_ABOVE
                     }
-                },
-                'include_in_all': False
+                }
             },
             'rev_link_names': {
                 'properties': {
@@ -484,34 +463,27 @@ def es_mapping(mapping, agg_items_mapping):
                         'type': 'keyword',
                         'ignore_above': KW_IGNORE_ABOVE
                     }
-                },
-                'include_in_all': False
+                }
             },
             'rev_linked_to_me': {
                 'type': 'keyword',
-                'ignore_above': KW_IGNORE_ABOVE,
-                'include_in_all': False
+                'ignore_above': KW_IGNORE_ABOVE
             },
             'validation_errors': {
-                'properties': validation_error_mapping(),
-                'include_in_all': False
+                'properties': validation_error_mapping()
             },
             'unique_keys': {
-                'type': 'object',
-                'include_in_all': False
+                'type': 'object'
             },
             'links': {
-                'type': 'object',
-                'include_in_all': False
+                'type': 'object'
             },
             'paths': {
                 'type': 'keyword',
-                'ignore_above': KW_IGNORE_ABOVE,
-                'include_in_all': False
+                'ignore_above': KW_IGNORE_ABOVE
             },
             'indexing_stats': {
-                'type': 'object',
-                'include_in_all': False
+                'type': 'object'
             }
         }
     }
@@ -533,7 +505,7 @@ def aggregated_items_mapping(types, item_type):
     """
     type_info = types[item_type]
     aggregated_items = type_info.aggregated_items
-    mapping = {'include_in_all': False, 'type': 'object'}
+    mapping = {'type': 'object'}
     if not aggregated_items:
         return mapping
     del mapping['type']
