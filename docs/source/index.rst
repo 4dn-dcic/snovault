@@ -20,4 +20,6 @@ To get started, read the following documentation on setting up and developing Sn
   storage_overview
   traversal
   resource_views
+  es_mapping
+  es_indexing
   snowflakes
