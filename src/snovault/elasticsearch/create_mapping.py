@@ -47,16 +47,23 @@ EPILOG = __doc__
 
 log = structlog.getLogger(__name__)
 
-PATH_FIELDS = ['submitted_file_name']
-NON_SUBSTRING_FIELDS = ['uuid', '@id', 'submitted_by', 'md5sum', 'references', 'submitted_file_name']
+# number of shards and replica, currently used for all indices
 NUM_SHARDS = 1
 NUM_REPLICAS = 1
+# memory safeguard; how many documents can be covered by from + size search req
 SEARCH_MAX = 100000
-# ignore above this number of kb when using mapping keyword fields
+# ignore above this number of kb when mapping keyword fields
 KW_IGNORE_ABOVE = 512
+# used to customize ngram filter behavior
+MIN_NGRAM = 2
+MAX_NGRAM = 10
 
 
 def determine_if_is_date_field(field, schema):
+    """
+    Helper funciton to determine whether a given `schema` for a field is a date.
+    TODO: remove unused `field` parameter. Requires search.py change
+    """
     is_date_field = False
     if schema.get('format') is not None:
         if schema['format'] == 'date' or schema['format'] == 'date-time':
@@ -75,6 +82,29 @@ def schema_mapping(field, schema, top_level=False):
     Create the mapping for a given schema. Can handle using all fields for
     objects (*), but can handle specific fields using the field parameter.
     This allows for the mapping to match the selective embedding.
+
+    Ultimately responsible for creating the field-level ES mappings for each
+    schema property. A typical mapping for a text field would be:
+
+        {
+            'type': 'text',
+            'fields': {
+                'raw': {
+                    'type': 'keyword',
+                    'ignore_above': KW_IGNORE_ABOVE
+                },
+                'lower_case_sort': {
+                    'type': 'keyword',
+                    'normalizer': 'case_insensitive',
+                    'ignore_above': KW_IGNORE_ABOVE
+                }
+            }
+        }
+
+    This field has two subfields, 'raw' and 'lower_case_sort', which are both
+    keywords that are leveraged in searches. 'lower_case_sort' uses a custom
+    normalize to lowercase the keyword value.
+    TODO: rename 'lower_case_sort' to 'lowercase' and adjust search code
     """
     type_ = schema['type']
 
@@ -111,7 +141,7 @@ def schema_mapping(field, schema, top_level=False):
                 },
                 'lower_case_sort': {
                     'type': 'keyword',
-                    'normalizer': 'case_insensistive_sort',
+                    'normalizer': 'case_insensitive',
                     'ignore_above': KW_IGNORE_ABOVE
                 }
             }
@@ -131,7 +161,7 @@ def schema_mapping(field, schema, top_level=False):
                 },
                 'lower_case_sort': {
                     'type': 'keyword',
-                    'normalizer': 'case_insensistive_sort',
+                    'normalizer': 'case_insensitive',
                     'ignore_above': KW_IGNORE_ABOVE
                 }
             }
@@ -147,18 +177,18 @@ def schema_mapping(field, schema, top_level=False):
                 },
                 'lower_case_sort': {
                     'type': 'keyword',
-                    'normalizer': 'case_insensistive_sort',
+                    'normalizer': 'case_insensitive',
                     'ignore_above': KW_IGNORE_ABOVE
                 }
             }
         }
 
     if type_ == 'string':
-        # don't make a mapping for non-embedded objects
+        # don't make a mapping for linked objects not within the embedded list
         if 'linkTo' in schema:
-            return
+            return None
 
-        sub_mapping = {
+        return {
             'type': 'text',
             'fields': {
                 'raw': {
@@ -167,16 +197,11 @@ def schema_mapping(field, schema, top_level=False):
                 },
                 'lower_case_sort': {
                     'type': 'keyword',
-                    'normalizer': 'case_insensistive_sort',
+                    'normalizer': 'case_insensitive',
                     'ignore_above': KW_IGNORE_ABOVE
                 }
             }
         }
-
-        if field in NON_SUBSTRING_FIELDS:
-            if field in PATH_FIELDS:
-                sub_mapping['analyzer'] = 'snovault_path_analyzer'
-        return sub_mapping
 
     if type_ == 'number':
         return {
@@ -188,7 +213,7 @@ def schema_mapping(field, schema, top_level=False):
                 },
                 'lower_case_sort': {
                     'type': 'keyword',
-                    'normalizer': 'case_insensistive_sort',
+                    'normalizer': 'case_insensitive',
                     'ignore_above': KW_IGNORE_ABOVE
                 }
             }
@@ -204,7 +229,7 @@ def schema_mapping(field, schema, top_level=False):
                 },
                 'lower_case_sort': {
                     'type': 'keyword',
-                    'normalizer': 'case_insensistive_sort',
+                    'normalizer': 'case_insensitive',
                     'ignore_above': KW_IGNORE_ABOVE
                 }
             }
@@ -212,6 +237,11 @@ def schema_mapping(field, schema, top_level=False):
 
 
 def index_settings():
+    """
+    Return a dictionary of index settings, which dictate things such as
+    shard/replica config per index, as well as filters, analyzers, and
+    normalizers. Several settings are configured using global values
+    """
     return {
         'index': {
             'number_of_shards': NUM_SHARDS,
@@ -227,56 +257,44 @@ def index_settings():
             },
             'analysis': {
                 'filter': {
-                    'substring': {
-                        'type': 'nGram',
-                        'min_gram': 1,
-                        'max_gram': 33
+                    # create tokens between size MIN_NGRAM and MAX_NGRAM
+                    'ngram_filter': {
+                        'type': 'edgeNGram',
+                         'min_gram': MIN_NGRAM,
+                         'max_gram': MAX_NGRAM
+                    },
+                    # truncate tokens to size MAX_NGRAM
+                    'truncate_to_ngram': {
+                         'type': 'truncate',
+                         'length': MAX_NGRAM
                     }
                 },
                 'analyzer': {
-                    'default': {
-                        'type': 'custom',
-                        'tokenizer': 'whitespace',
-                        'char_filter': 'html_strip',
-                        'filter': [
-                            'standard',
-                            'lowercase',
-                        ]
-                    },
+                    # used to analyze `_all` at index time
                     'snovault_index_analyzer': {
                         'type': 'custom',
                         'tokenizer': 'whitespace',
                         'char_filter': 'html_strip',
                         'filter': [
-                            'standard',
                             'lowercase',
                             'asciifolding',
-                            'substring'
+                            'ngram_filter'
                         ]
                     },
+                    # used to analyze `_all` at query time
                     'snovault_search_analyzer': {
                         'type': 'custom',
                         'tokenizer': 'whitespace',
                         'filter': [
-                            'standard',
                             'lowercase',
-                            'asciifolding'
+                            'asciifolding',
+                            'truncate_to_ngram'
                         ]
-                    },
-                    'snovault_path_analyzer': {
-                        'type': 'custom',
-                        'tokenizer': 'snovault_path_tokenizer',
-                        'filter': ['lowercase']
-                    }
-                },
-                'tokenizer': {
-                    'snovault_path_tokenizer': {
-                        'type': 'path_hierarchy',
-                        'reverse': True
                     }
                 },
                 'normalizer': {
-                    'case_insensistive_sort': {
+                    # keyword fields can use to lowercase on indexing and search
+                    'case_insensitive': {
                         'type': 'custom',
                         'filter': ['lowercase']
                     }
@@ -287,6 +305,9 @@ def index_settings():
 
 
 def validation_error_mapping():
+    """
+    Static mapping defined for validation errors built in @@index-data view
+    """
     return {
         'location': {
             'type': 'text',
@@ -320,6 +341,10 @@ def validation_error_mapping():
 
 # generate an index record, which contains a mapping and settings
 def build_index_record(mapping, in_type):
+    """
+    Generate an index record, which is the entire mapping + settings for the
+    given index (in_type)
+    """
     return {
         'mappings': {in_type: mapping},
         'settings': index_settings()
@@ -327,6 +352,11 @@ def build_index_record(mapping, in_type):
 
 
 def es_mapping(mapping, agg_items_mapping):
+    """
+    Entire Elasticsearch mapping for one item type, including dynamic templates
+    and all properties made in the @@index-data view. Takes the item mapping
+    and aggregated item mapping as parameters, since those vary by item type
+    """
     return {
         '_all': {
             'enabled': True,
@@ -491,6 +521,7 @@ def aggregated_items_mapping(types, item_type):
     (only used for exact match search and not sorted).
     Since the fields for each aggregated item are split by dots, we organize
     these as the hierarchical objects for Elasticsearch
+
     Args:
         types: result of request.registry[TYPES]
         item_type: string item type that we are creating the mapping for
@@ -583,10 +614,12 @@ def type_mapping(types, item_type, embed=True):
     schema = type_info.schema
     # use top_level parameter here for schema_mapping
     mapping = schema_mapping('*', schema, True)
-    embeds = add_default_embeds(item_type, types, type_info.embedded_list, schema)
-    embeds.sort()
     if not embed:
         return mapping
+
+    # process the `embedded_list` to add default fields for embedded objects
+    embeds = add_default_embeds(item_type, types, type_info.embedded_list, schema)
+    embeds.sort()
     for prop in embeds:
         single_embed = {}
         curr_s = schema

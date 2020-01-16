@@ -91,7 +91,6 @@ def threadlocal_manager():
     # configue RDBStorage. Overide write storage to use new DBSession
     register_storage(request.registry, write_override=RDBStorage(DBSession))
     zope.sqlalchemy.register(DBSession)
-    snovault.storage.register(DBSession)  # adds transactions-table listeners
     connection = DBSession().connection()
     connection.execute('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY')
 

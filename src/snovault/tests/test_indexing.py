@@ -1479,3 +1479,20 @@ def test_elasticsearch_item_embedded_agg(app, testapp, indexer_testapp, es_based
     # check @@links on the ppp page to ensure it contains ES item
     res = testapp.get(ppp_res.json['@graph'][0]['@id'] + '@@links')
     assert target_uuid in [x['uuid'] for x in res.json['uuids_linking_to']]
+
+
+def test_assert_transactions_table_is_gone(app):
+    """
+    A bit of a strange location for this test, but we need the app and
+    serverfixtures to be established (used for indexing)
+    """
+    from sqlalchemy import MetaData
+    session = app.registry[DBSESSION]
+    connection = session.connection().connect()
+    meta = MetaData(bind=session.connection(), reflect=True)
+    assert 'transactions' not in meta.tables
+    # make sure tid column is removed
+    assert 'tid' not in meta.tables['propsheets'].columns
+    # make sure fkey constraint is also removed
+    constraints = [c.name for c in meta.tables['propsheets'].constraints]
+    assert 'propsheets_tid_fkey' not in constraints

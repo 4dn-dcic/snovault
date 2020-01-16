@@ -2,7 +2,8 @@
 Snovault
 ========================
 
-Snovault is a JSON-LD Database Framework that serves as the backend for the 4DN Data portal and CGAP.
+Snovault is a JSON-LD Database Framework that serves as the backend for the 4DN Data portal and CGAP. Check out our full documentation `here
+<https://snovault.readthedocs.io/en/latest/>`_.
 
 |Build status|_
 
@@ -25,6 +26,7 @@ Step 2: Install or update dependencies::
 
     $ brew install libevent libmagic libxml2 libxslt openssl postgresql graphviz python3
     $ brew install freetype libjpeg libtiff littlecms webp  # Required by Pillow
+    $ brew cask install adoptopenjdk8
     $ brew tap homebrew/versions
     $ brew install elasticsearch@5.6
 

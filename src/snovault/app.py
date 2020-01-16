@@ -105,7 +105,6 @@ def configure_dbsession(config, clear_data=False):
 
         DBSession = orm.scoped_session(orm.sessionmaker(bind=engine))
         zope.sqlalchemy.register(DBSession)
-        snovault.storage.register(DBSession)
 
     config.registry[DBSESSION] = DBSession
 

@@ -38,7 +38,6 @@ from .interfaces import (
 )
 from pyramid.threadlocal import get_current_request
 import boto3
-import transaction
 import uuid
 import time
 import structlog
@@ -580,10 +579,20 @@ class UUID(types.TypeDecorator):
 
 
 class RDBBlobStorage(object):
+    """ Handlers to blobs we store in RDB """
     def __init__(self, DBSession):
         self.DBSession = DBSession
 
     def store_blob(self, data, download_meta, blob_id=None):
+        """ Initializes a db session and stores the data
+
+        Args:
+            data: raw attachment data
+            download_meta: metadata associated with 'data', not actually used
+            unless the caller wants to retain the blob_id
+            blob_id: optional arg specifying the id, will be generated if not
+            provided
+        """
         if blob_id is None:
             blob_id = uuid.uuid4()
         elif isinstance(blob_id, str):
@@ -594,6 +603,15 @@ class RDBBlobStorage(object):
         download_meta['blob_id'] = str(blob_id)
 
     def get_blob(self, download_meta):
+        """ Gets a blob given from RDB
+
+        Args:
+            download_meta: metadata associated with the blob, all that is required
+            is an entry for 'blob_id'
+
+        Returns:
+            data from the DB
+        """
         blob_id = download_meta['blob_id']
         if isinstance(blob_id, str):
             blob_id = uuid.UUID(blob_id)
@@ -603,6 +621,7 @@ class RDBBlobStorage(object):
 
 
 class S3BlobStorage(object):
+    """ Handler to blobs we store in S3 """
     def __init__(self, bucket):
         self.bucket = bucket
         session = boto3.session.Session(region_name='us-east-1')
@@ -610,14 +629,18 @@ class S3BlobStorage(object):
 
     def store_blob(self, data, download_meta, blob_id=None):
         """
-        create a new s3 key = blob_id
+        Create a new s3 key = blob_id
         upload the contents and return the meta in download_meta
+
+        Args:
+            data: raw blob to store
+            download_meta: unused beyond setting some meta data fields
+            blob_id: optional ID if you want to provide it, one will be generated
         """
         if blob_id is None:
             blob_id = str(uuid.uuid4())
 
         content_type = download_meta.get('type','binary/octet-stream')
-
         self.s3.put_object(Bucket=self.bucket,
                            Key=blob_id,
                            Body=data,
@@ -628,15 +651,24 @@ class S3BlobStorage(object):
         download_meta['blob_id'] = str(blob_id)
 
     def _get_bucket_key(self, download_meta):
-        # Assume files have been migrated
+        """ Helper for the below two methods """
         if 'bucket' in download_meta:
             return download_meta['bucket'], download_meta['key']
         else:
             return self.bucket, download_meta['blob_id']
 
     def get_blob_url(self, download_meta):
-        bucket_name, key = self._get_bucket_key(download_meta)
+        """ Locates a blob on S3 storage
 
+        Args:
+            download_meta: dictionary containing meta data, can specify the bucket
+            itself if it stored elsewhere otherwise defaults to self.bucket and
+            the blob_id
+
+        Returns:
+            url to the data
+        """
+        bucket_name, key = self._get_bucket_key(download_meta)
         location = self.s3.generate_presigned_url(
             ClientMethod='get_object',
             ExpiresIn=36*60*60,
@@ -644,8 +676,15 @@ class S3BlobStorage(object):
         return location
 
     def get_blob(self, download_meta):
-        bucket_name, key = self._get_bucket_key(download_meta)
+        """ Locates and gets a blob on S3 storage
 
+        Args:
+            download_meta: see above
+
+        Returns:
+            data from S3
+        """
+        bucket_name, key = self._get_bucket_key(download_meta)
         response = self.s3.get_object(Bucket=bucket_name,
                                  Key=key)
         return response['Body'].read().decode()
@@ -712,13 +751,7 @@ class PropertySheet(Base):
                  nullable=False)
     name = Column(types.String, nullable=False)
     properties = Column(JSON)
-    tid = Column(UUID,
-                 ForeignKey('transactions.tid',
-                            deferrable=True,
-                            initially='DEFERRED'),
-                 nullable=False)
     resource = orm.relationship('Resource')
-    transaction = orm.relationship('TransactionRecord')
 
 
 class CurrentPropertySheet(Base):
@@ -800,11 +833,6 @@ class Resource(Base):
         return self.rid
 
     @property
-    def tid(self):
-        tids = (str(self.data[k].propsheet.tid) for k in self.data.keys())
-        return ','.join(sorted(set(tids)))
-
-    @property
     def sid(self):
         """
         In some cases there may be more than one sid, but we care about the
@@ -829,20 +857,6 @@ class Blob(Base):
     __tablename__ = 'blobs'
     blob_id = Column(UUID, primary_key=True)
     data = Column(types.LargeBinary)
-
-
-class TransactionRecord(Base):
-    __tablename__ = 'transactions'
-    order = Column(types.Integer, autoincrement=True, primary_key=True)
-    tid = Column(UUID, default=uuid.uuid4, nullable=False, unique=True)
-    data = Column(JSON)
-    timestamp = Column(
-        types.DateTime(timezone=True), nullable=False, server_default=func.now())
-    # A server_default is necessary for the notify_ddl overwrite to work
-    xid = Column(types.BigInteger, nullable=True, server_default=null())
-    __mapper_args__ = {
-        'eager_defaults': True,
-    }
 
 
 # User specific stuff
@@ -887,101 +901,3 @@ class User(Base):
         if not user:
             return False
         return crypt.check(user.password, password)
-notify_ddl = DDL("""
-    ALTER TABLE %(table)s ALTER COLUMN "xid" SET DEFAULT txid_current();
-    CREATE OR REPLACE FUNCTION snovault_transaction_notify() RETURNS trigger AS $$
-    DECLARE
-    BEGIN
-        PERFORM pg_notify('snovault.transaction', NEW.xid::TEXT);
-        RETURN NEW;
-    END;
-    $$ LANGUAGE plpgsql;
-    CREATE TRIGGER snovault_transactions_insert AFTER INSERT ON %(table)s
-    FOR EACH ROW EXECUTE PROCEDURE snovault_transaction_notify();
-""")
-
-event.listen(
-    TransactionRecord.__table__, 'after_create',
-    notify_ddl.execute_if(dialect='postgresql'),
-)
-
-
-@event.listens_for(PropertySheet, 'before_insert')
-def set_tid(mapper, connection, target):
-    if target.tid is not None:
-        return
-    txn = transaction.get()
-    data = txn._extension
-    target.tid = data['tid']
-
-
-def register(DBSession):
-    event.listen(DBSession, 'before_flush', add_transaction_record)
-    event.listen(DBSession, 'before_commit', record_transaction_data)
-    event.listen(DBSession, 'after_begin', set_transaction_isolation_level)
-
-
-def add_transaction_record(session, flush_context, instances):
-    txn = transaction.get()
-    # Set data with txn.setExtendedInfo(name, value)
-    data = txn._extension
-    record = data.get('_snovault_transaction_record')
-    if record is not None:
-        if orm.object_session(record) is None:
-            # Savepoint rolled back
-            session.add(record)
-        # Transaction has already been recorded
-        return
-
-    tid = data['tid'] = uuid.uuid4()
-    record = TransactionRecord(tid=tid)
-    data['_snovault_transaction_record'] = record
-    session.add(record)
-
-
-def record_transaction_data(session):
-    txn = transaction.get()
-    data = txn._extension
-    if '_snovault_transaction_record' not in data:
-        return
-
-    record = data['_snovault_transaction_record']
-
-    if txn.description:
-        data['description'] = txn.description
-
-    if txn.user:
-        data['userid'] = txn.user
-
-    record.data = {k: v for k, v in data.items() if not k.startswith('_')}
-    session.add(record)
-
-
-_set_transaction_snapshot = text(
-    "SET TRANSACTION ISOLATION LEVEL SERIALIZABLE, READ ONLY;"
-    "SET TRANSACTION SNAPSHOT :snapshot_id;"
-)
-
-
-def set_transaction_isolation_level(session, sqla_txn, connection):
-    """
-    Set appropriate transaction isolation level.
-    Doomed transactions can be read-only.
-    ``transaction.doom()`` must be called before the connection is used.
-    Othewise assume it is a write which must be REPEATABLE READ.
-    """
-    if connection.engine.url.drivername != 'postgresql':
-        return
-
-    txn = transaction.get()
-    if not txn.isDoomed():
-        # connection.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ;")
-        return
-
-    data = txn._extension
-    if 'snapshot_id' in data:
-        connection.execute(
-            _set_transaction_snapshot,
-            snapshot_id=data['snapshot_id'])
-    else:
-        connection.execute("SET TRANSACTION READ ONLY;")
