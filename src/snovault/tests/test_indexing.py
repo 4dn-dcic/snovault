@@ -12,21 +12,21 @@ import uuid
 import yaml
 import os
 from datetime import datetime
-from snovault.elasticsearch.interfaces import (
+from ..elasticsearch.interfaces import (
     ELASTIC_SEARCH,
     INDEXER_QUEUE,
     INDEXER_QUEUE_MIRROR,
 )
-from snovault import (
+from .. import (
     COLLECTIONS,
     TYPES,
     DBSESSION,
     STORAGE
 )
-from snovault.commands.es_index_data import run as run_index_data
-from snovault.elasticsearch import create_mapping, indexer_utils
+from ..commands.es_index_data import run as run_index_data
+from ..elasticsearch import create_mapping, indexer_utils
 from elasticsearch.exceptions import NotFoundError
-from snovault.elasticsearch.create_mapping import (
+from ..elasticsearch.create_mapping import (
     run,
     type_mapping,
     create_mapping_by_type,
@@ -35,13 +35,13 @@ from snovault.elasticsearch.create_mapping import (
     confirm_mapping,
     compare_against_existing_mapping
 )
-from snovault.elasticsearch.indexer import (
+from ..elasticsearch.indexer import (
     check_sid,
     SidException
 )
 from pyramid.paster import get_appsettings
-from snovault.tests.pyramidfixtures import dummy_request
-from snovault.tests.toolfixtures import registry, root, elasticsearch
+from .pyramidfixtures import dummy_request
+from .toolfixtures import registry, root, elasticsearch
 
 pytestmark = [pytest.mark.indexing]
 TEST_COLL = '/testing-post-put-patch-sno/'

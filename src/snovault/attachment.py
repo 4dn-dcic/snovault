@@ -14,7 +14,7 @@ from urllib.parse import (
     quote,
     unquote,
 )
-from snovault import (
+from . import (
     BLOBS,
     Item,
 )

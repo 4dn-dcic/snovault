@@ -1,4 +1,4 @@
-from snovault import (
+from .. import (
     Item,
     collection,
 )

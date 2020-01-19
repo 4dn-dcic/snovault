@@ -10,7 +10,7 @@ import itertools
 import logging
 import transaction
 from copy import deepcopy
-from snovault import (
+from . import (
     CONNECTION,
     STORAGE,
     UPGRADER,

@@ -1,5 +1,5 @@
-from snovault.json_renderer import json_renderer
-from snovault.util import get_root_request
+from ..json_renderer import json_renderer
+from ..util import get_root_request
 from dcicutils.es_utils import create_es_client
 from elasticsearch.connection import RequestsHttpConnection
 from elasticsearch.serializer import SerializationError

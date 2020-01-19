@@ -1,5 +1,5 @@
-from snovault import Item, Root, CONNECTION
-from snovault.elasticsearch.indexer_utils import get_uuids_for_types
+from . import Item, Root, CONNECTION
+from .elasticsearch.indexer_utils import get_uuids_for_types
 from past.builtins import basestring
 from pyramid.view import view_config
 

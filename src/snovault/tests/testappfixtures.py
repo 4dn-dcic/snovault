@@ -31,7 +31,7 @@ _app_settings = {
 
 @pytest.fixture(scope='session')
 def app_settings(request, wsgi_server_host_port, conn, DBSession):
-    from snovault import DBSESSION
+    from .. import DBSESSION
     import os
     settings = _app_settings.copy()
     settings[DBSESSION] = DBSession
@@ -43,7 +43,7 @@ def app(app_settings):
     '''WSGI application level functional testing.
        will have to make snovault dummy main app
     '''
-    from snovault import main
+    from .. import main
     return main({}, **app_settings)
 
 

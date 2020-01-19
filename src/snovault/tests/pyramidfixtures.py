@@ -1,5 +1,5 @@
 import pytest
-from snovault.tests.toolfixtures import registry
+from .toolfixtures import registry
 
 # Fixtures  for pyramid, embedding
 

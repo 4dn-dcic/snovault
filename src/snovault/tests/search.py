@@ -3,21 +3,21 @@ import math
 import itertools
 from pyramid.view import view_config
 from webob.multidict import MultiDict
-from snovault import (
+from .. import (
     AbstractCollection,
     TYPES,
     COLLECTIONS
 )
-from snovault.embed import make_subrequest
-from snovault.elasticsearch import ELASTIC_SEARCH
-from snovault.elasticsearch.indexer_utils import get_namespaced_index
-from snovault.elasticsearch.create_mapping import determine_if_is_date_field
-from snovault.resource_views import collection_view_listing_db
-from snovault.util import (
+from ..embed import make_subrequest
+from ..elasticsearch import ELASTIC_SEARCH
+from ..elasticsearch.indexer_utils import get_namespaced_index
+from ..elasticsearch.create_mapping import determine_if_is_date_field
+from ..resource_views import collection_view_listing_db
+from ..util import (
     find_collection_subtypes,
     crawl_schema
 )
-from snovault.typeinfo import AbstractTypeInfo
+from ..typeinfo import AbstractTypeInfo
 from elasticsearch.helpers import scan
 from elasticsearch_dsl import Search
 from elasticsearch import (

@@ -1,4 +1,4 @@
-from snovault import DBSESSION
+from .. import DBSESSION
 from contextlib import contextmanager
 from multiprocessing import (
     get_context,
@@ -14,8 +14,8 @@ from pyramid.threadlocal import (
 import atexit
 import structlog
 import logging
-from snovault import set_logging
-from snovault.storage import register_storage
+from .. import set_logging
+from ..storage import register_storage
 import transaction
 import signal
 import time
@@ -44,7 +44,7 @@ def initializer(app_factory, settings):
     """
     Need to initialize the app for the subprocess
     """
-    from snovault.app import configure_engine
+    from ..app import configure_engine
     signal.signal(signal.SIGINT, signal.SIG_IGN)
 
     # set up global variables to use throughout subprocess
@@ -67,7 +67,6 @@ def threadlocal_manager():
     Set registry and request attributes using the global app within the
     subprocess
     """
-    import snovault.storage
     import zope.sqlalchemy
     from sqlalchemy import orm
 

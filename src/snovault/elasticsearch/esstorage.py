@@ -22,7 +22,7 @@ log = structlog.getLogger(__name__)
 
 
 def includeme(config):
-    from snovault import STORAGE
+    from .. import STORAGE
     registry = config.registry
     es = registry[ELASTIC_SEARCH]
     # ES 5 change: 'snovault' index removed, search among '_all' instead

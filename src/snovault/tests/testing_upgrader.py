@@ -1,8 +1,8 @@
-from snovault import (
+from .. import (
     Item,
     collection,
 )
-from snovault.upgrader import (
+from ..upgrader import (
     upgrade_step,
     upgrade_finalizer,
 )

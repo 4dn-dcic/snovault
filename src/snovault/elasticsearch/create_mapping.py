@@ -20,12 +20,12 @@ from elasticsearch.exceptions import (
 from elasticsearch_dsl import Index, Search
 from elasticsearch_dsl.connections import connections
 from functools import reduce
-from snovault import (
+from .. import (
     COLLECTIONS,
     TYPES,
 )
-from snovault.schema_utils import combine_schemas
-from snovault.util import add_default_embeds, find_collection_subtypes
+from ..schema_utils import combine_schemas
+from ..util import add_default_embeds, find_collection_subtypes
 from .interfaces import ELASTIC_SEARCH, INDEXER_QUEUE
 from collections import OrderedDict
 from itertools import chain
@@ -34,7 +34,7 @@ import structlog
 import time
 import datetime
 import sys
-from snovault.commands.es_index_data import run as run_index_data
+from ..commands.es_index_data import run as run_index_data
 from .indexer_utils import get_namespaced_index, find_uuids_for_indexing, get_uuids_for_types
 import transaction
 import os

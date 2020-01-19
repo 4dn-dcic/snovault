@@ -1,6 +1,6 @@
 import pytest
-from snovault.tests.toolfixtures import registry
-from snovault.util import (
+from .toolfixtures import registry
+from ..util import (
     build_default_embeds,
     find_default_embeds_for_schema,
     find_collection_subtypes,
@@ -30,7 +30,7 @@ def test_build_default_embeds():
     assert(set(final_embeds) == set(expected_embeds))
 
 def test_find_default_embeds_and_expand_emb_list(registry):
-    from snovault import TYPES
+    from .. import TYPES
     # use EmbeddingTest as test case
     # 'attachment' -> linkTo TestingDownload
     type_info = registry[TYPES].by_item_type['embedding_test']

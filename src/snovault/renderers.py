@@ -19,7 +19,7 @@ from pyramid.traversal import (
     _join_path_tuple,
 )
 
-from snovault.validation import CSRFTokenError
+from .validation import CSRFTokenError
 from subprocess_middleware.tween import SubprocessTween
 import logging
 import os

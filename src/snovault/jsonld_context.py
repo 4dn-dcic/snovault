@@ -1,4 +1,4 @@
-from snovault import (
+from . import (
     TYPES,
 )
 from pyramid.events import (

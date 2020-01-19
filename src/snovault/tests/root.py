@@ -1,5 +1,5 @@
 from pyramid.decorator import reify
-from snovault import (
+from .. import (
     Root,
     calculated_property,
     root,

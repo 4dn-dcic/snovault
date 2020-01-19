@@ -2,8 +2,8 @@ from .interfaces import ELASTIC_SEARCH
 from elasticsearch.exceptions import ConnectionTimeout
 from elasticsearch.helpers import scan
 import time
-from snovault import COLLECTIONS, STORAGE
-from snovault.util import find_collection_subtypes
+from .. import COLLECTIONS, STORAGE
+from ..util import find_collection_subtypes
 
 
 def get_namespaced_index(config, index):

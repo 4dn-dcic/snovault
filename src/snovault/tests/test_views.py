@@ -1,6 +1,6 @@
 import pytest
-from snovault import TYPES
-from snovault.tests.toolfixtures import registry, root
+from .. import TYPES
+from .toolfixtures import registry, root
 TYPE_NAMES = ['TestingPostPutPatchSno', 'TestingDownload']
 
 """ Get all item types from schema names """

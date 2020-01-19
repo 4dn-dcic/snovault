@@ -1,12 +1,12 @@
 import pytest
-from snovault.tests.toolfixtures import registry, storage
-from snovault.tests.serverfixtures import session
+from .toolfixtures import registry, storage
+from .serverfixtures import session
 
 pytestmark = pytest.mark.storage
 
 
 def test_storage_creation(session):
-    from snovault.storage import (
+    from ..storage import (
         PropertySheet,
         CurrentPropertySheet,
         Blob,
@@ -23,7 +23,7 @@ def test_storage_creation(session):
 def test_transaction_record_rollback(session):
     import transaction
     import uuid
-    from snovault.storage import Resource
+    from ..storage import Resource
     rid = uuid.uuid4()
     resource = Resource('test_item', {'': {}}, rid=rid)
     session.add(resource)
@@ -41,7 +41,7 @@ def test_transaction_record_rollback(session):
 
 
 def test_current_propsheet(session):
-    from snovault.storage import (
+    from ..storage import (
         CurrentPropertySheet,
         Resource,
         PropertySheet,
@@ -65,7 +65,7 @@ def test_current_propsheet(session):
 
 
 def test_current_propsheet_update(session):
-    from snovault.storage import (
+    from ..storage import (
         CurrentPropertySheet,
         Resource,
         PropertySheet,
@@ -91,7 +91,7 @@ def test_current_propsheet_update(session):
 
 
 def test_get_by_json(session):
-    from snovault.storage import (
+    from ..storage import (
         CurrentPropertySheet,
         Resource,
         PropertySheet,
@@ -117,7 +117,7 @@ def test_get_by_json(session):
 
 
 def test_purge_uuid(session, storage):
-    from snovault.storage import (
+    from ..storage import (
         Resource,
         Key,
         PropertySheet,
@@ -154,7 +154,7 @@ def test_purge_uuid(session, storage):
 
 
 def test_delete_compound(session, storage):
-    from snovault.storage import (
+    from ..storage import (
         CurrentPropertySheet,
         Resource,
         PropertySheet,
@@ -196,7 +196,7 @@ def test_delete_compound(session, storage):
 
 def test_keys(session):
     from sqlalchemy.orm.exc import FlushError
-    from snovault.storage import (
+    from ..storage import (
         Resource,
         Key,
     )
@@ -229,7 +229,7 @@ def test_keys(session):
 
 
 def test_get_sids_by_uuids(session, storage):
-    from snovault.storage import (
+    from ..storage import (
         CurrentPropertySheet,
         Resource,
         PropertySheet,
@@ -244,7 +244,7 @@ def test_get_sids_by_uuids(session, storage):
 
 
 def test_S3BlobStorage():
-    from snovault.storage import S3BlobStorage
+    from ..storage import S3BlobStorage
     blob_bucket = 'encoded-4dn-blobs'
     storage = S3BlobStorage(blob_bucket)
     assert storage.bucket == blob_bucket
@@ -264,7 +264,7 @@ def test_S3BlobStorage():
 
 
 def test_S3BlobStorage_get_blob_url_for_non_s3_file():
-    from snovault.storage import S3BlobStorage
+    from ..storage import S3BlobStorage
     blob_bucket = 'encoded-4dn-blobs'
     storage = S3BlobStorage(blob_bucket)
     assert storage.bucket == blob_bucket

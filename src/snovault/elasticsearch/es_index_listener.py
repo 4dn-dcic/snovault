@@ -6,7 +6,7 @@ Example.
 """
 
 from webtest import TestApp
-from snovault.elasticsearch.interfaces import (
+from .interfaces import (
     ELASTIC_SEARCH,
     INDEXER_QUEUE
 )

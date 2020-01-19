@@ -11,7 +11,7 @@ from .interfaces import (
     INDEXER,
     INDEXER_QUEUE
 )
-from snovault import (
+from .. import (
     DBSESSION,
     STORAGE
 )

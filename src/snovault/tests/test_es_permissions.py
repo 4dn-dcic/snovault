@@ -1,5 +1,5 @@
 import pytest
-from snovault.elasticsearch.cached_views import filter_embedded
+from ..elasticsearch.cached_views import filter_embedded
 from copy import deepcopy
 
 

@@ -1,4 +1,4 @@
-from snovault.interfaces import (
+from .interfaces import (
     TYPES,
     UPGRADER,
 )

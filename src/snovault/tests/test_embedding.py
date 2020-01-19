@@ -1,7 +1,7 @@
 import pytest
-from snovault.tests.toolfixtures import registry, root
-from snovault.tests.pyramidfixtures import dummy_request, threadlocals
-from snovault.tests.test_views import PARAMETERIZED_NAMES
+from .toolfixtures import registry, root
+from .pyramidfixtures import dummy_request, threadlocals
+from .test_views import PARAMETERIZED_NAMES
 
 targets = [
     {'name': 'one', 'uuid': '775795d3-4410-4114-836b-8eeecf1d0c2f'},

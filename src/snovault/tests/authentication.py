@@ -29,10 +29,10 @@ from pyramid.settings import (
     asbool,
     aslist,
 )
-from snovault import ROOT, COLLECTIONS
-from snovault.storage import User
-from snovault.calculated import calculate_properties
-from snovault.validators import no_validate_item_content_post
+from .. import ROOT, COLLECTIONS
+from ..storage import User
+from ..calculated import calculate_properties
+from ..validators import no_validate_item_content_post
 
 
 CRYPT_CONTEXT = __name__ + ':crypt_context'

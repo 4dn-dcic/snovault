@@ -1,4 +1,4 @@
-from snovault import COLLECTIONS
+from .. import COLLECTIONS
 
 
 def groupfinder(login, request):

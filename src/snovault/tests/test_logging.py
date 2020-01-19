@@ -1,8 +1,8 @@
-from snovault import stats
-from snovault.crud_views import log as crud_view_log
+from .. import stats
+from ..crud_views import log as crud_view_log
 from unittest import mock
 import pytest
-from snovault.tests.test_post_put_patch import COLLECTION_URL, item_with_uuid
+from .test_post_put_patch import COLLECTION_URL, item_with_uuid
 import structlog
 import json
 import yaml

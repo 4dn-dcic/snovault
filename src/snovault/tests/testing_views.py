@@ -11,7 +11,7 @@ from pyramid.traversal import (
     traverse,
 )
 from pyramid.view import view_config
-from snovault import (
+from .. import (
     AbstractCollection as BaseAbstractCollection,
     Collection as BaseCollection,
     Item as BaseItem,
@@ -20,9 +20,9 @@ from snovault import (
     abstract_collection,
     load_schema,
 )
-from snovault.tests.root import TestRoot
-from snovault.attachment import ItemWithAttachment
-from snovault.interfaces import CONNECTION
+from .root import TestRoot
+from ..attachment import ItemWithAttachment
+from ..interfaces import CONNECTION
 
 
 def includeme(config):
