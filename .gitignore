@@ -1,6 +1,11 @@
+# Python code coverage
 .coverage
+
+# Helper files for zc.buildout
 /.installed.cfg
 /.mr.developer.cfg
+
+# Uncategorized
 /.cache/
 /.sass-cache/
 /annotations.json
@@ -19,14 +24,38 @@
 /dist/
 /build/
 
+# Mac folders
 *.DS_Store
+
+# Python eggs
 *.egg-info
+
+# Python caching
 *.pyc
+
+# Eclipse and other editing
 +.project
 +.pydevproject
+.idea/
+
+# Log files
 *.log
+
+# PyEnv
 .python-version
+
+# Microsoft Office lock and backup files
 ~$*
 .~*#
 
-.python-version
+# Emacs backup files
+*~
+\#.*\#
+
+# Virtualenv folders
+*env/
+
+# Elastic Beanstalk Files
+.elasticbeanstalk/*
+!.elasticbeanstalk/*.cfg.yml
+!.elasticbeanstalk/*.global.yml

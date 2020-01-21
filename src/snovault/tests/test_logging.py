@@ -34,7 +34,6 @@ def test_stats_tween_logs_stats(testapp, mocked):
 def test_stats_tween_logs_telemetry_id(testapp, mocked):
     with mocked as mocked_log:
         res = testapp.get("/?telemetry_id=test_telem")
-        mocked_log.bind.assert_called()
         assert mocked_log.bind.call_count == 2
         assert mocked_log.bind.call_args_list[0] == mock.call(telemetry_id='test_telem',
                                                               url_path='/',
