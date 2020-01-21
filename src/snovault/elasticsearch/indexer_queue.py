@@ -122,14 +122,8 @@ def dlq_to_primary(request):
     queue_indexer = request.registry[INDEXER_QUEUE]
     dlq_messages = queue_indexer.receive_messages(target_queue='dlq')
     response = {}
-    response['number_failed'] = 0
-    if len(dlq_messages) == 0:
-        response['number_migrated'] = 0
-        return response
-    # send messages if we got any
-    failed = queue_indexer.send_messages(dlq_messages)
-    if len(failed) != 0:
-        response['number_failed'] = len(failed)
+    failed = queue_indexer.send_messages(dlq_messages) if dlq_messages else []
+    response['number_failed'] = len(failed)
     response['number_migrated'] = len(dlq_messages) - len(failed)
     return response
 
@@ -187,7 +181,7 @@ class QueueManager(object):
                 'VisibilityTimeout': '600',  # increase if messages going to dlq
                 'MessageRetentionPeriod': '1209600',  # 14 days, in seconds
                 'ReceiveMessageWaitTimeSeconds': '2',  # 2 seconds of long polling
-            }
+            },
         }
         # initialize the queue and dlq here, but not on mirror queue
         if not mirror_env:
@@ -203,7 +197,7 @@ class QueueManager(object):
         self.queue_targets = OrderedDict([
             ('primary', self.queue_url),
             ('secondary', self.second_queue_url),
-            ('dlq', self.dlq_url)
+            ('dlq', self.dlq_url),
         ])
 
     def add_uuids(self, registry, uuids, strict=False, target_queue='primary',

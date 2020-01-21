@@ -295,9 +295,8 @@ def test_dlq_to_primary(app, anontestapp, indexer_testapp):
     """
     indexer_queue = app.registry[INDEXER_QUEUE]
     indexer_queue.clear_queue()
-    test_message1 = "destined for primary!"
-    test_message2 = "i am also destined!"
-    success, failed = indexer_queue.add_uuids(app.registry, [test_message1, test_message2],
+    test_bodies = ["destined for primary!", "i am also destined!"]
+    success, failed = indexer_queue.add_uuids(app.registry, test_bodies,
                                         target_queue='dlq')
     assert not failed
     assert len(success) == 2
@@ -308,7 +307,7 @@ def test_dlq_to_primary(app, anontestapp, indexer_testapp):
     assert len(msgs) == 2
     for msg in msgs:
         body = msg["Body"]
-        assert 'destined' in body
+        assert body in test_bodies
 
     # hit route with no messages, should see 0 migrated
     res = indexer_testapp.get('/dlq_to_primary').json
