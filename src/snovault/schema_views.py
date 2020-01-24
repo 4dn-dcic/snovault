@@ -1,19 +1,26 @@
+import sys
 from collections import OrderedDict
+from itertools import chain
+from urllib.parse import urlparse
+
 from pyramid.httpexceptions import HTTPNotFound
 from pyramid.view import view_config
+
 from .etag import etag_app_version_effective_principals
 from .interfaces import (
     COLLECTIONS,
     TYPES,
 )
-from urllib.parse import urlparse
-from itertools import chain
+from .util import log_route
 
 
 def includeme(config):
     config.add_route('schemas', '/profiles/')
     config.add_route('schema', '/profiles/{type_name}.json')
     config.scan(__name__)
+
+from structlog import getLogger
+log = getLogger(__name__)
 
 
 def _annotated_schema(type_info, request):
@@ -79,6 +86,7 @@ def schema(context, request):
     This allows this endpoint to work with item name (e.g. MyItem) or item_type
     (e.g. my_item)
     """
+    log_route(log, sys._getframe().f_code.co_name)
     type_name = request.matchdict['type_name']
     types = request.registry[TYPES]
     found_type_info = None
@@ -102,6 +110,7 @@ def schemas(context, request):
     for regular classes using registry[TYPES].by_item_type and for abstract
     classes by using registry[TYPES].by_abstract_type
     """
+    log_route(log, sys._getframe().f_code.co_name)
     types = request.registry[TYPES]
     schemas = {}
     all_item_types = chain(types.by_item_type.values(),

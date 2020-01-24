@@ -1,17 +1,20 @@
-from snovault import (
-    TYPES,
+import sys
+from urllib.parse import (
+    quote,
+    urlparse,
 )
+
 from pyramid.events import (
     ApplicationCreated,
     subscriber,
 )
 from pyramid.httpexceptions import HTTPNotFound
 from pyramid.view import view_config
-from urllib.parse import (
-    quote,
-    urlparse,
+
+from snovault import (
+    TYPES,
 )
-from .util import ensurelist
+from .util import ensurelist, log_route
 
 
 def includeme(config):
@@ -25,6 +28,9 @@ def includeme(config):
     config.add_route('jsonld_term', term_path + '{term}')
     config.scan(__name__)
 
+
+import structlog
+log = structlog.getLogger(__name__)
 
 @subscriber(ApplicationCreated)
 def make_jsonld_context(event):
@@ -288,11 +294,13 @@ def jsonld_context(context, request):
     """
     Basically a view that list all the terms used on the site in JSON-ld format
     """
+    log_route(log, sys._getframe().f_code.co_name)
     return request.registry['snovault.jsonld.context']
 
 
 @view_config(route_name='jsonld_term', request_method='GET')
 def jsonld_term(context, request):
+    log_route(log, sys._getframe().f_code.co_name)
     ontology = request.registry['snovault.jsonld.context']
     term = request.matchdict['term']
     try:

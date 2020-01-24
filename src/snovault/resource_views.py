@@ -1,9 +1,11 @@
 import sys
+from itertools import islice
+from urllib.parse import urlencode
+
 from future.utils import (
     raise_with_traceback,
     itervalues,
 )
-from itertools import islice
 from past.builtins import basestring
 from pyramid.exceptions import PredicateMismatch
 from pyramid.httpexceptions import HTTPNotFound
@@ -12,7 +14,7 @@ from pyramid.view import (
     render_view_to_response,
     view_config,
 )
-from urllib.parse import urlencode
+
 from .calculated import calculate_properties
 from .resources import (
     AbstractCollection,
@@ -25,16 +27,23 @@ from .util import (
     expand_embedded_model,
     process_aggregated_items,
     check_es_and_cache_linked_sids,
-    validate_es_content
+    validate_es_content,
+    log_route
 )
+
 
 def includeme(config):
     config.scan(__name__)
 
 
+from structlog import getLogger
+log = getLogger(__name__)
+
+
 @view_config(context=AbstractCollection, permission='list', request_method='GET',
              name='listing')
 def collection_view_listing_db(context, request):
+    log_route(log, sys._getframe().f_code.co_name)
     result = {}
 
     frame = request.params.get('frame', 'columns')
@@ -71,6 +80,7 @@ def collection_view_listing_db(context, request):
 
 @view_config(context=Root, request_method='GET', name='page')
 def home(context, request):
+    log_route(log, sys._getframe().f_code.co_name)
     properties = request.embed(request.resource_path(context), '@@object')
     calculated = calculate_properties(context, request, properties, category='page')
     properties.update(calculated)
@@ -80,7 +90,7 @@ def home(context, request):
 @view_config(context=Root, request_method='GET', name='object')
 @view_config(context=AbstractCollection, permission='list', request_method='GET', name='object')
 def collection_view_object(context, request):
-
+    log_route(log, sys._getframe().f_code.co_name)
     properties = context.__json__(request)
     calculated = calculate_properties(context, request, properties)
     properties.update(calculated)
@@ -89,6 +99,7 @@ def collection_view_object(context, request):
 
 @view_config(context=AbstractCollection, permission='list', request_method='GET', name='page')
 def collection_list(context, request):
+    log_route(log, sys._getframe().f_code.co_name)
     path = request.resource_path(context)
     properties = request.embed(path, '@@object')
     calculated = calculate_properties(context, request, properties, category='page')
@@ -106,6 +117,7 @@ def collection_list(context, request):
 @view_config(context=AbstractCollection, permission='list', request_method='GET')
 @view_config(context=Item, permission='view', request_method='GET')
 def item_view(context, request):
+    log_route(log, sys._getframe().f_code.co_name)
     frame = request.params.get('frame', 'page')
     if getattr(request, '__parent__', None) is None:
         # We need the response headers from non subrequests
@@ -147,6 +159,7 @@ def item_view_object(context, request):
     Returns:
         Dictionary item properties
     """
+    log_route(log, sys._getframe().f_code.co_name)
     if hasattr(request, 'datastore') and request.datastore != 'elasticsearch':
         es_res = check_es_and_cache_linked_sids(context, request, 'object')
         # validate_es_content also checks/updates rev links
@@ -182,6 +195,7 @@ def item_view_embedded(context, request):
     Returns:
         Dictionary item properties
     """
+    log_route(log, sys._getframe().f_code.co_name)
     if hasattr(request, 'datastore') and request.datastore != 'elasticsearch':
         es_res = check_es_and_cache_linked_sids(context, request, 'embedded')
         # validate_es_content also checks/updates rev links
@@ -221,6 +235,7 @@ def item_view_embedded(context, request):
 @view_config(context=Item, permission='view', request_method='GET',
              name='page')
 def item_view_page(context, request):
+    log_route(log, sys._getframe().f_code.co_name)
     item_path = request.resource_path(context)
     properties = request.embed(item_path, '@@embedded', as_user=True)
     calculated = calculate_properties(context, request, properties, category='page')
@@ -231,6 +246,7 @@ def item_view_page(context, request):
 @view_config(context=Item, permission='expand', request_method='GET',
              name='expand')
 def item_view_expand(context, request):
+    log_route(log, sys._getframe().f_code.co_name)
     path = request.resource_path(context)
     properties = request.embed(path, '@@object', as_user=True)
     for path in request.params.getall('expand'):
@@ -269,6 +285,7 @@ def expand_column(request, obj, subset, path):
 @view_config(context=Item, permission='view', request_method='GET',
              name='columns')
 def item_view_columns(context, request):
+    log_route(log, sys._getframe().f_code.co_name)
     path = request.resource_path(context)
     properties = request.embed(path, '@@object')
     if context.schema is None or 'columns' not in context.schema:
@@ -292,6 +309,7 @@ def item_view_columns(context, request):
 @view_config(context=Item, permission='view_raw', request_method='GET',
              name='raw')
 def item_view_raw(context, request):
+    log_route(log, sys._getframe().f_code.co_name)
     props = context.properties
     # only upgrade properties if explicitly requested
     if asbool(request.params.get('upgrade', True)):

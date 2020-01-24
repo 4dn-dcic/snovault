@@ -1,16 +1,15 @@
+import logging
 from copy import deepcopy
-from .interfaces import CONNECTION
-from past.builtins import basestring
 from posixpath import join
+
 from pyramid.compat import (
     native_,
     unquote_bytes_to_wsgi,
 )
 from pyramid.httpexceptions import HTTPNotFound
-from pyramid.exceptions import URLDecodeError
-from pyramid.traversal import find_resource
-from pyramid.interfaces import IRoutesMapper
-import logging
+
+from .interfaces import CONNECTION
+
 log = logging.getLogger(__name__)
 
 

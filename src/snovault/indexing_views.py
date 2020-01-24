@@ -1,24 +1,29 @@
 from __future__ import unicode_literals
-from pyramid.security import (
-    Authenticated,
-    Everyone,
-    principals_allowed_by_permission,
-)
+
+import sys
+from contextlib import contextmanager
+from timeit import default_timer as timer
+
+from pyramid.settings import asbool
 from pyramid.traversal import resource_path
 from pyramid.view import view_config
-from pyramid.settings import asbool
-from timeit import default_timer as timer
-from contextlib import contextmanager
-from .resources import Item, calc_principals
-from .interfaces import STORAGE
-from .embed import make_subrequest
-from .validation import ValidationFailure
+
 from .elasticsearch.indexer_utils import find_uuids_for_indexing
+from .embed import make_subrequest
+from .interfaces import STORAGE
+from .resources import Item, calc_principals
+from .util import log_route
+from .validation import ValidationFailure
+
 
 def includeme(config):
     config.add_route('indexing-info', '/indexing-info')
     config.add_route('max-sid', '/max-sid')
     config.scan(__name__)
+
+
+from structlog import getLogger
+log = getLogger(__name__)
 
 
 @contextmanager
@@ -92,6 +97,7 @@ def item_index_data(context, request):
     Returns:
         A dict document representing the full data to index for the given item
     """
+    log_route(log, sys._getframe().f_code.co_name)
     indexing_stats = {}  # hold timing details for this view
 
     uuid = str(context.uuid)
@@ -217,6 +223,7 @@ def indexing_info(request):
     Returns:
         dict response
     """
+    log_route(log, sys._getframe().f_code.co_name)
     uuid = request.params.get('uuid')
     if not uuid:
         return {'status': 'error', 'title': 'Error', 'message': 'ERROR! Provide a uuid to the query.'}
@@ -255,6 +262,7 @@ def max_sid(request):
     Returns:
         dict response
     """
+    log_route(log, sys._getframe().f_code.co_name)
     response = {'display_title': 'Current maximum database sid'}
     try:
         max_sid = request.registry[STORAGE].write.get_max_sid()

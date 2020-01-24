@@ -15,6 +15,18 @@ log = structlog.getLogger(__name__)
 # Misc. utilities #
 ###################
 
+def log_route(log_ref, route_name, extra=None):
+    """
+    Logs that we have reached route_name in the application
+    Can log 'extra' information as well if specified
+    Used with sys._getframe().f_code.co_name as a 'hack' to get the calling function, in this case
+    a searchable name of a route
+    Helpful in debugging 500 errors
+    """
+    log_ref.info('ROUTE -- Entering view config: %s' % route_name)
+    if extra:
+        log_ref.info('ROUTE -- Extra info: %s' % extra)
+
 
 def select_distinct_values(request, value_path, *from_paths):
     if isinstance(value_path, basestring):

@@ -1,18 +1,26 @@
 """ Cached views used when model was pulled from elasticsearch.
 """
 
-from itertools import chain
+import sys
+
 from pyramid.httpexceptions import HTTPForbidden
 from pyramid.view import view_config
+
 from .interfaces import ICachedItem
+from ..util import log_route
 
 
 def includeme(config):
     config.scan(__name__)
 
 
+from structlog import getLogger
+log = getLogger(__name__)
+
+
 @view_config(context=ICachedItem, request_method='GET', name='embedded')
 def cached_view_embedded(context, request):
+    log_route(log, sys._getframe().f_code.co_name)
     source = context.model.source
     allowed = set(source['principals_allowed']['view'])
     if allowed.isdisjoint(request.effective_principals):
@@ -46,6 +54,7 @@ def filter_embedded(embedded, effective_principals):
 
 @view_config(context=ICachedItem, request_method='GET', name='object')
 def cached_view_object(context, request):
+    log_route(log, sys._getframe().f_code.co_name)
     source = context.model.source
     allowed = set(source['principals_allowed']['view'])
     if allowed.isdisjoint(request.effective_principals):

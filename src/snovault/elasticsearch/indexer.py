@@ -1,27 +1,30 @@
+import copy
+import datetime
+import json
+import time
+from timeit import default_timer as timer
+
+import structlog
 from elasticsearch.exceptions import (
     ConflictError,
     ConnectionError,
     TransportError,
 )
-from ..embed import MissingIndexItemException
 from pyramid.view import view_config
 from urllib3.exceptions import ReadTimeoutError
-from .interfaces import (
-    ELASTIC_SEARCH,
-    INDEXER,
-    INDEXER_QUEUE
-)
+
 from snovault import (
     DBSESSION,
     STORAGE
 )
 from .indexer_utils import get_namespaced_index, find_uuids_for_indexing
-import datetime
-import structlog
-import time
-import copy
-import json
-from timeit import default_timer as timer
+from .interfaces import (
+    ELASTIC_SEARCH,
+    INDEXER,
+    INDEXER_QUEUE
+)
+from ..embed import MissingIndexItemException
+from ..util import log_route
 
 log = structlog.getLogger(__name__)
 
@@ -65,6 +68,7 @@ def check_sid(sid, max_sid):
 @view_config(route_name='index', request_method='POST', permission="index")
 def index(request):
     # Setting request.datastore here only works because routed views are not traversed.
+    log_route(log, sys._getframe().f_code.co_name)
     request.datastore = 'database'
     record = request.json.get('record', False)  # if True, make a record in es
     dry_run = request.json.get('dry_run', False)  # if True, do not actually index

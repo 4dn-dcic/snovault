@@ -1,7 +1,16 @@
+import mimetypes
+import sys
+import uuid
 from base64 import b64decode
 from hashlib import md5
 from io import BytesIO
 from mimetypes import guess_type
+from urllib.parse import (
+    quote,
+    unquote,
+)
+
+import magic
 from PIL import Image
 from pyramid.httpexceptions import (
     HTTPNotFound,
@@ -10,21 +19,21 @@ from pyramid.httpexceptions import (
 from pyramid.response import Response
 from pyramid.traversal import find_root
 from pyramid.view import view_config
-from urllib.parse import (
-    quote,
-    unquote,
-)
+
 from snovault import (
     BLOBS,
     Item,
 )
+from .util import log_route
 from .validation import ValidationFailure
-import magic
-import mimetypes
-import uuid
+
 
 def includeme(config):
     config.scan(__name__)
+
+
+from structlog import getLogger
+log = getLogger(__name__)
 
 
 class ItemWithAttachment(Item):
@@ -243,6 +252,7 @@ class ItemWithAttachment(Item):
 @view_config(name='download', context=ItemWithAttachment, request_method='GET',
              permission='view', subpath_segments=2)
 def download(context, request):
+    log_route(log, sys._getframe().f_code.co_name)
     prop_name, filename = request.subpath
     try:
         downloads = context.propsheets['downloads']

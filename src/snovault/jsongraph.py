@@ -2,11 +2,15 @@ from snovault import Item, Root, CONNECTION
 from snovault.elasticsearch.indexer_utils import get_uuids_for_types
 from past.builtins import basestring
 from pyramid.view import view_config
+import sys
+from .util import log_route
 
 
 def includeme(config):
     config.scan(__name__)
 
+from structlog import getLogger
+log = getLogger(__name__)
 
 def uuid_to_ref(obj, path):
     if isinstance(path, basestring):

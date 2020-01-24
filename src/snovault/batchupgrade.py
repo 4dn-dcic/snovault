@@ -7,26 +7,30 @@ Example:
 
 """
 import itertools
-import logging
-import transaction
+import sys
 from copy import deepcopy
+
+import transaction
+from pyramid.traversal import find_resource
+from pyramid.view import view_config
+
 from snovault import (
     CONNECTION,
     STORAGE,
     UPGRADER,
 )
-from pyramid.view import view_config
-from pyramid.traversal import find_resource
 from .schema_utils import validate
+from .util import log_route
 
 EPILOG = __doc__
-logger = logging.getLogger(__name__)
 
 
 def includeme(config):
     config.add_route('batch_upgrade', '/batch_upgrade')
     config.scan(__name__)
 
+from structlog import getLogger
+logger = getLogger(__name__)
 
 def batched(iterable, n=1):
     l = len(iterable)
@@ -95,6 +99,7 @@ def update_item(storage, context):
 
 @view_config(route_name='batch_upgrade', request_method='POST', permission='import_items')
 def batch_upgrade(request):
+    log_route(logger, sys._getframe().f_code.co_name)
     request.datastore = 'database'
     transaction.get().setExtendedInfo('upgrade', True)
     batch = request.json['batch']

@@ -1,26 +1,28 @@
-from past.builtins import basestring
 from pyramid.settings import asbool
-from pyramid.traversal import (
-    find_resource,
-)
-from pyramid.view import view_config
+import sys
 from uuid import (
     UUID,
     uuid4,
 )
+
+import transaction
+from pyramid.settings import asbool
+from pyramid.view import view_config
+from structlog import get_logger
+
+from .calculated import calculated_property
 from .interfaces import (
-    COLLECTIONS,
-    CONNECTION,
     STORAGE,
     Created,
     BeforeModified,
     AfterModified,
 )
+from .invalidation import add_to_indexing_queue
 from .resources import (
     Collection,
     Item,
 )
-from .calculated import calculated_property
+from .util import log_route
 from .validation import ValidationFailure
 from .validators import (
     no_validate_item_content_patch,
@@ -31,10 +33,7 @@ from .validators import (
     validate_item_content_put,
     validate_item_content_in_place
 )
-from .invalidation import add_to_indexing_queue
-import transaction
 
-from structlog import get_logger
 log = get_logger(__name__)
 
 
@@ -149,6 +148,7 @@ def render_item(request, context, render, return_uri_also=False):
              request_param=['validate=false'])
 def collection_add(context, request, render=None):
     '''Endpoint for adding a new Item.'''
+    log_route(log, sys._getframe().f_code.co_name)
     check_only = asbool(request.params.get('check_only', False))
     if check_only:
         return {
@@ -200,6 +200,7 @@ def item_edit(context, request, render=None):
     PATCH, always return a dummy response with `check_only=true` and do not
     actually modify the DB with `update_item`
     '''
+    log_route(log, sys._getframe().f_code.co_name)
     check_only = asbool(request.params.get('check_only', False))
     if check_only:
         return {
@@ -231,6 +232,7 @@ def get_linking_items(context, request, render=None):
     any items that link to the given item context
     Split the answer into linkTos and rev_links
     """
+    log_route(log, sys._getframe().f_code.co_name)
     item_uuid = str(context.uuid)
     links = request.registry[STORAGE].find_uuids_linked_to_item(item_uuid)
     request.response.status = 200
@@ -254,6 +256,7 @@ def item_delete_full(context, request, render=None):
     To purge, use ?purge=true query string
     For example: DELETE `/<item-type>/<uuid>?purge=true`
     """
+    log_route(log, sys._getframe().f_code.co_name)
     # possibly temporary fix to check if user is admin
     if hasattr(request, 'user_info'):
         user_details = request.user_info.get('details', {})
@@ -313,6 +316,7 @@ def item_view_validation_errors(context, request):
     Returns:
         A dictionary including item path and validation errors from ES
     """
+    log_route(log, sys._getframe().f_code.co_name)
     if not hasattr(context.model, 'source'):
         return {
             '@id': request.resource_path(context),
@@ -340,5 +344,6 @@ def validation_errors_property(context, request):
     Returns:
         List result of validation errors
     """
+    log_route(log, sys._getframe().f_code.co_name)
     path = request.resource_path(context)
     return request.embed(path, '@@validation-errors')['validation_errors']
