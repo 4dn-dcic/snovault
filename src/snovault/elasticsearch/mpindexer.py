@@ -172,7 +172,7 @@ class MPIndexer(Indexer):
             processes=self.processes,
             initializer=initializer,
             initargs=self.initargs,
-            maxtasksperchild=1,
+            maxtasksperchild=1,  # see rationale in function documentation above.
             context=get_context('spawn'),
         )
 
@@ -184,6 +184,7 @@ class MPIndexer(Indexer):
         breaking the list up among all available workers in the pool.
         Otherwise, all available workers will asynchronously pull uuids of the
         queue for indexing (see indexer.py).
+        Note that counter is a length 1 array (so it can be passed by reference)
         Close the pool at the end of the function and return list of errors.
         """
         pool = self.init_pool()
@@ -217,13 +218,13 @@ class MPIndexer(Indexer):
             # last_count used to track if there is "more" work to do
             last_count = 0
 
-            # create the initial jobs (same as number of processes in pool)
+            # create the initial workers (same as number of processes in pool)
             for i in range(workers):
                 res = pool.apply_async(queue_update_helper,
                                        callback=callback_w_errors)
                 async_results.append(res)
 
-            # check job statuses
+            # check worker statuses
             # add more jobs if any are finished and indexing is ongoing
             while True:
                 results_to_add = []
