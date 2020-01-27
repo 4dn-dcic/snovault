@@ -121,7 +121,7 @@ def indexing_status(context, request):
 
 @view_config(route_name='dlq_to_primary', request_method='GET', permission='index')
 @debug_log
-def dlq_to_primary(request):
+def dlq_to_primary(context, request):
     """
     Endpoint to move all uuids on the DLQ to the primary queue
     """
