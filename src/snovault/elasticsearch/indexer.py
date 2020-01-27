@@ -67,7 +67,8 @@ def check_sid(sid, max_sid):
 
 
 @view_config(route_name='index', request_method='POST', permission="index")
-def index(request):
+@debug_log
+def index(context, request):
     # Setting request.datastore here only works because routed views are not traversed.
     request.datastore = 'database'
     record = request.json.get('record', False)  # if True, make a record in es

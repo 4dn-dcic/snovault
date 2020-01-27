@@ -203,7 +203,8 @@ def item_index_data(context, request):
 
 
 @view_config(route_name='indexing-info', permission='index', request_method='GET')
-def indexing_info(request):
+@debug_log
+def indexing_info(context, request):
     """
     Endpoint to check some indexing-related properties of a given uuid, which
     is provided using the `uuid=` query parameter. This route cannot be defined
@@ -245,7 +246,8 @@ def indexing_info(request):
 
 
 @view_config(route_name='max-sid', permission='index', request_method='GET')
-def max_sid(request):
+@debug_log
+def max_sid(context, request):
     """
     Very simple endpoint to return the current maximum sid used in postgres.
     Might make more sense to define this view in storage.py, but leave it here

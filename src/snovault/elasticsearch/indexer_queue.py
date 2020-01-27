@@ -40,7 +40,8 @@ def includeme(config):
 
 
 @view_config(route_name='queue_indexing', request_method='POST', permission="index")
-def queue_indexing(request):
+@debug_log
+def queue_indexing(context, request):
     """
     Endpoint to queue items for indexing. Takes a POST request with index
     priviliges which should contain either a list of uuids under "uuids" key
@@ -98,7 +99,8 @@ def queue_indexing(request):
 
 
 @view_config(route_name='indexing_status', request_method='GET')
-def indexing_status(request):
+@debug_log
+def indexing_status(context, request):
     """
     Endpoint to check what is currently on the queue. Uses GET requests
     """
@@ -118,6 +120,7 @@ def indexing_status(request):
 
 
 @view_config(route_name='dlq_to_primary', request_method='GET', permission='index')
+@debug_log
 def dlq_to_primary(request):
     """
     Endpoint to move all uuids on the DLQ to the primary queue
