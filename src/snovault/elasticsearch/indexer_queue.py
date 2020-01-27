@@ -19,6 +19,7 @@ log = structlog.getLogger(__name__)
 def includeme(config):
     config.add_route('queue_indexing', '/queue_indexing')
     config.add_route('indexing_status', '/indexing_status')
+    config.add_route('dlq_to_primary', '/dlq_to_primary')
     env_name = config.registry.settings.get('env.name')
     config.registry[INDEXER_QUEUE] = QueueManager(config.registry)
     # INDEXER_QUEUE_MIRROR is used because webprod and webprod2 share a DB
@@ -113,6 +114,20 @@ def indexing_status(request):
     return response
 
 
+@view_config(route_name='dlq_to_primary', request_method='GET', permission='index')
+def dlq_to_primary(request):
+    """
+    Endpoint to move all uuids on the DLQ to the primary queue
+    """
+    queue_indexer = request.registry[INDEXER_QUEUE]
+    dlq_messages = queue_indexer.receive_messages(target_queue='dlq')
+    response = {}
+    failed = queue_indexer.send_messages(dlq_messages) if dlq_messages else []
+    response['number_failed'] = len(failed)
+    response['number_migrated'] = len(dlq_messages) - len(failed)
+    return response
+
+
 class QueueManager(object):
     """
     Class for handling the queues responsible for coordinating indexing.
@@ -166,7 +181,7 @@ class QueueManager(object):
                 'VisibilityTimeout': '600',  # increase if messages going to dlq
                 'MessageRetentionPeriod': '1209600',  # 14 days, in seconds
                 'ReceiveMessageWaitTimeSeconds': '2',  # 2 seconds of long polling
-            }
+            },
         }
         # initialize the queue and dlq here, but not on mirror queue
         if not mirror_env:
@@ -181,7 +196,8 @@ class QueueManager(object):
         # short names for queues. Use OrderedDict to preserve order in Py < 3.6
         self.queue_targets = OrderedDict([
             ('primary', self.queue_url),
-            ('secondary', self.second_queue_url)
+            ('secondary', self.second_queue_url),
+            ('dlq', self.dlq_url),
         ])
 
     def add_uuids(self, registry, uuids, strict=False, target_queue='primary',

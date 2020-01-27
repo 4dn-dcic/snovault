@@ -15,11 +15,11 @@ Installation Instructions
 
 Currently these are for Mac OSX using homebrew. If using linux, install dependencies with a different package manager.
 
-Step 0: Install Xcode (from App Store) and homebrew: http://brew.sh::
+Step 0: Install Xcode (from App Store) and homebrew: http://brew.sh
 
 Step 1: Verify that homebrew is working properly::
 
-    $ sudo brew doctor
+    $ brew doctor
 
 
 Step 2: Install or update dependencies::
