@@ -99,7 +99,6 @@ def test_logging_basic(testapp, external_tx, capfd):
         assert 'level' in log_msg
 
 
-@pytest.mark.skip
 def test_logging_see_debug_log(testapp, capfd):
     """
     Tests that when we hit a route with the @debug_log decorator we see an appropriate log statement
