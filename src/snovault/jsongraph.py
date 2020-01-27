@@ -2,15 +2,12 @@ from snovault import Item, Root, CONNECTION
 from snovault.elasticsearch.indexer_utils import get_uuids_for_types
 from past.builtins import basestring
 from pyramid.view import view_config
-import sys
-from .util import log_route
+from .util import debug_log
 
 
 def includeme(config):
     config.scan(__name__)
 
-from structlog import getLogger
-log = getLogger(__name__)
 
 def uuid_to_ref(obj, path):
     if isinstance(path, basestring):
@@ -48,6 +45,7 @@ def item_jsongraph(context, properties):
 
 
 @view_config(context=Root, request_method='GET', name='jsongraph')
+@debug_log
 def jsongraph(context, request):
     conn = request.registry[CONNECTION]
     cache = {

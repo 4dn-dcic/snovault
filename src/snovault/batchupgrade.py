@@ -20,7 +20,7 @@ from snovault import (
     UPGRADER,
 )
 from .schema_utils import validate
-from .util import log_route
+from .util import debug_log
 
 EPILOG = __doc__
 
@@ -29,8 +29,10 @@ def includeme(config):
     config.add_route('batch_upgrade', '/batch_upgrade')
     config.scan(__name__)
 
+
 from structlog import getLogger
 logger = getLogger(__name__)
+
 
 def batched(iterable, n=1):
     l = len(iterable)
@@ -98,8 +100,8 @@ def update_item(storage, context):
 
 
 @view_config(route_name='batch_upgrade', request_method='POST', permission='import_items')
+@debug_log
 def batch_upgrade(request):
-    log_route(logger, sys._getframe().f_code.co_name)
     request.datastore = 'database'
     transaction.get().setExtendedInfo('upgrade', True)
     batch = request.json['batch']

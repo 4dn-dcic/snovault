@@ -1,4 +1,3 @@
-import sys
 from collections import OrderedDict
 from itertools import chain
 from urllib.parse import urlparse
@@ -11,16 +10,13 @@ from .interfaces import (
     COLLECTIONS,
     TYPES,
 )
-from .util import log_route
+from .util import debug_log
 
 
 def includeme(config):
     config.add_route('schemas', '/profiles/')
     config.add_route('schema', '/profiles/{type_name}.json')
     config.scan(__name__)
-
-from structlog import getLogger
-log = getLogger(__name__)
 
 
 def _annotated_schema(type_info, request):
@@ -77,6 +73,7 @@ def _annotated_schema(type_info, request):
 
 @view_config(route_name='schema', request_method='GET',
              decorator=etag_app_version_effective_principals)
+@debug_log
 def schema(context, request):
     """
     /profiles/{type_name}.json -- view for the profile of a specific item type
@@ -86,7 +83,6 @@ def schema(context, request):
     This allows this endpoint to work with item name (e.g. MyItem) or item_type
     (e.g. my_item)
     """
-    log_route(log, sys._getframe().f_code.co_name)
     type_name = request.matchdict['type_name']
     types = request.registry[TYPES]
     found_type_info = None
@@ -102,15 +98,16 @@ def schema(context, request):
     return _annotated_schema(type_info, request)
 
 
+
 @view_config(route_name='schemas', request_method='GET',
              decorator=etag_app_version_effective_principals)
+@debug_log
 def schemas(context, request):
     """
     /profiles/ view for viewing all schemas. Leverages the TypeInfo objects
     for regular classes using registry[TYPES].by_item_type and for abstract
     classes by using registry[TYPES].by_abstract_type
     """
-    log_route(log, sys._getframe().f_code.co_name)
     types = request.registry[TYPES]
     schemas = {}
     all_item_types = chain(types.by_item_type.values(),

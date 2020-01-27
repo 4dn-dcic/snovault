@@ -22,7 +22,7 @@ from .resources import (
     Collection,
     Item,
 )
-from .util import log_route
+from .util import debug_log
 from .validation import ValidationFailure
 from .validators import (
     no_validate_item_content_patch,
@@ -146,9 +146,9 @@ def render_item(request, context, render, return_uri_also=False):
 @view_config(context=Collection, permission='add_unvalidated', request_method='POST',
              validators=[no_validate_item_content_post],
              request_param=['validate=false'])
+@debug_log
 def collection_add(context, request, render=None):
     '''Endpoint for adding a new Item.'''
-    log_route(log, sys._getframe().f_code.co_name)
     check_only = asbool(request.params.get('check_only', False))
     if check_only:
         return {
@@ -185,6 +185,7 @@ def collection_add(context, request, render=None):
 @view_config(context=Item, permission='index', request_method='GET',
              validators=[validate_item_content_in_place],
              request_param=['check_only=true'])
+@debug_log
 def item_edit(context, request, render=None):
     '''
     Endpoint for editing an existing Item.
@@ -200,7 +201,6 @@ def item_edit(context, request, render=None):
     PATCH, always return a dummy response with `check_only=true` and do not
     actually modify the DB with `update_item`
     '''
-    log_route(log, sys._getframe().f_code.co_name)
     check_only = asbool(request.params.get('check_only', False))
     if check_only:
         return {
@@ -226,13 +226,13 @@ def item_edit(context, request, render=None):
 
 @view_config(context=Item, permission='view', request_method='GET',
              name='links')
+@debug_log
 def get_linking_items(context, request, render=None):
     """
     Utilize find_uuids_linked_to_item function in PickStorage to find
     any items that link to the given item context
     Split the answer into linkTos and rev_links
     """
-    log_route(log, sys._getframe().f_code.co_name)
     item_uuid = str(context.uuid)
     links = request.registry[STORAGE].find_uuids_linked_to_item(item_uuid)
     request.response.status = 200
@@ -247,6 +247,7 @@ def get_linking_items(context, request, render=None):
 
 
 @view_config(context=Item, permission='edit', request_method='DELETE')
+@debug_log
 def item_delete_full(context, request, render=None):
     """
     DELETE method that either sets the status of an item to deleted (base
@@ -256,7 +257,6 @@ def item_delete_full(context, request, render=None):
     To purge, use ?purge=true query string
     For example: DELETE `/<item-type>/<uuid>?purge=true`
     """
-    log_route(log, sys._getframe().f_code.co_name)
     # possibly temporary fix to check if user is admin
     if hasattr(request, 'user_info'):
         user_details = request.user_info.get('details', {})
@@ -300,8 +300,10 @@ def item_delete_full(context, request, render=None):
     }
 
 
+
 @view_config(context=Item, permission='view', request_method='GET',
              name='validation-errors')
+@debug_log
 def item_view_validation_errors(context, request):
     """
     View config for validation_errors. If the current model does not have
@@ -316,7 +318,6 @@ def item_view_validation_errors(context, request):
     Returns:
         A dictionary including item path and validation errors from ES
     """
-    log_route(log, sys._getframe().f_code.co_name)
     if not hasattr(context.model, 'source'):
         return {
             '@id': request.resource_path(context),
@@ -344,6 +345,5 @@ def validation_errors_property(context, request):
     Returns:
         List result of validation errors
     """
-    log_route(log, sys._getframe().f_code.co_name)
     path = request.resource_path(context)
     return request.embed(path, '@@validation-errors')['validation_errors']

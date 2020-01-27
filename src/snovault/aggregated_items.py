@@ -2,11 +2,10 @@ import sys
 
 from pyramid.httpexceptions import HTTPForbidden
 from pyramid.view import view_config
-from structlog import getLogger
 
 from .calculated import calculated_property
 from .resources import Item
-from .util import log_route
+from .util import debug_log
 
 
 def includeme(config):
@@ -14,11 +13,9 @@ def includeme(config):
     config.scan(__name__)
 
 
-log = getLogger(__name__)
-
-
 @view_config(context=Item, permission='view', request_method='GET',
              name='aggregated-items')
+@debug_log
 def item_view_aggregated_items(context, request):
     """
     View config for aggregated_items. If the current model does not have
@@ -33,7 +30,6 @@ def item_view_aggregated_items(context, request):
     Returns:
         A dictionary including item path and aggregated_items
     """
-    log_route(log, sys._getframe().f_code.co_name)
     # if we do not have the cached ES model, do not run aggs
     if not hasattr(context.model, 'source'):
         return {
@@ -62,6 +58,5 @@ def aggregated_items_property(context, request):
     Returns:
         Dictionary result of aggregated_items
     """
-    log_route(log, sys._getframe().f_code.co_name)
     path = request.resource_path(context)
     return request.embed(path, '@@aggregated-items')['aggregated_items']

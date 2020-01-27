@@ -24,7 +24,7 @@ from snovault import (
     BLOBS,
     Item,
 )
-from .util import log_route
+from .util import debug_log
 from .validation import ValidationFailure
 
 
@@ -251,8 +251,8 @@ class ItemWithAttachment(Item):
 
 @view_config(name='download', context=ItemWithAttachment, request_method='GET',
              permission='view', subpath_segments=2)
+@debug_log
 def download(context, request):
-    log_route(log, sys._getframe().f_code.co_name)
     prop_name, filename = request.subpath
     try:
         downloads = context.propsheets['downloads']

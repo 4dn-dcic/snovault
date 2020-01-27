@@ -25,7 +25,7 @@ from .interfaces import (
     INDEXER_QUEUE
 )
 from ..embed import MissingIndexItemException
-from ..util import log_route
+from ..util import debug_log
 
 log = structlog.getLogger(__name__)
 
@@ -69,7 +69,6 @@ def check_sid(sid, max_sid):
 @view_config(route_name='index', request_method='POST', permission="index")
 def index(request):
     # Setting request.datastore here only works because routed views are not traversed.
-    log_route(log, sys._getframe().f_code.co_name)
     request.datastore = 'database'
     record = request.json.get('record', False)  # if True, make a record in es
     dry_run = request.json.get('dry_run', False)  # if True, do not actually index

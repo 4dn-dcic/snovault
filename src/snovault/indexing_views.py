@@ -12,7 +12,7 @@ from .elasticsearch.indexer_utils import find_uuids_for_indexing
 from .embed import make_subrequest
 from .interfaces import STORAGE
 from .resources import Item, calc_principals
-from .util import log_route
+from .util import debug_log
 from .validation import ValidationFailure
 
 
@@ -20,10 +20,6 @@ def includeme(config):
     config.add_route('indexing-info', '/indexing-info')
     config.add_route('max-sid', '/max-sid')
     config.scan(__name__)
-
-
-from structlog import getLogger
-log = getLogger(__name__)
 
 
 @contextmanager
@@ -78,6 +74,7 @@ def get_rev_linked_items(request, uuid):
 
 
 @view_config(context=Item, name='index-data', permission='index', request_method='GET')
+@debug_log
 def item_index_data(context, request):
     """
     Very important view which is used to calculate all the data indexed in ES
@@ -97,7 +94,6 @@ def item_index_data(context, request):
     Returns:
         A dict document representing the full data to index for the given item
     """
-    log_route(log, sys._getframe().f_code.co_name)
     indexing_stats = {}  # hold timing details for this view
 
     uuid = str(context.uuid)
@@ -223,7 +219,6 @@ def indexing_info(request):
     Returns:
         dict response
     """
-    log_route(log, sys._getframe().f_code.co_name)
     uuid = request.params.get('uuid')
     if not uuid:
         return {'status': 'error', 'title': 'Error', 'message': 'ERROR! Provide a uuid to the query.'}
@@ -262,7 +257,6 @@ def max_sid(request):
     Returns:
         dict response
     """
-    log_route(log, sys._getframe().f_code.co_name)
     response = {'display_title': 'Current maximum database sid'}
     try:
         max_sid = request.registry[STORAGE].write.get_max_sid()

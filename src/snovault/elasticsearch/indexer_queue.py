@@ -14,7 +14,7 @@ from pyramid.view import view_config
 
 from .indexer_utils import get_uuids_for_types
 from .interfaces import INDEXER_QUEUE, INDEXER_QUEUE_MIRROR
-from ..util import log_route
+from ..util import debug_log
 
 log = structlog.getLogger(__name__)
 
@@ -47,7 +47,6 @@ def queue_indexing(request):
     or a list of collections under "collections" key of its body. Can also
     optionally take "strict" boolean and "target_queue" string.
     """
-    log_route(log, sys._getframe().f_code.co_name)
     req_uuids = request.json.get('uuids', None)
     req_collections = request.json.get('collections', None)
     queue_mode = None  # either queueing 'uuids' or 'collection'
@@ -103,7 +102,6 @@ def indexing_status(request):
     """
     Endpoint to check what is currently on the queue. Uses GET requests
     """
-    log_route(log, sys._getframe().f_code.co_name)
     queue_indexer = request.registry[INDEXER_QUEUE]
     response = {}
     try:
@@ -124,7 +122,6 @@ def dlq_to_primary(request):
     """
     Endpoint to move all uuids on the DLQ to the primary queue
     """
-    log_route(log, sys._getframe().f_code.co_name)
     queue_indexer = request.registry[INDEXER_QUEUE]
     dlq_messages = queue_indexer.receive_messages(target_queue='dlq')
     response = {}

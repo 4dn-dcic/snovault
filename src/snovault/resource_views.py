@@ -28,7 +28,7 @@ from .util import (
     process_aggregated_items,
     check_es_and_cache_linked_sids,
     validate_es_content,
-    log_route
+    debug_log
 )
 
 
@@ -36,14 +36,10 @@ def includeme(config):
     config.scan(__name__)
 
 
-from structlog import getLogger
-log = getLogger(__name__)
-
-
 @view_config(context=AbstractCollection, permission='list', request_method='GET',
              name='listing')
+@debug_log
 def collection_view_listing_db(context, request):
-    log_route(log, sys._getframe().f_code.co_name)
     result = {}
 
     frame = request.params.get('frame', 'columns')
@@ -79,8 +75,8 @@ def collection_view_listing_db(context, request):
 
 
 @view_config(context=Root, request_method='GET', name='page')
+@debug_log
 def home(context, request):
-    log_route(log, sys._getframe().f_code.co_name)
     properties = request.embed(request.resource_path(context), '@@object')
     calculated = calculate_properties(context, request, properties, category='page')
     properties.update(calculated)
@@ -89,8 +85,8 @@ def home(context, request):
 
 @view_config(context=Root, request_method='GET', name='object')
 @view_config(context=AbstractCollection, permission='list', request_method='GET', name='object')
+@debug_log
 def collection_view_object(context, request):
-    log_route(log, sys._getframe().f_code.co_name)
     properties = context.__json__(request)
     calculated = calculate_properties(context, request, properties)
     properties.update(calculated)
@@ -98,8 +94,8 @@ def collection_view_object(context, request):
 
 
 @view_config(context=AbstractCollection, permission='list', request_method='GET', name='page')
+@debug_log
 def collection_list(context, request):
-    log_route(log, sys._getframe().f_code.co_name)
     path = request.resource_path(context)
     properties = request.embed(path, '@@object')
     calculated = calculate_properties(context, request, properties, category='page')
@@ -116,8 +112,8 @@ def collection_list(context, request):
 @view_config(context=Root, request_method='GET')
 @view_config(context=AbstractCollection, permission='list', request_method='GET')
 @view_config(context=Item, permission='view', request_method='GET')
+@debug_log
 def item_view(context, request):
-    log_route(log, sys._getframe().f_code.co_name)
     frame = request.params.get('frame', 'page')
     if getattr(request, '__parent__', None) is None:
         # We need the response headers from non subrequests
@@ -140,6 +136,7 @@ def item_view(context, request):
 
 @view_config(context=Item, permission='view', request_method='GET',
              name='object')
+@debug_log
 def item_view_object(context, request):
     """
     Render json structure. This is the most basic view and contains the scope
@@ -159,7 +156,6 @@ def item_view_object(context, request):
     Returns:
         Dictionary item properties
     """
-    log_route(log, sys._getframe().f_code.co_name)
     if hasattr(request, 'datastore') and request.datastore != 'elasticsearch':
         es_res = check_es_and_cache_linked_sids(context, request, 'object')
         # validate_es_content also checks/updates rev links
@@ -176,6 +172,7 @@ def item_view_object(context, request):
 
 
 @view_config(context=Item, permission='view', request_method='GET', name='embedded')
+@debug_log
 def item_view_embedded(context, request):
     """
     Calculate and return the embedded view for an item. This is an intensive
@@ -195,7 +192,6 @@ def item_view_embedded(context, request):
     Returns:
         Dictionary item properties
     """
-    log_route(log, sys._getframe().f_code.co_name)
     if hasattr(request, 'datastore') and request.datastore != 'elasticsearch':
         es_res = check_es_and_cache_linked_sids(context, request, 'embedded')
         # validate_es_content also checks/updates rev links
@@ -234,8 +230,8 @@ def item_view_embedded(context, request):
 
 @view_config(context=Item, permission='view', request_method='GET',
              name='page')
+@debug_log
 def item_view_page(context, request):
-    log_route(log, sys._getframe().f_code.co_name)
     item_path = request.resource_path(context)
     properties = request.embed(item_path, '@@embedded', as_user=True)
     calculated = calculate_properties(context, request, properties, category='page')
@@ -245,8 +241,8 @@ def item_view_page(context, request):
 
 @view_config(context=Item, permission='expand', request_method='GET',
              name='expand')
+@debug_log
 def item_view_expand(context, request):
-    log_route(log, sys._getframe().f_code.co_name)
     path = request.resource_path(context)
     properties = request.embed(path, '@@object', as_user=True)
     for path in request.params.getall('expand'):
@@ -284,8 +280,8 @@ def expand_column(request, obj, subset, path):
 
 @view_config(context=Item, permission='view', request_method='GET',
              name='columns')
+@debug_log
 def item_view_columns(context, request):
-    log_route(log, sys._getframe().f_code.co_name)
     path = request.resource_path(context)
     properties = request.embed(path, '@@object')
     if context.schema is None or 'columns' not in context.schema:
@@ -308,8 +304,8 @@ def item_view_columns(context, request):
 
 @view_config(context=Item, permission='view_raw', request_method='GET',
              name='raw')
+@debug_log
 def item_view_raw(context, request):
-    log_route(log, sys._getframe().f_code.co_name)
     props = context.properties
     # only upgrade properties if explicitly requested
     if asbool(request.params.get('upgrade', True)):

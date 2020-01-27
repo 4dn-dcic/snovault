@@ -8,17 +8,13 @@ from pyramid.response import Response
 from pyramid.view import view_config
 
 from snovault import TYPES
-from .util import log_route
+from .util import debug_log
 
 
 def includeme(config):
     config.add_route('graph_dot', '/profiles/graph.dot')
     config.add_route('graph_svg', '/profiles/graph.svg')
     config.scan(__name__)
-
-
-from structlog import getLogger
-log = getLogger(__name__)
 
 
 def node(type_name, props):
@@ -85,15 +81,15 @@ def digraph(types, exclude=None):
 
 
 @view_config(route_name='graph_dot', request_method='GET')
+@debug_log
 def schema_dot(request):
-    log_route(log, sys._getframe().f_code.co_name)
     dot = digraph(request.registry[TYPES].by_item_type, request.params.getall('exclude'))
     return Response(dot, content_type='text/vnd.graphviz', charset='utf-8')
 
 
 @view_config(route_name='graph_svg', request_method='GET')
+@debug_log
 def schema_svg(request):
-    log_route(log, sys._getframe().f_code.co_name)
     dot = digraph(request.registry[TYPES].by_item_type, request.params.getall('exclude'))
     p = Popen(['dot', '-Tsvg'], stdin=PIPE, stdout=PIPE, stderr=PIPE)
     svg, err = p.communicate(dot.encode('utf-8'))

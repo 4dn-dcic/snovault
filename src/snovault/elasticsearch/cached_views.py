@@ -7,20 +7,16 @@ from pyramid.httpexceptions import HTTPForbidden
 from pyramid.view import view_config
 
 from .interfaces import ICachedItem
-from ..util import log_route
+from ..util import debug_log
 
 
 def includeme(config):
     config.scan(__name__)
 
 
-from structlog import getLogger
-log = getLogger(__name__)
-
-
 @view_config(context=ICachedItem, request_method='GET', name='embedded')
+@debug_log
 def cached_view_embedded(context, request):
-    log_route(log, sys._getframe().f_code.co_name)
     source = context.model.source
     allowed = set(source['principals_allowed']['view'])
     if allowed.isdisjoint(request.effective_principals):
@@ -53,8 +49,8 @@ def filter_embedded(embedded, effective_principals):
 
 
 @view_config(context=ICachedItem, request_method='GET', name='object')
+@debug_log
 def cached_view_object(context, request):
-    log_route(log, sys._getframe().f_code.co_name)
     source = context.model.source
     allowed = set(source['principals_allowed']['view'])
     if allowed.isdisjoint(request.effective_principals):
