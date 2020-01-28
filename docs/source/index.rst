@@ -73,3 +73,22 @@ Specific tests to run locally for schema changes::
 Run the Pyramid tests with::
 
     $ bin/test
+
+
+.. toctree::
+   :maxdepth: 2
+   :hidden:
+   
+   index
+   overview
+   attachment
+   auth
+   custom-travis
+   database
+   embedding-and-indexing
+   es-mapping
+   invalidation
+   object-lifecycle
+   search_info
+   snowflakes
+   testing
