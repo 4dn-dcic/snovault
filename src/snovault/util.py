@@ -361,8 +361,7 @@ def expand_val_for_embedded_model(request, obj_val, downstream_model, field_name
     elif isinstance(obj_val, basestring):
         # get the @@object view of obj to embed
         # TODO: per-field invalidation by adding uuids to request._linked_uuids
-        # ONLY if the field is used in downstream_model (i.e. actually in the
-        # context embedded_list)
+        # ONLY if the field is used in downstream_model (i.e. in embedded_list)
         obj_val = secure_embed(request, obj_val, '@@object')
         if not obj_val or obj_val == {'error': 'no view permissions'}:
             return obj_val
@@ -402,7 +401,7 @@ def build_embedded_model(fields_to_embed):
     {'modifications': {'modified_regions': {'fields_to_use': ['chromosome']}},
      'lab': {'fields_to_use': ['uuid']},
      'award': {'fields_to_use': ['*']},
-     'bisource': {'fields_to_use': ['name']},
+     'biosource': {'fields_to_use': ['name']},
      'fields_to_use': ['*']}
     """
     embedded_model = {'fields_to_use':['*']}

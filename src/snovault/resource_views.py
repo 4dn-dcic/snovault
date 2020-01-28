@@ -80,7 +80,6 @@ def home(context, request):
 @view_config(context=Root, request_method='GET', name='object')
 @view_config(context=AbstractCollection, permission='list', request_method='GET', name='object')
 def collection_view_object(context, request):
-
     properties = context.__json__(request)
     calculated = calculate_properties(context, request, properties)
     properties.update(calculated)

@@ -391,13 +391,21 @@ class Item(Resource):
         return properties
 
     def __json__(self, request):
+        """
+        This function is used to get the "complete" properties of the Item
+        after calling `upgrade_properties`
+        """
         return self.upgrade_properties()
 
     def item_with_links(self, request):
-        # This works from the schema rather than the links table
-        # so that upgrade on GET can work.
-        # context.__json__ CALLS THE UPGRADER (upgrade_properties)
-        properties = self.__json__(request)
+        """
+        Use the upgraded properties of this Item to convert all linked uuids
+        to resource paths.
+        Additionally, if indexing, this method adds the current Item's uuid/sid
+        to `_linked_uuids` and `_sid_cache` on the request
+        """
+        properties = self.upgrade_properties()
+        # use schema_links rather than DB links so upgrades work on ES GETs
         for path in self.type_info.schema_links:
             uuid_to_path(request, properties, path)
 
