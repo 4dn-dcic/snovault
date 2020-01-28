@@ -23,12 +23,6 @@ from jsonschema_serialize_fork.compat import (
     urlopen
 )
 
-SERVER_DEFAULTS = {}
-
-
-def server_default(func):
-    SERVER_DEFAULTS[func.__name__] = func
-
 
 class RefResolverOrdered(RefResolver):
     """
@@ -295,7 +289,6 @@ class SchemaValidator(Draft4Validator):
     VALIDATORS['permission'] = permission
     VALIDATORS['requestMethod'] = requestMethod
     VALIDATORS['validators'] = validators
-    SERVER_DEFAULTS = SERVER_DEFAULTS
 
 
 format_checker = FormatChecker()
