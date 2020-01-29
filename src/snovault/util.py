@@ -22,7 +22,7 @@ def debug_log(func):
     """ Decorator that adds some debug output of the view to log that we got there """
     @functools.wraps(func)
     def log_decorator(*args, **kwargs):
-        log_func(log, func.__name__)
+        log_function_call(log, func.__name__)
         if not args:
             return func(**kwargs)
         elif not kwargs:
@@ -31,7 +31,7 @@ def debug_log(func):
     return log_decorator
 
 
-def log_func(log_ref, func_name, extra=None):
+def log_function_call(log_ref, func_name, extra=None):
     """
     Logs that we have reached func_name in the application
     Can log 'extra' information as well if specified

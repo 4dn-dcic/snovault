@@ -110,4 +110,4 @@ def test_logging_see_debug_log(testapp, capfd):
             continue
         if 'DEBUG_FUNC' in record:
             return
-    assert False  # did not see log message
+    raise AssertionError("Did not see 'DEBUG_FUNC' in a log message")

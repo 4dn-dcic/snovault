@@ -7,12 +7,12 @@ Example:
 
 """
 import itertools
-import sys
 from copy import deepcopy
 
 import transaction
 from pyramid.traversal import find_resource
 from pyramid.view import view_config
+from structlog import getLogger
 
 from snovault import (
     CONNECTION,
@@ -22,6 +22,7 @@ from snovault import (
 from .schema_utils import validate
 from .util import debug_log
 
+logger = getLogger(__name__)
 EPILOG = __doc__
 
 
@@ -30,8 +31,6 @@ def includeme(config):
     config.scan(__name__)
 
 
-from structlog import getLogger
-logger = getLogger(__name__)
 
 
 def batched(iterable, n=1):

@@ -11,9 +11,7 @@ from pyramid.events import (
 from pyramid.httpexceptions import HTTPNotFound
 from pyramid.view import view_config
 
-from snovault import (
-    TYPES,
-)
+from snovault import TYPES
 from .util import ensurelist, debug_log
 
 

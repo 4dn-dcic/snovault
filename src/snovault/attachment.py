@@ -1,5 +1,4 @@
 import mimetypes
-import sys
 import uuid
 from base64 import b64decode
 from hashlib import md5
@@ -19,6 +18,7 @@ from pyramid.httpexceptions import (
 from pyramid.response import Response
 from pyramid.traversal import find_root
 from pyramid.view import view_config
+from structlog import getLogger
 
 from snovault import (
     BLOBS,
@@ -32,7 +32,6 @@ def includeme(config):
     config.scan(__name__)
 
 
-from structlog import getLogger
 log = getLogger(__name__)
 
 

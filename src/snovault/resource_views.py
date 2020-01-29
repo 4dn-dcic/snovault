@@ -28,7 +28,7 @@ from .util import (
     process_aggregated_items,
     check_es_and_cache_linked_sids,
     validate_es_content,
-    debug_log
+    debug_log,
 )
 
 
