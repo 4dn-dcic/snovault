@@ -5,6 +5,7 @@ import pytest
 from snovault.tests.test_post_put_patch import COLLECTION_URL, item_with_uuid
 import structlog
 import json
+import time
 import yaml
 
 
@@ -67,6 +68,7 @@ def test_telemetry_id_carries_through_logging(testapp, external_tx):
         assert logger._context.get('telemetry_id') == 'test'
         assert logger._context.get('log_action') == 'action_test'
 
+
 def test_logging_basic(testapp, external_tx, capfd):
         '''
         in prod logging setup, an Elasticsearch server is provided. Logs will
@@ -95,3 +97,17 @@ def test_logging_basic(testapp, external_tx, capfd):
         assert '@timestamp' in log_msg
         assert 'logger' in log_msg
         assert 'level' in log_msg
+
+
+def test_logging_see_debug_log(testapp, capfd):
+    """
+    Tests that when we hit a route with the @debug_log decorator we see an appropriate log statement
+    """
+    testapp.get('/')  # all routes are marked
+    check_logs = capfd.readouterr()[-1].split('\n')
+    for record in check_logs:
+        if not record:
+            continue
+        if 'DEBUG_FUNC' in record:
+            return
+    raise AssertionError("Did not see 'DEBUG_FUNC' in a log message")

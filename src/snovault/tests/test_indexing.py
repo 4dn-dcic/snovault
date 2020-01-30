@@ -70,7 +70,7 @@ def app_settings(wsgi_server_host_port, elasticsearch_server, postgresql_server,
     return settings
 
 
-@pytest.yield_fixture(scope='session', params=[True, False])
+@pytest.yield_fixture(scope='session', params=[False, True])
 def app(app_settings, request):
     from snovault import main
     if request.param: # run tests both with and without mpindexer
@@ -1093,6 +1093,8 @@ def test_indexing_esstorage(app, testapp, indexer_testapp):
     # db get_by_uuid direct returns None by design
     db_res_direct = app.registry[STORAGE].write.get_by_uuid_direct(test_uuid, namespaced_test_type, TEST_TYPE)
     assert db_res_direct == None
+    # delete the test item (should throw no exceptions)
+    esstorage.purge_uuid(test_uuid, namespaced_test_type)
 
 
 @pytest.mark.flaky(max_runs=2, rerun_filter=delay_rerun)

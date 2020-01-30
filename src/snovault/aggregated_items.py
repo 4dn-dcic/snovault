@@ -1,7 +1,11 @@
+import sys
+
+from pyramid.httpexceptions import HTTPForbidden
+from pyramid.view import view_config
+
 from .calculated import calculated_property
 from .resources import Item
-from pyramid.view import view_config
-from pyramid.httpexceptions import HTTPForbidden
+from .util import debug_log
 
 
 def includeme(config):
@@ -11,6 +15,7 @@ def includeme(config):
 
 @view_config(context=Item, permission='view', request_method='GET',
              name='aggregated-items')
+@debug_log
 def item_view_aggregated_items(context, request):
     """
     View config for aggregated_items. If the current model does not have

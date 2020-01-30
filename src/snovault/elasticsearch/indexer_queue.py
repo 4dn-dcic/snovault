@@ -1,20 +1,23 @@
 ### Class to manage the items for indexing
 # First round will use a standard SQS queue from AWS without Elasticache.
 
-import boto3
-import json
-import math
-import structlog
-import socket
-import time
 import datetime
-from pyramid.view import view_config
-from pyramid.decorator import reify
-from .interfaces import INDEXER_QUEUE, INDEXER_QUEUE_MIRROR
-from .indexer_utils import get_uuids_for_types
+import json
+import socket
+import sys
+import time
 from collections import OrderedDict
 
+import boto3
+import structlog
+from pyramid.view import view_config
+
+from .indexer_utils import get_uuids_for_types
+from .interfaces import INDEXER_QUEUE, INDEXER_QUEUE_MIRROR
+from ..util import debug_log
+
 log = structlog.getLogger(__name__)
+
 
 def includeme(config):
     config.add_route('queue_indexing', '/queue_indexing')
@@ -37,7 +40,8 @@ def includeme(config):
 
 
 @view_config(route_name='queue_indexing', request_method='POST', permission="index")
-def queue_indexing(request):
+@debug_log
+def queue_indexing(context, request):
     """
     Endpoint to queue items for indexing. Takes a POST request with index
     priviliges which should contain either a list of uuids under "uuids" key
@@ -95,7 +99,8 @@ def queue_indexing(request):
 
 
 @view_config(route_name='indexing_status', request_method='GET')
-def indexing_status(request):
+@debug_log
+def indexing_status(context, request):
     """
     Endpoint to check what is currently on the queue. Uses GET requests
     """
@@ -115,7 +120,8 @@ def indexing_status(request):
 
 
 @view_config(route_name='dlq_to_primary', request_method='GET', permission='index')
-def dlq_to_primary(request):
+@debug_log
+def dlq_to_primary(context, request):
     """
     Endpoint to move all uuids on the DLQ to the primary queue
     """

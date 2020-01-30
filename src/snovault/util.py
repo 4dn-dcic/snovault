@@ -1,12 +1,14 @@
-from past.builtins import basestring
-from pyramid.threadlocal import manager as threadlocal_manager
-from pyramid.httpexceptions import HTTPForbidden
-from .interfaces import CONNECTION, STORAGE, TYPES
-from copy import deepcopy
+import functools
 import json
-import structlog
 import sys
+from copy import deepcopy
 
+import structlog
+from past.builtins import basestring
+from pyramid.httpexceptions import HTTPForbidden
+from pyramid.threadlocal import manager as threadlocal_manager
+
+from .interfaces import CONNECTION, STORAGE, TYPES
 
 log = structlog.getLogger(__name__)
 
@@ -14,6 +16,30 @@ log = structlog.getLogger(__name__)
 ###################
 # Misc. utilities #
 ###################
+
+
+def debug_log(func):
+    """ Decorator that adds some debug output of the view to log that we got there """
+    @functools.wraps(func)
+    def log_decorator(*args, **kwargs):
+        log_function_call(log, func.__name__)
+        if not args:
+            return func(**kwargs)
+        elif not kwargs:
+            return func(*args)
+        return func(*args, **kwargs)
+    return log_decorator
+
+
+def log_function_call(log_ref, func_name, extra=None):
+    """
+    Logs that we have reached func_name in the application
+    Can log 'extra' information as well if specified
+    Helpful in debugging 500 errors on routes and logging entry to any particular function
+    """
+    log_ref.info('DEBUG_FUNC -- Entering view config: %s' % func_name)
+    if extra:
+        log_ref.info('DEBUG_FUNC -- Extra info: %s' % extra)
 
 
 def select_distinct_values(request, value_path, *from_paths):

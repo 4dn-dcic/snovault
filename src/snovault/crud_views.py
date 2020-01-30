@@ -1,26 +1,28 @@
-from past.builtins import basestring
 from pyramid.settings import asbool
-from pyramid.traversal import (
-    find_resource,
-)
-from pyramid.view import view_config
+import sys
 from uuid import (
     UUID,
     uuid4,
 )
+
+import transaction
+from pyramid.settings import asbool
+from pyramid.view import view_config
+from structlog import get_logger
+
+from .calculated import calculated_property
 from .interfaces import (
-    COLLECTIONS,
-    CONNECTION,
     STORAGE,
     Created,
     BeforeModified,
     AfterModified,
 )
+from .invalidation import add_to_indexing_queue
 from .resources import (
     Collection,
     Item,
 )
-from .calculated import calculated_property
+from .util import debug_log
 from .validation import ValidationFailure
 from .validators import (
     no_validate_item_content_patch,
@@ -31,10 +33,7 @@ from .validators import (
     validate_item_content_put,
     validate_item_content_in_place
 )
-from .invalidation import add_to_indexing_queue
-import transaction
 
-from structlog import get_logger
 log = get_logger(__name__)
 
 
@@ -147,6 +146,7 @@ def render_item(request, context, render, return_uri_also=False):
 @view_config(context=Collection, permission='add_unvalidated', request_method='POST',
              validators=[no_validate_item_content_post],
              request_param=['validate=false'])
+@debug_log
 def collection_add(context, request, render=None):
     '''Endpoint for adding a new Item.'''
     check_only = asbool(request.params.get('check_only', False))
@@ -185,6 +185,7 @@ def collection_add(context, request, render=None):
 @view_config(context=Item, permission='index', request_method='GET',
              validators=[validate_item_content_in_place],
              request_param=['check_only=true'])
+@debug_log
 def item_edit(context, request, render=None):
     '''
     Endpoint for editing an existing Item.
@@ -225,6 +226,7 @@ def item_edit(context, request, render=None):
 
 @view_config(context=Item, permission='view', request_method='GET',
              name='links')
+@debug_log
 def get_linking_items(context, request, render=None):
     """
     Utilize find_uuids_linked_to_item function in PickStorage to find
@@ -245,6 +247,7 @@ def get_linking_items(context, request, render=None):
 
 
 @view_config(context=Item, permission='edit', request_method='DELETE')
+@debug_log
 def item_delete_full(context, request, render=None):
     """
     DELETE method that either sets the status of an item to deleted (base
@@ -297,8 +300,10 @@ def item_delete_full(context, request, render=None):
     }
 
 
+
 @view_config(context=Item, permission='view', request_method='GET',
              name='validation-errors')
+@debug_log
 def item_view_validation_errors(context, request):
     """
     View config for validation_errors. If the current model does not have

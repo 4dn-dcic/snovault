@@ -1,9 +1,11 @@
 import sys
+from itertools import islice
+from urllib.parse import urlencode
+
 from future.utils import (
     raise_with_traceback,
     itervalues,
 )
-from itertools import islice
 from past.builtins import basestring
 from pyramid.exceptions import PredicateMismatch
 from pyramid.httpexceptions import HTTPNotFound
@@ -12,7 +14,7 @@ from pyramid.view import (
     render_view_to_response,
     view_config,
 )
-from urllib.parse import urlencode
+
 from .calculated import calculate_properties
 from .resources import (
     AbstractCollection,
@@ -25,8 +27,10 @@ from .util import (
     expand_embedded_model,
     process_aggregated_items,
     check_es_and_cache_linked_sids,
-    validate_es_content
+    validate_es_content,
+    debug_log,
 )
+
 
 def includeme(config):
     config.scan(__name__)
@@ -34,6 +38,7 @@ def includeme(config):
 
 @view_config(context=AbstractCollection, permission='list', request_method='GET',
              name='listing')
+@debug_log
 def collection_view_listing_db(context, request):
     result = {}
 
@@ -70,6 +75,7 @@ def collection_view_listing_db(context, request):
 
 
 @view_config(context=Root, request_method='GET', name='page')
+@debug_log
 def home(context, request):
     properties = request.embed(request.resource_path(context), '@@object')
     calculated = calculate_properties(context, request, properties, category='page')
@@ -79,6 +85,7 @@ def home(context, request):
 
 @view_config(context=Root, request_method='GET', name='object')
 @view_config(context=AbstractCollection, permission='list', request_method='GET', name='object')
+@debug_log
 def collection_view_object(context, request):
     properties = context.__json__(request)
     calculated = calculate_properties(context, request, properties)
@@ -87,6 +94,7 @@ def collection_view_object(context, request):
 
 
 @view_config(context=AbstractCollection, permission='list', request_method='GET', name='page')
+@debug_log
 def collection_list(context, request):
     path = request.resource_path(context)
     properties = request.embed(path, '@@object')
@@ -104,6 +112,7 @@ def collection_list(context, request):
 @view_config(context=Root, request_method='GET')
 @view_config(context=AbstractCollection, permission='list', request_method='GET')
 @view_config(context=Item, permission='view', request_method='GET')
+@debug_log
 def item_view(context, request):
     frame = request.params.get('frame', 'page')
     if getattr(request, '__parent__', None) is None:
@@ -127,6 +136,7 @@ def item_view(context, request):
 
 @view_config(context=Item, permission='view', request_method='GET',
              name='object')
+@debug_log
 def item_view_object(context, request):
     """
     Render json structure. This is the most basic view and contains the scope
@@ -162,6 +172,7 @@ def item_view_object(context, request):
 
 
 @view_config(context=Item, permission='view', request_method='GET', name='embedded')
+@debug_log
 def item_view_embedded(context, request):
     """
     Calculate and return the embedded view for an item. This is an intensive
@@ -219,6 +230,7 @@ def item_view_embedded(context, request):
 
 @view_config(context=Item, permission='view', request_method='GET',
              name='page')
+@debug_log
 def item_view_page(context, request):
     item_path = request.resource_path(context)
     properties = request.embed(item_path, '@@embedded', as_user=True)
@@ -229,6 +241,7 @@ def item_view_page(context, request):
 
 @view_config(context=Item, permission='expand', request_method='GET',
              name='expand')
+@debug_log
 def item_view_expand(context, request):
     path = request.resource_path(context)
     properties = request.embed(path, '@@object', as_user=True)
@@ -267,6 +280,7 @@ def expand_column(request, obj, subset, path):
 
 @view_config(context=Item, permission='view', request_method='GET',
              name='columns')
+@debug_log
 def item_view_columns(context, request):
     path = request.resource_path(context)
     properties = request.embed(path, '@@object')
@@ -290,6 +304,7 @@ def item_view_columns(context, request):
 
 @view_config(context=Item, permission='view_raw', request_method='GET',
              name='raw')
+@debug_log
 def item_view_raw(context, request):
     props = context.properties
     # only upgrade properties if explicitly requested

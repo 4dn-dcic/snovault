@@ -330,6 +330,7 @@ class ElasticSearchStorage(object):
             mirror_env = registry.settings['mirror.env.name']
             use_aws_auth = registry.settings.get('elasticsearch.aws_auth')
             mirror_health = ff_utils.get_health_page(ff_env=mirror_env)
+            log.info('PURGE: attempting to purge %s from mirror storage %s' % (rid, mirror_env))
             # if we could not get mirror health, bail here
             if 'error' in mirror_health:
                 log.error('PURGE: Tried to purge %s from mirror storage but couldn\'t get health page. Is staging up?' % rid)
@@ -348,6 +349,8 @@ class ElasticSearchStorage(object):
                 log.error('PURGE: Couldn\'t find %s in mirrored ElasticSearch (%s). Continuing.' % (rid, mirror_env))
             except Exception as exc:
                 log.error('PURGE: Cannot delete %s in mirrored ElasticSearch (%s). Error: %s Continuing.' % (item_type, mirror_env, str(exc)))
+        else:
+            log.info('PURGE: Did not find a mirror env. Continuing.')
 
     def __iter__(self, *item_types):
         query = {'query': {

@@ -1,10 +1,14 @@
+import sys
 from collections import defaultdict
+from subprocess import Popen, PIPE
+from xml.sax.saxutils import quoteattr, escape
+
 from past.builtins import basestring
 from pyramid.response import Response
 from pyramid.view import view_config
-from subprocess import Popen, PIPE
-from xml.sax.saxutils import quoteattr, escape
+
 from snovault import TYPES
+from .util import debug_log
 
 
 def includeme(config):
@@ -77,13 +81,15 @@ def digraph(types, exclude=None):
 
 
 @view_config(route_name='graph_dot', request_method='GET')
-def schema_dot(request):
+@debug_log
+def schema_dot(context, request):
     dot = digraph(request.registry[TYPES].by_item_type, request.params.getall('exclude'))
     return Response(dot, content_type='text/vnd.graphviz', charset='utf-8')
 
 
 @view_config(route_name='graph_svg', request_method='GET')
-def schema_svg(request):
+@debug_log
+def schema_svg(context, request):
     dot = digraph(request.registry[TYPES].by_item_type, request.params.getall('exclude'))
     p = Popen(['dot', '-Tsvg'], stdin=PIPE, stdout=PIPE, stderr=PIPE)
     svg, err = p.communicate(dot.encode('utf-8'))
