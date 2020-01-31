@@ -404,7 +404,7 @@ class Item(Resource):
         Additionally, if indexing, this method adds the current Item's uuid/sid
         to `_linked_uuids` and `_sid_cache` on the request
         """
-        properties = self.upgrade_properties()
+        properties = self.__json__(request)
         # use schema_links rather than DB links so upgrades work on ES GETs
         for path in self.type_info.schema_links:
             uuid_to_path(request, properties, path)
