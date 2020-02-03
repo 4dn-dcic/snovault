@@ -138,8 +138,6 @@ def linkTo(validator, linkTo, instance, schema):
         raise Exception("Bad schema")  # raise some sort of schema error
     try:
         item = find_resource(base, instance.replace(':', '%3A'))
-        if item is None:
-            raise KeyError()
     except KeyError:
         error = "%r not found" % instance
         yield ValidationError(error)
@@ -183,60 +181,6 @@ def linkTo(validator, linkTo, instance, schema):
     # And normalize the value to a uuid
     if validator._serialize:
         validator._validated[-1] = str(item.uuid)
-
-
-def linkFrom(validator, linkFrom, instance, schema):
-    # avoid circular import
-    from snovault import Item, TYPES, COLLECTIONS
-    request = get_current_request()
-    collections = request.registry[COLLECTIONS]
-
-    linkType, linkProp = linkFrom.split('.')
-    if validator.is_type(instance, "string"):
-        base = collections[linkType]
-        try:
-            item = find_resource(base, instance.replace(':', '%3A'))
-            if item is None:
-                raise KeyError()
-        except KeyError:
-            error = "%r not found" % instance
-            yield ValidationError(error)
-            return
-        if not isinstance(item, Item):
-            error = "%r is not a linkable resource" % instance
-            yield ValidationError(error)
-            return
-        if linkType not in set([item.type_info.name] + item.type_info.base_types):
-            error = "%r is not of type %s" % (instance, repr(linkType))
-            yield ValidationError(error)
-            return
-        pass
-    else:
-        path = instance.get('@id')
-        if validator._serialize:
-            lv = len(validator._validated)
-        if '@id' in instance:
-            del instance['@id']
-
-        # treat the link property as not required
-        # because it will be filled in when the child is created/updated
-        subschema = request.registry[TYPES][linkType].schema
-        subschema = copy.deepcopy(subschema)
-        if linkProp in subschema['required']:
-            subschema['required'].remove(linkProp)
-
-        for error in validator.descend(instance, subschema):
-            yield error
-
-        if validator._serialize:
-            validated_instance = validator._validated[lv]
-            del validator._validated[lv:]
-            if path is not None:
-                item = find_resource(request.root, path.replace(':', '%3A'))
-                validated_instance['uuid'] = str(item.uuid)
-            elif 'uuid' in validated_instance:  # where does this come from?
-                del validated_instance['uuid']
-            validator._validated[-1] = validated_instance
 
 
 class IgnoreUnchanged(ValidationError):
@@ -291,7 +235,6 @@ class SchemaValidator(Draft4Validator):
     VALIDATORS = Draft4Validator.VALIDATORS.copy()
     VALIDATORS['calculatedProperty'] = calculatedProperty
     VALIDATORS['linkTo'] = linkTo
-    VALIDATORS['linkFrom'] = linkFrom
     VALIDATORS['permission'] = permission
     VALIDATORS['requestMethod'] = requestMethod
     VALIDATORS['validators'] = validators
@@ -376,7 +319,7 @@ def validate(schema, data, current=None, validate_current=False):
                 except Exception:
                     validate_value = None  # not found
                 if validated_value == current_value:
-                    continue  # value is unchanged between data/curret; ignore
+                    continue  # value is unchanged between data/current; ignore
         filtered_errors.append(error)
 
     return validated, filtered_errors

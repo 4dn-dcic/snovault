@@ -115,16 +115,13 @@ def purge_item(context, request):
     have been removed. Requires that the status of the item == 'deleted',
     otherwise will throw a validation failure
     """
-    from snovault.elasticsearch.indexer_utils import get_namespaced_index
     item_type = context.collection.type_info.item_type
     item_uuid = str(context.uuid)
     if context.properties.get('status') != 'deleted':
         msg = (u'Item status must equal deleted before purging from DB.' +
                ' It currently is %s' % context.properties.get('status'))
         raise ValidationFailure('body', ['status'], msg)
-    # purge_uuid fxn ensures that all links to the item are removed
-    namespaced_index = get_namespaced_index(request, item_type)
-    request.registry[STORAGE].purge_uuid(item_uuid, namespaced_index, item_type)
+    request.registry[STORAGE].purge_uuid(rid=item_uuid, item_type=item_type)
     return True
 
 
@@ -306,9 +303,8 @@ def item_delete_full(context, request, render=None):
 @debug_log
 def item_view_validation_errors(context, request):
     """
-    View config for validation_errors. If the current model does not have
-    `source`, it means we are using write (RDS) storage and not ES. In that
-    case, do not calculate the validation errors as it would require an extra
+    View config for validation_errors. If the current model is not using ES,
+    do not calculate the validation errors as it would require an extra
     request and some tricky permission handling.
 
     Args:
@@ -318,7 +314,7 @@ def item_view_validation_errors(context, request):
     Returns:
         A dictionary including item path and validation errors from ES
     """
-    if not hasattr(context.model, 'source'):
+    if context.model.used_datastore != 'elasticsearch':
         return {
             '@id': request.resource_path(context),
             'validation_errors': [],

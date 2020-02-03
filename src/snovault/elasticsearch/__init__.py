@@ -20,9 +20,6 @@ PY2 = sys.version_info.major == 2
 
 def includeme(config):
     settings = config.registry.settings
-
-    config.add_request_method(datastore, 'datastore', reify=True)
-
     address = settings['elasticsearch.server']
     use_aws_auth = settings.get('elasticsearch.aws_auth')
     # make sure use_aws_auth is bool
@@ -44,17 +41,6 @@ def includeme(config):
     config.include('.indexer')
     if asbool(settings.get('mpindexer')) and not PY2:
         config.include('.mpindexer')
-
-
-def datastore(request):
-    if request.__parent__ is not None:
-        return request.__parent__.datastore
-    datastore = 'database'
-    if request.method in ('HEAD', 'GET'):
-        datastore = request.params.get('datastore') or \
-            request.headers.get('X-Datastore') or \
-            request.registry.settings.get('collection_datastore', 'elasticsearch')
-    return datastore
 
 
 class PyramidJSONSerializer(object):

@@ -15,7 +15,7 @@ import atexit
 import structlog
 import logging
 from snovault import set_logging
-from snovault.storage import register_storage
+from snovault.storage import register_storage, RDBStorage
 import transaction
 import signal
 import time
@@ -42,17 +42,19 @@ app = None
 
 def initializer(app_factory, settings):
     """
-    Initialize the app and database session for the subprocess
+    Need to initialize the app for the subprocess.
+    As part of this, configue a new database engine and set logging
     """
     from snovault.app import configure_engine
     signal.signal(signal.SIGINT, signal.SIG_IGN)
 
     # set up global variables to use throughout subprocess
-    global app
-    atexit.register(clear_manager_and_dispose_engine)
-    app = app_factory(settings, indexer_worker=True, create_tables=False)
-
     global db_engine
+    db_engine = None
+    atexit.register(clear_manager_and_dispose_engine)
+
+    global app
+    app = app_factory(settings, indexer_worker=True, create_tables=False)
     db_engine = configure_engine(settings)
 
     # Use `es_server=app.registry.settings.get('elasticsearch.server')` when ES logging is working
@@ -86,9 +88,10 @@ def threadlocal_manager():
     # configure a sqlalchemy session and set isolation level
     DBSession = orm.scoped_session(orm.sessionmaker(bind=db_engine))
     request.registry[DBSESSION] = DBSession
-    register_storage(request.registry)
+    # configue RDBStorage. Overide write storage to use new DBSession
+    register_storage(request.registry, write_override=RDBStorage(DBSession))
     zope.sqlalchemy.register(DBSession)
-    connection = request.registry[DBSESSION]().connection()
+    connection = DBSession().connection()
     connection.execute('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY')
 
     # add the newly created request to the pyramid threadlocal manager

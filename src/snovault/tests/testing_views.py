@@ -272,7 +272,6 @@ def edit_json(context, request):
         }
 
 
-
 @abstract_collection(
     name='abstractItemTests',
     unique_key='accession',
@@ -343,6 +342,7 @@ class TestingDownload(ItemWithAttachment):
 class TestingLinkSourceSno(Item):
     item_type = 'testing_link_source_sno'
     schema = load_schema('snovault:test_schemas/TestingLinkSourceSno.json')
+    embedded_list = ['target_es.status', 'target.status']
 
 
 @collection('testing-link-aggregates-sno')
@@ -434,3 +434,44 @@ def testing_retry(context, request):
         'attempt': request.environ['_attempt'],
         'detached': inspect(model).detached,
     }
+
+
+# properties_datastore sets makes this collection stored in ES
+@collection('testing-link-targets-elastic-search',
+            unique_key='testing_link_target_elastic_search:name',
+            properties_datastore='elasticsearch')
+class TestingLinkTargetElasticSearch(Item):
+    """
+    Like TestingLinkTargetSno, but leverages ElasticSearch storage exclusively.
+    Includes a linkTo and a rev_link to test multiple behaviors.
+    """
+    item_type = 'testing_link_target_elastic_search'
+    name_key = 'name'
+    schema = load_schema('snovault:test_schemas/TestingLinkTargetElasticSearch.json')
+    rev = {
+        'reverse_es': ('TestingLinkSourceSno', 'target_es'),
+    }
+    filtered_rev_statuses = ('deleted', 'replaced')
+    aggregated_items = {
+        "ppp": ['simple1', 'uuid']
+    }
+    embedded_list = [
+        'reverse_es.name',
+        'ppp.simple1'
+    ]
+
+    def rev_link_atids(self, request, rev_name):
+        conn = request.registry[CONNECTION]
+        return [request.resource_path(conn[uuid]) for uuid in
+                self.get_filtered_rev_links(request, rev_name)]
+
+    @calculated_property(schema={
+        "title": "Sources",
+        "type": "array",
+        "items": {
+            "type": ['string', 'object'],
+            "linkTo": "TestingLinkSourceSno",
+        },
+    })
+    def reverse_es(self, request):
+        return self.rev_link_atids(request, "reverse_es")

@@ -1,6 +1,8 @@
 import pytest
 from snovault.tests.toolfixtures import registry, storage
 from snovault.tests.serverfixtures import session
+from snovault.storage import PickStorage, RDBStorage
+from snovault import DBSESSION, STORAGE
 
 pytestmark = pytest.mark.storage
 
@@ -271,3 +273,43 @@ def test_S3BlobStorage_get_blob_url_for_non_s3_file():
     download_meta = {'blob_id': 'blob_id'}
     url = storage.get_blob_url(download_meta)
     assert url
+
+
+def test_pick_storage(registry, dummy_request):
+    from pyramid.threadlocal import manager
+    # use a dummy value for ElasticSearchStorage
+    storage = PickStorage(RDBStorage(registry[DBSESSION]), 'dummy_es', registry)
+    assert isinstance(storage.write, RDBStorage)
+    assert storage.read == 'dummy_es'
+    # test storage selection logic
+    assert storage.storage('database') is storage.write
+    assert storage.storage('elasticsearch') == 'dummy_es'
+    with pytest.raises(Exception) as exec_info:
+        storage.storage('not_a_db')
+    assert 'Invalid forced datastore not_a_db' in str(exec_info)
+    assert storage.storage() is storage.write
+
+    dummy_request.datastore = 'elasticsearch'
+    manager.push({'request': dummy_request, 'registry': registry})
+    assert storage.storage() == 'dummy_es'
+    manager.pop()
+
+
+def test_register_storage(registry):
+    from snovault.storage import register_storage
+    # test storage.register_storage, used to configure registry[STORAGE]
+    storage = PickStorage('dummy_db', 'dummy_es', registry)
+    # store previous storage and use a dummy one for testing
+    prev_storage = registry[STORAGE]
+    registry[STORAGE] = storage
+    # expect existing values to be used
+    register_storage(registry)
+    assert registry[STORAGE].write == 'dummy_db'
+    assert registry[STORAGE].read == 'dummy_es'
+    # expect overrides to be used
+    register_storage(registry, write_override='override_db',
+                     read_override='override_es')
+    assert registry[STORAGE].write == 'override_db'
+    assert registry[STORAGE].read == 'override_es'
+    # reset storage
+    registry[STORAGE] = prev_storage

@@ -156,12 +156,12 @@ def item_view_object(context, request):
     Returns:
         Dictionary item properties
     """
-    if hasattr(request, 'datastore') and request.datastore != 'elasticsearch':
+    if request.datastore != 'elasticsearch':
         es_res = check_es_and_cache_linked_sids(context, request, 'object')
         # validate_es_content also checks/updates rev links
         if es_res and validate_es_content(context, request, es_res, 'object'):
             # if indexing, handle linked_uuids
-            if getattr(request, '_indexing_view', False) is True:
+            if request._indexing_view is True:
                 request._linked_uuids = [link['uuid'] for link in es_res['linked_uuids_object']]
             return es_res['object']
 
@@ -192,12 +192,12 @@ def item_view_embedded(context, request):
     Returns:
         Dictionary item properties
     """
-    if hasattr(request, 'datastore') and request.datastore != 'elasticsearch':
+    if request.datastore != 'elasticsearch':
         es_res = check_es_and_cache_linked_sids(context, request, 'embedded')
         # validate_es_content also checks/updates rev links
         if es_res and validate_es_content(context, request, es_res, 'embedded'):
             # if indexing, handle aggregated_items and linked_uuids
-            if getattr(request, '_indexing_view', False) is True:
+            if request._indexing_view is True:
                 request._linked_uuids = [link['uuid'] for link in es_res['linked_uuids_embedded']]
             if getattr(request, '_aggregate_for').get('uuid') == str(context.uuid):
                 # format this in a specific way to work with further processing

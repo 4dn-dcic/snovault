@@ -18,10 +18,9 @@ def includeme(config):
 @debug_log
 def item_view_aggregated_items(context, request):
     """
-    View config for aggregated_items. If the current model does not have
-    `source`, it means we are using write (RDS) storage and not ES. In that
-    case, do not calculate the aggregated_items, as that would required
-    the whole @@index-data view to be run
+    View config for aggregated_items. If the current model is not using ES,
+    do not calculate the aggregated_items, as that would required the whole
+    @@index-data view to be run
 
     Args:
         context: current Item
@@ -31,7 +30,7 @@ def item_view_aggregated_items(context, request):
         A dictionary including item path and aggregated_items
     """
     # if we do not have the cached ES model, do not run aggs
-    if not hasattr(context.model, 'source'):
+    if context.model.used_datastore != 'elasticsearch':
         return {
             '@id': request.resource_path(context),
             'aggregated_items': {},

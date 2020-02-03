@@ -12,7 +12,7 @@ from pyramid.security import (
 )
 from pyramid.traversal import (
     resource_path,
-    traverse,
+    traverse
 )
 from .calculated import (
     calculate_properties,
@@ -41,26 +41,10 @@ def includeme(config):
     config.scan(__name__)
 
 
-# Migrated from snowflakes
-def calc_principals(context):
-    principals_allowed = {}
-    for permission in ('view', 'edit'):
-        principals = principals_allowed_by_permission(context, permission)
-        if principals is Everyone:
-            principals = [Everyone]
-        elif Everyone in principals:
-            principals = [Everyone]
-        elif Authenticated in principals:
-            principals = [Authenticated]
-        # Filter our roles
-        principals_allowed[permission] = [
-            p for p in sorted(principals) if not p.startswith('role.')
-        ]
-    return principals_allowed
-
-
 class Resource(object):
-
+    """
+    Just used to add global calculated properties
+    """
     @calculated_property(name='@id', schema={
         "title": "ID",
         "type": "string",
@@ -110,13 +94,18 @@ class Root(Resource):
         return self.get(name, None) is not None
 
     def get(self, name, default=None):
-        resource = self.collections.get(name, None)
+        """
+        Underlying get function used in traversal. Handles Collections (by
+        direct `get`) and Items (through `Connection.__getitem__`)
+        """
+        resource = self.collections.get(name)
         if resource is not None:
             return resource
-        resource = self.connection.get_by_uuid(name, None)
-        if resource is not None:
-            return resource
-        return default
+        try:
+            resource = self.connection[name]  # Connection.__getitem__
+        except KeyError:
+            resource = default
+        return resource
 
     def __json__(self, request=None):
         return self.properties.copy()
@@ -139,6 +128,7 @@ class AbstractCollection(Resource, Mapping):
     - type_info (TypeInfo for a certain item type, see snovault.typeinfo.py)
     - __acl__
     - uniqueKey for the collection (e.g. item_name:key)
+    - properties_datastore for items in the collection (defaults to 'database')
     And some other info as well.
 
     Collections allow retrieval of specific items with them by using the `get`
@@ -146,8 +136,10 @@ class AbstractCollection(Resource, Mapping):
     """
     properties = {}
     unique_key = None
+    default_properties_datastore = 'database'
 
-    def __init__(self, registry, name, type_info, properties=None, acl=None, unique_key=None):
+    def __init__(self, registry, name, type_info, properties=None, acl=None,
+                 unique_key=None, properties_datastore=None):
         self.registry = registry
         self.__name__ = name
         self.type_info = type_info
@@ -157,6 +149,11 @@ class AbstractCollection(Resource, Mapping):
             self.__acl__ = acl
         if unique_key is not None:
             self.unique_key = unique_key
+        # use a default value configured on the class if not set
+        if properties_datastore is not None:
+            self.properties_datastore = properties_datastore
+        else:
+            self.properties_datastore = self.default_properties_datastore
 
     @reify
     def connection(self):
@@ -195,13 +192,21 @@ class AbstractCollection(Resource, Mapping):
             resource.type_info.name in resource.type_info.subtypes
 
     def get(self, name, default=None):
-        resource = self.connection.get_by_uuid(name, None)
+        """
+        Get an item by name using this collection. First try uuid and then
+        unique key. If neither are found, return default, which is usually None.
+        self.properties_datastore is checked on the item class and used with
+        Connection to force a certain datastore if needed to retrieve item
+        """
+        resource = self.connection.get_by_uuid(name, default=None,
+                                               datastore=self.properties_datastore)
         if resource is not None:
             if not self._allow_contained(resource):
                 return default
             return resource
         if self.unique_key is not None:
-            resource = self.connection.get_by_unique_key(self.unique_key, name)
+            resource = self.connection.get_by_unique_key(self.unique_key, name,
+                                                         datastore=self.properties_datastore)
             if resource is not None:
                 if not self._allow_contained(resource):
                     return default
@@ -247,6 +252,9 @@ display_title_schema = {
 
 
 class Item(Resource):
+    """
+    Base Item resource that corresponds to a Collection or AbstractCollection
+    """
     item_type = None
     base_types = ['Item']
     name_key = None
@@ -274,13 +282,24 @@ class Item(Resource):
         collections = self.registry[COLLECTIONS]
         return collections[self.type_info.name]
 
+    @reify
+    def properties_datastore(self):
+        return self.collection.properties_datastore
+
+    @reify
+    def default_properties_datastore(self):
+        return self.collection.default_properties_datastore
+
     @property
     def __parent__(self):
         return self.collection
 
     @property
     def __name__(self):
-
+        """
+        Used in the resource path for this item. Use `self.name_key` if
+        present, otherwise `self.uuid`
+        """
         if self.name_key is None:
             return str(self.uuid)
         return self.properties.get(self.name_key, None) or str(self.uuid)
@@ -299,15 +318,27 @@ class Item(Resource):
 
     @property
     def sid(self):
-        return self.model.sid
+        return self.db_model.sid
 
     @property
     def max_sid(self):
-        return self.model.max_sid
+        return self.db_model.max_sid
+
+    @property
+    def db_model(self):
+        """
+        Always returns the resouce model from write storage, which is needed
+        for operations like getting current sid/max_sid, rev_links, and
+        updating. Leverage `model.used_datastore` to determine source
+        """
+        if self.model.used_datastore != 'database':
+            connection = self.registry[CONNECTION]
+            return connection.storage.write.get_by_uuid(str(self.uuid))
+        return self.model
 
     def links(self, properties):
         return {
-            path: set(simple_path_ids(properties, path))
+            path: list(set(simple_path_ids(properties, path)))
             for path in self.type_info.schema_links
         }
 
@@ -326,8 +357,7 @@ class Item(Resource):
         types = self.registry[TYPES]
         type_name, rel = self.rev[name]
         types = types[type_name].subtypes
-        # if we are indexing, update the following request attributes
-        return self.registry[CONNECTION].get_rev_links(self.model, rel, *types)
+        return self.registry[CONNECTION].get_rev_links(self.db_model, rel, *types)
 
     def get_filtered_rev_links(self, request, name):
         """
@@ -350,7 +380,7 @@ class Item(Resource):
             if traverse(request.root, str(rev_id))['context'].__json__(request).get('status')
             not in self.filtered_rev_statuses
         ]
-        if getattr(request, '_indexing_view', False) is True:
+        if request._indexing_view is True:
             to_update = {name: filtered_uuids}
             if str(self.uuid) in request._rev_linked_uuids_by_item:
                 request._rev_linked_uuids_by_item[str(self.uuid)].update(to_update)
@@ -399,11 +429,13 @@ class Item(Resource):
 
     def item_with_links(self, request):
         """
-        Use the upgraded properties of this Item to convert all linked uuids
-        to resource paths.
-        Additionally, if indexing, this method adds the current Item's uuid/sid
-        to `_linked_uuids` and `_sid_cache` on the request
+        Key function that transforms uuids into resource paths in properties.
+        It is also responsible for calling upgraders using the __json__ method
+        Lastly, adds this items' uuid to request._linked_uuids when indexing
         """
+        # *** context.__json__ CALLS THE UPGRADER (upgrade_properties) ***
+        # This works from the schema rather than the links table
+        # so that upgrade on GET can work.
         properties = self.__json__(request)
         # use schema_links rather than DB links so upgrades work on ES GETs
         for path in self.type_info.schema_links:
@@ -411,7 +443,7 @@ class Item(Resource):
 
         # if indexing, add the uuid of this object to request._linked_uuids
         # and add the sid to _sid_cache if not already present
-        if getattr(request, '_indexing_view', False) is True:
+        if request._indexing_view is True:
             request._linked_uuids.add(str(self.uuid))
             if str(self.uuid) not in request._sid_cache:
                 request._sid_cache[str(self.uuid)] = self.sid
@@ -484,7 +516,8 @@ class Item(Resource):
 
         # actually propogate the update to the DB
         connection = self.registry[CONNECTION]
-        connection.update(self.model, properties, sheets, unique_keys, links)
+        connection.update(self.db_model, properties, sheets, unique_keys, links,
+                          datastore=self.properties_datastore)
 
     @reify
     def embedded(self):
@@ -531,10 +564,21 @@ class Item(Resource):
         }
     })
     def principals_allowed(self):
-        # importing at top of file requires many more relative imports
-        from .resources import calc_principals
-        principals = calc_principals(self)
-        return principals
+        allowed = {}
+        # these are the relevant Item permissions
+        for permission in ('view', 'edit'):
+            principals = principals_allowed_by_permission(self, permission)
+            if principals is Everyone:
+                principals = [Everyone]
+            elif Everyone in principals:
+                principals = [Everyone]
+            elif Authenticated in principals:
+                principals = [Authenticated]
+            # Filter our roles
+            allowed[permission] = [
+                p for p in sorted(principals) if not p.startswith('role.')
+            ]
+        return allowed
 
     @calculated_property(schema=display_title_schema)
     def display_title(self):

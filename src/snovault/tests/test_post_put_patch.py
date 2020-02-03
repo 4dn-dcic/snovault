@@ -330,3 +330,12 @@ def test_max_sid_view(content, testapp):
     res = testapp.get('/max-sid', status=200)
     assert res.json['status'] == 'success'
     assert res.json['max_sid'] > starting_sid
+
+
+def test_create_es_item_without_es(content, testapp):
+    """
+    Items with `properties_datastore='elasticsearch'` should fail without ES set up
+    """
+    target_data = {'name': 'es_target_test'}
+    res = testapp.post_json('/testing-link-targets-elastic-search/', target_data, status=500)
+    assert res.json['detail'] == 'Forced datastore elasticsearch is not configured'

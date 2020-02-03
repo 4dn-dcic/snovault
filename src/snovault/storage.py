@@ -1,5 +1,9 @@
 
-from pyramid.httpexceptions import HTTPConflict
+from pyramid.httpexceptions import (
+    HTTPConflict,
+    HTTPLocked,
+    HTTPInternalServerError
+)
 from sqlalchemy import (
     Column,
     DDL,
@@ -32,33 +36,71 @@ from .interfaces import (
     DBSESSION,
     STORAGE,
 )
+from pyramid.threadlocal import get_current_request
 import boto3
 import uuid
 import time
+import structlog
 
+log = structlog.getLogger(__name__)
 
 _DBSESSION = None
 
 
 def includeme(config):
     registry = config.registry
-    register_storage(registry)
+    # add `datastore` attribute to request
+    config.add_request_method(datastore, 'datastore', reify=True)
+    # register PickStorage initialized with write storage
+    write_stg = RDBStorage(registry[DBSESSION]) if registry[DBSESSION] else None
+    register_storage(registry, write_override=write_stg)
 
 
-def register_storage(registry):
+def datastore(request):
     """
-    Wrapper function to register a RDBStorage as registry[STORAGE]
+    Function that is reified as `request.datastore`. Used with PickStorage
+    to determine whether to use RDBStorage or ElasticSearchStorage. Can be
+    overriden by storage argument to `PickStorage.storage` directly
     """
-    if not registry[DBSESSION]:
-        registry[STORAGE] = None
-        return
-    registry[STORAGE] = RDBStorage(registry[DBSESSION])
+    if request.__parent__ is not None:
+        return request.__parent__.datastore
+    datastore = 'database'
+    if request.method in ('HEAD', 'GET'):
+        datastore = request.params.get('datastore') or \
+            request.headers.get('X-Datastore') or \
+            request.registry.settings.get('collection_datastore', 'elasticsearch')
+    return datastore
+
+
+def register_storage(registry, write_override=None, read_override=None):
+    """
+    Wrapper function to register a PickStorage as registry[STORAGE].
+    Attempts to reuse an existing PickStorage if possible, including read/write
+    connections. If `write_override` or `read_override` are provided, will
+    override PickStorage attributes with the given values
+
+    Also sets up global DBSESSION config for this file and initializes
+    blob storage
+    """
+    write_storage = None
+    read_storage = None
+    if isinstance(registry.get(STORAGE), PickStorage):
+        write_storage = registry[STORAGE].write
+        read_storage = registry[STORAGE].read
+    if write_override is not None:
+        write_storage = write_override
+    if read_override is not None:
+        read_storage = read_override
+    # set PickStorage with correct write/read
+    registry[STORAGE] = PickStorage(write_storage, read_storage, registry)
+
+    # global config needed for some storage-related properties
     global _DBSESSION
     _DBSESSION = registry[DBSESSION]
-    if registry.settings.get('blob_bucket'):
-        registry[BLOBS] = S3BlobStorage(
-            registry.settings['blob_bucket'],
-        )
+
+    # set up blob storage if not configured already
+    if not registry.get(BLOBS) and registry.settings.get('blob_bucket'):
+        registry[BLOBS] = S3BlobStorage(registry.settings['blob_bucket'])
     else:
         registry[BLOBS] = RDBBlobStorage(registry[DBSESSION])
 
@@ -84,7 +126,187 @@ baked_query_sids = bakery(lambda session: session.query(CurrentPropertySheet))
 baked_query_sids += lambda q: q.filter(CurrentPropertySheet.rid.in_(bindparam('rids', expanding=True)))
 
 
+class PickStorage(object):
+    """
+    Class that directs storage methods to write storage (RDBStorage) or read
+    storage (ElasticSearchStorage)
+    """
+    def __init__(self, write, read, registry):
+        self.write = write
+        self.read = read
+        self.registry = registry
+        self.used_datastores = {
+            'database': self.write,
+            'elasticsearch': self.read
+        }
+
+    def storage(self, datastore=None):
+        """
+        Choose which storage to use.
+        1. First check `request.datastore` to see if using self.read
+        2. Check `datastore` parameter to see if a certain storage is forced
+        3. If neither 1. or 2. result in a storage, use self.write
+        """
+        # usually check the datastore attribute on request (set on GET/HEAD)
+        request = get_current_request()
+        if self.read and request and request.datastore == 'elasticsearch':
+            return self.read
+
+        # check the datastore specified by Connection (not always used)
+        if datastore is not None:
+            if datastore in self.used_datastores:
+                if self.used_datastores[datastore] is None:
+                    raise HTTPInternalServerError('Forced datastore %s is not'
+                                                  ' configured' % datastore)
+                return self.used_datastores[datastore]
+            else:
+                raise HTTPInternalServerError('Invalid forced datastore %s. Must be one of: %s'
+                                              % (datastore, list(self.used_datastores.keys())))
+        # return write as a fallback
+        return self.write
+
+    def get_by_uuid(self, uuid, datastore=None):
+        """
+        Get write/read model by uuid
+        """
+        storage = self.storage(datastore)
+        model = storage.get_by_uuid(uuid)
+        # unless forcing ES datastore, check write storage if not found in read
+        if datastore == 'database' and storage is self.read:
+            if model is None:
+                return self.write.get_by_uuid(uuid)
+        return model
+
+    def get_by_unique_key(self, unique_key, name, datastore=None):
+        """
+        Get write/read model by given unique key with value (name)
+        """
+        storage = self.storage(datastore)
+        model = storage.get_by_unique_key(unique_key, name)
+        # unless forcing ES datastore, check write storage if not found in read
+        if datastore == 'database' and storage is self.read:
+            if model is None:
+                return self.write.get_by_unique_key(unique_key, name)
+        return model
+
+    def get_by_json(self, key, value, item_type, default=None, datastore=None):
+        """
+        Get write/read model by given key:value
+        """
+        storage = self.storage(datastore)
+        model = storage.get_by_json(key, value, item_type)
+        # unless forcing ES datastore, check write storage if not found in read
+        if datastore == 'database' and storage is self.read:
+            if model is None:
+                return self.write.get_by_json(key, value, item_type)
+        return model
+
+    def purge_uuid(self, rid, item_type=None):
+        """
+        Attempt to purge an item by given resource id (rid), completely
+        removing all propsheets, links, and keys from the DB. If read storage
+        is configured, will check to ensure no items link to the given item
+        and also remove the given item from Elasticsearch
+        """
+        log.warning('PURGE: purging %s' % rid)
+        # requires ES for searching item links
+        if self.read:
+            # model and max_sid are used later, in second `if self.read` block
+            model = self.get_by_uuid(rid)
+            if not item_type:
+                item_type = model.item_type
+            max_sid = model.max_sid
+            links_to_item = self.find_uuids_linked_to_item(rid)
+            if len(links_to_item) > 0:
+                raise HTTPLocked(
+                    detail="Cannot purge item as other items still link to it",
+                    comment=links_to_item
+                )
+
+            # delete item from ES and mirrored ES, and queue reindexing
+            self.read.purge_uuid(rid, item_type, max_sid)
+
+        # delete the item from DB
+        self.write.purge_uuid(rid)
+
+    def get_rev_links(self, model, rel, *item_types):
+        """
+        Return a list of reverse links for the given model and item types using
+        a certain reverse link type (rel)
+        """
+        return self.storage().get_rev_links(model, rel, *item_types)
+
+    def __iter__(self, *item_types):
+        """
+        Return a generator that yields all uuids for given item types
+        """
+        return self.storage().__iter__(*item_types)
+
+    def __len__(self, *item_types):
+        """
+        Return an integer count of number of items among given item types
+        """
+        return self.storage().__len__(*item_types)
+
+    def create(self, item_type, uuid):
+        """
+        Always use self.write to create Resource model. Responsible for
+        generating the initial DB entries for the item, regardless of storage
+        used
+        """
+        return self.write.create(item_type, uuid)
+
+    def update(self, model, properties=None, sheets=None, unique_keys=None,
+               links=None, datastore=None):
+        """
+        model should always be write storage.Resource. If storage used is read,
+        then this will both update DB tables and the item properties in ES
+        """
+        storage = self.storage(datastore)
+        if storage is self.read:
+            # must update links and such in write RDS. However, don't update
+            # properties and sheets, as those are exclusively stored in ES.
+            # Still call `storage.update` below to update contents of ES doc
+            self.write.update(model, {}, None, unique_keys, links)
+
+        return storage.update(model, properties, sheets, unique_keys, links)
+
+    def get_sids_by_uuids(self, uuids):
+        """
+        Return a dict containing current sids keyed by uuid for given uuids
+        Only functional with self.write
+        """
+        return self.write.get_sids_by_uuids(uuids)
+
+    def get_by_uuid_direct(self, uuid, item_type, default=None):
+        """
+        Get the ES document by uuid directly for Elasticsearch
+        Only functional with self.read
+        """
+        if self.read:
+            # must pass registry for access to settings
+            return self.read.get_by_uuid_direct(uuid, item_type)
+
+        return self.write.get_by_uuid_direct(uuid, item_type, default)
+
+    def find_uuids_linked_to_item(self, uuid):
+        """
+        Returns a list of info about other items linked to item with given uuid.
+        See esstorage.ElasticSearchStorage.find_uuids_linked_to_item
+        Only functional with self.read
+        """
+        if self.read:
+            return self.read.find_uuids_linked_to_item(uuid)
+
+        return self.write.find_uuids_linked_to_item(uuid)
+
+
+
 class RDBStorage(object):
+    """
+    Storage class used to interface with the relational database.
+    Corresponds to PickStorage.write
+    """
     batchsize = 1000
 
     def __init__(self, DBSession):
@@ -105,7 +327,7 @@ class RDBStorage(object):
             return default
         return model
 
-    def get_by_uuid_direct(self, rid, index_name, item_type, default=None):
+    def get_by_uuid_direct(self, rid, item_type, default=None):
         """
         This method is meant to only work with ES, so return None (default)
         for the DB implementation
@@ -119,6 +341,13 @@ class RDBStorage(object):
             default
         """
         return default
+
+    def find_uuids_linked_to_item(self, rid):
+        """
+        This method is meant to only work with ES, so return empty list for
+        DB implementation. See ElasticSearchStorage.find_uuids_linked_to_item
+        """
+        return []
 
     def get_by_unique_key(self, unique_key, name, default=None):
         session = self.DBSession()
@@ -174,7 +403,7 @@ class RDBStorage(object):
     def get_max_sid(self):
         """
         Return the current max sid from the `current_propsheet` table.
-        Not specific to a given uuid (i.e. rid)
+        Not specific to a given uuid (i.e. rid). If no sid found, return 0
 
         Returns:
             int: maximum sid found
@@ -182,7 +411,7 @@ class RDBStorage(object):
         session = self.DBSession()
         # first element of the first result or None if no rows present.
         # If multiple rows are returned, raises MultipleResultsFound.
-        data = session.query(func.max(CurrentPropertySheet.sid)).scalar()
+        data = session.query(func.max(CurrentPropertySheet.sid)).scalar() or 0
         return data
 
     def __iter__(self, *item_types):
@@ -400,7 +629,8 @@ class S3BlobStorage(object):
 
     def store_blob(self, data, download_meta, blob_id=None):
         """
-        Create a new s3 key = blob_id and upload the contents
+        Create a new s3 key = blob_id
+        upload the contents and return the meta in download_meta
 
         Args:
             data: raw blob to store
@@ -461,8 +691,9 @@ class S3BlobStorage(object):
 
 
 class Key(Base):
-    ''' indexed unique tables for accessions and other unique keys
-    '''
+    """
+    indexed unique tables for accessions and other unique keys
+    """
     __tablename__ = 'keys'
 
     # typically the field that is unique, i.e. accession
@@ -499,8 +730,9 @@ class Link(Base):
 
 
 class PropertySheet(Base):
-    '''A triple describing a resource
-    '''
+    """
+    A triple describing a resource
+    """
     __tablename__ = 'propsheets'
     __table_args__ = (
         schema.ForeignKeyConstraint(
@@ -544,8 +776,10 @@ class CurrentPropertySheet(Base):
 
 
 class Resource(Base):
-    '''Resources are described by multiple propsheets
-    '''
+    """
+    Resources are described by multiple propsheets
+    """
+    used_datastore = 'database'
     __tablename__ = 'resources'
     rid = Column(UUID, primary_key=True)
     item_type = Column(types.String, nullable=False)
@@ -608,8 +842,10 @@ class Resource(Base):
 
     @property
     def max_sid(self):
-        # data = session.query(func.max(CurrentPropertySheet.sid)).scalar()
-        return _DBSESSION.query(func.max(CurrentPropertySheet.sid)).scalar()
+        """
+        See `RDBStorage.get_max_sid`
+        """
+        return _DBSESSION.query(func.max(CurrentPropertySheet.sid)).scalar() or 0
 
     def used_for(self, item):
         pass

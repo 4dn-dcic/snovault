@@ -8,20 +8,12 @@
         "uuid": {
             "type": "string"
         },
-        "target": {
-            "type": "string",
-            "linkTo": "TestingLinkTargetSno"
-        },
-        "target_es": {
-            "type": "string",
-            "linkTo": "TestingLinkTargetElasticSearch"
+        "status": {
+            "type": "string"
         },
         "ppp": {
             "type": "string",
             "linkTo": "TestingPostPutPatchSno"
-        },
-        "status": {
-            "type": "string"
         }
     },
     "additionalProperties": false
