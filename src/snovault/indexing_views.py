@@ -16,7 +16,7 @@ from .interfaces import STORAGE
 from .elasticsearch.indexer_utils import find_uuids_for_indexing
 from .embed import make_subrequest
 from .interfaces import STORAGE
-from .resources import Item, calc_principals
+from .resources import Item
 from .util import debug_log
 from .validation import ValidationFailure
 
