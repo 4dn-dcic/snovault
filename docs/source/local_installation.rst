@@ -9,14 +9,13 @@ Step 0: Obtain AWS keys. These will need to added to your environment variables 
 
 Step 1: Verify that homebrew is working properly::
 
-    $ sudo brew doctor
+    $ brew doctor
 
 
 Step 2: Install or update dependencies::
 
     $ brew install libevent libmagic libxml2 libxslt openssl postgresql graphviz
     $ brew install freetype libjpeg libtiff littlecms webp  # Required by Pillow
-    $ brew tap homebrew/versions
     $ brew install elasticsearch@5.6
 
 If you need to update dependencies::

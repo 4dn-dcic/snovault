@@ -48,9 +48,8 @@ class ManagerLRUCache(object):
 
     def __delitem__(self, key):
         cache = self.cache
-        if cache is None:
-            return
-        del self.cache[key]
+        if cache is not None:
+            del cache[key]
 
     # ISynchronizer
 

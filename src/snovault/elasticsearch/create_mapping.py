@@ -1108,7 +1108,7 @@ def run(app, collections=None, dry_run=False, check_first=False, skip_indexing=F
                     continue
         start = timer()
         mapping = create_mapping_by_type(collection_name, registry)
-        mapping_time =timer() - start
+        mapping_time = timer() - start
         start = timer()
         namespaced_index = get_namespaced_index(app, collection_name)
         build_index(app, es, namespaced_index, collection_name, mapping, uuids_to_index,

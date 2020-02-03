@@ -11,6 +11,7 @@ from .interfaces import (
 )
 from .indexer_utils import get_namespaced_index, find_uuids_for_indexing
 from .create_mapping import SEARCH_MAX
+from ..storage import register_storage
 from dcicutils import es_utils, ff_utils
 import structlog
 
@@ -18,7 +19,6 @@ log = structlog.getLogger(__name__)
 
 
 def includeme(config):
-    from ..storage import register_storage
     registry = config.registry
     # IMPORTANT: update read storage on PickStorage created in storage.py
     # Without `register_storage` call, cannot read from ES in the portal

@@ -133,7 +133,7 @@ def cached_view_expand(context, request):
 
 
 @view_config(context=ICachedItem, permission='index', request_method='GET',
-             name='index-data', )
+             name='index-data')
 def cached_index_data(context, request):
     """
     Must generate this view because it's not stored in ES source

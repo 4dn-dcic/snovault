@@ -115,14 +115,13 @@ def purge_item(context, request):
     have been removed. Requires that the status of the item == 'deleted',
     otherwise will throw a validation failure
     """
-    from snovault.elasticsearch.indexer_utils import get_namespaced_index
     item_type = context.collection.type_info.item_type
     item_uuid = str(context.uuid)
     if context.properties.get('status') != 'deleted':
         msg = (u'Item status must equal deleted before purging from DB.' +
                ' It currently is %s' % context.properties.get('status'))
         raise ValidationFailure('body', ['status'], msg)
-    request.registry[STORAGE].purge_uuid(item_uuid, item_type)
+    request.registry[STORAGE].purge_uuid(rid=item_uuid, item_type=item_type)
     return True
 
 
