@@ -2,6 +2,7 @@ from snovault import Item, Root, CONNECTION
 from snovault.elasticsearch.indexer_utils import get_uuids_for_types
 from past.builtins import basestring
 from pyramid.view import view_config
+from .util import debug_log
 
 
 def includeme(config):
@@ -44,6 +45,7 @@ def item_jsongraph(context, properties):
 
 
 @view_config(context=Root, request_method='GET', name='jsongraph')
+@debug_log
 def jsongraph(context, request):
     conn = request.registry[CONNECTION]
     cache = {

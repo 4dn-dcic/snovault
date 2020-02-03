@@ -70,7 +70,8 @@ def app_settings(wsgi_server_host_port, elasticsearch_server, postgresql_server,
 
     return settings
 
-@pytest.yield_fixture(scope='session', params=[True, False])
+
+@pytest.yield_fixture(scope='session', params=[False, True])
 def app(app_settings, request):
     from snovault import main
     if request.param: # run tests both with and without mpindexer
@@ -177,6 +178,7 @@ def test_indexer_queue_adds_telemetry_id(app):
 
 
 @pytest.mark.es
+@pytest.mark.flaky
 def test_indexer_queue(app):
     indexer_queue_mirror = app.registry[INDEXER_QUEUE_MIRROR]
     # this is only set up for webprod/webprod2
@@ -225,7 +227,7 @@ def test_indexer_queue(app):
 def test_queue_indexing_telemetry_id(app, testapp):
     indexer_queue = app.registry[INDEXER_QUEUE]
     ordered_queue_targets = [targ for targ in indexer_queue.queue_targets]
-    assert ordered_queue_targets == ['primary', 'secondary']
+    assert ordered_queue_targets == ['primary', 'secondary', 'dlq']
     indexer_queue.clear_queue()
     testapp.post_json(TEST_COLL + '?telemetry_id=test_telem', {'required': ''})
     time.sleep(2)
@@ -248,6 +250,8 @@ def test_queue_indexing_telemetry_id(app, testapp):
     assert tries_left > 0
     # delete the messages
     for target in indexer_queue.queue_targets:
+        if 'dlq' in target:  # skip if dlq
+            continue
         received = indexer_queue.receive_messages(target_queue=target)
         assert len(received) > 0
         for msg in received:
@@ -300,6 +304,39 @@ def test_queue_indexing_after_post_patch(app, testapp):
     assert 'sid' in msg_body
     assert msg_body['sid'] > post_sid
     indexer_queue.delete_messages(received)
+
+
+@pytest.mark.flaky
+def test_dlq_to_primary(app, anontestapp, indexer_testapp):
+    """
+    Tests the dlq_to_primary route
+    Post some messages to the DLQ, hit the route, receive
+    those same messages from the primary queue
+    """
+    indexer_queue = app.registry[INDEXER_QUEUE]
+    indexer_queue.clear_queue()
+    test_bodies = ["destined for primary!", "i am also destined!"]
+    success, failed = indexer_queue.add_uuids(app.registry, test_bodies,
+                                        target_queue='dlq')
+    assert not failed
+    assert len(success) == 2
+    res = indexer_testapp.get('/dlq_to_primary').json
+    assert res['number_migrated'] == 2
+    assert res['number_failed'] == 0
+    msgs = indexer_queue.receive_messages()  # receive from primary
+    assert len(msgs) == 2
+    for msg in msgs:
+        # sqs msg reading is super busted so the below is necessary
+        body = json.loads(json.loads(msg['Body'])['Body'])['uuid']
+        assert body in test_bodies
+
+    # hit route with no messages, should see 0 migrated
+    res = indexer_testapp.get('/dlq_to_primary').json
+    assert res['number_migrated'] == 0
+    assert res['number_failed'] == 0
+
+    # hit route from unauthenticated testapp, should fail
+    anontestapp.get('/dlq_to_primary', status=403)
 
 
 @pytest.mark.flaky
@@ -1076,6 +1113,8 @@ def test_indexing_esstorage(app, testapp, indexer_testapp):
     # db get_by_uuid direct returns None by design
     db_res_direct = app.registry[STORAGE].write.get_by_uuid_direct(test_uuid, TEST_TYPE)
     assert db_res_direct == None
+    # delete the test item (should throw no exceptions)
+    esstorage.purge_uuid(test_uuid, namespaced_test_type)
 
 
 @pytest.mark.flaky(max_runs=2, rerun_filter=delay_rerun)

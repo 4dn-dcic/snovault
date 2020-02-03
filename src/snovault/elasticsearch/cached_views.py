@@ -6,9 +6,11 @@ from Elasticsearch. See esstorage.CachedModel and the following docs:
 https://zopeinterface.readthedocs.io/en/stable/api.html#zope.interface.declarations.alsoProvides
 """
 
-from itertools import chain
+import sys
+
 from pyramid.httpexceptions import HTTPForbidden
 from pyramid.view import view_config
+
 from .interfaces import ICachedItem
 from ..resource_views import (
     item_view_embedded,
@@ -17,12 +19,24 @@ from ..resource_views import (
     item_view_expand
 )
 from ..indexing_views import item_index_data
+from ..util import debug_log
 
 
 def includeme(config):
     config.scan(__name__)
 
 
+@view_config(context=ICachedItem, request_method='GET', name='embedded')
+@debug_log
+def cached_view_embedded(context, request):
+    source = context.model.source
+    allowed = set(source['principals_allowed']['view'])
+    if allowed.isdisjoint(request.effective_principals):
+        raise HTTPForbidden()
+    return filter_embedded(source['embedded'], request.effective_principals)
+
+
+_skip_fields = ['@type', 'principals_allowed']
 def filter_embedded(embedded, effective_principals):
     """
     Filter the embedded items by principals_allowed, replacing them with
@@ -78,6 +92,7 @@ def cached_view_embedded(context, request):
 
 @view_config(context=ICachedItem, permission='view', request_method='GET',
              name='object')
+@debug_log
 def cached_view_object(context, request):
     """
     Use the 'object' view that is stored the ElasticSearch unless we

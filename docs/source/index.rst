@@ -12,14 +12,23 @@ Since Snovault is used for multiple deployments across a couple projects, we use
 
 To get started, read the following documentation on setting up and developing Snovault:
 
+    $ bin/test
+
+
 .. toctree::
-  :titlesonly:
-  local_installation
-  testing
-  resources
-  storage_overview
-  traversal
-  resource_views
-  es_mapping
-  es_indexing
-  snowflakes
+   :maxdepth: 2
+   :hidden:
+   
+   index
+   overview
+   attachment
+   auth
+   custom-travis
+   database
+   embedding-and-indexing
+   es-mapping
+   invalidation
+   object-lifecycle
+   search_info
+   snowflakes
+   testing

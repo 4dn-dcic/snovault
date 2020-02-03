@@ -1,17 +1,18 @@
-from snovault import (
-    TYPES,
+import sys
+from urllib.parse import (
+    quote,
+    urlparse,
 )
+
 from pyramid.events import (
     ApplicationCreated,
     subscriber,
 )
 from pyramid.httpexceptions import HTTPNotFound
 from pyramid.view import view_config
-from urllib.parse import (
-    quote,
-    urlparse,
-)
-from .util import ensurelist
+
+from snovault import TYPES
+from .util import ensurelist, debug_log
 
 
 def includeme(config):
@@ -282,6 +283,7 @@ def ontology_from_schema(schema, prefix, term_path, item_type, class_name, base_
 
 @view_config(route_name='jsonld_context_no_slash', request_method='GET')
 @view_config(route_name='jsonld_context', request_method='GET')
+@debug_log
 def jsonld_context(context, request):
     """
     Basically a view that list all the terms used on the site in JSON-ld format
@@ -290,6 +292,7 @@ def jsonld_context(context, request):
 
 
 @view_config(route_name='jsonld_term', request_method='GET')
+@debug_log
 def jsonld_term(context, request):
     ontology = request.registry['snovault.jsonld.context']
     term = request.matchdict['term']

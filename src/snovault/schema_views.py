@@ -1,13 +1,16 @@
 from collections import OrderedDict
+from itertools import chain
+from urllib.parse import urlparse
+
 from pyramid.httpexceptions import HTTPNotFound
 from pyramid.view import view_config
+
 from .etag import etag_app_version_effective_principals
 from .interfaces import (
     COLLECTIONS,
     TYPES,
 )
-from urllib.parse import urlparse
-from itertools import chain
+from .util import debug_log
 
 
 def includeme(config):
@@ -70,6 +73,7 @@ def _annotated_schema(type_info, request):
 
 @view_config(route_name='schema', request_method='GET',
              decorator=etag_app_version_effective_principals)
+@debug_log
 def schema(context, request):
     """
     /profiles/{type_name}.json -- view for the profile of a specific item type
@@ -94,8 +98,10 @@ def schema(context, request):
     return _annotated_schema(type_info, request)
 
 
+
 @view_config(route_name='schemas', request_method='GET',
              decorator=etag_app_version_effective_principals)
+@debug_log
 def schemas(context, request):
     """
     /profiles/ view for viewing all schemas. Leverages the TypeInfo objects

@@ -1,27 +1,31 @@
+import copy
+import datetime
+import json
+import time
+import sys
+from timeit import default_timer as timer
+
+import structlog
 from elasticsearch.exceptions import (
     ConflictError,
     ConnectionError,
     TransportError,
 )
-from ..embed import MissingIndexItemException
 from pyramid.view import view_config
 from urllib3.exceptions import ReadTimeoutError
-from .interfaces import (
-    ELASTIC_SEARCH,
-    INDEXER,
-    INDEXER_QUEUE
-)
+
 from snovault import (
     DBSESSION,
     STORAGE
 )
 from .indexer_utils import get_namespaced_index, find_uuids_for_indexing
-import datetime
-import structlog
-import time
-import copy
-import json
-from timeit import default_timer as timer
+from .interfaces import (
+    ELASTIC_SEARCH,
+    INDEXER,
+    INDEXER_QUEUE
+)
+from ..embed import MissingIndexItemException
+from ..util import debug_log
 
 log = structlog.getLogger(__name__)
 
@@ -63,7 +67,8 @@ def check_sid(sid, max_sid):
 
 
 @view_config(route_name='index', request_method='POST', permission="index")
-def index(request):
+@debug_log
+def index(context, request):
     # Setting request.datastore here only works because routed views are not traversed.
     request.datastore = 'database'
     record = request.json.get('record', False)  # if True, make a record in es
@@ -77,7 +82,7 @@ def index(request):
         index_start_time = datetime.datetime.now()
         index_start_str = index_start_time.isoformat()
 
-        # create indexing record, with _id = indexing_start_time timestamp
+        # create indexing record, with _id equal to starting timestamp
         indexing_record = {
             'uuid': index_start_str,
             'indexing_status': 'started',
@@ -93,7 +98,7 @@ def index(request):
             indexing_content['initial_queue_status'] = indexer.queue.number_of_messages()
         indexing_record['indexing_content'] = indexing_content
         indexing_record['indexing_started'] = index_start_str
-        indexing_counter = [0]  # do this so I can pass it as a reference
+        indexing_counter = [0]
         # actually index
         # try to ensure ES is reasonably up to date
         es.indices.refresh(index=namespace_star)
@@ -105,8 +110,10 @@ def index(request):
         # Enabling the line below adds ~1.5 second overhead before and after indexing
         # es.indices.put_settings(index='_all', body={'index' : {'refresh_interval': '-1'}})
 
-        # prepare_for_indexing
+        # do the indexing!
         indexing_record['errors'] = indexer.update_objects(request, indexing_counter)
+
+        # get some final info for the record
         index_finish_time = datetime.datetime.now()
         indexing_record['indexing_finished'] = index_finish_time.isoformat()
         indexing_record['indexing_elapsed'] = str(index_finish_time - index_start_time)
@@ -150,9 +157,11 @@ class Indexer(object):
         self.es = registry[ELASTIC_SEARCH]
         self.queue = registry[INDEXER_QUEUE]
 
-    def update_objects(self, request, counter=None):
+    def update_objects(self, request, counter):
         """
-        Top level update routing
+        Top level routing between `Indexer.update_objects_sync` (synchronous)
+        and `Indexer.update_objects_queue` (asynchronous, usually used).
+        Also sets isolation level for the DB connection
         """
         session = request.registry[DBSESSION]()
         connection = session.connection()
@@ -211,7 +220,12 @@ class Indexer(object):
 
     def update_objects_queue(self, request, counter):
         """
-        Used with the queue
+        Used for asynchronous indexing with the indexer queues. Some notes:
+        - Keep track of `max_sid` of the transaction scope to defer out-of-scope
+          indexing to a new run.
+        - Iterate through queue messages, calling `update_object` on each
+        - Handle deleting and recycling messages to the queues on errors/defers
+        - Handles getting messages by priority with `get_messages_from_queue`
         """
         errors = []
         # hold uuids that will be used to find secondary uuids
@@ -281,7 +295,7 @@ class Indexer(object):
                     # if non-strict, adding will queue associated items to secondary
                     if msg_body['strict'] is False:
                         non_strict_uuids.add(msg_uuid)
-                    if counter: counter[0] += 1  # do not increment on error
+                    counter[0] += 1  # do not increment on error
                     to_delete.append(msg)
 
                 # delete messages when we have the right number
@@ -330,14 +344,18 @@ class Indexer(object):
         Used with sync uuids (simply loop through)
         sync_uuids is a list of string uuids. Use timestamp of index run
         all uuids behave here as strict == true
+
+        NOTE: This method does NOT take care of invalidation of items linked to
+        indexed items. It is assumed that ALL items you want to index, including
+        linked items are passed through the `sync_uuids` parameter
         """
         errors = []
         for i, uuid in enumerate(sync_uuids):
             error = self.update_object(request, uuid)
-            if error is not None:  # don't increment counter on an error
+            if error is not None:
                 errors.append(error)
-            elif counter:
-                counter[0] += 1
+            else:
+                counter[0] += 1  # don't increment counter on an error
         return errors
 
 
@@ -367,9 +385,12 @@ class Indexer(object):
 
         index_data_query = '/%s/@@index-data' % uuid
         try:
-            # check sid first -- will raise SidException if invalid
-            if sid is not None:
-                check_sid(sid, max_sid)  # max_sid should be set already
+            # check sid first against max_sid from `update_objects_queue`
+            # Raises SidException if invalid
+            if sid and max_sid:
+                check_sid(sid, max_sid)
+
+            # invoke subrequest to get contents to index
             result = request.embed(index_data_query, as_user='INDEXER')
             duration = timer() - start
             # add total duration to indexing_stats in document
@@ -419,10 +440,11 @@ class Indexer(object):
                     request_timeout=30
                 )
             except ConflictError:
+                # sid of found document is greater than sid of indexed document
+                # this may be somewhat common and is not harmful
+                # do not return an error so item is removed from queue
                 duration = timer() - start
                 log.warning('Conflict indexing', sid=result['sid'], duration=duration, cat=cat)
-                # this may be somewhat common and is not harmful
-                # do not return an error so the item is removed from the queue
                 return
             except (ConnectionError, ReadTimeoutError, TransportError) as e:
                 duration = timer() - start
@@ -434,12 +456,9 @@ class Indexer(object):
                 last_exc = repr(e)
                 break
             else:
+                # success! Do not return an error so item is removed from queue
                 duration = timer() - start
                 log.info('Time to index', duration=duration, cat=cat)
                 return
-
+        # returning an error message means item did not index
         return {'error_message': last_exc, 'time': curr_time, 'uuid': str(uuid)}
-
-
-    def shutdown(self):
-        pass

@@ -1,24 +1,28 @@
 ### Class to manage the items for indexing
 # First round will use a standard SQS queue from AWS without Elasticache.
 
-import boto3
-import json
-import math
-import structlog
-import socket
-import time
 import datetime
-from pyramid.view import view_config
-from pyramid.decorator import reify
-from .interfaces import INDEXER_QUEUE, INDEXER_QUEUE_MIRROR
-from .indexer_utils import get_uuids_for_types
+import json
+import socket
+import sys
+import time
 from collections import OrderedDict
 
+import boto3
+import structlog
+from pyramid.view import view_config
+
+from .indexer_utils import get_uuids_for_types
+from .interfaces import INDEXER_QUEUE, INDEXER_QUEUE_MIRROR
+from ..util import debug_log
+
 log = structlog.getLogger(__name__)
+
 
 def includeme(config):
     config.add_route('queue_indexing', '/queue_indexing')
     config.add_route('indexing_status', '/indexing_status')
+    config.add_route('dlq_to_primary', '/dlq_to_primary')
     env_name = config.registry.settings.get('env.name')
     config.registry[INDEXER_QUEUE] = QueueManager(config.registry)
     # INDEXER_QUEUE_MIRROR is used because webprod and webprod2 share a DB
@@ -36,7 +40,8 @@ def includeme(config):
 
 
 @view_config(route_name='queue_indexing', request_method='POST', permission="index")
-def queue_indexing(request):
+@debug_log
+def queue_indexing(context, request):
     """
     Endpoint to queue items for indexing. Takes a POST request with index
     priviliges which should contain either a list of uuids under "uuids" key
@@ -94,7 +99,8 @@ def queue_indexing(request):
 
 
 @view_config(route_name='indexing_status', request_method='GET')
-def indexing_status(request):
+@debug_log
+def indexing_status(context, request):
     """
     Endpoint to check what is currently on the queue. Uses GET requests
     """
@@ -110,6 +116,21 @@ def indexing_status(request):
             response[queue] = numbers[queue]
         response['display_title'] = 'Indexing Status'
         response['status'] = 'Success'
+    return response
+
+
+@view_config(route_name='dlq_to_primary', request_method='GET', permission='index')
+@debug_log
+def dlq_to_primary(context, request):
+    """
+    Endpoint to move all uuids on the DLQ to the primary queue
+    """
+    queue_indexer = request.registry[INDEXER_QUEUE]
+    dlq_messages = queue_indexer.receive_messages(target_queue='dlq')
+    response = {}
+    failed = queue_indexer.send_messages(dlq_messages) if dlq_messages else []
+    response['number_failed'] = len(failed)
+    response['number_migrated'] = len(dlq_messages) - len(failed)
     return response
 
 
@@ -166,7 +187,7 @@ class QueueManager(object):
                 'VisibilityTimeout': '600',  # increase if messages going to dlq
                 'MessageRetentionPeriod': '1209600',  # 14 days, in seconds
                 'ReceiveMessageWaitTimeSeconds': '2',  # 2 seconds of long polling
-            }
+            },
         }
         # initialize the queue and dlq here, but not on mirror queue
         if not mirror_env:
@@ -181,7 +202,8 @@ class QueueManager(object):
         # short names for queues. Use OrderedDict to preserve order in Py < 3.6
         self.queue_targets = OrderedDict([
             ('primary', self.queue_url),
-            ('secondary', self.second_queue_url)
+            ('secondary', self.second_queue_url),
+            ('dlq', self.dlq_url),
         ])
 
     def add_uuids(self, registry, uuids, strict=False, target_queue='primary',
