@@ -1,6 +1,7 @@
 import functools
 import json
 import sys
+import datetime
 from copy import deepcopy
 
 import structlog
@@ -16,6 +17,43 @@ log = structlog.getLogger(__name__)
 ###################
 # Misc. utilities #
 ###################
+
+
+class TimedCacheTuple(object):
+    """ A 3 tuple containing an arbitrary value, a time and a function 
+        pointer used to compute that value
+    """
+
+    def __init__(self, func):
+        self.time = datetime.datetime.now()  # relative should be ok here
+        self.func = func
+        self.val = func()
+
+
+class TimedCache(object):
+    """ 
+    A cache that stores key, value pairs where the key is an
+    arbitrary ID and the value is a the above class consisting of the value, 
+    insertion time and function pointer to recompute the value. 
+    TimedCache has a global TTL applied to all items in the cache.
+    """
+
+    def __init__(self, ttl):
+        """ Initializes the cache setting the TTL and underlying structure
+
+            :args ttl: time-to-live of all values in the cache
+        """
+        self.ttl = ttl
+        self.cache = {}
+
+    def insert(self, key, func):
+        self.cache[key] = TimedCacheTuple(func)
+    
+    def get(self, key):
+        return self.cache.get(key)
+    
+    def __getitem__(self, key):
+        return self.cache.get(key).val  # return only the value
 
 
 def debug_log(func):
