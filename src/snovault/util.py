@@ -55,6 +55,10 @@ class TimedCache(object):
     def __getitem__(self, key):
         return self.cache.get(key).val  # return only the value
 
+    def update(self):
+        for k, v in self.cache.items():
+            self.insert(k, v.func)  
+
 
 def debug_log(func):
     """ Decorator that adds some debug output of the view to log that we got there """

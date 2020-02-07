@@ -90,6 +90,9 @@ class ElasticSearchStorage(object):
         self.registry = registry
         self.es = registry[ELASTIC_SEARCH]
         self.index = get_namespaced_index(registry, '*')
+        if self.registry.settings.get('mirror.env.name'):  # mirror info does not change. Cache it
+            mirror_env = self.registry.settings['mirror.env.name']
+            self.mirror_health = ff_utils.get_health_page(ff_env=mirror_env)
 
     def _one(self, search):
         # execute search and return a model if there is one hit
@@ -250,24 +253,23 @@ class ElasticSearchStorage(object):
         self.registry[INDEXER].find_and_queue_secondary_items(set([rid]), set(), sid=max_sid)
 
         # if configured, delete the item from the mirrored ES as well
-        if self.registry.settings.get('mirror.env.name'):
+        if self.mirror_health:
             mirror_env = self.registry.settings['mirror.env.name']
             use_aws_auth = self.registry.settings.get('elasticsearch.aws_auth')
-            mirror_health = ff_utils.get_health_page(ff_env=mirror_env)
             log.info('PURGE: attempting to purge %s from mirror storage %s' % (rid, mirror_env))
             # if we could not get mirror health, bail here
-            if 'error' in mirror_health:
+            if 'error' in self.mirror_health:
                 log.error('PURGE: Tried to purge %s from mirror storage but couldn\'t get health page. Is staging up?' % rid)
-                log.error('PURGE: Mirror health error: %s' % mirror_health)
+                log.error('PURGE: Mirror health error: %s' % self.mirror_health)
                 return
             # make sure use_aws_auth is bool
             if not isinstance(use_aws_auth, bool):
                 use_aws_auth = True if use_aws_auth == 'true' else False
-            mirror_client = es_utils.create_es_client(mirror_health['elasticsearch'],
+            mirror_client = es_utils.create_es_client(self.mirror_health['elasticsearch'],
                                                       use_aws_auth=use_aws_auth)
             try:
                 # assume index is <namespace> + item_type
-                mirror_index = mirror_health.get('namespace', '') + item_type
+                mirror_index = self.mirror_health.get('namespace', '') + item_type
                 mirror_client.delete(id=rid, index=mirror_index, doc_type=item_type)
             except elasticsearch.exceptions.NotFoundError:
                 # Case: Not yet indexed
