@@ -41,15 +41,20 @@ class TimedCache(object):
     def __init__(self, ttl):
         """ Initializes the cache setting the TTL and underlying structure
 
-            :args ttl: time-to-live of all values in the cache
+            :args ttl: time-to-live of all values in the cache (in minutes)
         """
-        self.ttl = ttl
+        self.ttl = datetime.timedelta(minutes=ttl)
         self.cache = {}
 
     def insert(self, key, func):
         self.cache[key] = TimedCacheTuple(func)
     
     def get(self, key):
+        vals = self.cache.get(key)
+        if vals:  # if we have a value, check ttl, recompute if need be
+            if (vals.time + self.ttl) > datetime.datetime.now():
+                self.insert(key, vals.func)
+        
         return self.cache.get(key)
     
     def __getitem__(self, key):
