@@ -18,6 +18,21 @@ log = structlog.getLogger(__name__)
 ###################
 
 
+def dictionary_lookup(dictionary, key):
+    """
+    dictionary_lookup(d, k) is the same as d[k] but with more informative error reporting.
+    Note, however, that on any error (and in particular on missing key), this raises ValueError (not KeyError).
+    """
+    if not isinstance(dictionary, dict):
+        raise ValueError("%r is not a dictionary." % dictionary)
+    elif key not in dictionary:
+        # We might wish we could use KeyError, but its argument coventions and descriptive string are
+        # so broken as to really be beyond repair. Better to just identify this as bad data. -kmp 9-Feb-2020
+        raise ValueError("%r has no %r key." % (dictionary, key))
+    else:
+        return dictionary[key]
+
+
 def debug_log(func):
     """ Decorator that adds some debug output of the view to log that we got there """
     @functools.wraps(func)
