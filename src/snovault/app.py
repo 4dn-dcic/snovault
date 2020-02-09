@@ -1,19 +1,23 @@
 import base64
 import codecs
+import hashlib
 import json
 import os
+import psycopg2
+import subprocess
+import zope.sqlalchemy
 
-from pyramid.path import (
-    AssetResolver,
-    caller_package,
-)
+from pyramid.path import AssetResolver, caller_package
 from pyramid.session import SignedCookieSessionFactory
-from sqlalchemy import engine_from_config
+from pyramid.settings import asbool
+from pyramid_localroles import LocalRolesAuthorizationPolicy
+from sqlalchemy import engine_from_config, event, orm
 from webob.cookies import JSONSerializer
+from . import DBSESSION
+from .elasticsearch import APP_FACTORY
 from .json_renderer import json_renderer
-from pyramid.settings import (
-    asbool,
-)
+from .storage import Base
+
 
 STATIC_MAX_AGE = 0
 
@@ -57,8 +61,6 @@ def set_postgresql_statement_timeout(engine, timeout=20 * 1000):
     """
     Prevent Postgres waiting indefinitely for a lock.
     """
-    from sqlalchemy import event
-    import psycopg2
 
     @event.listens_for(engine, 'connect')
     def connect(dbapi_connection, connection_record):
@@ -83,12 +85,6 @@ def configure_dbsession(config, clear_data=False):
     Create a sqlalchemy engine and a session that uses it, the latter of which
     is added to the registry. Handle some extra registration
     """
-    import snovault.storage
-    import zope.sqlalchemy
-    from sqlalchemy import orm
-    from snovault import DBSESSION
-    from snovault.storage import Base
-
     settings = config.registry.settings
     DBSession = settings.pop(DBSESSION, None)
 
@@ -138,14 +134,19 @@ def session(config):
 
 
 def app_version(config):
-    import hashlib
-    import os
-    import subprocess
     try:
+        # For each of the next two subprocess calls, if there's an error, 'git' call will write to stderr,
+        # but we don't care about that output, so we have muffled it by directing it to /dev/null.
+        # If you're debugging this and want to know what's being ignored, comment out the 'stderr=' line.
+        # -kmp 8-Feb-2020
         version = subprocess.check_output(
-            ['git', '-C', os.path.dirname(__file__), 'describe']).decode('utf-8').strip()
+            ['git', '-C', os.path.dirname(__file__), 'describe'],
+            stderr=subprocess.DEVNULL,
+        ).decode('utf-8').strip()
         diff = subprocess.check_output(
-            ['git', '-C', os.path.dirname(__file__), 'diff', '--no-ext-diff'])
+            ['git', '-C', os.path.dirname(__file__), 'diff', '--no-ext-diff'],
+            stderr=subprocess.DEVNULL,
+        )
         if diff:
             version += '-patch' + hashlib.sha1(diff).hexdigest()[:7]
     except:
@@ -170,12 +171,10 @@ def main(global_config, **local_config):
         settings['persona.audiences'] += '\nhttp://%s:6543' % hostname
 
     config = Configurator(settings=settings)
-    from snovault.elasticsearch import APP_FACTORY
     config.registry[APP_FACTORY] = main  # used by mp_indexer
     config.include(app_version)
 
     config.include('pyramid_multiauth')  # must be before calling set_authorization_policy
-    from pyramid_localroles import LocalRolesAuthorizationPolicy
     # Override default authz policy set by pyramid_multiauth
     config.set_authorization_policy(LocalRolesAuthorizationPolicy())
     config.include(session)

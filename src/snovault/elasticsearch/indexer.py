@@ -14,7 +14,7 @@ from elasticsearch.exceptions import (
 from pyramid.view import view_config
 from urllib3.exceptions import ReadTimeoutError
 
-from snovault import (
+from .. import (
     DBSESSION,
     STORAGE
 )
@@ -25,7 +25,7 @@ from .interfaces import (
     INDEXER_QUEUE
 )
 from ..embed import MissingIndexItemException
-from ..util import debug_log
+from ..util import debug_log, dictionary_lookup
 
 log = structlog.getLogger(__name__)
 
@@ -253,7 +253,10 @@ class Indexer(object):
                         to_delete = []
                     continue
 
-                msg_uuid= msg_body['uuid']
+                # This rather than msg_body['uuid'] to get better error reporting
+                # in case uuid is missing from dictionary, which probably happens
+                # because the msg_body is some other kind of object entirely. -kmp 9-Feb-2020
+                msg_uuid = dictionary_lookup(msg_body, 'uuid')
                 msg_sid = msg_body['sid']
                 msg_curr_time = msg_body['timestamp']
                 msg_detail = msg_body.get('detail')
