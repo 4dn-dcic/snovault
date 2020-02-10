@@ -1359,6 +1359,7 @@ def test_elasticsearch_item_basic(app, testapp, indexer_testapp, es_based_target
     assert initial_count == after_count
 
 
+@pytest.mark.flaky(max_runs=2, rerun_filter=delay_rerun)
 def test_elasticsearch_item_with_source(app, testapp, indexer_testapp, es_based_target):
     """
     Test rev_linking with a TestingLinkTargetElasticSearch item, including
