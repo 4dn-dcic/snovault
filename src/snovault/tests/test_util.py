@@ -1,5 +1,5 @@
 import pytest
-from ..util import dictionary_lookup
+from ..util import dictionary_lookup, DictionaryKeyError
 
 def test_dictionary_lookup():
 
@@ -14,7 +14,7 @@ def test_dictionary_lookup():
     try:
         dictionary_lookup(d2, 'y')
     except Exception as e:
-        assert isinstance(e, KeyError)
+        assert isinstance(e, DictionaryKeyError)
         assert str(e) == '''{'x': 10} has no 'y' key.'''
     else:
         raise AssertionError("No exception was raised where one was expected.")
@@ -22,7 +22,7 @@ def test_dictionary_lookup():
     try:
         dictionary_lookup(17, 'z')
     except Exception as e:
-        assert isinstance(e, ValueError)
+        assert isinstance(e, DictionaryKeyError)
         assert str(e) == '''17 is not a dictionary.'''
     else:
         raise AssertionError("No exception was raised where one was expected.")
@@ -31,7 +31,7 @@ def test_dictionary_lookup():
         # String form of JSON isn't what's needed. It has to be parsed (i.e., a dict).
         dictionary_lookup(repr(d2), 'x')
     except Exception as e:
-        assert isinstance(e, ValueError)
+        assert isinstance(e, DictionaryKeyError)
         assert str(e) == '''"{'x': 10}" is not a dictionary.'''
     else:
         raise AssertionError("No exception was raised where one was expected.")

@@ -26,16 +26,17 @@ class DictionaryKeyError(KeyError):
         self._dictionary_key = key
 
     def __str__(self):
-        return "%r has no %r key." % (self._dictionary, self._dictionary_key)
+        if isinstance(self._dictionary, dict):
+            return "%r has no %r key." % (self._dictionary, self._dictionary_key)
+        else:
+            return "%r is not a dictionary." % self._dictionary
 
 
 def dictionary_lookup(dictionary, key):
     """
     dictionary_lookup(d, k) is the same as d[k] but with more informative error reporting.
     """
-    if not isinstance(dictionary, dict):
-        raise ValueError("%r is not a dictionary." % dictionary)
-    elif key not in dictionary:
+    if not isinstance(dictionary, dict) or (key not in dictionary):
         raise DictionaryKeyError(dictionary=dictionary, key=key)
     else:
         return dictionary[key]
