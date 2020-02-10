@@ -1458,6 +1458,7 @@ def test_elasticsearch_item_with_source(app, testapp, indexer_testapp, es_based_
     testapp.get(es_based_target['@id'] + '?datastore=database', status=404)
 
 
+@pytest.mark.flaky(max_runs=2, rerun_filter=delay_rerun)
 def test_elasticsearch_item_embedded_agg(app, testapp, indexer_testapp, es_based_target):
     """
     Test embedding items in TestingLinkTargetElasticSearch and using
