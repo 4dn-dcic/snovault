@@ -37,10 +37,15 @@ If you need to update dependencies::
     $ rm -rf snowflakes/eggs
 
 
-Step 3: Run buildout::
+Step 3: Run poetry::
 
-    $ python3 bootstrap.py --buildout-version 2.9.5 --setuptools-version 36.6.0
-    $ bin/buildout
+If you are initializing versions of poetry to use, or trying to upgrade:
+
+    $ poetry update
+
+Once initialized, or if you are downloading a packaged version:
+
+    $ poetry install
 
     NOTE:
     If you have issues with postgres or the python interface to it (psycogpg2) you probably need to install postgresql
