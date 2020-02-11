@@ -1,19 +1,15 @@
-from snovault.json_renderer import json_renderer
-from snovault.util import get_root_request
+import json
+import sys
+
+from aws_requests_auth.boto_utils import BotoAWSRequestsAuth
 from dcicutils.es_utils import create_es_client
 from elasticsearch.connection import RequestsHttpConnection
 from elasticsearch.serializer import SerializationError
-from pyramid.settings import (
-    asbool,
-    aslist,
-)
-from .interfaces import (
-    APP_FACTORY,
-    ELASTIC_SEARCH
-)
-import json
-import sys
-from aws_requests_auth.boto_utils import BotoAWSRequestsAuth
+from pyramid.settings import asbool, aslist
+from ..json_renderer import json_renderer
+from ..util import get_root_request
+from .interfaces import APP_FACTORY, ELASTIC_SEARCH
+
 
 PY2 = sys.version_info.major == 2
 

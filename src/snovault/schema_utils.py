@@ -1,27 +1,22 @@
-from pyramid.path import (
-    AssetResolver,
-    caller_package,
-)
-from pyramid.threadlocal import get_current_request
-from pyramid.traversal import find_resource
-import json
 import codecs
 import collections
 import copy
+import json
+
 from jsonschema_serialize_fork import (
     Draft4Validator,
     FormatChecker,
     RefResolver,
 )
+# TODO: remove these imports when RefResolverOrdered is removed
+from jsonschema_serialize_fork.compat import urlsplit, urlopen
 from jsonschema_serialize_fork.exceptions import ValidationError
+from pyramid.path import AssetResolver, caller_package
+from pyramid.threadlocal import get_current_request
+from pyramid.traversal import find_resource
 from uuid import UUID
 from .util import ensurelist
 
-# TODO: remove these imports when RefResolverOrdered is removed
-from jsonschema_serialize_fork.compat import (
-    urlsplit,
-    urlopen
-)
 
 SERVER_DEFAULTS = {}
 
@@ -121,8 +116,9 @@ def mixinSchemas(schema, resolver, key_name = 'properties'):
 
 
 def linkTo(validator, linkTo, instance, schema):
+    # TODO: Eliminate this circularity issue. -kmp 10-Feb-2020
     # avoid circular import
-    from snovault import Item, COLLECTIONS
+    from . import Item, COLLECTIONS
 
     if not validator.is_type(instance, "string"):
         return

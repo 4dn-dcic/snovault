@@ -5,46 +5,46 @@ elasticsearch running as subprocesses.
 Does not include data dependent tests
 """
 
+import json
+import os
 import pytest
 import time
-import json
+import transaction as transaction_management
 import uuid
-import yaml
-import os
 import webtest
+import yaml
+
 from datetime import datetime
-from snovault.elasticsearch.interfaces import (
-    ELASTIC_SEARCH,
-    INDEXER_QUEUE,
-    INDEXER_QUEUE_MIRROR,
-)
-from snovault import (
-    COLLECTIONS,
-    TYPES,
-    DBSESSION,
-    STORAGE
-)
-from snovault.commands.es_index_data import run as run_index_data
-from snovault.elasticsearch import create_mapping, indexer_utils
 from elasticsearch.exceptions import NotFoundError
-from snovault.elasticsearch.create_mapping import (
+from pyramid.paster import get_appsettings
+from pyramid.traversal import traverse
+from sqlalchemy import MetaData
+from zope.sqlalchemy import mark_changed
+from .. import COLLECTIONS, DBSESSION, STORAGE, TYPES, main, util
+from ..commands.es_index_data import run as run_index_data
+from ..elasticsearch import create_mapping, indexer_utils
+from ..elasticsearch.create_mapping import (
+    build_index_record,
+    check_and_reindex_existing,
+    check_if_index_exists,
+    compare_against_existing_mapping,
+    confirm_mapping,
+    create_mapping_by_type,
+    index_settings,
     run,
     type_mapping,
-    create_mapping_by_type,
-    build_index_record,
-    check_if_index_exists,
-    confirm_mapping,
-    compare_against_existing_mapping
 )
-from snovault.elasticsearch.indexer import (
-    check_sid,
-    SidException
-)
-from pyramid.paster import get_appsettings
-from snovault.tests.pyramidfixtures import dummy_request
-from snovault.tests.toolfixtures import registry, root, elasticsearch
+from ..elasticsearch.indexer import check_sid, SidException
+from ..elasticsearch.interfaces import ELASTIC_SEARCH, INDEXER_QUEUE, INDEXER_QUEUE_MIRROR
+from .pyramidfixtures import dummy_request
+from .testappfixtures import _app_settings
+from .testing_views import TestingLinkSourceSno
+from .toolfixtures import registry, root, elasticsearch
+
 
 pytestmark = [pytest.mark.indexing]
+
+
 TEST_COLL = '/testing-post-put-patch-sno/'
 TEST_TYPE = 'testing_post_put_patch_sno'  # use one collection for testing
 
@@ -54,7 +54,6 @@ create_mapping.NUM_SHARDS = 1
 
 @pytest.fixture(scope='session')
 def app_settings(wsgi_server_host_port, elasticsearch_server, postgresql_server, aws_auth):
-    from .testappfixtures import _app_settings
     settings = _app_settings.copy()
     settings['create_tables'] = True
     settings['elasticsearch.server'] = elasticsearch_server
@@ -73,7 +72,6 @@ def app_settings(wsgi_server_host_port, elasticsearch_server, postgresql_server,
 
 @pytest.yield_fixture(scope='session', params=[False, True])
 def app(app_settings, request):
-    from snovault import main
     if request.param: # run tests both with and without mpindexer
         app_settings['mpindexer'] = True
     app = main({}, **app_settings)
@@ -91,9 +89,6 @@ def setup_and_teardown(app):
     Run create mapping and purge queue before tests and clear out the
     DB tables after the test
     """
-    import transaction
-    from sqlalchemy import MetaData
-    from zope.sqlalchemy import mark_changed
     # BEFORE THE TEST - just run CM for the TEST_TYPE by default
     create_mapping.run(app, collections=[TEST_TYPE], skip_indexing=True)
     app.registry[INDEXER_QUEUE].clear_queue()
@@ -111,7 +106,7 @@ def setup_and_teardown(app):
         print('Count after -->', str(connection.scalar("SELECT COUNT(*) FROM %s" % table)), '\n')
     session.flush()
     mark_changed(session())
-    transaction.commit()
+    transaction_management.commit()
 
 
 @pytest.yield_fixture(scope='function')
@@ -138,7 +133,6 @@ def test_indexer_namespacing(app, testapp, indexer_testapp):
     Tests that namespacing indexes works as expected. This test has no real
     effect on local but does on Travis
     """
-    import os
     jid = os.environ.get('TRAVIS_JOB_ID')
     idx = indexer_utils.get_namespaced_index(app, TEST_TYPE)
     testapp.post_json(TEST_COLL, {'required': ''})
@@ -546,10 +540,6 @@ def test_queue_indexing_with_linked(app, testapp, indexer_testapp, dummy_request
     - test check_es_and_cache_linked_sids & validate_es_content
     - test purge functionality before and after removing links to an item
     """
-    import webtest
-    from snovault import util
-    from pyramid.traversal import traverse
-    from snovault.tests.testing_views import TestingLinkSourceSno
     es = app.registry[ELASTIC_SEARCH]
     indexer_queue = app.registry[INDEXER_QUEUE]
     # first, run create mapping with the indices we will use
@@ -870,7 +860,6 @@ def test_es_indices(app, elasticsearch):
 
 @pytest.mark.flaky
 def test_index_settings(app, testapp, indexer_testapp):
-    from snovault.elasticsearch.create_mapping import index_settings
     es_settings = index_settings()
     max_result_window = es_settings['index']['max_result_window']
     # preform some initial indexing to build meta
@@ -946,7 +935,6 @@ def test_dynamic_mapping_check_first(app, testapp, indexer_testapp):
 
 @pytest.mark.flaky
 def test_check_and_reindex_existing(app, testapp):
-    from snovault.elasticsearch.create_mapping import check_and_reindex_existing
     es = app.registry[ELASTIC_SEARCH]
     # post an item but don't reindex
     # this will cause the testing-ppp index to queue reindexing when we call
@@ -1528,7 +1516,6 @@ def test_assert_transactions_table_is_gone(app):
     A bit of a strange location for this test, but we need the app and
     serverfixtures to be established (used for indexing)
     """
-    from sqlalchemy import MetaData
     session = app.registry[DBSESSION]
     connection = session.connection().connect()
     meta = MetaData(bind=session.connection(), reflect=True)

@@ -1,4 +1,9 @@
+import os
 import pytest
+import webtest
+
+from .. import DBSESSION, main
+
 
 _app_settings = {
     'collection_datastore': 'database',
@@ -31,8 +36,6 @@ _app_settings = {
 
 @pytest.fixture(scope='session')
 def app_settings(request, wsgi_server_host_port, conn, DBSession):
-    from snovault import DBSESSION
-    import os
     settings = _app_settings.copy()
     settings[DBSESSION] = DBSession
     return settings
@@ -43,7 +46,6 @@ def app(app_settings):
     '''WSGI application level functional testing.
        will have to make snovault dummy main app
     '''
-    from snovault import main
     return main({}, **app_settings)
 
 
@@ -51,52 +53,47 @@ def app(app_settings):
 def testapp(app):
     '''TestApp with JSON accept header.
     '''
-    from webtest import TestApp
     environ = {
         'HTTP_ACCEPT': 'application/json',
         'REMOTE_USER': 'TEST',
     }
-    return TestApp(app, environ)
+    return webtest.TestApp(app, environ)
 
 
 @pytest.fixture
 def anontestapp(app):
     '''TestApp with JSON accept header.
     '''
-    from webtest import TestApp
     environ = {
         'HTTP_ACCEPT': 'application/json',
     }
-    return TestApp(app, environ)
+    return webtest.TestApp(app, environ)
 
 
 @pytest.fixture
 def authenticated_testapp(app):
     '''TestApp with JSON accept header for non-admin user.
     '''
-    from webtest import TestApp
     environ = {
         'HTTP_ACCEPT': 'application/json',
         'REMOTE_USER': 'TEST_AUTHENTICATED',
     }
-    return TestApp(app, environ)
+    return webtest.TestApp(app, environ)
 
 
 @pytest.fixture
 def embed_testapp(app):
-    from webtest import TestApp
     environ = {
         'HTTP_ACCEPT': 'application/json',
         'REMOTE_USER': 'EMBED',
     }
-    return TestApp(app, environ)
+    return webtest.TestApp(app, environ)
 
 
 @pytest.fixture
 def indexer_testapp(app):
-    from webtest import TestApp
     environ = {
         'HTTP_ACCEPT': 'application/json',
         'REMOTE_USER': 'INDEXER',
     }
-    return TestApp(app, environ)
+    return webtest.TestApp(app, environ)

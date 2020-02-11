@@ -1,7 +1,12 @@
 import pytest
-from snovault.tests.toolfixtures import registry, root
-from snovault.tests.pyramidfixtures import dummy_request, threadlocals
-from snovault.tests.test_views import PARAMETERIZED_NAMES
+
+from re import findall
+from .. import TYPES
+from ..util import add_default_embeds, crawl_schemas_by_embeds
+from .pyramidfixtures import dummy_request, threadlocals
+from .test_views import PARAMETERIZED_NAMES
+from .toolfixtures import registry, root
+
 
 targets = [
     {'name': 'one', 'uuid': '775795d3-4410-4114-836b-8eeecf1d0c2f'},
@@ -27,7 +32,6 @@ sources = [
 # Convert names to snake is needed so that
 # we can parameterize on the embeds
 def convert_names_to_snake():
-    from re import findall
     res = []
     for name in PARAMETERIZED_NAMES:
         caps = findall('[A-Z][^A-Z]*', name)
@@ -54,8 +58,6 @@ def test_add_default_embeds(registry, item_type):
     """
     Ensure default embedding matches the schema for each object
     """
-    from snovault.util import add_default_embeds, crawl_schemas_by_embeds
-    from snovault import TYPES
     type_info = registry[TYPES].by_item_type[item_type]
     schema = type_info.schema
     embeds = add_default_embeds(item_type, registry[TYPES], type_info.embedded_list, schema)
@@ -75,8 +77,6 @@ def test_manual_embeds(registry, item_type):
     """
     Ensure manual embedding in the types files are valid
     """
-    from snovault.util import crawl_schemas_by_embeds
-    from snovault import TYPES
     type_info = registry[TYPES].by_item_type[item_type]
     schema = type_info.schema
     embeds = type_info.embedded_list

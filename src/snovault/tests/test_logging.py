@@ -1,12 +1,13 @@
-from snovault import stats
-from snovault.crud_views import log as crud_view_log
-from unittest import mock
-import pytest
-from snovault.tests.test_post_put_patch import COLLECTION_URL, item_with_uuid
-import structlog
 import json
+import pytest
+import structlog
 import time
 import yaml
+
+from unittest import mock
+from .. import stats
+from ..crud_views import log as crud_view_log
+from .test_post_put_patch import COLLECTION_URL, item_with_uuid
 
 
 @pytest.fixture

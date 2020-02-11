@@ -6,31 +6,34 @@ Example:
     %(prog)s production.ini --app-name app
 
 """
-import itertools
-from copy import deepcopy
 
-import transaction
+import argparse
+import itertools
+import transaction as transaction_management
+import webtest
+
+from copy import deepcopy
+# multiprocessing.get_context is Python 3 only.
+from multiprocessing import get_context
+from multiprocessing.pool import Pool
+from pyramid import paster
 from pyramid.traversal import find_resource
 from pyramid.view import view_config
 from structlog import getLogger
-
-from snovault import (
-    CONNECTION,
-    STORAGE,
-    UPGRADER,
-)
+from . import CONNECTION, STORAGE, UPGRADER
 from .schema_utils import validate
 from .util import debug_log
 
+
 logger = getLogger(__name__)
+
+
 EPILOG = __doc__
 
 
 def includeme(config):
     config.add_route('batch_upgrade', '/batch_upgrade')
     config.scan(__name__)
-
-
 
 
 def batched(iterable, n=1):
@@ -40,8 +43,6 @@ def batched(iterable, n=1):
 
 
 def internal_app(configfile, app_name=None, username=None):
-    from webtest import TestApp
-    from pyramid import paster
     app = paster.get_app(configfile, app_name)
     if not username:
         username = 'UPGRADE'
@@ -49,7 +50,7 @@ def internal_app(configfile, app_name=None, username=None):
         'HTTP_ACCEPT': 'application/json',
         'REMOTE_USER': username,
     }
-    return TestApp(app, environ)
+    return webtest.TestApp(app, environ)
 
 
 # Running in subprocess
@@ -102,7 +103,7 @@ def update_item(storage, context):
 @debug_log
 def batch_upgrade(request):
     request.datastore = 'database'
-    transaction.get().setExtendedInfo('upgrade', True)
+    transaction_management.get().setExtendedInfo('upgrade', True)
     batch = request.json['batch']
     root = request.root
     storage = request.registry[STORAGE].write
@@ -137,17 +138,13 @@ def batch_upgrade(request):
 
 
 def run(config_uri, app_name=None, username=None, types=(), batch_size=500, processes=None):
-    # multiprocessing.get_context is Python 3 only.
-    from multiprocessing import get_context
-    from multiprocessing.pool import Pool
-
     # Loading app will have configured from config file. Reconfigure here:
     logging.getLogger('snovault').setLevel(logging.DEBUG)
 
     testapp = internal_app(config_uri, app_name, username)
     connection = testapp.app.registry[CONNECTION]
     uuids = [str(uuid) for uuid in connection.__iter__(*types)]
-    transaction.abort()
+    transaction_management.abort()
     logger.info('Total items: %d' % len(uuids))
 
     pool = Pool(
@@ -184,7 +181,6 @@ def run(config_uri, app_name=None, username=None, types=(), batch_size=500, proc
 
 
 def main():
-    import argparse
     parser = argparse.ArgumentParser(
         description="Batch upgrade content items.", epilog=EPILOG,
         formatter_class=argparse.RawDescriptionHelpFormatter,

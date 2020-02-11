@@ -1,8 +1,10 @@
-from pkg_resources import resource_filename
-from pyramid.events import (
-    BeforeRender,
-    subscriber,
-)
+import logging
+import os
+import psutil
+import time
+
+# from pkg_resources import resource_filename
+from pyramid.events import BeforeRender, subscriber
 from pyramid.httpexceptions import (
     HTTPMovedPermanently,
     HTTPPreconditionFailed,
@@ -11,20 +13,11 @@ from pyramid.httpexceptions import (
 )
 from pyramid.security import forget
 from pyramid.settings import asbool
-from pyramid.threadlocal import (
-    manager,
-)
-from pyramid.traversal import (
-    split_path_info,
-    _join_path_tuple,
-)
-
-from snovault.validation import CSRFTokenError
+from pyramid.threadlocal import manager
+from pyramid.traversal import split_path_info, _join_path_tuple
 from subprocess_middleware.tween import SubprocessTween
-import logging
-import os
-import psutil
-import time
+from webob.cookies import Cookie
+from .validation import CSRFTokenError
 
 
 log = logging.getLogger(__name__)
@@ -112,7 +105,6 @@ def security_tween_factory(handler, registry):
 
 
 def normalize_cookie_tween_factory(handler, registry):
-    from webob.cookies import Cookie
 
     ignore = {
         '/favicon.ico',

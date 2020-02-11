@@ -1,7 +1,5 @@
-from snovault import (
-    Item,
-    collection,
-)
+from .. import Item, collection
+
 
 # Test class for keys
 

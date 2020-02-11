@@ -1,11 +1,5 @@
-from snovault import (
-    Item,
-    collection,
-)
-from snovault.upgrader import (
-    upgrade_step,
-    upgrade_finalizer,
-)
+from .. import Item, collection
+from ..upgrader import upgrade_step, upgrade_finalizer
 
 
 def includeme(config):

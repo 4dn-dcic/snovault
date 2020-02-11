@@ -5,25 +5,27 @@ Example.
 
 """
 
-from webtest import TestApp
-from snovault.elasticsearch.interfaces import (
-    ELASTIC_SEARCH,
-    INDEXER_QUEUE
-)
+import argparse
 import atexit
 import datetime
 import elasticsearch.exceptions
 import json
 import logging
-import structlog
 import os
 import psycopg2
 import signal
 import sqlalchemy.exc
+import structlog
 import sys
 import threading
 import time
+import webtest
+
+from pyramid import paster
 from urllib.parse import parse_qsl
+from .. import set_logging
+from .interfaces import ELASTIC_SEARCH, INDEXER_QUEUE
+
 
 log = structlog.getLogger(__name__)
 
@@ -147,7 +149,7 @@ def composite(loader, global_conf, **settings):
         'HTTP_ACCEPT': 'application/json',
         'REMOTE_USER': username,
     }
-    testapp = TestApp(app, environ)
+    testapp = webtest.TestApp(app, environ)
 
 
     timestamp = datetime.datetime.now().isoformat()
@@ -199,8 +201,6 @@ def composite(loader, global_conf, **settings):
 
 
 def internal_app(configfile, app_name=None, username=None):
-    from webtest import TestApp
-    from pyramid import paster
     app = paster.get_app(configfile, app_name)
     if not username:
         username = 'IMPORT'
@@ -208,12 +208,10 @@ def internal_app(configfile, app_name=None, username=None):
         'HTTP_ACCEPT': 'application/json',
         'REMOTE_USER': username,
     }
-    return TestApp(app, environ)
+    return webtest.TestApp(app, environ)
 
 
 def main():
-    import argparse
-    from snovault import set_logging
     parser = argparse.ArgumentParser(
         description="Listen for changes from postgres and index in elasticsearch",
         epilog=EPILOG,

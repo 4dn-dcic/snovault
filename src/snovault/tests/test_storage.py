@@ -1,20 +1,24 @@
 import pytest
-from snovault.tests.toolfixtures import registry, storage
-from snovault.tests.serverfixtures import session
-from snovault.storage import PickStorage, RDBStorage
-from snovault import DBSESSION, STORAGE
+import transaction as transaction_management
+import uuid
+
+from .. import DBSESSION, STORAGE
+from ..storage import PickStorage, RDBStorage, Resource
+from ..storage import (
+    PropertySheet,
+    CurrentPropertySheet,
+    Blob,
+    Key,
+    Link,
+)
+from .serverfixtures import session
+from .toolfixtures import registry, storage
+
 
 pytestmark = pytest.mark.storage
 
 
 def test_storage_creation(session):
-    from snovault.storage import (
-        PropertySheet,
-        CurrentPropertySheet,
-        Blob,
-        Key,
-        Link,
-    )
     assert session.query(PropertySheet).count() == 0
     assert session.query(CurrentPropertySheet).count() == 0
     assert session.query(Blob).count() == 0
@@ -23,14 +27,11 @@ def test_storage_creation(session):
 
 
 def test_transaction_record_rollback(session):
-    import transaction
-    import uuid
-    from snovault.storage import Resource
     rid = uuid.uuid4()
     resource = Resource('test_item', {'': {}}, rid=rid)
     session.add(resource)
-    transaction.commit()
-    transaction.begin()
+    transaction_management.commit()
+    transaction_management.begin()
     sp = session.begin_nested()
     resource = Resource('test_item', {'': {}}, rid=rid)
     session.add(resource)
@@ -39,11 +40,11 @@ def test_transaction_record_rollback(session):
     sp.rollback()
     resource = Resource('test_item', {'': {}})
     session.add(resource)
-    transaction.commit()
+    transaction_management.commit()
 
 
 def test_current_propsheet(session):
-    from snovault.storage import (
+    from ..storage import (
         CurrentPropertySheet,
         Resource,
         PropertySheet,
@@ -67,7 +68,7 @@ def test_current_propsheet(session):
 
 
 def test_current_propsheet_update(session):
-    from snovault.storage import (
+    from ..storage import (
         CurrentPropertySheet,
         Resource,
         PropertySheet,
@@ -93,7 +94,7 @@ def test_current_propsheet_update(session):
 
 
 def test_get_by_json(session):
-    from snovault.storage import (
+    from ..storage import (
         CurrentPropertySheet,
         Resource,
         PropertySheet,
@@ -119,7 +120,7 @@ def test_get_by_json(session):
 
 
 def test_purge_uuid(session, storage):
-    from snovault.storage import (
+    from ..storage import (
         Resource,
         Key,
         PropertySheet,
@@ -156,7 +157,7 @@ def test_purge_uuid(session, storage):
 
 
 def test_delete_compound(session, storage):
-    from snovault.storage import (
+    from ..storage import (
         CurrentPropertySheet,
         Resource,
         PropertySheet,
@@ -198,7 +199,7 @@ def test_delete_compound(session, storage):
 
 def test_keys(session):
     from sqlalchemy.orm.exc import FlushError
-    from snovault.storage import (
+    from ..storage import (
         Resource,
         Key,
     )
@@ -231,7 +232,7 @@ def test_keys(session):
 
 
 def test_get_sids_by_uuids(session, storage):
-    from snovault.storage import (
+    from ..storage import (
         CurrentPropertySheet,
         Resource,
         PropertySheet,
@@ -246,7 +247,7 @@ def test_get_sids_by_uuids(session, storage):
 
 
 def test_S3BlobStorage():
-    from snovault.storage import S3BlobStorage
+    from ..storage import S3BlobStorage
     blob_bucket = 'encoded-4dn-blobs'
     storage = S3BlobStorage(blob_bucket)
     assert storage.bucket == blob_bucket
@@ -266,7 +267,7 @@ def test_S3BlobStorage():
 
 
 def test_S3BlobStorage_get_blob_url_for_non_s3_file():
-    from snovault.storage import S3BlobStorage
+    from ..storage import S3BlobStorage
     blob_bucket = 'encoded-4dn-blobs'
     storage = S3BlobStorage(blob_bucket)
     assert storage.bucket == blob_bucket
@@ -296,7 +297,7 @@ def test_pick_storage(registry, dummy_request):
 
 
 def test_register_storage(registry):
-    from snovault.storage import register_storage
+    from ..storage import register_storage
     # test storage.register_storage, used to configure registry[STORAGE]
     storage = PickStorage('dummy_db', 'dummy_es', registry)
     # store previous storage and use a dummy one for testing

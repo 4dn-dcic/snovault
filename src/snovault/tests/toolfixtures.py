@@ -1,7 +1,9 @@
 import pytest
-
+from ..interfaces import BLOBS, CALCULATED_PROPERTIES, COLLECTIONS, CONNECTION, STORAGE, ROOT, TYPES, UPGRADER
+from ..elasticsearch import ELASTIC_SEARCH
 
 # Fixtures  for app
+
 
 @pytest.fixture
 def registry(app):
@@ -10,53 +12,44 @@ def registry(app):
 
 @pytest.fixture
 def blobs(registry):
-    import snovault.interfaces
-    return registry[snovault.interfaces.BLOBS]
+    return registry[BLOBS]
 
 
 @pytest.fixture
 def calculated_properties(registry):
-    import snovault.interfaces
-    return registry[snovault.interfaces.CALCULATED_PROPERTIES]
+    return registry[CALCULATED_PROPERTIES]
 
 
 @pytest.fixture
 def collections(registry):
-    import snovault.interfaces
-    return registry[snovault.interfaces.COLLECTIONS]
+    return registry[COLLECTIONS]
 
 
 @pytest.fixture
 def connection(registry):
-    import snovault.interfaces
-    return registry[snovault.interfaces.CONNECTION]
+    return registry[CONNECTION]
 
 
 @pytest.fixture
 def elasticsearch(registry):
-    from snovault.elasticsearch import ELASTIC_SEARCH
     return registry[ELASTIC_SEARCH]
 
 
 @pytest.fixture
 def storage(registry):
-    import snovault.interfaces
-    return registry[snovault.interfaces.STORAGE]
+    return registry[STORAGE]
 
 
 @pytest.fixture
 def root(registry):
-    import snovault.interfaces
-    return registry[snovault.interfaces.ROOT]
+    return registry[ROOT]
 
 
 @pytest.fixture
 def types(registry):
-    import snovault.interfaces
-    return registry[snovault.interfaces.TYPES]
+    return registry[TYPES]
 
 
 @pytest.fixture
 def upgrader(registry):
-    import snovault.interfaces
-    return registry[snovault.interfaces.UPGRADER]
+    return registry[UPGRADER]

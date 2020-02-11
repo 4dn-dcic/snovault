@@ -1,38 +1,28 @@
 import base64
 import os
+
 from operator import itemgetter
 from passlib.context import CryptContext
 from pyramid.authentication import (
     BasicAuthAuthenticationPolicy as _BasicAuthAuthenticationPolicy,
     CallbackAuthenticationPolicy
 )
-from pyramid.path import (
-    DottedNameResolver,
-    caller_package,
-)
-
+from pyramid.httpexceptions import HTTPForbidden
+from pyramid.path import caller_package, DottedNameResolver
 from pyramid.security import (
-    NO_PERMISSION_REQUIRED,
-    remember,
-    forget,
     Authenticated,
     Everyone,
-    principals_allowed_by_permission
+    forget,
+    NO_PERMISSION_REQUIRED,
+    remember,
+    principals_allowed_by_permission,
 )
-from pyramid.httpexceptions import (
-    HTTPForbidden,
-)
-from pyramid.view import (
-    view_config,
-)
-from pyramid.settings import (
-    asbool,
-    aslist,
-)
-from snovault import ROOT, COLLECTIONS
-from snovault.storage import User
-from snovault.calculated import calculate_properties
-from snovault.validators import no_validate_item_content_post
+from pyramid.settings import asbool, aslist
+from pyramid.view import view_config
+from .. import ROOT, COLLECTIONS
+from ..storage import User
+from ..calculated import calculate_properties
+from ..validators import no_validate_item_content_post
 
 
 CRYPT_CONTEXT = __name__ + ':crypt_context'

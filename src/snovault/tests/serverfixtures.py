@@ -1,8 +1,23 @@
+import logging
 import pytest
+import sqlalchemy
+import transaction as transaction_management
+import webtest
+import webtest.http
+import zope.sqlalchemy
+
+from contextlib import contextmanager
+from transaction.interfaces import ISynchronizer
+from urllib.parse import quote
+from zope.interface import implementer
+
+from ..app import configure_engine
+from ..storage import Base
+from .elasticsearch_fixture import server_process as elasticsearch_server_process
+from .postgresql_fixture import initdb, server_process as postgres_server_process
 
 
 def pytest_configure():
-    import logging
     logging.basicConfig(format='')
     logging.getLogger('sqlalchemy.engine').setLevel(logging.WARNING)
 
@@ -24,12 +39,10 @@ def pytest_configure():
 @pytest.yield_fixture(scope='session')
 def engine_url(request):
     # Ideally this would use a different database on the same postgres server
-    from urllib.parse import quote
-    from .postgresql_fixture import initdb, server_process
     tmpdir = request.config._tmpdirhandler.mktemp('postgresql-engine', numbered=True)
     tmpdir = str(tmpdir)
     initdb(tmpdir)
-    process = server_process(tmpdir)
+    process = postgres_server_process(tmpdir)
 
     yield 'postgresql://postgres@:5432/postgres?host=%s' % quote(tmpdir)
 
@@ -41,12 +54,10 @@ def engine_url(request):
 @pytest.mark.fixture_cost(10)
 @pytest.yield_fixture(scope='session')
 def postgresql_server(request):
-    from urllib.parse import quote
-    from .postgresql_fixture import initdb, server_process
     tmpdir = request.config._tmpdirhandler.mktemp('postgresql', numbered=True)
     tmpdir = str(tmpdir)
     initdb(tmpdir)
-    process = server_process(tmpdir)
+    process = postgres_server_process(tmpdir)
 
     yield 'postgresql://postgres@:5432/postgres?host=%s' % quote(tmpdir)
 
@@ -56,8 +67,7 @@ def postgresql_server(request):
 
 @pytest.fixture(scope='session')
 def elasticsearch_host_port():
-    from webtest.http import get_free_port
-    return get_free_port()
+    return webtest.http.get_free_port()
 
 
 @pytest.mark.fixture_cost(10)
@@ -65,11 +75,10 @@ def elasticsearch_host_port():
 def elasticsearch_server(request, elasticsearch_host_port, remote_es):
     if not remote_es:
         # spawn a new one
-        from .elasticsearch_fixture import server_process
         host, port = elasticsearch_host_port
         tmpdir = request.config._tmpdirhandler.mktemp('elasticsearch', numbered=True)
         tmpdir = str(tmpdir)
-        process = server_process(str(tmpdir), host=host, port=port)
+        process = elasticsearch_server_process(str(tmpdir), host=host, port=port)
 
         yield 'http://%s:%d' % (host, port)
 
@@ -86,8 +95,6 @@ def elasticsearch_server(request, elasticsearch_host_port, remote_es):
 
 @pytest.yield_fixture(scope='session')
 def conn(engine_url):
-    from snovault.app import configure_engine
-    from snovault.storage import Base
 
     engine_settings = {
         'sqlalchemy.url': engine_url,
@@ -107,11 +114,8 @@ def conn(engine_url):
 
 @pytest.fixture(scope='session')
 def _DBSession(conn):
-    import snovault.storage
-    import zope.sqlalchemy
-    from sqlalchemy import orm
     # ``server`` thread must be in same scope
-    DBSession = orm.scoped_session(orm.sessionmaker(bind=conn), scopefunc=lambda: 0)
+    DBSession = sqlalchemy.orm.scoped_session(sqlalchemy.orm.sessionmaker(bind=conn), scopefunc=lambda: 0)
     zope.sqlalchemy.register(DBSession)
     return DBSession
 
@@ -128,17 +132,15 @@ def external_tx(request, conn):
     yield tx
     tx.rollback()
     # # The database should be empty unless a data fixture was loaded
-    # from snovault.storage import Base
     # for table in Base.metadata.sorted_tables:
     #     assert conn.execute(table.count()).scalar() == 0
 
 
 @pytest.fixture
 def transaction(request, external_tx, zsa_savepoints, check_constraints):
-    import transaction
-    transaction.begin()
-    request.addfinalizer(transaction.abort)
-    return transaction
+    transaction_management.begin()
+    request.addfinalizer(transaction_management.abort)
+    return transaction_management
 
 
 @pytest.yield_fixture(scope='session')
@@ -148,8 +150,6 @@ def zsa_savepoints(conn):
     This means failed requests rollback to the db state when they began rather
     than that at the start of the test.
     """
-    from transaction.interfaces import ISynchronizer
-    from zope.interface import implementer
 
     @implementer(ISynchronizer)
     class Savepoints(object):
@@ -185,11 +185,10 @@ def zsa_savepoints(conn):
 
     zsa_savepoints = Savepoints(conn)
 
-    import transaction
-    transaction.manager.registerSynch(zsa_savepoints)
+    transaction_management.manager.registerSynch(zsa_savepoints)
 
     yield zsa_savepoints
-    transaction.manager.unregisterSynch(zsa_savepoints)
+    transaction_management.manager.unregisterSynch(zsa_savepoints)
 
 
 @pytest.fixture
@@ -209,8 +208,6 @@ def check_constraints(conn, _DBSession):
     boundary, not at a savepoint. With the Pyramid transaction bound to a
     subtransaction check them manually.
     '''
-    from transaction.interfaces import ISynchronizer
-    from zope.interface import implementer
 
     @implementer(ISynchronizer)
     class CheckConstraints(object):
@@ -245,20 +242,17 @@ def check_constraints(conn, _DBSession):
 
     check_constraints = CheckConstraints(conn)
 
-    import transaction
-    transaction.manager.registerSynch(check_constraints)
+    transaction_management.manager.registerSynch(check_constraints)
 
     yield check_constraints
 
-    transaction.manager.unregisterSynch(check_constraints)
+    transaction_management.manager.unregisterSynch(check_constraints)
 
 
 @pytest.yield_fixture
 def execute_counter(conn, zsa_savepoints, check_constraints):
     """ Count calls to execute
     """
-    from contextlib import contextmanager
-    from sqlalchemy import event
 
     class Counter(object):
         def __init__(self):
@@ -277,7 +271,7 @@ def execute_counter(conn, zsa_savepoints, check_constraints):
 
     counter = Counter()
 
-    @event.listens_for(conn, 'after_cursor_execute')
+    @sqlalchemy.event.listens_for(conn, 'after_cursor_execute')
     def after_cursor_execute(conn, cursor, statement, parameters, context, executemany):
         # Ignore the testing savepoints
         if zsa_savepoints.state != 'begun' or check_constraints.state == 'checking':
@@ -286,31 +280,29 @@ def execute_counter(conn, zsa_savepoints, check_constraints):
 
     yield counter
 
-    event.remove(conn, 'after_cursor_execute', after_cursor_execute)
+    sqlalchemy.event.remove(conn, 'after_cursor_execute', after_cursor_execute)
 
 
 @pytest.yield_fixture
 def no_deps(conn, DBSession):
-    from sqlalchemy import event
 
     session = DBSession()
 
-    @event.listens_for(session, 'after_flush')
+    @sqlalchemy.event.listens_for(session, 'after_flush')
     def check_dependencies(session, flush_context):
         assert not flush_context.cycles
 
-    @event.listens_for(conn, "before_execute", retval=True)
+    @sqlalchemy.event.listens_for(conn, "before_execute", retval=True)
     def before_execute(conn, clauseelement, multiparams, params):
         return clauseelement, multiparams, params
 
     yield
 
-    event.remove(session, 'before_flush', check_dependencies)
+    sqlalchemy.event.remove(session, 'before_flush', check_dependencies)
 
 @pytest.fixture(scope='session')
 def wsgi_server_host_port():
-    from webtest.http import get_free_port
-    return get_free_port()
+    return webtest.http.get_free_port()
 
 
 @pytest.fixture(scope='session')
@@ -321,10 +313,9 @@ def wsgi_server_app(app):
 @pytest.mark.fixture_cost(100)
 @pytest.yield_fixture(scope='session')
 def wsgi_server(request, wsgi_server_app, wsgi_server_host_port):
-    from webtest.http import StopableWSGIServer
     host, port = wsgi_server_host_port
 
-    server = StopableWSGIServer.create(
+    server = webtest.http.StopableWSGIServer.create(
         wsgi_server_app,
         host=host,
         port=port,

@@ -1,12 +1,16 @@
 import unittest
+
+from pyramid.interfaces import IAuthenticationPolicy
+from pyramid.security import Authenticated, Everyone
 from pyramid.testing import DummyRequest
+from zope.interface.verify import verifyObject, verifyClass
+from .authentication import NamespacedAuthenticationPolicy
 
 
 class TestNamespacedAuthenticationPolicy(unittest.TestCase):
     """ This is a modified version of TestRemoteUserAuthenticationPolicy
     """
     def _getTargetClass(self):
-        from snovault.tests.authentication import NamespacedAuthenticationPolicy
         return NamespacedAuthenticationPolicy
 
     def _makeOne(self, namespace='user',
@@ -15,14 +19,10 @@ class TestNamespacedAuthenticationPolicy(unittest.TestCase):
         return self._getTargetClass()(namespace, base, *args, **kw)
 
     def test_class_implements_IAuthenticationPolicy(self):
-        from zope.interface.verify import verifyClass
-        from pyramid.interfaces import IAuthenticationPolicy
         klass = self._makeOne().__class__
         verifyClass(IAuthenticationPolicy, klass)
 
     def test_instance_implements_IAuthenticationPolicy(self):
-        from zope.interface.verify import verifyObject
-        from pyramid.interfaces import IAuthenticationPolicy
         verifyObject(IAuthenticationPolicy, self._makeOne())
 
     def test_unauthenticated_userid_returns_None(self):
@@ -46,14 +46,11 @@ class TestNamespacedAuthenticationPolicy(unittest.TestCase):
         self.assertEqual(policy.authenticated_userid(request), 'user.fred')
 
     def test_effective_principals_None(self):
-        from pyramid.security import Everyone
         request = DummyRequest(environ={})
         policy = self._makeOne()
         self.assertEqual(policy.effective_principals(request), [Everyone])
 
     def test_effective_principals(self):
-        from pyramid.security import Everyone
-        from pyramid.security import Authenticated
         request = DummyRequest(environ={'REMOTE_USER':'fred'})
         policy = self._makeOne()
         self.assertEqual(policy.effective_principals(request),

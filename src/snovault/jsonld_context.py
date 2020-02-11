@@ -1,17 +1,10 @@
 import sys
-from urllib.parse import (
-    quote,
-    urlparse,
-)
 
-from pyramid.events import (
-    ApplicationCreated,
-    subscriber,
-)
+from pyramid.events import ApplicationCreated, subscriber
 from pyramid.httpexceptions import HTTPNotFound
 from pyramid.view import view_config
-
-from snovault import TYPES
+from urllib.parse import quote, urlparse
+from . import TYPES
 from .util import ensurelist, debug_log
 
 

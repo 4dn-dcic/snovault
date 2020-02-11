@@ -1,13 +1,12 @@
 import sys
-from collections import defaultdict
-from subprocess import Popen, PIPE
-from xml.sax.saxutils import quoteattr, escape
 
+from collections import defaultdict
 from past.builtins import basestring
 from pyramid.response import Response
 from pyramid.view import view_config
-
-from snovault import TYPES
+from subprocess import Popen, PIPE
+from xml.sax.saxutils import quoteattr, escape
+from . import TYPES
 from .util import debug_log
 
 

@@ -1,4 +1,6 @@
 import pytest
+from ..storage import Link
+
 
 targets = [
     {'name': 'one', 'uuid': '775795d3-4410-4114-836b-8eeecf1d0c2f'},
@@ -34,7 +36,6 @@ def content(testapp):
 
 
 def test_links_add(content, session):
-    from snovault.storage import Link
     links = sorted([
         (str(link.source_rid), link.rel, str(link.target_rid))
         for link in session.query(Link).all()
@@ -47,8 +48,6 @@ def test_links_add(content, session):
 
 
 def test_links_update(content, testapp, session):
-    from snovault.storage import Link
-
     url = '/testing-link-sources-sno/' + sources[1]['uuid']
     new_item = {'name': 'B updated', 'target': targets[0]['name']}
     testapp.put_json(url, new_item, status=200)

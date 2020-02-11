@@ -1,9 +1,6 @@
+import re
+
 from pyramid.decorator import reify
-from snovault import (
-    Root,
-    calculated_property,
-    root,
-)
 from pyramid.security import (
     ALL_PERMISSIONS,
     Allow,
@@ -11,7 +8,8 @@ from pyramid.security import (
     Deny,
     Everyone,
 )
-import re
+from .. import calculated_property, Root, root
+
 
 accession_re = re.compile(r'^SNO(SS|FL)[0-9][0-9][0-9][A-Z][A-Z][A-Z]$')
 test_accession_re = re.compile(r'^TST(SS|FL)[0-9][0-9][0-9]([0-9][0-9][0-9]|[A-Z][A-Z][A-Z])$')

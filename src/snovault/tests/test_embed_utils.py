@@ -1,12 +1,16 @@
 import pytest
-from snovault.tests.toolfixtures import registry
-from snovault.util import (
+
+from copy import deepcopy
+from .. import TYPES
+from ..util import (
     build_default_embeds,
     find_default_embeds_for_schema,
     find_collection_subtypes,
     expand_embedded_list,
     crawl_schema
 )
+from .toolfixtures import registry
+
 
 def test_find_collection_subtypes(app):
     test_item_type = 'AbstractItemTest'
@@ -30,7 +34,6 @@ def test_build_default_embeds():
     assert(set(final_embeds) == set(expected_embeds))
 
 def test_find_default_embeds_and_expand_emb_list(registry):
-    from snovault import TYPES
     # use EmbeddingTest as test case
     # 'attachment' -> linkTo TestingDownload
     type_info = registry[TYPES].by_item_type['embedding_test']
@@ -59,8 +62,6 @@ def test_find_default_embeds_and_expand_emb_list(registry):
     assert set(expected_built) == set(build_default_embeds(embs_to_add2, set()))
 
 def test_crawl_schema(registry):
-    from snovault import TYPES
-    from copy import deepcopy
     field_path = 'attachment.@type'
     embedding_schema = registry[TYPES].by_item_type['embedding_test'].schema
     res = crawl_schema(registry[TYPES], field_path, embedding_schema)

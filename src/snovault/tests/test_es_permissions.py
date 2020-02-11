@@ -1,6 +1,7 @@
 import pytest
-from snovault.elasticsearch.cached_views import filter_embedded
+
 from copy import deepcopy
+from ..elasticsearch.cached_views import filter_embedded
 
 
 def test_filtered_embedded_admin(embedded_lab, effective_princ_admin):

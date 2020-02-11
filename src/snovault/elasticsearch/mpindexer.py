@@ -1,24 +1,27 @@
-from snovault import DBSESSION
+import atexit
+import logging
+import structlog
+import time
+import transaction
+import signal
+import zope.sqlalchemy
+
 from contextlib import contextmanager
+from functools import partial
 from multiprocessing import (
     get_context,
     cpu_count
 )
 from multiprocessing.pool import Pool
-from functools import partial
 from pyramid.request import apply_request_extensions
 from pyramid.threadlocal import (
     get_current_request,
     manager
 )
-import atexit
-import structlog
-import logging
-from snovault import set_logging
-from snovault.storage import register_storage, RDBStorage
-import transaction
-import signal
-import time
+from sqlalchemy import orm
+
+from .. import DBSESSION, set_logging
+from ..app import configure_engine
 from .indexer import (
     INDEXER,
     Indexer,
@@ -27,6 +30,8 @@ from .interfaces import (
     APP_FACTORY,
     INDEXER_QUEUE
 )
+from ..storage import register_storage, RDBStorage
+
 
 log = structlog.getLogger(__name__)
 
@@ -45,7 +50,6 @@ def initializer(app_factory, settings):
     Need to initialize the app for the subprocess.
     As part of this, configue a new database engine and set logging
     """
-    from snovault.app import configure_engine
     signal.signal(signal.SIGINT, signal.SIG_IGN)
 
     # set up global variables to use throughout subprocess
@@ -69,9 +73,6 @@ def threadlocal_manager():
     Set registry and request attributes using the global app within the
     subprocess
     """
-    import snovault.storage
-    import zope.sqlalchemy
-    from sqlalchemy import orm
 
     # clear threadlocal manager to get a clean stack
     manager.clear()

@@ -6,9 +6,19 @@ To load the initial data:
     %(prog)s production.ini
 
 """
-from pyramid.paster import get_app
+
+import argparse
+import datetime
+import json
+import logging
+import os
+import structlog
+import sys
+import time
+# import transaction as transaction_proxy
+
+from collections import OrderedDict
 from elasticsearch import RequestError
-from elasticsearch.helpers import bulk
 from elasticsearch.exceptions import (
     ConflictError,
     ConnectionError,
@@ -17,30 +27,19 @@ from elasticsearch.exceptions import (
     RequestError,
     ConnectionTimeout
 )
+from elasticsearch.helpers import bulk
 from elasticsearch_dsl import Index, Search
 from elasticsearch_dsl.connections import connections
 from functools import reduce
-from snovault import (
-    COLLECTIONS,
-    TYPES,
-)
-from snovault.schema_utils import combine_schemas
-from snovault.util import add_default_embeds, find_collection_subtypes
-from .interfaces import ELASTIC_SEARCH, INDEXER_QUEUE
-from collections import OrderedDict
 from itertools import chain
-import json
-import structlog
-import time
-import datetime
-import sys
-from snovault.commands.es_index_data import run as run_index_data
-from .indexer_utils import get_namespaced_index, find_uuids_for_indexing, get_uuids_for_types
-import transaction
-import os
-import argparse
-import logging
+from pyramid.paster import get_app
 from timeit import default_timer as timer
+from .. import COLLECTIONS, TYPES, set_logging
+from ..commands.es_index_data import run as run_index_data
+from ..schema_utils import combine_schemas
+from ..util import add_default_embeds, find_collection_subtypes
+from .indexer_utils import get_namespaced_index, find_uuids_for_indexing, get_uuids_for_types
+from .interfaces import ELASTIC_SEARCH, INDEXER_QUEUE
 
 
 EPILOG = __doc__
@@ -1050,7 +1049,6 @@ def run(app, collections=None, dry_run=False, check_first=False, skip_indexing=F
         (e.g. MyType). Indexing/queueing order will be dictated by index in the
         list, such that the items at the front are indexed first.
     """
-    from timeit import default_timer as timer
     overall_start = timer()
     registry = app.registry
     es = registry[ELASTIC_SEARCH]
@@ -1196,7 +1194,6 @@ def run(app, collections=None, dry_run=False, check_first=False, skip_indexing=F
 
 
 def main():
-    from snovault import set_logging
     parser = argparse.ArgumentParser(
         description="Create Elasticsearch mapping", epilog=EPILOG,
         formatter_class=argparse.RawDescriptionHelpFormatter,

@@ -1,11 +1,18 @@
+import os
 import pytest
-from snovault import TYPES
-from snovault.tests.toolfixtures import registry, root
+
+from base64 import b64encode
+from jsonschema_serialize_fork import Draft4Validator
+from pyramid.compat import ascii_native_
+from .. import TYPES
+from .toolfixtures import registry, root
+
+
 TYPE_NAMES = ['TestingPostPutPatchSno', 'TestingDownload']
 
-""" Get all item types from schema names """
+
 def get_parameterized_names():
-    import os
+    """ Get all item types from schema names """
     return [name.split('.')[0] for name in os.listdir(os.getcwd() + '/src/snovault/test_schemas')]
 
 PARAMETERIZED_NAMES = get_parameterized_names()
@@ -26,8 +33,6 @@ def test_json(testapp, item_type):
 
 
 def test_json_basic_auth(anontestapp):
-    from base64 import b64encode
-    from pyramid.compat import ascii_native_
     url = '/'
     value = "Authorization: Basic %s" % ascii_native_(b64encode(b'nobody:pass'))
     res = anontestapp.get(url, headers={'Authorization': value}, status=401)
@@ -58,8 +63,6 @@ def test_collection_post_missing_content_type(testapp):
 
 
 def test_collection_post_bad(anontestapp):
-    from base64 import b64encode
-    from pyramid.compat import ascii_native_
     value = "Authorization: Basic %s" % ascii_native_(b64encode(b'nobody:pass'))
     anontestapp.post_json('/embedding-tests', {}, headers={'Authorization': value}, status=401)
 
@@ -172,11 +175,10 @@ def test_home(testapp):
 
 @pytest.mark.parametrize('item_type', TYPE_NAMES)
 def test_profiles(testapp, item_type):
-    from jsonschema_serialize_fork import Draft4Validator
     res = testapp.get('/profiles/%s.json' % item_type).maybe_follow(status=200)
     errors = Draft4Validator.check_schema(res.json)
     assert not errors
-    # added from snovault.schema_views._annotated_schema
+    # added from ..schema_views._annotated_schema
     assert 'rdfs:seeAlso' in res.json
     assert 'rdfs:subClassOf' in res.json
     assert 'children' in res.json
@@ -185,11 +187,10 @@ def test_profiles(testapp, item_type):
 
 @pytest.mark.parametrize('item_type', ['AbstractItemTest'])
 def test_profiles_abstract(testapp, item_type):
-    from jsonschema_serialize_fork import Draft4Validator
     res = testapp.get('/profiles/%s.json' % item_type).maybe_follow(status=200)
     errors = Draft4Validator.check_schema(res.json)
     assert not errors
-    # added from snovault.schema_views._annotated_schema
+    # added from ..schema_views._annotated_schema
     assert 'rdfs:seeAlso' in res.json
     # Item/item does not have subClass
     if item_type.lower() == 'item':
@@ -202,7 +203,6 @@ def test_profiles_abstract(testapp, item_type):
 
 
 def test_profiles_all(testapp, registry):
-    from jsonschema_serialize_fork import Draft4Validator
     res = testapp.get('/profiles/').maybe_follow(status=200)
     # make sure all types are present, including abstract types
     for ti in registry[TYPES].by_item_type.values():

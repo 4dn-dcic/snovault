@@ -5,13 +5,13 @@ from pyramid.security import (
     Deny,
     DENY_ALL,
     Everyone,
+    principals_allowed_by_permission,
 )
-from pyramid.traversal import (
-    find_root,
-    traverse,
-)
+from pyramid.traversal import find_root, traverse
 from pyramid.view import view_config
-from snovault import (
+from sqlalchemy import inspect
+from transaction.interfaces import TransientError
+from .. import (
     AbstractCollection as BaseAbstractCollection,
     Collection as BaseCollection,
     Item as BaseItem,
@@ -20,14 +20,13 @@ from snovault import (
     abstract_collection,
     load_schema,
 )
-from snovault.tests.root import TestRoot
-from snovault.attachment import ItemWithAttachment
-from snovault.interfaces import CONNECTION
+from ..attachment import ItemWithAttachment
+from ..interfaces import CONNECTION
+from .root import TestRoot
 
 
 def includeme(config):
     config.scan(__name__)
-
 
 
 # Item acls
@@ -85,7 +84,6 @@ def user(request):
 
 @view_config(name='testing-allowed', request_method='GET')
 def allowed(context, request):
-    from pyramid.security import principals_allowed_by_permission
     permission = request.params.get('permission', 'view')
     return {
         'has_permission': bool(request.has_permission(permission, context)),
@@ -421,8 +419,6 @@ def testing_render_error(request):
 
 @view_config(context=TestingPostPutPatchSno, name='testing-retry')
 def testing_retry(context, request):
-    from sqlalchemy import inspect
-    from transaction.interfaces import TransientError
 
     model = context.model
     request.environ['_attempt'] = request.environ.get('_attempt', 0) + 1

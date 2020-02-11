@@ -1,29 +1,19 @@
+import magic
 import mimetypes
 import uuid
+
 from base64 import b64decode
 from hashlib import md5
 from io import BytesIO
 from mimetypes import guess_type
-from urllib.parse import (
-    quote,
-    unquote,
-)
-
-import magic
 from PIL import Image
-from pyramid.httpexceptions import (
-    HTTPNotFound,
-    HTTPFound
-)
+from pyramid.httpexceptions import HTTPNotFound, HTTPFound
 from pyramid.response import Response
 from pyramid.traversal import find_root
 from pyramid.view import view_config
 from structlog import getLogger
-
-from snovault import (
-    BLOBS,
-    Item,
-)
+from urllib.parse import quote, unquote
+from . import BLOBS, Item
 from .util import debug_log
 from .validation import ValidationFailure
 

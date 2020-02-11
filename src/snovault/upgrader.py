@@ -1,13 +1,9 @@
-from snovault.interfaces import (
-    TYPES,
-    UPGRADER,
-)
-from pkg_resources import parse_version
-from pyramid.interfaces import (
-    PHASE1_CONFIG,
-)
-from .interfaces import PHASE2_5_CONFIG
 import venusian
+
+from .interfaces import TYPES, UPGRADER
+from pkg_resources import parse_version
+from pyramid.interfaces import PHASE1_CONFIG
+from .interfaces import PHASE2_5_CONFIG
 
 
 def includeme(config):

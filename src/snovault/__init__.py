@@ -89,7 +89,7 @@ def main(global_config, **local_config):
     settings['snovault.jsonld.terms_prefix'] = 'snovault'
 
     config = Configurator(settings=settings)
-    from snovault.elasticsearch import APP_FACTORY
+    from .elasticsearch import APP_FACTORY
     config.registry[APP_FACTORY] = main  # used by mp_indexer
     config.include(app_version)
 

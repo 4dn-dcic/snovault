@@ -27,6 +27,7 @@ from .interfaces import (
 from ..embed import MissingIndexItemException
 from ..util import debug_log, dictionary_lookup
 
+
 log = structlog.getLogger(__name__)
 
 
