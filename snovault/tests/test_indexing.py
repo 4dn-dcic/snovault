@@ -70,7 +70,18 @@ def app_settings(wsgi_server_host_port, elasticsearch_server, postgresql_server,
     return settings
 
 
-@pytest.yield_fixture(scope='session', params=[False, True])
+INDEXER_MODE = os.environ.get('INDEXER_MODE', "MPINDEX").upper()
+if INDEXER_MODE == "MPINDEX":
+    INDEXER_APP_PARAMS = [True]
+elif INDEXER_MODE == "INDEX":
+    INDEXER_APP_PARAMS = [False]
+elif INDEXER_MODE == "BOTH":
+    INDEXER_APP_PARAMS = [False, True]
+else:
+    raise Exception("Bad value of INDEXER_MODE: %s. Possible values are MPINDEX, INDEX, and BOTH." % INDEXER_MODE)
+
+
+@pytest.yield_fixture(scope='session', params=INDEXER_APP_PARAMS)
 def app(app_settings, request):
     if request.param: # run tests both with and without mpindexer
         app_settings['mpindexer'] = True
