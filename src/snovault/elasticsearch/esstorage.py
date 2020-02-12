@@ -90,12 +90,11 @@ class ElasticSearchStorage(object):
         self.registry = registry
         self.es = registry[ELASTIC_SEARCH]
         self.index = get_namespaced_index(registry, '*')
-        if self.registry.settings.get('mirror.env.name'):  # mirror info does not change. Cache it
-            self.mirror_env = self.registry.settings['mirror.env.name']
+        self.mirror_env = self.registry.settings.get('mirror.env.name', None)
+        self.mirror_health = None
+        if self.mirror_env:  # mirror info does not change. Cache it
             self.mirror_health = ff_utils.get_health_page(ff_env=self.mirror_env)
-        else:
-            self.mirror_env = None
-            self.mirror_health = None
+
 
     def _one(self, search):
         # execute search and return a model if there is one hit
