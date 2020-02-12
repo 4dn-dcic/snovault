@@ -10,10 +10,15 @@ For the development.ini you must supply the paster app name:
     %(prog)s development.ini --app-name app
 
 """
+
 import json
 import logging
+import webtest
+
 from future.utils import itervalues
+from pyramid import paster
 from pyramid.traversal import resource_path
+
 
 EPILOG = __doc__
 
@@ -62,14 +67,12 @@ def run(testapp, collections=None):
 
 
 def internal_app(configfile, app_name=None, username='TEST', accept='text/html'):
-    from pyramid import paster
-    from webtest import TestApp
     app = paster.get_app(configfile, app_name)
     environ = {
         'HTTP_ACCEPT': accept,
         'REMOTE_USER': username,
     }
-    return TestApp(app, environ)
+    return webtest.TestApp(app, environ)
 
 
 def main():

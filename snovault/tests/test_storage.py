@@ -5,11 +5,12 @@ import uuid
 from .. import DBSESSION, STORAGE
 from ..storage import PickStorage, RDBStorage, Resource
 from ..storage import (
-    PropertySheet,
-    CurrentPropertySheet,
     Blob,
+    CurrentPropertySheet,
     Key,
     Link,
+    PropertySheet,
+    Resource,
 )
 from .serverfixtures import session
 from .toolfixtures import registry, storage
@@ -44,11 +45,6 @@ def test_transaction_record_rollback(session):
 
 
 def test_current_propsheet(session):
-    from ..storage import (
-        CurrentPropertySheet,
-        Resource,
-        PropertySheet,
-    )
     name = 'testdata'
     props1 = {'foo': 'bar'}
     resource = Resource('test_item', {name: props1})
@@ -68,11 +64,6 @@ def test_current_propsheet(session):
 
 
 def test_current_propsheet_update(session):
-    from ..storage import (
-        CurrentPropertySheet,
-        Resource,
-        PropertySheet,
-    )
     name = 'testdata'
     props1 = {'foo': 'bar'}
     resource = Resource('test_item', {name: props1})
@@ -94,11 +85,6 @@ def test_current_propsheet_update(session):
 
 
 def test_get_by_json(session):
-    from ..storage import (
-        CurrentPropertySheet,
-        Resource,
-        PropertySheet,
-    )
     name = 'testdata'
     props1 = {'foo': 'bar'}
     resource = Resource('test_item', {name: props1})
