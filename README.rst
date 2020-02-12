@@ -1,6 +1,6 @@
-========
-Snovault
-========
+=============
+DCIC Snovault
+=============
 
 |Build status|_
 
@@ -10,12 +10,29 @@ Snovault
 Overview
 ========
 
-Snovault is a JSON-LD Database Framework that serves as the backend for the 4DN Data portal and CGAP. Check out our full documentation `here
+DCIC Snovault is a JSON-LD Database Framework that serves as the backend for the 4DN Data portal and CGAP. Check out our full documentation `here
 <https://snovault.readthedocs.io/en/latest/>`_.
 
+.. note::
 
-Installation
-============
+    This repository contains a core piece of functionality shared amongst several projects
+    in the 4DN-DCIC. It is meant to be used internally by the DCIC team
+    in support of `Fourfront <https://data.4dnucleome.org>`_\ ,
+    the 4DN data portal, and at this point in time it is not expected to be useful
+    in a standalone/plug-and-play way to others.
+
+Installation in 4DN components
+==============================
+
+DCIC Snovault is pip installable as the ``dcicsnovault`` package with::
+
+    $ pip install dcicsnovault``
+
+However, at the present time, the functionality it provides might only be useful in conjunction
+with other 4DN-DCIC components.
+
+Installation for Development
+============================
 
 Currently these are for Mac OSX using homebrew. If using linux, install dependencies with a different package manager.
 
@@ -65,14 +82,12 @@ NOTES:
     $ brew upgrade
     $ rm -rf encoded/eggs
 
-Step 3: Running Buildout
-------------------------
+Step 3: Running Poetry
+----------------------
 
 Run buildout::
 
-    $ python3 bootstrap.py --buildout-version 2.9.5 --setuptools-version 36.6.0
-    $ bin/buildout
-
+    $ poetry install
 
 NOTES:
 
