@@ -82,3 +82,4 @@ Specific tests to run locally for schema changes::
 Run the Pyramid tests with::
 
     $ bin/test
+
