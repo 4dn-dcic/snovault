@@ -1117,6 +1117,30 @@ def test_indexing_esstorage(app, testapp, indexer_testapp):
     esstorage.purge_uuid(test_uuid, namespaced_test_type)
 
 
+@pytest.mark.flaky  # timing could mess up
+def test_indexing_esstorage_can_purge_without_db(app, testapp, indexer_testapp):
+    """
+    Tests that we can delete items from ES using the DELETE API when said item does
+    not exist in the DB
+    """
+    esstorage = app.registry[STORAGE].read
+    rdbstorage = app.registry[STORAGE].write
+    # post an item, allow it to index
+    res = testapp.post_json(TEST_COLL, {'required': 'some_value'})
+    test_uuid = res.json['@graph'][0]['uuid']
+    res = indexer_testapp.post_json('/index', {'record': True})
+    assert res.json['indexing_count'] == 1
+    time.sleep(2)
+    # get out of DB, purge it manually
+    db_res = rdbstorage.get_by_uuid(test_uuid)
+    rdbstorage.purge_uuid(str(db_res.uuid))  # delete from DB
+    assert esstorage.get_by_uuid(test_uuid)  # can still get from es
+    testapp.delete_json('/' + test_uuid)  # set status to deleted
+    testapp.delete_json('/' + test_uuid + '?purge=True')  # purge fully
+    time.sleep(1)  # give es a second to catch up
+    assert not esstorage.get_by_uuid(test_uuid)  # should not get now
+
+
 @pytest.mark.flaky(max_runs=2, rerun_filter=delay_rerun)
 def test_aggregated_items(app, testapp, indexer_testapp):
     """
