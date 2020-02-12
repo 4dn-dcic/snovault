@@ -91,9 +91,10 @@ class ElasticSearchStorage(object):
         self.es = registry[ELASTIC_SEARCH]
         self.index = get_namespaced_index(registry, '*')
         if self.registry.settings.get('mirror.env.name'):  # mirror info does not change. Cache it
-            mirror_env = self.registry.settings['mirror.env.name']
-            self.mirror_health = ff_utils.get_health_page(ff_env=mirror_env)
+            self.mirror_env = self.registry.settings['mirror.env.name']
+            self.mirror_health = ff_utils.get_health_page(ff_env=self.mirror_env)
         else:
+            self.mirror_env = None
             self.mirror_health = None
 
     def _one(self, search):
@@ -263,6 +264,8 @@ class ElasticSearchStorage(object):
             if 'error' in self.mirror_health:
                 log.error('PURGE: Tried to purge %s from mirror storage but couldn\'t get health page. Is staging up?' % rid)
                 log.error('PURGE: Mirror health error: %s' % self.mirror_health)
+                log.error('PURGE: Recomputing mirror health...')
+                self.mirror_health = ff_utils.get_health_page(ff_env=self.mirror_env)
                 return
             # make sure use_aws_auth is bool
             if not isinstance(use_aws_auth, bool):

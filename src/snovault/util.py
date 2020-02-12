@@ -19,52 +19,6 @@ log = structlog.getLogger(__name__)
 ###################
 
 
-class TimedCacheTuple(object):
-    """ A 3 tuple containing an arbitrary value, a time and a function 
-        pointer used to compute that value
-    """
-
-    def __init__(self, func):
-        self.time = datetime.datetime.now()  # relative should be ok here
-        self.func = func
-        self.val = func()
-
-
-class TimedCache(object):
-    """ 
-    A cache that stores key, value pairs where the key is an
-    arbitrary ID and the value is a the above class consisting of the value, 
-    insertion time and function pointer to recompute the value. 
-    TimedCache has a global TTL applied to all items in the cache.
-    """
-
-    def __init__(self, ttl):
-        """ Initializes the cache setting the TTL and underlying structure
-
-            :args ttl: time-to-live of all values in the cache (in minutes)
-        """
-        self.ttl = datetime.timedelta(minutes=ttl)
-        self.cache = {}
-
-    def insert(self, key, func):
-        self.cache[key] = TimedCacheTuple(func)
-    
-    def get(self, key):
-        vals = self.cache.get(key)
-        if vals:  # if we have a value, check ttl, recompute if need be
-            if (vals.time + self.ttl) > datetime.datetime.now():
-                self.insert(key, vals.func)
-        
-        return self.cache.get(key)
-    
-    def __getitem__(self, key):
-        return self.cache.get(key).val  # return only the value
-
-    def update(self):
-        for k, v in self.cache.items():
-            self.insert(k, v.func)  
-
-
 def debug_log(func):
     """ Decorator that adds some debug output of the view to log that we got there """
     @functools.wraps(func)
