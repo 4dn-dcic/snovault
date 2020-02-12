@@ -85,37 +85,41 @@ NOTES:
 Step 3: Running Poetry
 ----------------------
 
-Run buildout::
+To locally install using versions of Python libraries that have worked before, use this::
 
     $ poetry install
 
-NOTES:
 
-* If you have issues with postgres or the python interface to it (psycogpg2)
-  you probably need to install postgresql via homebrew (as above)
+Updating dependencies
+=====================
 
-* If you have issues with Pillow you may need to install new xcode command line tools.
+To update the version dependencies, use::
 
-  - First update Xcode from AppStore (reboot)::
+    $ poetry update
 
-      $ xcode-select --install
+This command also takes space-separated names of specific packages to update. For more information, do::
 
-  - If you are running macOS Mojave (though this is fixed in Catalina), you may need to run this command as well::
+    $ poetry help update
 
-      $ sudo installer -pkg /Library/Developer/CommandLineTools/Packages/macOS_SDK_headers_for_macOS_10.14.pkg -target /
 
-  - If you have trouble with zlib, especially in Catalina, it is probably because brew installed it
-    in a different location. In that case, you'll want to do the following
-    in place of the regular call to buildout::
+Managing poetry.lock after update
+---------------------------------
 
-      $ CFLAGS="-I$(brew --prefix zlib)/include" LDFLAGS="-L$(brew --prefix zlib)/lib" bin/buildout
+There may be situations where you do this with no intent to check in the resulting updates,
+but once you have checked that the updates are sound, you may wish to check the resulting
+``poetry.lock`` file.
 
-* If you wish to completely rebuild the application, or have updated dependencies,
-  before you go ahead, you'll probably want to do::
+Publishing
+==========
 
-    $ make clean
+Normally, a successful build on a tagged branch will cause publication automatically.
+It should not be necessary for you to manually use::
 
-  Then goto Step 3.
+    $ poetry publish
+
+Also, you would need appropriate credentials on PyPi for such publication to succeed. As presently configured,
+these credentials need to be in the environment variables ``PYPI_USER`` and ``PYPI_PASSWORD``.
+If you attempt to do this manually, be sure the version is set properly!
 
 Running tests
 =============
