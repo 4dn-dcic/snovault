@@ -1,7 +1,6 @@
 import functools
 import json
 import sys
-import datetime
 from copy import deepcopy
 
 import structlog
