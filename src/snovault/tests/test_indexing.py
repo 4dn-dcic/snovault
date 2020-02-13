@@ -1331,6 +1331,7 @@ def test_validators_on_indexing(app, testapp, indexer_testapp):
     assert val_err_view['validation_errors'] == es_res['_source']['validation_errors']
 
 
+@pytest.mark.flaky
 def test_elasticsearch_item_basic(app, testapp, indexer_testapp, es_based_target):
     es = app.registry[ELASTIC_SEARCH]
     namespaced_target = indexer_utils.get_namespaced_index(app, 'testing_link_target_elastic_search')
