@@ -133,6 +133,18 @@ def es_based_target(app, testapp):
     es.indices.delete(index=namespaced_indexing)
 
 
+def test_indexing_post_then_get_immediately(testapp, indexer_testapp):
+    """
+    Tests that we can post then immediately get an object
+    """
+    res = testapp.post_json(TEST_COLL, {'required': 'some_value'})
+    test_uuid = res.json['@graph'][0]['uuid']
+    testapp.get('/' + test_uuid, status=[301, 200])
+    res = indexer_testapp.post_json('/index', {'record': True})
+    assert res.json['indexing_count'] == 1
+    testapp.get('/' + test_uuid, status=[301, 200])
+
+
 def test_indexer_namespacing(app, testapp, indexer_testapp):
     """
     Tests that namespacing indexes works as expected. This test has no real
