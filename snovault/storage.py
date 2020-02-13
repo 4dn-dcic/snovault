@@ -172,7 +172,10 @@ class PickStorage(object):
         storage = self.storage(datastore)
         model = storage.get_by_uuid(uuid)
         # unless forcing ES datastore, check write storage if not found in read
-        if datastore == 'database' and storage is self.read:
+        # if datastore == 'database' and storage is self.read:
+        # Old is above - See C4-30
+        # if not specifically specifying datastore=elasticsearch, always fall back to DB
+        if not datastore == 'elasticsearch':
             if model is None:
                 return self.write.get_by_uuid(uuid)
         return model
@@ -184,7 +187,10 @@ class PickStorage(object):
         storage = self.storage(datastore)
         model = storage.get_by_unique_key(unique_key, name)
         # unless forcing ES datastore, check write storage if not found in read
-        if datastore == 'database' and storage is self.read:
+        # if datastore == 'database' and storage is self.read:
+        # Old is above - See C4-30
+        # if not specifically specifying datastore=elasticsearch, always fall back to DB
+        if not datastore == 'elasticsearch':
             if model is None:
                 return self.write.get_by_unique_key(unique_key, name)
         return model
@@ -196,7 +202,10 @@ class PickStorage(object):
         storage = self.storage(datastore)
         model = storage.get_by_json(key, value, item_type)
         # unless forcing ES datastore, check write storage if not found in read
-        if datastore == 'database' and storage is self.read:
+        # if datastore == 'database' and storage is self.read:
+        # Old is above - See C4-30
+        # if not specifically specifying datastore=elasticsearch, always fall back to DB
+        if not datastore == 'elasticsearch':
             if model is None:
                 return self.write.get_by_json(key, value, item_type)
         return model
