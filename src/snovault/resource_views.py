@@ -29,6 +29,7 @@ from .util import (
     check_es_and_cache_linked_sids,
     validate_es_content,
     debug_log,
+    filter_embedded,
 )
 
 
@@ -204,7 +205,7 @@ def item_view_embedded(context, request):
                 request._aggregated_items = {agg: {'items': val} for agg, val in
                                              es_res['aggregated_items'].items()}
                 request._aggregate_for['uuid'] = None
-            return es_res['embedded']
+            return filter_embedded(es_res['embedded'], request.effective_principals)
 
     # set up _aggregated_items if we want to aggregate this target
     will_aggregate = getattr(request, '_aggregate_for').get('uuid') == str(context.uuid)
@@ -225,7 +226,7 @@ def item_view_embedded(context, request):
         # use a list here so that the reference is maintained through subreq
         request._aggregate_for['uuid'] = None
 
-    return embedded
+    return filter_embedded(embedded, request.effective_principals)
 
 
 @view_config(context=Item, permission='view', request_method='GET',

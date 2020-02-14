@@ -18,6 +18,36 @@ log = structlog.getLogger(__name__)
 ###################
 
 
+_skip_fields = ['@type', 'principals_allowed']
+def filter_embedded(embedded, effective_principals):
+    """
+    Filter the embedded items by principals_allowed, replacing them with
+    a 'no view allowed' error message if the effective principals on the
+    request are disjointed
+    """
+    _skip_fields = ['@type', 'principals_allowed']
+    # handle dictionary
+    if isinstance(embedded, dict):
+        if 'principals_allowed' in embedded.keys():
+            obj_princ = embedded.get('principals_allowed')
+            allowed = set(obj_princ['view'])
+            if allowed.isdisjoint(effective_principals):
+                embedded = {'error': 'no view permissions'}
+                return embedded
+
+        for name, obj in embedded.items():
+            if isinstance(obj, (dict, list)) and name not in _skip_fields:
+                embedded[name] = filter_embedded(obj, effective_principals)
+
+    # handle array
+    elif isinstance(embedded, list):
+        for idx, item in enumerate(embedded):
+            embedded[idx] = filter_embedded(item, effective_principals)
+
+    # default just return the sucker
+    return embedded
+
+
 def debug_log(func):
     """ Decorator that adds some debug output of the view to log that we got there """
     @functools.wraps(func)
