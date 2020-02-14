@@ -157,7 +157,7 @@ def item_view_object(context, request):
     Returns:
         Dictionary item properties
     """
-    if request.datastore != 'elasticsearch':
+    if request.datastore == 'elasticsearch':
         es_res = check_es_and_cache_linked_sids(context, request, 'object')
         # validate_es_content also checks/updates rev links
         if es_res and validate_es_content(context, request, es_res, 'object'):
@@ -193,7 +193,7 @@ def item_view_embedded(context, request):
     Returns:
         Dictionary item properties
     """
-    if request.datastore != 'elasticsearch':
+    if request.datastore == 'elasticsearch':
         es_res = check_es_and_cache_linked_sids(context, request, 'embedded')
         # validate_es_content also checks/updates rev links
         if es_res and validate_es_content(context, request, es_res, 'embedded'):
@@ -226,7 +226,7 @@ def item_view_embedded(context, request):
         # use a list here so that the reference is maintained through subreq
         request._aggregate_for['uuid'] = None
 
-    return filter_embedded(embedded, request.effective_principals)
+    return embedded
 
 
 @view_config(context=Item, permission='view', request_method='GET',
