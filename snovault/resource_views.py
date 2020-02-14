@@ -233,7 +233,6 @@ def item_view_embedded(context, request):
              name='page')
 @debug_log
 def item_view_page(context, request):
-    import pdb; pdb.set_trace()
     item_path = request.resource_path(context)
     properties = request.embed(item_path, '@@embedded', as_user=True)
     calculated = calculate_properties(context, request, properties, category='page')
