@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "dcicsnovault"
-version = "2.0.0b6"
+version = "2.0.0b7"
 description = "Storage support for 4DN Data Portals."
 authors = ["4DN-DCIC Team <support@4dnucleome.org>"]
 license = "MIT"
@@ -68,7 +68,9 @@ future = "^0.15.2"
 # missing in pipreqs, but not implicitly loaded: futures
 futures = "^3.1.1"
 # missing in pipreqs, but not implicitly loaded: html5lib
-html5lib = "^1.0b8"
+# cgap-portal really wants this to be 0.
+# html5lib = "^1.0b8"
+html5lib = "0.9999999"
 # missing in pipreqs, but not implicitly loaded: humanfriendly
 humanfriendly = "^1.44.5"
 # hupper = "^1.4.2" (*)
@@ -189,7 +191,7 @@ pytest-mock = ">=0.11.0,<1"
 pytest-runner = "^4.0"
 pytest-timeout = "^1.0.0"
 "repoze.debug" = "^1.0.2"
-"repoze.lru" = "^0.6"
+# "repoze.lru" = "^0.6"
 responses = "^0"
 
 [tool.poetry.scripts]
