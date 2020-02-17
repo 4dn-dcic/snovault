@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "dcicsnovault"
-version = "2.0.0b4"
+version = "2.0.0b5"
 description = "Storage support for 4DN Data Portals."
 authors = ["4DN-DCIC Team <support@4dnucleome.org>"]
 license = "MIT"
@@ -38,15 +38,15 @@ classifiers = [
 
 [tool.poetry.dependencies]
 python = ">=3.5,<3.7"
-# In the following, "(*)" means "removed by pipreq"
+# In the following, "(*)" means "removed by pipreqs"
 # aws_requests_auth = "0.4.2"
 aws_requests_auth = "^0.4.1"
 # pipreqs didn't seem to need this, but it might be useful.
 awscli = "^1.15.42"
 # is this next one even needed? maybe not now that we're in python 3.
 "backports.statistics" = "0.1.0"
-boto3 = "^1.7.42"
 # bcrypt = "^3.1.0" (*)
+boto3 = "^1.7.42"
 # botocore = "^1.10.42" (*)
 # certifi = ">=2018.4.16" (*)
 # cffi = "^1.6.0" (*)
