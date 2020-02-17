@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "dcicsnovault"
-version = "2.0.0b5"
+version = "2.0.0b6"
 description = "Storage support for 4DN Data Portals."
 authors = ["4DN-DCIC Team <support@4dnucleome.org>"]
 license = "MIT"
@@ -45,7 +45,8 @@ aws_requests_auth = "^0.4.1"
 awscli = "^1.15.42"
 # is this next one even needed? maybe not now that we're in python 3.
 "backports.statistics" = "0.1.0"
-# bcrypt = "^3.1.0" (*)
+# missing in pipreqs, but not implicitly loaded: bcrypt
+bcrypt = "^3.1.0"
 boto3 = "^1.7.42"
 # botocore = "^1.10.42" (*)
 # certifi = ">=2018.4.16" (*)
@@ -64,16 +65,22 @@ elasticsearch_dsl = "^5.3.0"
 # flaky = "3.6.1" (*)
 # future = "0.18.2"
 future = "^0.15.2"
-# html5lib = "1.0b8" (*)
-# humanfriendly = "^1.44.5" (*)
+# missing in pipreqs, but not implicitly loaded: futures
+futures = "^3.1.1"
+# missing in pipreqs, but not implicitly loaded: html5lib
+html5lib = "^1.0b8"
+# missing in pipreqs, but not implicitly loaded: humanfriendly
+humanfriendly = "^1.44.5"
 # hupper = "^1.4.2" (*)
 # idna = "2.7" (*)
 # isodate = "0.5.4" (*)
 # jmespath = "0.9.0" (*)
 jsonschema_serialize_fork = "2.1.1"
 keepalive = "0.5"
-# loremipsum = "1.0.5" (*)
-# MarkupSafe = "0.23" (*)
+# missing in pipreqs, but not implicitly loaded: loremipsum
+loremipsum = "1.0.5"
+# missing in pipreqs, but not implicitly loaded: MarkupSafe
+MarkupSafe = ">=0.23,<1"
 # # mr.developer = "1.38"
 # # mr.developer = ""
 # "mr.developer" = "1.38" (*)
@@ -92,7 +99,8 @@ psutil = ">=4.3.0,<5"
 psycopg2 = "^2.7.3"
 # py = "1.4.31" (*)
 # pyasn1 = "0.1.9" (*)
-# PyBrowserID = "^0.10.0" (*)
+# missing in pipreqs, but not implicitly loaded: PyBrowserID
+PyBrowserID = "^0.10.0"
 # pycparser = "2.14" (*)
 # pyparsing = "^2.1.1" (*)
 pyramid = "1.10.4"
@@ -124,16 +132,21 @@ rdflib-jsonld = ">=0.3.0,<1.0.0"
 # "repoze.debug" = "^1.0.2"
 # "repoze.lru" = "^0.6"
 # requests = "^2.20.0"
-# rfc3987 = "^1.3.6" (*)
+# missing in pipreqs, but not implicitly loaded: rfc3987
+rfc3987 = "^1.3.6"
 # rsa = "^3.4.2" (*)
-# rutter = "0.2" (*)
+# missing in pipreqs, but not implicitly loaded: rutter
+rutter = ">=0.2,<1"
 # s3transfer = "0.1.13" (*)
 # setuptools = "^36.6.0" (*)
 simplejson = "3.17.0"
 # six = "1.14.0" (*)
+# missing in pipreqs, but not implicitly loaded: SPARQLWrapper
+SPARQLWrapper = "^1.7.6"
 # SQLAlchemy = "1.3.13"
 SQLAlchemy = "^1.2.16"
-# strict-rfc3339 = "0.7" (*)
+# missing in pipreqs, but not implicitly loaded: strict-rfc3339
+strict-rfc3339 = ">=0.7,<1"
 # structlog = "20.1.0"
 structlog = ">=18.1.0,<20"
 # subprocess32 = "3.5.4" (*)
@@ -150,7 +163,8 @@ WebOb = "^1.8.5"
 WebTest = "^2.0.21"
 WSGIProxy2 = "0.4.2"
 zope = "^4.2.1"
-# xlrd = "1.0.0" (*)
+# missing in pipreqs, but not implicitly loaded: xlrd
+xlrd = "^1.0.0"
 # zc.buildout = "^2.13.2"
 # zc.recipe.egg = "^2.0.5"
 "zope.deprecation" = "^4.4.0"
