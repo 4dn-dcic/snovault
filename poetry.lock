@@ -33,15 +33,15 @@ category = "main"
 description = "Modern password hashing for your software and your servers"
 name = "bcrypt"
 optional = false
-python-versions = "*"
-version = "3.1.0"
+python-versions = ">=2.7, !=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*"
+version = "3.1.6"
 
 [package.dependencies]
 cffi = ">=1.1"
 six = ">=1.4.1"
 
 [package.extras]
-tests = ["pytest"]
+tests = ["pytest (>=3.2.1,<3.3.0 || >3.3.0)"]
 
 [[package]]
 category = "main"
@@ -188,7 +188,7 @@ description = "Python client for Elasticsearch"
 name = "elasticsearch-dsl"
 optional = false
 python-versions = "*"
-version = "5.3.0"
+version = "5.4.0"
 
 [package.dependencies]
 elasticsearch = ">=5.0.0,<6.0.0"
@@ -196,7 +196,7 @@ python-dateutil = "*"
 six = "*"
 
 [package.extras]
-develop = ["mock", "pytest", "pytest-cov", "pytz", "sphinx", "sphinx-rtd-theme"]
+develop = ["mock", "pytest (>=3.0.0)", "pytest-cov", "pytz", "sphinx", "sphinx-rtd-theme"]
 
 [[package]]
 category = "dev"
@@ -669,7 +669,7 @@ description = "File type identification using libmagic"
 name = "python-magic"
 optional = false
 python-versions = "*"
-version = "0.4.11"
+version = "0.4.12"
 
 [[package]]
 category = "main"
@@ -1052,7 +1052,7 @@ transaction = ">=1.6.0"
 test = ["zope.testing"]
 
 [metadata]
-content-hash = "49aa4ab2558a0ead3dbdebb36a4e25e8f0331c10e85624f1b3e43c916c5371c9"
+content-hash = "e967553f34f4273e0aec5fd3565e12cee3d16f96ac8023395ca610e2e54738fd"
 python-versions = ">=3.5,<3.7"
 
 [metadata.files]
@@ -1064,37 +1064,25 @@ awscli = [
     {file = "awscli-1.18.1.tar.gz", hash = "sha256:7bf8e31f83e79c9c5ab07fc7b82fdc15765f9c89140d71bda63e63f218ced859"},
 ]
 bcrypt = [
-    {file = "bcrypt-3.1.0-cp26-cp26m-macosx_10_7_intel.whl", hash = "sha256:ef8b9d5883611ffe2428d40dcf65ab86b8d92afdd6d01e79594b10a710d724af"},
-    {file = "bcrypt-3.1.0-cp26-cp26m-manylinux1_i686.whl", hash = "sha256:0a1fa5e8bad38ead75819fe82d1c9dbb682a972848639df3d70329fa24e1eed4"},
-    {file = "bcrypt-3.1.0-cp26-cp26m-manylinux1_x86_64.whl", hash = "sha256:21ae97098f187a40b7f64a359a794ecb5e6bfe7f6b358d0e3033081b43d406ed"},
-    {file = "bcrypt-3.1.0-cp26-cp26m-win32.whl", hash = "sha256:7db3949fbf42f544aae49b5559f333aa1473d84a712f085a27927bc18bdf53ba"},
-    {file = "bcrypt-3.1.0-cp26-cp26m-win_amd64.whl", hash = "sha256:8da0578982a6c1039a02f7f9ccfff2a92ea378b1c304e1b21c6219509fc4e8f1"},
-    {file = "bcrypt-3.1.0-cp26-cp26mu-manylinux1_i686.whl", hash = "sha256:ca31f7c36a646fe41fd38263bc1e45b46955bd638aba717183a23279b7e10b2c"},
-    {file = "bcrypt-3.1.0-cp26-cp26mu-manylinux1_x86_64.whl", hash = "sha256:6a5ed44eab27e7db0c04525430b84dbffa4ddaf4df113d54a18c8f1c53b95fa8"},
-    {file = "bcrypt-3.1.0-cp27-cp27m-macosx_10_6_intel.whl", hash = "sha256:b63349c7dca58de68841ababc92d67586bd74a02d3bdeded40ff3c624dee1d1b"},
-    {file = "bcrypt-3.1.0-cp27-cp27m-manylinux1_i686.whl", hash = "sha256:12ec763e3d0bed4e2c21708a5002d7d1e478e84773d8d70555509a3208bb2099"},
-    {file = "bcrypt-3.1.0-cp27-cp27m-manylinux1_x86_64.whl", hash = "sha256:d0fab32ab20677c2c8b06a8d8745bcfd45df73680c0f8ee6c5c80e007d830d8d"},
-    {file = "bcrypt-3.1.0-cp27-cp27m-win32.whl", hash = "sha256:bdfed3d16907dccec91547cdc8aa473908e9562da342ad16026c0bf97ba867f0"},
-    {file = "bcrypt-3.1.0-cp27-cp27m-win_amd64.whl", hash = "sha256:f9fc357289d198da42c347c93310d649c3a69cba5d068dee21321e95c560a94e"},
-    {file = "bcrypt-3.1.0-cp27-cp27mu-macosx_10_10_x86_64.whl", hash = "sha256:457bae2b268940792c58da6dfdbbb763a6b32d9729f273dbcbf7c41364727014"},
-    {file = "bcrypt-3.1.0-cp27-cp27mu-manylinux1_i686.whl", hash = "sha256:467a0ab2a23ca384d2a068a040409c8c4ba173335cd73158cb0a61b3c67fcb41"},
-    {file = "bcrypt-3.1.0-cp27-cp27mu-manylinux1_x86_64.whl", hash = "sha256:c9a3d44c3b13c6a1fb209663f6f06c04e41f2e8c4ac040ce51ddd019dc06ef09"},
-    {file = "bcrypt-3.1.0-cp33-cp33m-macosx_10_6_intel.whl", hash = "sha256:4c471a572d40e7809e31048e8e15437e8799240f6eba9164d1e60ea61604bf93"},
-    {file = "bcrypt-3.1.0-cp33-cp33m-manylinux1_i686.whl", hash = "sha256:540c9aecfaab41a68e012f8b1ffc280c29a60689a6181e06c4bc473f7382e953"},
-    {file = "bcrypt-3.1.0-cp33-cp33m-manylinux1_x86_64.whl", hash = "sha256:e2b779a29b51d2c80f408f36c77de55d040301a11c7ab96ef9af7797552572bf"},
-    {file = "bcrypt-3.1.0-cp33-cp33m-win32.whl", hash = "sha256:67ab148cc67310e6eb4455ed1751b8a8fd0e63be8227123a5d199c5233355ded"},
-    {file = "bcrypt-3.1.0-cp33-cp33m-win_amd64.whl", hash = "sha256:518bf3c6bc0f3fc9f273f66fc4f2fcbbfc40b0080ceb00fb4016a62531e15e30"},
-    {file = "bcrypt-3.1.0-cp34-cp34m-macosx_10_6_intel.whl", hash = "sha256:3f96bd5dfb5a0062c5bcac93b37c84edcd1d594bc7c5e2d8680aa60fb6f4f546"},
-    {file = "bcrypt-3.1.0-cp34-cp34m-manylinux1_i686.whl", hash = "sha256:3322a5be544d07ef8ee138a675653f3d7722f8beeb391fa04a228dfb4b35fd29"},
-    {file = "bcrypt-3.1.0-cp34-cp34m-manylinux1_x86_64.whl", hash = "sha256:63b67f6be04035c351f4db9ba0c1317c4a8acac6c647cc02755f342171bdc234"},
-    {file = "bcrypt-3.1.0-cp34-cp34m-win32.whl", hash = "sha256:7044e2c0a4e0378d4b945490124bed740cf864402f5686dbbefb78e8093ffbb6"},
-    {file = "bcrypt-3.1.0-cp34-cp34m-win_amd64.whl", hash = "sha256:78003c6793e07afbd8a7cce89c8c5b923eb511a8e2bdc837e59cca11cd31a7ea"},
-    {file = "bcrypt-3.1.0-cp35-cp35m-macosx_10_6_intel.whl", hash = "sha256:7d403d74183eb957f34ca331a5d05d4475d7993042419dfd3bfd3f8eb40b98d1"},
-    {file = "bcrypt-3.1.0-cp35-cp35m-manylinux1_i686.whl", hash = "sha256:d33967627e5f7d777b0e1bccf7aab2587058517d18ddc5b388b2652902511203"},
-    {file = "bcrypt-3.1.0-cp35-cp35m-manylinux1_x86_64.whl", hash = "sha256:e6b3c90908a740ce9cc0a0d7d55ae38602e64b226a0658581ea481c822c82fcf"},
-    {file = "bcrypt-3.1.0-cp35-cp35m-win32.whl", hash = "sha256:d43dda44ae1c3d50eddd54029ae1e3e2a2a2734d7e71eb94c66a72f640b1ac4b"},
-    {file = "bcrypt-3.1.0-cp35-cp35m-win_amd64.whl", hash = "sha256:26bad7f8010ccb029990f1103fb3686cdde098408de4855a2a286b07b96aef83"},
-    {file = "bcrypt-3.1.0.tar.gz", hash = "sha256:e54820d8b9eff357d1003f5b8d4b949a632b76b89610d8a933783fd476033ebe"},
+    {file = "bcrypt-3.1.6-cp27-cp27m-macosx_10_6_intel.whl", hash = "sha256:2aed3091eb6f51c26b7c2fad08d6620d1c35839e7a362f706015b41bd991125e"},
+    {file = "bcrypt-3.1.6-cp27-cp27m-manylinux1_i686.whl", hash = "sha256:a9083e7fa9adb1a4de5ac15f9097eb15b04e2c8f97618f1b881af40abce382e1"},
+    {file = "bcrypt-3.1.6-cp27-cp27m-manylinux1_x86_64.whl", hash = "sha256:b7e3948b8b1a81c5a99d41da5fb2dc03ddb93b5f96fcd3fd27e643f91efa33e1"},
+    {file = "bcrypt-3.1.6-cp27-cp27m-win32.whl", hash = "sha256:8ac06fb3e6aacb0a95b56eba735c0b64df49651c6ceb1ad1cf01ba75070d567f"},
+    {file = "bcrypt-3.1.6-cp27-cp27m-win_amd64.whl", hash = "sha256:dd08c50bc6f7be69cd7ba0769acca28c846ec46b7a8ddc2acf4b9ac6f8a7457e"},
+    {file = "bcrypt-3.1.6-cp27-cp27mu-manylinux1_i686.whl", hash = "sha256:678c21b2fecaa72a1eded0cf12351b153615520637efcadc09ecf81b871f1596"},
+    {file = "bcrypt-3.1.6-cp27-cp27mu-manylinux1_x86_64.whl", hash = "sha256:3e489787638a36bb466cd66780e15715494b6d6905ffdbaede94440d6d8e7dba"},
+    {file = "bcrypt-3.1.6-cp34-abi3-macosx_10_6_intel.whl", hash = "sha256:0ba875eb67b011add6d8c5b76afbd92166e98b1f1efab9433d5dc0fafc76e203"},
+    {file = "bcrypt-3.1.6-cp34-abi3-manylinux1_i686.whl", hash = "sha256:b998b8ca979d906085f6a5d84f7b5459e5e94a13fc27c28a3514437013b6c2f6"},
+    {file = "bcrypt-3.1.6-cp34-abi3-manylinux1_x86_64.whl", hash = "sha256:de5badee458544ab8125e63e39afeedfcf3aef6a6e2282ac159c95ae7472d773"},
+    {file = "bcrypt-3.1.6-cp34-cp34m-win32.whl", hash = "sha256:ede2a87333d24f55a4a7338a6ccdccf3eaa9bed081d1737e0db4dbd1a4f7e6b6"},
+    {file = "bcrypt-3.1.6-cp34-cp34m-win_amd64.whl", hash = "sha256:8fdced50a8b646fff8fa0e4b1c5fd940ecc844b43d1da5a980cb07f2d1b1132f"},
+    {file = "bcrypt-3.1.6-cp35-cp35m-win32.whl", hash = "sha256:2fa5d1e438958ea90eaedbf8082c2ceb1a684b4f6c75a3800c6ec1e18ebef96f"},
+    {file = "bcrypt-3.1.6-cp35-cp35m-win_amd64.whl", hash = "sha256:3a73f45484e9874252002793518da060fb11eaa76c30713faa12115db17d1430"},
+    {file = "bcrypt-3.1.6-cp36-cp36m-win32.whl", hash = "sha256:21ed446054c93e209434148ef0b362432bb82bbdaf7beef70a32c221f3e33d1c"},
+    {file = "bcrypt-3.1.6-cp36-cp36m-win_amd64.whl", hash = "sha256:75460c2c3786977ea9768d6c9d8957ba31b5fbeb0aae67a5c0e96aab4155f18c"},
+    {file = "bcrypt-3.1.6-cp37-cp37m-win32.whl", hash = "sha256:9b2c5b640a2da533b0ab5f148d87fb9989bf9bcb2e61eea6a729102a6d36aef9"},
+    {file = "bcrypt-3.1.6-cp37-cp37m-win_amd64.whl", hash = "sha256:28a0459381a8021f57230954b9e9a65bb5e3d569d2c253c5cac6cb181d71cf23"},
+    {file = "bcrypt-3.1.6.tar.gz", hash = "sha256:44636759d222baa62806bbceb20e96f75a015a6381690d1bc2eda91c01ec02ea"},
 ]
 beautifulsoup4 = [
     {file = "beautifulsoup4-4.4.1-py2-none-any.whl", hash = "sha256:82a253245aed9875f141dd98a7462572bca93d064cf3117bd33de4b61ee18e68"},
@@ -1207,8 +1195,8 @@ elasticsearch = [
     {file = "elasticsearch-5.5.3.tar.gz", hash = "sha256:ae91b089f2f2b5b3daa04297949e5f805ab12d187218cb587273f472656fd250"},
 ]
 elasticsearch-dsl = [
-    {file = "elasticsearch-dsl-5.3.0.tar.gz", hash = "sha256:de81b2322cde9bf1171c8a41d80596cdadd433b88b93daa09060af3a512523a7"},
-    {file = "elasticsearch_dsl-5.3.0-py2.py3-none-any.whl", hash = "sha256:de5fd68901c5b94e51e2ae4e8ad6f618b22665d89794d96f9b6b763986665527"},
+    {file = "elasticsearch-dsl-5.4.0.tar.gz", hash = "sha256:cbef6467085d7debc870bc450d996c7ba5b8822eb86a6033bba09134ffb01ba8"},
+    {file = "elasticsearch_dsl-5.4.0-py2.py3-none-any.whl", hash = "sha256:197246ddd556b4b7d2738dfa9e4831068c9b5cb21706f6aca035136d42849109"},
 ]
 entrypoints = [
     {file = "entrypoints-0.3-py2.py3-none-any.whl", hash = "sha256:589f874b313739ad35be6e0cd7efde2a4e9b6fea91edcc34e58ecbb8dbe56d19"},
@@ -1495,7 +1483,7 @@ python-dateutil = [
     {file = "python_dateutil-2.5.3-py2.py3-none-any.whl", hash = "sha256:598499a75be2e5e18a66f12c00dd47a069de24794effeda4228bfc760f44f527"},
 ]
 python-magic = [
-    {file = "python-magic-0.4.11.tar.gz", hash = "sha256:89021e288d6efd22cde2842349d79939b9664efdbf99f5790c9862a67759ea94"},
+    {file = "python-magic-0.4.12.tar.gz", hash = "sha256:a04b20900100884d4fce40a767182a16fcb9d10756c67cdc21f5fa610b7c9d3c"},
 ]
 pytz = [
     {file = "pytz-2019.3-py2.py3-none-any.whl", hash = "sha256:1c557d7d0e871de1f5ccd5833f60fb2550652da6be2693c1e02300743d21500d"},
