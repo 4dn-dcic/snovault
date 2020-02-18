@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "dcicsnovault"
-version = "2.0.0b9"
+version = "2.0.0b10"
 description = "Storage support for 4DN Data Portals."
 authors = ["4DN-DCIC Team <support@4dnucleome.org>"]
 license = "MIT"
@@ -54,7 +54,7 @@ chardet = "3.0.4"
 colorama = "0.3.7"
 coverage = "4.1"
 cryptacular = "1.4.1"
-dcicutils = "0.8.5"
+dcicutils = "0.9.3b0"
 docutils = "0.12"
 elasticsearch = "5.5.3"
 elasticsearch-dsl = "5.3.0"

@@ -145,23 +145,20 @@ test = ["nose", "coverage"]
 
 [[package]]
 category = "main"
-description = "Utility modules shared amongst several repos in the 4dn-dcic organization"
+description = "Utility package for interacting with the 4DN Data Portal and other 4DN resources"
 name = "dcicutils"
 optional = false
-python-versions = "*"
-version = "0.8.5"
+python-versions = ">=3.4,<3.7"
+version = "0.9.3b0"
 
 [package.dependencies]
-aws-requests-auth = ">=0.4.1"
-boto3 = ">=1.7.42"
-botocore = ">=1.10.42"
-elasticsearch = "5.5.3"
-requests = ">=2.20.0"
-structlog = ">=18.1.0"
-urllib3 = ">=1.23"
-
-[package.extras]
-test = ["pytest", "pytest-mock", "pytest-cov", "flaky"]
+aws-requests-auth = ">=0.4.2,<1"
+boto3 = ">=1.10.46,<2.0.0"
+botocore = ">=1.13.46,<2.0.0"
+elasticsearch = ">=5.5.3,<6.0.0"
+requests = ">=2.21.0,<3.0.0"
+structlog = ">=19.2.0,<20.0.0"
+urllib3 = ">=1.24.3,<2.0.0"
 
 [[package]]
 category = "main"
@@ -1055,7 +1052,7 @@ transaction = ">=1.6.0"
 test = ["zope.testing"]
 
 [metadata]
-content-hash = "8aa05d5aa15a37baf64ed4abaa18475c4dc0f748c5d03c506cb045ec6d33acc9"
+content-hash = "49aa4ab2558a0ead3dbdebb36a4e25e8f0331c10e85624f1b3e43c916c5371c9"
 python-versions = ">=3.5,<3.7"
 
 [metadata.files]
@@ -1198,8 +1195,8 @@ cryptacular = [
     {file = "cryptacular-1.4.1.tar.gz", hash = "sha256:273f03d03f9b316671ae4f1c1c6b8d3c883da19a5706873e8f3d6543e13dd4a1"},
 ]
 dcicutils = [
-    {file = "dcicutils-0.8.5-py3-none-any.whl", hash = "sha256:cd21a61dce5f3f7ca324785b4f746122973dd63b71d66017b1422af52cb77d28"},
-    {file = "dcicutils-0.8.5.tar.gz", hash = "sha256:ebfd8b67247364d460494a68e123583f786a35e6cd9fd5e9ce2877d1bea3d1c5"},
+    {file = "dcicutils-0.9.3b0-py3-none-any.whl", hash = "sha256:5c451e5678662d8a6785e5f9eaf227e1c87f65977d8f6d7e2bc2c7f0db37d7b7"},
+    {file = "dcicutils-0.9.3b0.tar.gz", hash = "sha256:f7f14cf15a0bd14dbdb3ad6608e4ce2e630a98bab7de422ca5fe0592b96ebaa8"},
 ]
 docutils = [
     {file = "docutils-0.12-py3-none-any.whl", hash = "sha256:dcebd4928112631626f4c4d0df59787c748404e66dda952110030ea883d3b8cd"},
