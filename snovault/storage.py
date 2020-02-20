@@ -868,12 +868,8 @@ class Blob(Base):
     data = Column(types.LargeBinary)
 
 
-# User specific stuff
-import cryptacular.bcrypt
-crypt = cryptacular.bcrypt.BCRYPTPasswordManager()
-
 def hash_password(password):
-    return crypt.encode(password)
+    return ''  # we do not use this
 
 
 class User(Base):
