@@ -42,14 +42,15 @@ def dictionary_lookup(dictionary, key):
         return dictionary[key]
 
 
-_skip_fields = ['@type', 'principals_allowed']
+_skip_fields = ['@type', 'principals_allowed']  # globally accessible if need be in the future
+
+
 def filter_embedded(embedded, effective_principals):
     """
     Filter the embedded items by principals_allowed, replacing them with
     a 'no view allowed' error message if the effective principals on the
     request are disjointed
     """
-    _skip_fields = ['@type', 'principals_allowed']
     # handle dictionary
     if isinstance(embedded, dict):
         if 'principals_allowed' in embedded.keys():
