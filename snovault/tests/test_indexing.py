@@ -94,7 +94,7 @@ def app(app_settings, request):
     DBSession.bind.pool.dispose()
 
 
-@pytest.yield_fixture(scope='module', autouse=True)
+@pytest.yield_fixture(autouse=True)
 def setup_and_teardown(app):
     """
     Run create mapping and purge queue before tests and clear out the
