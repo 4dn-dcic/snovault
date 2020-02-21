@@ -30,6 +30,7 @@ from .util import (
     validate_es_content,
     debug_log,
 )
+from .util import filter_embedded
 
 
 def includeme(config):
@@ -156,7 +157,7 @@ def item_view_object(context, request):
     Returns:
         Dictionary item properties
     """
-    if request.datastore != 'elasticsearch':
+    if request.datastore == 'elasticsearch':
         es_res = check_es_and_cache_linked_sids(context, request, 'object')
         # validate_es_content also checks/updates rev links
         if es_res and validate_es_content(context, request, es_res, 'object'):
@@ -192,7 +193,7 @@ def item_view_embedded(context, request):
     Returns:
         Dictionary item properties
     """
-    if request.datastore != 'elasticsearch':
+    if request.datastore == 'elasticsearch':
         es_res = check_es_and_cache_linked_sids(context, request, 'embedded')
         # validate_es_content also checks/updates rev links
         if es_res and validate_es_content(context, request, es_res, 'embedded'):
@@ -204,7 +205,7 @@ def item_view_embedded(context, request):
                 request._aggregated_items = {agg: {'items': val} for agg, val in
                                              es_res['aggregated_items'].items()}
                 request._aggregate_for['uuid'] = None
-            return es_res['embedded']
+            return filter_embedded(es_res['embedded'], request.effective_principals)
 
     # set up _aggregated_items if we want to aggregate this target
     will_aggregate = getattr(request, '_aggregate_for').get('uuid') == str(context.uuid)
