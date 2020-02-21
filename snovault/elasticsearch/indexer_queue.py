@@ -321,12 +321,13 @@ class QueueManager(object):
                             QueueName=queue_name,
                             Attributes=queue_attrs
                         )
-                    except self.client.exceptions.QueueAlreadyExists:
-                        # try to get queue url again
-                        queue_url = self.get_queue_url(queue_name)
-                        if queue_url:
-                            should_set_attrs = True
-                            break
+                    # XXX: Not implemented by moto... need a workaround
+                    # except self.client.exceptions.QueueAlreadyExists:
+                    #     # try to get queue url again
+                    #     queue_url = self.get_queue_url(queue_name)
+                    #     if queue_url:
+                    #         should_set_attrs = True
+                    #         break
                     except self.client.exceptions.QueueDeletedRecently:
                         log.warning('\n___MUST WAIT TO CREATE QUEUE FOR %ss___\n' % str(backoff))
                         time.sleep(backoff)
