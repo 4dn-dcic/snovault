@@ -52,7 +52,7 @@ awscli = "^1.15.42"
 #       so may no longer be needed. Something to investigate later. -kmp 20-Feb-2020
 "backports.statistics" = "0.1.0"
 # TODO: Check if this is needed. The functionality may come in through cryptacular.
-# bcrypt = "^3.1.0"
+# bcrypt = "3.1.0"
 boto3 = "^1.7.42"
 # botocore = "^1.10.42"
 # certifi = ">=2018.4.16"
@@ -60,7 +60,7 @@ boto3 = "^1.7.42"
 # chardet = "3.0.4"
 # colorama = "^0.3.3"
 # coverage = "^4.0.3"
-cryptacular = "^1.4.1"
+cryptacular = "1.4.1"
 # TODO: Probably we should be adding a "^" here to get new versions, but for now since we're debugging
 #       our whole ecosystem, I left this temporarily pinned. -kmp 20-Feb-2020
 dcicutils = "0.9.3b0"
