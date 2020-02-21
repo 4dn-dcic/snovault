@@ -147,6 +147,7 @@ flaky = "3.6.1"
 flake8 = ""
 # coverage = "4.5.4"
 coverage = ""
+moto = ""
 responses = "^0"
 
 [tool.poetry.scripts]

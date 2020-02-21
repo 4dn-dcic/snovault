@@ -13,6 +13,7 @@ import transaction as transaction_management
 import uuid
 import webtest
 import yaml
+from moto import mock_sqs
 
 from datetime import datetime
 from elasticsearch.exceptions import NotFoundError
@@ -86,7 +87,6 @@ def app(app_settings, request):
     if request.param: # run tests both with and without mpindexer
         app_settings['mpindexer'] = True
     app = main({}, **app_settings)
-
     yield app
 
     DBSession = app.registry[DBSESSION]
@@ -129,7 +129,7 @@ def es_based_target(app, testapp):
         collections=['testing_link_target_elastic_search'],
         skip_indexing=True
     )
-    target  = {'name': 'es_one', 'status': 'current'}
+    target = {'name': 'es_one', 'status': 'current'}
     target_res = testapp.post_json('/testing-link-targets-elastic-search/', target, status=201)
     yield target_res.json['@graph'][0]
 
