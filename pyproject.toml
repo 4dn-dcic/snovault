@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "dcicsnovault"
-version = "2.0.0b12"
+version = "2.0.0b13"
 description = "Storage support for 4DN Data Portals."
 authors = ["4DN-DCIC Team <support@4dnucleome.org>"]
 license = "MIT"
@@ -32,12 +32,13 @@ classifiers = [
     # that you indicate whether you support Python 2, Python 3 or both.
     'Programming Language :: Python :: 2.7',
     'Programming Language :: Python :: 3',
+    'Programming Language :: Python :: 3.4',
     'Programming Language :: Python :: 3.5',
     'Programming Language :: Python :: 3.6'
 ]
 
 [tool.poetry.dependencies]
-python = ">=3.5,<3.7"
+python = ">=3.4,<3.7"
 #
 # NOTE: For now I have retained (commented out) information about libraries that we no longer require
 #       just in case problems result that are due to missing support not immediately detected in testing.
@@ -51,7 +52,7 @@ awscli = "^1.15.42"
 #       so may no longer be needed. Something to investigate later. -kmp 20-Feb-2020
 "backports.statistics" = "0.1.0"
 # TODO: Check if this is needed. The functionality may come in through cryptacular.
-bcrypt = "^3.1.0"
+# bcrypt = "^3.1.0"
 boto3 = "^1.7.42"
 # botocore = "^1.10.42"
 # certifi = ">=2018.4.16"
@@ -132,10 +133,10 @@ venusian = "^1.2.0"
 WebOb = "^1.8.5"
 WebTest = "^2.0.21"
 WSGIProxy2 = "0.4.2"
-zope = "^4.2.1"
 xlrd = "^1.0.0"
 # zc.buildout = "^2.13.2"
 # zc.recipe.egg = "^2.0.5"
+# zope = "^4.2.1"
 "zope.deprecation" = "^4.4.0"
 "zope.interface" = "^4.6.0"
 "zope.sqlalchemy" = "^1.2"
