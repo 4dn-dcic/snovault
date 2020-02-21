@@ -5,6 +5,7 @@ import datetime
 import json
 import socket
 import sys
+import os
 import time
 from collections import OrderedDict
 
@@ -24,11 +25,12 @@ def includeme(config):
     config.add_route('indexing_status', '/indexing_status')
     config.add_route('dlq_to_primary', '/dlq_to_primary')
     env_name = config.registry.settings.get('env.name')
-    config.registry[INDEXER_QUEUE] = QueueManager(config.registry)
+    sqs_url = os.environ.get('SQS_URL', None)
+    config.registry[INDEXER_QUEUE] = QueueManager(config.registry, url=sqs_url)
     # INDEXER_QUEUE_MIRROR is used because webprod and webprod2 share a DB
     if env_name and 'fourfront-webprod' in env_name:
         mirror_env = 'fourfront-webprod2' if env_name == 'fourfront-webprod' else 'fourfront-webprod'
-        mirror_queue = QueueManager(config.registry, mirror_env=mirror_env)
+        mirror_queue = QueueManager(config.registry, mirror_env=mirror_env, url=sqs_url)
         if not mirror_queue.queue_url:
             log.error('INDEXING: Mirror queues %s are not available!' % mirror_queue.queue_name,
                       queue=mirror_queue.queue_name)
@@ -146,7 +148,7 @@ class QueueManager(object):
     3. Dead letter queue (dlq) for handling items that have issues processing
        from either the primary or secondary queues.
     """
-    def __init__(self, registry, mirror_env=None):
+    def __init__(self, registry, mirror_env=None, url=None):
         """
         __init__ will build all three queues needed with the desired settings.
         batch_size parameters conntrol how many messages are batched together
@@ -163,7 +165,10 @@ class QueueManager(object):
             backup = socket.gethostname()[:80].replace('.','-')
             # last case scenario
             self.env_name = backup if backup else 'fourfront-backup'
-        self.client = boto3.client('sqs', region_name='us-east-1')
+        if not url:
+            self.client = boto3.client('sqs', region_name='us-east-1')
+        else:
+            self.client = boto3.client('sqs', region_name='us-east-1', endpoint_url=url)
         # primary queue name
         self.queue_name = self.env_name + '-indexer-queue'
         # secondary queue name

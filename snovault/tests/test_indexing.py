@@ -82,7 +82,7 @@ else:
     raise Exception("Bad value of INDEXER_MODE: %s. Possible values are MPINDEX, INDEX, and BOTH." % INDEXER_MODE)
 
 
-@pytest.yield_fixture(scope='session', params=INDEXER_APP_PARAMS)
+@pytest.yield_fixture(scope='module', params=INDEXER_APP_PARAMS)
 def app(app_settings, request):
     if request.param: # run tests both with and without mpindexer
         app_settings['mpindexer'] = True
@@ -94,7 +94,7 @@ def app(app_settings, request):
     DBSession.bind.pool.dispose()
 
 
-@pytest.yield_fixture(autouse=True)
+@pytest.yield_fixture(scope='module', autouse=True)
 def setup_and_teardown(app):
     """
     Run create mapping and purge queue before tests and clear out the
