@@ -869,7 +869,7 @@ class Blob(Base):
 
 
 def hash_password(password):
-    return ''  # we do not use this
+    raise NotImplementedError('Should not be calling this function')
 
 
 class User(Base):
