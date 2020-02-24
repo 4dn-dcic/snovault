@@ -26,11 +26,11 @@ def includeme(config):
     config.add_route('dlq_to_primary', '/dlq_to_primary')
     env_name = config.registry.settings.get('env.name')
     sqs_url = os.environ.get('SQS_URL', None)
-    config.registry[INDEXER_QUEUE] = QueueManager(config.registry, url=sqs_url)
+    config.registry[INDEXER_QUEUE] = QueueManager(config.registry, override_url=sqs_url)
     # INDEXER_QUEUE_MIRROR is used because webprod and webprod2 share a DB
     if env_name and 'fourfront-webprod' in env_name:
         mirror_env = 'fourfront-webprod2' if env_name == 'fourfront-webprod' else 'fourfront-webprod'
-        mirror_queue = QueueManager(config.registry, mirror_env=mirror_env, url=sqs_url)
+        mirror_queue = QueueManager(config.registry, mirror_env=mirror_env, override_url=sqs_url)
         if not mirror_queue.queue_url:
             log.error('INDEXING: Mirror queues %s are not available!' % mirror_queue.queue_name,
                       queue=mirror_queue.queue_name)
@@ -148,7 +148,7 @@ class QueueManager(object):
     3. Dead letter queue (dlq) for handling items that have issues processing
        from either the primary or secondary queues.
     """
-    def __init__(self, registry, mirror_env=None, url=None):
+    def __init__(self, registry, mirror_env=None, override_url=None):
         """
         __init__ will build all three queues needed with the desired settings.
         batch_size parameters conntrol how many messages are batched together
@@ -159,18 +159,20 @@ class QueueManager(object):
         self.delete_batch_size = 10
         self.replace_batch_size = 10
         self.env_name = mirror_env if mirror_env else registry.settings.get('env.name')
-        self.override_url = False
+        self.override_url = override_url
         # local development
         if not self.env_name:
             # make sure it's something aws likes
             backup = socket.gethostname()[:80].replace('.','-')
             # last case scenario
             self.env_name = backup if backup else 'fourfront-backup'
-        if not url:
-            self.client = boto3.client('sqs', region_name='us-east-1')
-        else:
-            self.override_url = True
-            self.client = boto3.client('sqs', region_name='us-east-1', endpoint_url=url)
+
+        kwargs = {
+            'region_name': 'us-east-1'
+        }
+        if self.override_url:
+            kwargs['endpoint_url'] = self.override_url
+        self.client = boto3.client('sqs', **kwargs)
         # primary queue name
         self.queue_name = self.env_name + '-indexer-queue'
         # secondary queue name

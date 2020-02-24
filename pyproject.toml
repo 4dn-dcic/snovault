@@ -143,12 +143,10 @@ xlrd = "^1.0.0"
 
 [tool.poetry.dev-dependencies]
 # TODO: Do we care about any particular version for 'coverage'?
-# coverage = "4.5.4"
-coverage = ">=0"
+coverage = "^4.1"
 moto = "1.3.7"
 # TODO: Do we care about any particular version for 'flake8'?
-# flake8 = "3.7.8"
-flake8 = ">=0"
+flake8 = "^3.7.8"
 flaky = "3.6.1"
 # TODO: Investigate whether a major version upgrade is allowable for 'pytest', which is several versions behind.
 pytest = "^2.7.1"

@@ -81,7 +81,7 @@ else:
     raise Exception("Bad value of INDEXER_MODE: %s. Possible values are MPINDEX, INDEX, and BOTH." % INDEXER_MODE)
 
 
-@pytest.yield_fixture(scope='module', params=INDEXER_APP_PARAMS)
+@pytest.yield_fixture(scope='module', params=INDEXER_APP_PARAMS)  # must happen AFTER scope='session' moto setup
 def app(app_settings, request):
     if request.param: # run tests both with and without mpindexer
         app_settings['mpindexer'] = True
