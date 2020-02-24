@@ -13,7 +13,6 @@ import transaction as transaction_management
 import uuid
 import webtest
 import yaml
-from moto import mock_sqs
 
 from datetime import datetime
 from elasticsearch.exceptions import NotFoundError

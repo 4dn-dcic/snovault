@@ -159,6 +159,7 @@ class QueueManager(object):
         self.delete_batch_size = 10
         self.replace_batch_size = 10
         self.env_name = mirror_env if mirror_env else registry.settings.get('env.name')
+        self.override_url = False
         # local development
         if not self.env_name:
             # make sure it's something aws likes
@@ -168,6 +169,7 @@ class QueueManager(object):
         if not url:
             self.client = boto3.client('sqs', region_name='us-east-1')
         else:
+            self.override_url = True
             self.client = boto3.client('sqs', region_name='us-east-1', endpoint_url=url)
         # primary queue name
         self.queue_name = self.env_name + '-indexer-queue'
@@ -316,25 +318,38 @@ class QueueManager(object):
                 should_set_attrs = compare_attrs != curr_attrs
             else:  # queue needs to be created
                 for backoff in [30, 30, 10, 20, 30, 60, 90, 120]:  # totally arbitrary
-                    try:
-                        response = self.client.create_queue(
-                            QueueName=queue_name,
-                            Attributes=queue_attrs
-                        )
-                    # XXX: Not implemented by moto... need a workaround
-                    # except self.client.exceptions.QueueAlreadyExists:
-                    #     # try to get queue url again
-                    #     queue_url = self.get_queue_url(queue_name)
-                    #     if queue_url:
-                    #         should_set_attrs = True
-                    #         break
-                    except self.client.exceptions.QueueDeletedRecently:
-                        log.warning('\n___MUST WAIT TO CREATE QUEUE FOR %ss___\n' % str(backoff))
-                        time.sleep(backoff)
-                    else:
-                        log.warning('\n___CREATED QUEUE WITH NAME %s___\n' % queue_name)
-                        queue_url = response['QueueUrl']
-                        break
+                    if self.override_url:  # if we are mocking, catch generic exceptions
+                        try:
+                            response = self.client.create_queue(
+                                QueueName=queue_name,
+                                Attributes=queue_attrs
+                            )
+                        except Exception as e:
+                            log.warning('Got error %s while creating mocked queue' % str(e))
+                            break
+                        else:
+                            log.warning('\n___CREATED QUEUE WITH NAME %s___\n' % queue_name)
+                            queue_url = response['QueueUrl']
+                            break
+                    else:  # if we are not mocking boto, take advantage of exception API
+                        try:
+                            response = self.client.create_queue(
+                                QueueName=queue_name,
+                                Attributes=queue_attrs
+                            )
+                        except self.client.exceptions.QueueAlreadyExists:
+                            # try to get queue url again
+                            queue_url = self.get_queue_url(queue_name)
+                            if queue_url:
+                                should_set_attrs = True
+                                break
+                        except self.client.exceptions.QueueDeletedRecently:
+                            log.warning('\n___MUST WAIT TO CREATE QUEUE FOR %ss___\n' % str(backoff))
+                            time.sleep(backoff)
+                        else:
+                            log.warning('\n___CREATED QUEUE WITH NAME %s___\n' % queue_name)
+                            queue_url = response['QueueUrl']
+                            break
             # update the queue attributes with dlq information, which can only
             # be obtained after the dlq is created
             if queue_name == self.dlq_name:
