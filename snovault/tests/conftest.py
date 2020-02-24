@@ -43,11 +43,13 @@ def start_moto_server_sqs():
     """
     Spins off a moto server running sqs, yields to the tests and cleans up.
     """
-    os.environ['SQS_URL'] = 'http://localhost:3000'  # must exists globally because of MPIndexer
+    delete_sqs_url = 'SQS_URL' not in os.environ
+    old_sqs_url = os.environ.get('SQS_URL', None)
     server_output = tempfile.TemporaryFile()
     server = None
     try:
         try:
+            os.environ['SQS_URL'] = 'http://localhost:3000'  # must exists globally because of MPIndexer
             server_args = ['moto_server', 'sqs', '-p3000']
             server = subprocess.Popen(server_args, stdout=server_output, stderr=server_output)
             assert check_server_is_up(server, server_output)
@@ -59,7 +61,10 @@ def start_moto_server_sqs():
         yield  # run tests
 
     finally:
-        del os.environ['SQS_URL']
+        if delete_sqs_url:
+            del os.environ['SQS_URL']
+        else:
+            os.environ['SQS_URL'] = old_sqs_url
         if server:
             server.terminate()
 
