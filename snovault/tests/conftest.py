@@ -4,7 +4,6 @@ import tempfile
 import pytest
 import logging
 import subprocess
-from unittest import mock
 
 
 pytest_plugins = [
@@ -21,10 +20,10 @@ def autouse_external_tx(external_tx):
     pass
 
 
-def check_server_is_up(server, output):
-    """ Polls the moto server to see if it is actually up
+def _check_server_is_up(output):
+    """ Polls the given output file to detect
 
-        :args server: process object from subprocess.Popen to check
+        :args output: file to which server is piping out
         :returns: True if server is up, False if failed
     """
     tries = 5
@@ -52,7 +51,7 @@ def start_moto_server_sqs():
             os.environ['SQS_URL'] = 'http://localhost:3000'  # must exists globally because of MPIndexer
             server_args = ['moto_server', 'sqs', '-p3000']
             server = subprocess.Popen(server_args, stdout=server_output, stderr=server_output)
-            assert check_server_is_up(server, server_output)
+            assert _check_server_is_up(server_output)
         except AssertionError:
             raise AssertionError('Could not get moto server up')
         except Exception as e:
