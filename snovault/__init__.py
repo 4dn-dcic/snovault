@@ -37,7 +37,7 @@ from .app import (
 import logging
 import os
 from dcicutils.log_utils import set_logging
-
+from dcicutils.ff_utils import get_health_page
 
 
 def includeme(config):
@@ -79,7 +79,7 @@ def main(global_config, **local_config):
     for name in logging.Logger.manager.loggerDict:
         if any(logname in name for logname in lnames):
             logging.getLogger(name).setLevel(logging.WARNING)
-            
+
     set_logging(in_prod=settings.get('production'))
     # set_logging(settings.get('elasticsearch.server'), settings.get('production'))
 
@@ -123,9 +123,10 @@ def main(global_config, **local_config):
     config.registry['aws_ipset'] = netaddr.IPSet(
         record['ip_prefix'] for record in aws_ip_ranges['prefixes'] if record['service'] == 'AMAZON')
 
-    # Load upgrades last so that all views (including testing views) are
-    # registered.
-    #config.include('.upgrade')
+    # cache mirror_health in registry if need be
+    mirror = settings.get('mirror.env.name', None)
+    if mirror:
+        settings['mirror_health'] = get_health_page(ff_env=mirror)
 
     app = config.make_wsgi_app()
 
