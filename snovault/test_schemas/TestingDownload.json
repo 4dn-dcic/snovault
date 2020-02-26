@@ -1,0 +1,25 @@
+{
+    "type": "object",
+    "properties": {
+        "attachment": {
+            "type": "object",
+            "attachment": true,
+            "properties": {
+                "type": {
+                    "type": "string",
+                    "enum": ["image/png"]
+                }
+            }
+        },
+        "attachment2": {
+            "type": "object",
+            "attachment": true,
+            "properties": {
+                "type": {
+                    "type": "string",
+                    "enum": ["image/png"]
+                }
+            }
+        }
+    }
+}

@@ -1,0 +1,36 @@
+{
+    "title": "EmbeddingTest",
+    "description": "Dummy Schema for testing embedding",
+    "type": "object",
+    "required": ["title", "description"],
+    "properties": {
+        "schema_version": {
+            "type": "object",
+            "default": "1"
+        },
+        "attachment": {
+            "type": "object",
+            "linkTo": "TestingDownload"
+        },
+        "uuid": {
+            "type": "string"
+        }
+    },
+    "columns": {
+        "title": {
+            "title": "Title"
+        },
+        "accession": {
+            "title": "Accession"
+        },
+        "lab": {
+            "title": "Lab"
+        },
+        "award": {
+            "title": "Award"
+        },
+        "date_created": {
+            "title": "Date added"
+        }
+    }
+}

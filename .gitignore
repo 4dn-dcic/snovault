@@ -1,11 +1,15 @@
+# Python code coverage
 .coverage
+
+# Helper files for zc.buildout
 /.installed.cfg
 /.mr.developer.cfg
+
+# Uncategorized
 /.cache/
 /.sass-cache/
 /annotations.json
 /aws-ip-ranges.json
-/bin/
 /develop/
 /develop-eggs/
 /downloads/
@@ -18,19 +22,39 @@
 /session-secret.b64
 /dist/
 /build/
-/src/snowflakes/static/css/bootstrap.css
-/src/snowflakes/static/css/responsive.css
-/src/snowflakes/static/css/style.css
-/src/snowflakes/static/scss/_variables.original.scss
 
+# Mac folders
 *.DS_Store
+
+# Python eggs
 *.egg-info
+
+# Python caching
 *.pyc
+
+# Eclipse and other editing
 +.project
 +.pydevproject
+.idea/
+
+# Log files
 *.log
+
+# PyEnv
 .python-version
+
+# Microsoft Office lock and backup files
 ~$*
 .~*#
 
-.python-version
+# Emacs backup files
+*~
+\#.*\#
+
+# Virtualenv folders
+*env/
+
+# Elastic Beanstalk Files
+.elasticbeanstalk/*
+!.elasticbeanstalk/*.cfg.yml
+!.elasticbeanstalk/*.global.yml

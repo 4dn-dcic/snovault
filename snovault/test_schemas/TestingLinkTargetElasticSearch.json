@@ -1,0 +1,20 @@
+{
+    "type": "object",
+    "properties": {
+        "name": {
+            "type": "string",
+            "uniqueKey": true
+        },
+        "uuid": {
+            "type": "string"
+        },
+        "status": {
+            "type": "string"
+        },
+        "ppp": {
+            "type": "string",
+            "linkTo": "TestingPostPutPatchSno"
+        }
+    },
+    "additionalProperties": false
+}

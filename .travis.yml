@@ -1,15 +1,14 @@
+dist: trusty
 language: python
 sudo: true
 cache:
   pip: true
   directories:
   - eggs
-  - ".npm"
-  - node_modules
 addons:
   apt:
     packages:
-    - oracle-java8-set-default
+    - oracle-java9-set-default
     - bsdtar
     - build-essential
     - make
@@ -57,18 +56,30 @@ notifications:
 before_install:
 - postgres --version
 - initdb --version
-- nvm install 4
-- node --version
-- npm config set python /usr/bin/python2.7
 install:
 # need to manually change the version of six used by Travis for some reason
-- pip uninstall -y six
-- pip install six==1.11.0
-- python bootstrap.py --buildout-version 2.9.5 --setuptools-version 37.0.0
-- bin/buildout -c || (echo "Retrying buildout" && bin/buildout )
+# - pip uninstall -y six
+# - pip install six==1.11.0
+- pip install --upgrade pip==19.0.3
+- pip install poetry
 - pip install coveralls
 - pip install codacy-coverage
+- poetry install
+- pip install "moto[server]"
 script:
-- if test -n "$UNIT"; then bin/test -v -v --timeout=400 --aws-auth
-  -m "not bdd" --cov src/snovault --es search-fourfront-builds-uhevxdzfcv7mkm5pj5svcri3aq.us-east-1.es.amazonaws.com:80;
+- |
+  if test -n "$UNIT"; then bin/test -v -v --timeout=400 --aws-auth --cov snovault --es search-fourfront-builds-uhevxdzfcv7mkm5pj5svcri3aq.us-east-1.es.amazonaws.com:80;
   fi
+- |
+  if [[ $TRAVIS_BRANCH == 'master' ]]; then
+  echo 'Triggering docs build'
+  curl -X POST -d "branches=master" -d "token=$DOCS_TOKEN" https://readthedocs.org/api/v2/webhook/snovault/99596/
+  fi
+- echo $TRAVIS_JOB_ID
+- poetry run wipe-test-indices $TRAVIS_JOB_ID search-fourfront-builds-uhevxdzfcv7mkm5pj5svcri3aq.us-east-1.es.amazonaws.com:80
+deploy:
+  provider: script
+  script: poetry publish --build --username=$PYPI_USER --password=$PYPI_PASSWORD
+  on:
+    tags: true
+    condition: "$TRAVIS_PYTHON_VERSION == 3.4"

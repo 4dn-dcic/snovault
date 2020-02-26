@@ -1,79 +1,125 @@
-
-========================
-SnoVault JSON-LD Database Framework
-========================
-
-Version 0.1
+=============
+DCIC Snovault
+=============
 
 |Build status|_
 
-.. |Build status| image:: https://travis-ci.org/ENCODE-DCC/snovault.png?branch=master
-.. _Build status: https://travis-ci.org/ENCODE-DCC/snovault
+.. |Build status| image:: https://travis-ci.org/4dn-dcic/snovault.svg?branch=master
+.. _Build status: https://travis-ci.org/4dn-dcic/snovault
 
-Installation Instructions
-=========================
+Overview
+========
 
-Currently these are for Mac OSX.  For linux, look at cloud-config.yml it should be reasonably easy to infer from that
+DCIC Snovault is a JSON-LD Database Framework that serves as the backend for the 4DN Data portal and CGAP. Check out our full documentation `here
+<https://snovault.readthedocs.io/en/latest/>`_.
 
-Step 0: Install Xcode (from App Store) and homebrew: http://brew.sh::
+.. note::
 
-Step 1: Verify that homebrew is working properly::
+    This repository contains a core piece of functionality shared amongst several projects
+    in the 4DN-DCIC. It is meant to be used internally by the DCIC team
+    in support of `Fourfront <https://data.4dnucleome.org>`_\ ,
+    the 4DN data portal, and at this point in time it is not expected to be useful
+    in a standalone/plug-and-play way to others.
 
-    $ sudo brew doctor
+Installation in 4DN components
+==============================
 
+DCIC Snovault is pip installable as the ``dcicsnovault`` package with::
 
-Step 2: Install or update dependencies::
+    $ pip install dcicsnovault``
 
-    $ brew install libevent libmagic libxml2 libxslt openssl postgresql graphviz nginx python3
+However, at the present time, the functionality it provides might only be useful in conjunction
+with other 4DN-DCIC components.
+
+Installation for Development
+============================
+
+Currently these are for Mac OSX using homebrew. If using linux, install dependencies with a different package manager.
+
+Step 0: Install Xcode
+---------------------
+
+Install Xcode (from App Store) and homebrew: http://brew.sh
+
+Step 1: Verify Homebrew Itself
+------------------------------
+
+Verify that homebrew is working properly::
+
+    $ brew doctor
+
+Step 2: Install Homebrewed Dependencies
+---------------------------------------
+
+Install or update dependencies::
+
+    $ brew install libevent libmagic libxml2 libxslt openssl postgresql graphviz python3
     $ brew install freetype libjpeg libtiff littlecms webp  # Required by Pillow
-    $ brew tap homebrew/versions
-    $ brew install elasticsearch@5.6 node4-lts
+    $ brew cask install adoptopenjdk8
+    $ brew install elasticsearch@5.6
 
-If you need to update dependencies::
+NOTES:
+
+* If installation of adtopopenjdk8 fails due to an ambiguity, it should work to do this instead::
+
+    $ brew cask install homebrew/cask-versions/adoptopenjdk8
+
+* If you try to invoke elasticsearch and it is not found,
+  you may need to link the brew-installed elasticsearch::
+
+    $ brew link --force elasticsearch@5.6
+
+* If you need to update dependencies::
+
+    $ brew update
+    $ rm -rf encoded/eggs
+
+* If you need to upgrade brew-installed packages that don't have pinned versions,
+  you can use the following. However, take care because there is no command to directly
+  undo this effect::
 
     $ brew update
     $ brew upgrade
-    $ rm -rf snowflakes/eggs
+    $ rm -rf encoded/eggs
+
+Step 3: Running Poetry
+----------------------
+
+To locally install using versions of Python libraries that have worked before, use this::
+
+    $ poetry install
 
 
-Step 3: Run buildout::
+Updating dependencies
+=====================
 
-    $ python3 bootstrap.py --buildout-version 2.9.5 --setuptools-version 36.6.0
-    $ bin/buildout
+To update the version dependencies, use::
 
-    NOTE:
-    If you have issues with postgres or the python interface to it (psycogpg2) you probably need to install postgresql
-    via homebrew (as above)
-    If you have issues with Pillow you may need to install new xcode command line tools:
-    - First update Xcode from AppStore (reboot)
-    $ xcode-select --install
+    $ poetry update
 
+This command also takes space-separated names of specific packages to update. For more information, do::
+
+    $ poetry help update
 
 
-If you wish to completely rebuild the application, or have updated dependencies:
-    $ make clean
+Managing poetry.lock after update
+---------------------------------
 
-    Then goto Step 3.
+There may be situations where you do this with no intent to check in the resulting updates,
+but once you have checked that the updates are sound, you may wish to check the resulting
+``poetry.lock`` file.
 
-Step 4: Start the application locally
+Publishing
+==========
 
-In one terminal startup the database servers and nginx proxy with::
+Normally, a successful build on a tagged branch will cause publication automatically.
+It should not be necessary for you to manually use::
 
-    $ bin/dev-servers development.ini --app-name app --clear --init --load
+    $ poetry publish
 
-This will first clear any existing data in /tmp/snowflakes
-Then postgres and elasticsearch servers will be initiated within /tmp/snowflakes.
-An nginx proxy running on port 8000 will be started.
-The servers are started, and finally the test set will be loaded.
-
-In a second terminal, run the app with::
-
-    $ bin/pserve development.ini
-
-Indexing will then proceed in a background thread similar to the production setup.
-
-Browse to the interface at http://localhost:8000/.
-
+Also, you would need appropriate credentials on PyPi for such publication to succeed. As presently configured,
+these credentials need to be in the environment variables ``PYPI_USER`` and ``PYPI_PASSWORD``.
+If you attempt to do this manually, be sure the version is set properly!
 
 Running tests
 =============
@@ -92,88 +138,5 @@ Specific tests to run locally for schema changes::
 
 Run the Pyramid tests with::
 
-    $ bin/test -m "not bdd"
+    $ bin/test
 
-Run the Browser tests with::
-
-    $ bin/test -m bdd -v --splinter-webdriver chrome
-
-Run the Javascript tests with::
-
-    $ npm test
-
-Or if you need to supply command line arguments::
-
-    $ ./node_modules/.bin/jest
-
-
-Building Javascript
-===================
-
-Our Javascript is written using ES6 and JSX, so needs to be compiled
-using babel and webpack.
-
-To build production-ready bundles, do::
-
-    $ npm run build
-
-(This is also done as part of running buildout.)
-
-To build development bundles and continue updating them as you edit source files, run::
-
-    $ npm run dev
-
-The development bundles are not minified, to speed up building.
-
-
-Notes on SASS/Compass
-=====================
-
-We use the `SASS <http://sass-lang.com/>`_ and `Compass <http://compass-style.org/>`_ CSS preprocessors.
-The buildout installs the SASS and Compass utilities and compiles the CSS.
-When changing the SCSS source files you must recompile the CSS using one of the following methods:
-
-Compiling "on the fly"
-----------------------
-
-Compass can watch for any changes made to .scss files and instantly compile them to .css.
-To start this, from the root of the project (where config.rb is) do::
-
-    $ bin/compass watch
-
-You can specify whether the compiled CSS is minified or not in config.rb. (Currently, it is set to minify.)
-
-Force compiling
----------------
-
-::
-
-    $ bin/compass compile
-
-Again, you can specify whether the compiled CSS is minified or not in config.rb.
-
-Also see the `Compass Command Line Documentation <http://compass-style.org/help/tutorials/command-line/>`_ and the `Configuration Reference <http://compass-style.org/help/tutorials/configuration-reference/>`_.
-
-And of course::
-
-    $ bin/compass help
-
-
-SublimeLinter
-=============
-
-To setup SublimeLinter with Sublime Text 3, first install the linters::
-
-    $ easy_install-2.7 flake8
-    $ npm install -g jshint
-    $ npm install -g jsxhint
-
-After first setting up `Package Control`_ (follow install and usage instructions on site), use it to install the following packages in Sublime Text 3:
-
-    * sublimelinter
-    * sublimelinter-flake8
-    * sublimelinter-jsxhint
-    * jsx
-    * sublimelinter-jshint
-
-.. _`Package Control`: https://sublime.wbond.net/

@@ -15,4 +15,3 @@ def remote_es(request):
 @pytest.fixture(scope='session')
 def aws_auth(request):
     return request.config.getoption("--aws-auth")
-
