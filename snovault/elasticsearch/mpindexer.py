@@ -10,7 +10,8 @@ from contextlib import contextmanager
 from functools import partial
 from multiprocessing import (
     get_context,
-    cpu_count
+    cpu_count,
+    TimeoutError
 )
 from multiprocessing.pool import Pool
 from pyramid.request import apply_request_extensions
@@ -235,15 +236,18 @@ class MPIndexer(Indexer):
                     try:
                         # res_vals are returned from one run of `queue_update_helper`
                         # in form: (errors <list>, counter <list>, deferred <bool>)
-                        res_vals = res.get()
-
+                        res_vals = res.get(timeout=1)  # wait 1 sec per async result
                         del async_results[idx]
+
                         # add jobs if overall counter has increased OR process is deferred
                         if (counter[0] > last_count) or res_vals[2] is True:
                             last_count = counter[0]
                             res = self.pool.apply_async(queue_update_helper,
                                                    callback=callback_w_errors)
                             results_to_add.append(res)
+
+                    except TimeoutError:  # if result is not ready, continue
+                        continue
 
                     # Catch exceptions thrown both in the async result AND in the multiprocessing library
                     except BaseException as e:
