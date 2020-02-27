@@ -159,7 +159,6 @@ class MPIndexer(Indexer):
         self.processes = num_cpu - 2 if num_cpu - 2 > 1 else 1
         self.initargs = (registry[APP_FACTORY], registry.settings,)
 
-    def init_pool(self):
         """
         Initialize multiprocessing pool.
         Use `maxtasksperchild=1`, which causes the worker to be recycled after
@@ -172,13 +171,14 @@ class MPIndexer(Indexer):
               so that transaction scope is correctly handled and we can skip
               work done by `initializer` for each `queue_update_helper` call
         """
-        return Pool(
+        self.pool = Pool(
             processes=self.processes,
             initializer=initializer,
             initargs=self.initargs,
             maxtasksperchild=1,  # see rationale in function documentation above.
             context=get_context('spawn'),
         )
+
 
     def update_objects(self, request, counter):
         """
@@ -191,7 +191,6 @@ class MPIndexer(Indexer):
         Note that counter is a length 1 array (so it can be passed by reference)
         Close the pool at the end of the function and return list of errors.
         """
-        pool = self.init_pool()
         sync_uuids = request.json.get('uuids', None)
         workers = self.processes
         # ensure workers != 0
@@ -207,7 +206,7 @@ class MPIndexer(Indexer):
                 chunkiness = self.chunksize
             # imap_unordered to hopefully shuffle item types and come up with
             # a more or less equal workload for each process
-            for error in pool.imap_unordered(sync_update_helper, sync_uuids, chunkiness):
+            for error in self.pool.imap_unordered(sync_update_helper, sync_uuids, chunkiness):
                 if error is not None:
                     errors.append(error)
                 else:
@@ -224,7 +223,7 @@ class MPIndexer(Indexer):
 
             # create the initial workers (same as number of processes in pool)
             for i in range(workers):
-                res = pool.apply_async(queue_update_helper,
+                res = self.pool.apply_async(queue_update_helper,
                                        callback=callback_w_errors)
                 async_results.append(res)
 
@@ -242,7 +241,7 @@ class MPIndexer(Indexer):
                         # add jobs if overall counter has increased OR process is deferred
                         if (counter[0] > last_count) or res_vals[2] is True:
                             last_count = counter[0]
-                            res = pool.apply_async(queue_update_helper,
+                            res = self.pool.apply_async(queue_update_helper,
                                                    callback=callback_w_errors)
                             results_to_add.append(res)
 
@@ -256,6 +255,4 @@ class MPIndexer(Indexer):
                     break
                 time.sleep(0.5)
 
-        pool.close()
-        pool.join()
         return errors
