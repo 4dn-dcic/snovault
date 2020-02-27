@@ -232,13 +232,13 @@ class MPIndexer(Indexer):
             # add more jobs if any are finished and indexing is ongoing
             while True:
                 results_to_add = []
-                idxs_to_rm = []
                 for idx, res in enumerate(async_results):
-                    if res.ready():
+                    try:
                         # res_vals are returned from one run of `queue_update_helper`
                         # in form: (errors <list>, counter <list>, deferred <bool>)
                         res_vals = res.get()
-                        idxs_to_rm.append(idx)
+
+                        del async_results[idx]
                         # add jobs if overall counter has increased OR process is deferred
                         if (counter[0] > last_count) or res_vals[2] is True:
                             last_count = counter[0]
@@ -246,10 +246,12 @@ class MPIndexer(Indexer):
                                                    callback=callback_w_errors)
                             results_to_add.append(res)
 
-                for idx in sorted(idxs_to_rm, reverse=True):
-                    del async_results[idx]
-                async_results.extend(results_to_add)
+                    # Catch exceptions thrown both in the async result AND in the multiprocessing library
+                    except BaseException as e:
+                        log.error('Caught BaseException in MPIndexer: %s' % str(e))
+                        del async_results[idx]
 
+                async_results.extend(results_to_add)
                 if len(async_results) == 0:
                     break
                 time.sleep(0.5)
