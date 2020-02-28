@@ -81,12 +81,11 @@ else:
     raise Exception("Bad value of INDEXER_MODE: %s. Possible values are MPINDEX, INDEX, and BOTH." % INDEXER_MODE)
 
 
-@pytest.yield_fixture(scope='session', params=INDEXER_APP_PARAMS)
+@pytest.yield_fixture(scope='module', params=INDEXER_APP_PARAMS)  # must happen AFTER scope='session' moto setup
 def app(app_settings, request):
     if request.param: # run tests both with and without mpindexer
         app_settings['mpindexer'] = True
     app = main({}, **app_settings)
-
     yield app
 
     DBSession = app.registry[DBSESSION]
@@ -129,7 +128,7 @@ def es_based_target(app, testapp):
         collections=['testing_link_target_elastic_search'],
         skip_indexing=True
     )
-    target  = {'name': 'es_one', 'status': 'current'}
+    target = {'name': 'es_one', 'status': 'current'}
     target_res = testapp.post_json('/testing-link-targets-elastic-search/', target, status=201)
     yield target_res.json['@graph'][0]
 
@@ -1153,6 +1152,7 @@ def test_indexing_esstorage_can_purge_without_db(app, testapp, indexer_testapp):
     assert not esstorage.get_by_uuid(test_uuid)  # should not get now
 
 
+@pytest.mark.flaky
 def test_indexing_rdbstorage_can_purge_without_es(app, testapp, indexer_testapp):
     """
     Tests that we can delete items from the DB using the DELETE API when said item

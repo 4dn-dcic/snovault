@@ -149,7 +149,7 @@ class PickStorage(object):
         """
         # usually check the datastore attribute on request (set on GET/HEAD)
         request = get_current_request()
-        if self.read and request and request.datastore == 'elasticsearch':
+        if self.read is not None and request and request.datastore == 'elasticsearch':
             return self.read
 
         # check the datastore specified by Connection (not always used)
@@ -219,7 +219,7 @@ class PickStorage(object):
         """
         log.warning('PURGE: purging %s' % rid)
         # requires ES for searching item links
-        if self.read:
+        if self.read is not None:
             # model and max_sid are used later, in second `if self.read` block
             model = self.get_by_uuid(rid)
             if not item_type:
@@ -292,7 +292,7 @@ class PickStorage(object):
         Get the ES document by uuid directly for Elasticsearch
         Only functional with self.read
         """
-        if self.read:
+        if self.read is not None:
             # must pass registry for access to settings
             return self.read.get_by_uuid_direct(uuid, item_type)
 
@@ -304,7 +304,7 @@ class PickStorage(object):
         See esstorage.ElasticSearchStorage.find_uuids_linked_to_item
         Only functional with self.read
         """
-        if self.read:
+        if self.read is not None:
             return self.read.find_uuids_linked_to_item(uuid)
 
         return self.write.find_uuids_linked_to_item(uuid)
