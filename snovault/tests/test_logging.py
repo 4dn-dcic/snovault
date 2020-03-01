@@ -88,7 +88,7 @@ def test_logging_basic(testapp, external_tx, capfd):
             if not record:
                 continue
             try:
-                proc_record = yaml.load('{' + record.strip().split('{', 1)[1])
+                proc_record = yaml.safe_load('{' + record.strip().split('{', 1)[1])
             except:
                 continue
             if not isinstance(proc_record, dict):

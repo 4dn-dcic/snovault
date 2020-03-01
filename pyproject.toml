@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "dcicsnovault"
-version = "2.0.1b1"
+version = "2.0.1b2"
 description = "Storage support for 4DN Data Portals."
 authors = ["4DN-DCIC Team <support@4dnucleome.org>"]
 license = "MIT"
@@ -104,7 +104,13 @@ pyramid-translogger = "^0.1"
 python-dateutil = "^2.5.3"
 python_magic = ">=0.4.11,<1"
 pytz = ">=2016.4"
-PyYAML = "^3.12"
+# There was no version 4 of PyYAML. We upgraded today to PyYAML 5 per compatibility info in:
+# https://github.com/yaml/pyyaml/issues/265
+# We must have 5.1 to get the new yaml.safe_load method.
+# awscli appears to add its own restrictions, but our uses are pretty simple.
+# 5.2 had soe bugs that were probably only in Python 2, but we require 5.2 here just in case.
+# The narrowing to 5.3 is just to help 'poetry lock' converge faster. -kmp 1-Mar-2020
+PyYAML = ">=5.1,<5.3"
 rdflib = "^4.2.2"
 rdflib-jsonld = ">=0.3.0,<1.0.0"
 # requests = "^2.20.0"

@@ -433,7 +433,7 @@ def test_indexing_logging(app, testapp, indexer_testapp, capfd):
         if not record:
             continue
         try:
-            proc_record = yaml.load('{' + record.strip().split('{', 1)[1])
+            proc_record = yaml.safe_load('{' + record.strip().split('{', 1)[1])
         except:
             continue
         if not isinstance(proc_record, dict):
