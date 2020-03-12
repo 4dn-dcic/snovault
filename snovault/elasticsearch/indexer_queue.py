@@ -339,8 +339,7 @@ class QueueManager(object):
                                 QueueName=queue_name,
                                 Attributes=queue_attrs
                             )
-                        except (self.client.exceptions.QueueAlreadyExists,
-                                self.client.exceptions.SignatureDoesNotMatch) as e:
+                        except self.client.exceptions.QueueAlreadyExists as e:
                             log.warning('%s: QueueName=%s' % (e.__class__.__name__, queue_name))
                             # try to get queue url again
                             queue_url = self.get_queue_url(queue_name)
