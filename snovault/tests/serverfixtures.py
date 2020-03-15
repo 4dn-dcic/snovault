@@ -14,7 +14,9 @@ from zope.interface import implementer
 from ..app import configure_engine
 from ..storage import Base
 from .elasticsearch_fixture import server_process as elasticsearch_server_process
-from .postgresql_fixture import initdb, server_process as postgres_server_process
+from .postgresql_fixture import (
+    initdb, server_process as postgres_server_process, SNOVAULT_DB_TEST_PORT, make_snovault_db_test_url,
+)
 
 
 def pytest_configure():
@@ -44,7 +46,7 @@ def engine_url(request):
     initdb(tmpdir)
     process = postgres_server_process(tmpdir)
 
-    yield 'postgresql://postgres@:5432/postgres?host=%s' % quote(tmpdir)
+    yield make_snovault_db_test_url(datadir=tmpdir)
 
     if process.poll() is None:
         process.terminate()
@@ -59,10 +61,11 @@ def postgresql_server(request):
     initdb(tmpdir)
     process = postgres_server_process(tmpdir)
 
-    yield 'postgresql://postgres@:5432/postgres?host=%s' % quote(tmpdir)
+    yield make_snovault_db_test_url(datadir=tmpdir)
 
     if process.poll() is None:
         process.terminate()
+        # Should there be a process.wait() here? -kmp 14-Mar-2020
 
 
 @pytest.fixture(scope='session')

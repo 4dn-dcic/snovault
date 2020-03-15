@@ -7,3 +7,5 @@ macpoetry-install:
 macbuild:
 	make macpoetry-install
 	make moto-setup
+test:
+	bin/test --timeout=400

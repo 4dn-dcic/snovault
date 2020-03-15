@@ -1,5 +1,7 @@
+import contextlib
 import functools
 import json
+import os
 import sys
 from copy import deepcopy
 
@@ -16,6 +18,32 @@ log = structlog.getLogger(__name__)
 ###################
 # Misc. utilities #
 ###################
+
+
+def set_or_remove(dictionary, key, value):
+    if value is None:
+        if key in dictionary:
+            del dictionary[key]
+    else:
+        dictionary[key] = value
+
+
+@contextlib.contextmanager
+def dictionary_bindings(dictionary, **bindings):
+    old_dict = dictionary.copy()
+    try:
+        for key, value in bindings.items():
+            set_or_remove(dictionary, key, value)
+        yield
+    finally:
+        for key in bindings:
+            set_or_remove(dictionary, key, old_dict.get(key, None))
+
+
+@contextlib.contextmanager
+def environ_bindings(**bindings):
+    with dictionary_bindings(os.environ, **bindings):
+        yield
 
 
 class DictionaryKeyError(KeyError):
