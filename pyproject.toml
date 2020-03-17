@@ -167,4 +167,4 @@ wipe-test-indices = "snovault.commands.wipe_test_indices:main"
 
 [build-system]
 requires = ["poetry>=0.12"]
-build-backend = "^poetry.masonry.api"
+build-backend = "poetry.masonry.api"
