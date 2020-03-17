@@ -7,6 +7,20 @@ DCIC Snovault
 .. |Build status| image:: https://travis-ci.org/4dn-dcic/snovault.svg?branch=master
 .. _Build status: https://travis-ci.org/4dn-dcic/snovault
 
+.. Important::
+
+ DCIC Snovault is a FORK of `snovault <https://pypi.org/project/snovault/>`_
+ created at the `ENCODE DCC project at Stanford <https://github.com/ENCODE-DCC>`_.
+ Our fork supports other projects of the
+ `4D Nucleome Data Coordination and Integration Center (4DN-DCIC)
+ <https://github.com/4dn-dcic>`_.
+ Although this software is available as open source software,
+ its primary function is to support our layered projects,
+ and we are not at this time able to offer any active support for other uses.
+ In particular, this fork does not purport to supersede
+ the original `snovault <https://pypi.org/project/snovault/>`_.
+ we just have a different use case that we are actively exploring.
+
 Overview
 ========
 
