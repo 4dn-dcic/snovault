@@ -98,7 +98,10 @@ def register_storage(registry, write_override=None, read_override=None):
     _DBSESSION = registry[DBSESSION]
 
     # set up blob storage if not configured already
-    registry[BLOBS] = S3BlobStorage(registry.settings['blob_bucket'])
+    try:
+        registry[BLOBS] = S3BlobStorage(registry.settings['blob_bucket'])
+    except KeyError:  # only use this if blob_bucket is not set
+        registry[BLOBS] = RDBBlobStorage(registry[DBSESSION])
 
 
 Base = declarative_base()
