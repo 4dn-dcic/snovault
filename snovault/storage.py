@@ -1,4 +1,3 @@
-
 from pyramid.httpexceptions import (
     HTTPConflict,
     HTTPLocked,
@@ -99,10 +98,7 @@ def register_storage(registry, write_override=None, read_override=None):
     _DBSESSION = registry[DBSESSION]
 
     # set up blob storage if not configured already
-    if not registry.get(BLOBS) and registry.settings.get('blob_bucket'):
-        registry[BLOBS] = S3BlobStorage(registry.settings['blob_bucket'])
-    else:
-        registry[BLOBS] = RDBBlobStorage(registry[DBSESSION])
+    registry[BLOBS] = S3BlobStorage(registry.settings['blob_bucket'])
 
 
 Base = declarative_base()
