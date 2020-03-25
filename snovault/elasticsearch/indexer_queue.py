@@ -29,14 +29,13 @@ def includeme(config):
     config.registry[INDEXER_QUEUE] = QueueManager(config.registry, override_url=sqs_url)
     # INDEXER_QUEUE_MIRROR is used because blue and green share a DB
     # XXX: This hard coding should be refactored
-    setup_mirror = False
-    if env_name and 'blue' in env_name:
-        mirror_env = 'fourfront-green'
-        setup_mirror = True
-    elif env_name and 'green' in env_name:
-        mirror_env = 'fourfront-blue'
-        setup_mirror = True
-    if setup_mirror:
+    mirror_env = None
+    if env_name:
+        if 'blue' in env_name:
+            mirror_env = 'fourfront-green'
+        else:
+            mirror_env = 'fourfront-blue'
+    if mirror_env:
         mirror_queue = QueueManager(config.registry, mirror_env=mirror_env, override_url=sqs_url)
         if not mirror_queue.queue_url:
             log.error('INDEXING: Mirror queues %s are not available!' % mirror_queue.queue_name,
