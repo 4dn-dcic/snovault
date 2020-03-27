@@ -11,6 +11,7 @@ from collections import OrderedDict
 
 import boto3
 import structlog
+from dcicutils.env_utils import blue_green_mirror_env
 from pyramid.view import view_config
 
 from .indexer_utils import get_uuids_for_types
@@ -27,9 +28,9 @@ def includeme(config):
     env_name = config.registry.settings.get('env.name')
     sqs_url = os.environ.get('SQS_URL', None)
     config.registry[INDEXER_QUEUE] = QueueManager(config.registry, override_url=sqs_url)
-    # INDEXER_QUEUE_MIRROR is used because webprod and webprod2 share a DB
-    if env_name and 'fourfront-webprod' in env_name:
-        mirror_env = 'fourfront-webprod2' if env_name == 'fourfront-webprod' else 'fourfront-webprod'
+    # INDEXER_QUEUE_MIRROR is used because blue and green share a DB
+    mirror_env = blue_green_mirror_env(env_name) if env_name else None
+    if mirror_env:
         mirror_queue = QueueManager(config.registry, mirror_env=mirror_env, override_url=sqs_url)
         if not mirror_queue.queue_url:
             log.error('INDEXING: Mirror queues %s are not available!' % mirror_queue.queue_name,
@@ -339,8 +340,7 @@ class QueueManager(object):
                                 QueueName=queue_name,
                                 Attributes=queue_attrs
                             )
-                        except self.client.exceptions.QueueAlreadyExists as e:
-                            log.warning('%s: QueueName=%s' % (e.__class__.__name__, queue_name))
+                        except self.client.exceptions.QueueAlreadyExists:
                             # try to get queue url again
                             queue_url = self.get_queue_url(queue_name)
                             if queue_url:
