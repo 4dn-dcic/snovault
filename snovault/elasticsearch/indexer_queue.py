@@ -11,6 +11,7 @@ from collections import OrderedDict
 
 import boto3
 import structlog
+from dcicutils.env_utils import blue_green_mirror_env
 from pyramid.view import view_config
 
 from .indexer_utils import get_uuids_for_types
@@ -28,13 +29,7 @@ def includeme(config):
     sqs_url = os.environ.get('SQS_URL', None)
     config.registry[INDEXER_QUEUE] = QueueManager(config.registry, override_url=sqs_url)
     # INDEXER_QUEUE_MIRROR is used because blue and green share a DB
-    # XXX: This hard coding should be refactored
-    mirror_env = None
-    if env_name:
-        if 'blue' in env_name:
-            mirror_env = 'fourfront-green'
-        else:
-            mirror_env = 'fourfront-blue'
+    mirror_env = blue_green_mirror_env(env_name) if env_name else None
     if mirror_env:
         mirror_queue = QueueManager(config.registry, mirror_env=mirror_env, override_url=sqs_url)
         if not mirror_queue.queue_url:
