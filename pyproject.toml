@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "dcicsnovault"
-version = "2.1.0"
+version = "2.1.1b1"
 description = "Storage support for 4DN Data Portals."
 authors = ["4DN-DCIC Team <support@4dnucleome.org>"]
 license = "MIT"
@@ -61,7 +61,7 @@ boto3 = "^1.7.42"
 # We don't need this.
 # TODO: Probably we should be adding a "^" here to get new versions, but for now since we're debugging
 #       our whole ecosystem, I left this temporarily pinned. -kmp 20-Feb-2020
-dcicutils = "0.11.0"
+dcicutils = "0.12.0b1"
 # docutils = "0.12"
 elasticsearch_dsl = "^5.3.0"
 # flaky = "3.6.1"
