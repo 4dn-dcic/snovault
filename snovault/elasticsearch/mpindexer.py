@@ -10,7 +10,8 @@ from contextlib import contextmanager
 from functools import partial
 from multiprocessing import (
     get_context,
-    cpu_count
+    cpu_count,
+    TimeoutError
 )
 from multiprocessing.pool import Pool
 from pyramid.request import apply_request_extensions
@@ -159,7 +160,6 @@ class MPIndexer(Indexer):
         self.processes = num_cpu - 2 if num_cpu - 2 > 1 else 1
         self.initargs = (registry[APP_FACTORY], registry.settings,)
 
-    def init_pool(self):
         """
         Initialize multiprocessing pool.
         Use `maxtasksperchild=1`, which causes the worker to be recycled after
@@ -172,13 +172,14 @@ class MPIndexer(Indexer):
               so that transaction scope is correctly handled and we can skip
               work done by `initializer` for each `queue_update_helper` call
         """
-        return Pool(
+        self.pool = Pool(
             processes=self.processes,
             initializer=initializer,
             initargs=self.initargs,
             maxtasksperchild=1,  # see rationale in function documentation above.
             context=get_context('spawn'),
         )
+
 
     def update_objects(self, request, counter):
         """
@@ -191,7 +192,6 @@ class MPIndexer(Indexer):
         Note that counter is a length 1 array (so it can be passed by reference)
         Close the pool at the end of the function and return list of errors.
         """
-        pool = self.init_pool()
         sync_uuids = request.json.get('uuids', None)
         workers = self.processes
         # ensure workers != 0
@@ -207,7 +207,7 @@ class MPIndexer(Indexer):
                 chunkiness = self.chunksize
             # imap_unordered to hopefully shuffle item types and come up with
             # a more or less equal workload for each process
-            for error in pool.imap_unordered(sync_update_helper, sync_uuids, chunkiness):
+            for error in self.pool.imap_unordered(sync_update_helper, sync_uuids, chunkiness):
                 if error is not None:
                     errors.append(error)
                 else:
@@ -224,7 +224,7 @@ class MPIndexer(Indexer):
 
             # create the initial workers (same as number of processes in pool)
             for i in range(workers):
-                res = pool.apply_async(queue_update_helper,
+                res = self.pool.apply_async(queue_update_helper,
                                        callback=callback_w_errors)
                 async_results.append(res)
 
@@ -232,28 +232,31 @@ class MPIndexer(Indexer):
             # add more jobs if any are finished and indexing is ongoing
             while True:
                 results_to_add = []
-                idxs_to_rm = []
                 for idx, res in enumerate(async_results):
-                    if res.ready():
+                    try:
                         # res_vals are returned from one run of `queue_update_helper`
                         # in form: (errors <list>, counter <list>, deferred <bool>)
-                        res_vals = res.get()
-                        idxs_to_rm.append(idx)
+                        res_vals = res.get(timeout=1)  # wait 1 sec per async result
+                        del async_results[idx]
+
                         # add jobs if overall counter has increased OR process is deferred
                         if (counter[0] > last_count) or res_vals[2] is True:
                             last_count = counter[0]
-                            res = pool.apply_async(queue_update_helper,
+                            res = self.pool.apply_async(queue_update_helper,
                                                    callback=callback_w_errors)
                             results_to_add.append(res)
 
-                for idx in sorted(idxs_to_rm, reverse=True):
-                    del async_results[idx]
-                async_results.extend(results_to_add)
+                    except TimeoutError:  # if result is not ready, continue
+                        continue
 
+                    # Catch exceptions thrown both in the async result AND in the multiprocessing library
+                    except BaseException as e:
+                        log.error('Caught BaseException in MPIndexer: %s' % str(e))
+                        del async_results[idx]
+
+                async_results.extend(results_to_add)
                 if len(async_results) == 0:
                     break
                 time.sleep(0.5)
 
-        pool.close()
-        pool.join()
         return errors
