@@ -82,4 +82,4 @@ deploy:
   script: poetry publish --build --username=$PYPI_USER --password=$PYPI_PASSWORD
   on:
     tags: true
-    condition: "$TRAVIS_PYTHON_VERSION == 3.4"
+    condition: "$TRAVIS_PYTHON_VERSION == 3.6"
