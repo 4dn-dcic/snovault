@@ -1,4 +1,6 @@
+import os
 import pytest
+import mock
 
 from .. import TYPES
 from ..elasticsearch.create_mapping import merge_schemas, type_mapping, update_mapping_by_embed
@@ -20,6 +22,20 @@ def test_type_mapping(registry, item_type):
     assert mapping
     assert 'properties' in mapping
     assert 'include_in_all' in mapping
+    if item_type == 'TestingLinkTargetElasticSearch':
+        assert mapping['properties']['reverse_es'].get('type', 'object') != 'nested'  # should not occur here
+
+
+@mock.patch.dict(os.environ, {'MAP_WITH_NESTED': 'True'})
+def test_type_mapping_nested(registry):
+    """
+    Tests that mapping a field with a list of dicts in it maps with type=nested if told to do so
+    """
+    mapping = type_mapping(registry[TYPES], 'TestingLinkTargetElasticSearch')
+    assert mapping
+    assert 'properties' in mapping
+    assert 'include_in_all' in mapping
+    assert mapping['properties']['reverse_es']['type'] == 'nested'  # should occur here
 
 
 def test_merge_schemas(registry):

@@ -124,7 +124,7 @@ def schema_mapping(field, schema, top_level=False, from_array=False):
                 'include_in_all': True,
                 'properties': properties,
             }
-        elif from_array:
+        elif from_array and os.environ.get('MAP_WITH_NESTED', False):  # only do this if we said so
             return {
                 'type': 'nested',
                 'properties': properties
@@ -639,7 +639,7 @@ def type_mapping(types, item_type, embed=True):
                 break
             curr_m = update_mapping_by_embed(curr_m, curr_e, curr_s)
             if curr_e != 'update_items' and curr_m.get('properties') and curr_e in schema['properties'] and curr_e in \
-                    mapping['properties'] and schema['properties'][curr_e]['type'] == 'array':
+                    mapping['properties'] and schema['properties'][curr_e]['type'] == 'array' and os.environ.get('MAP_WITH_NESTED', False):
                 # If this is a list of linkTos and has properties to be embedded, make it 'nested' for more aggregations.
                 curr_m['type'] = "nested"
     return mapping
