@@ -26,10 +26,12 @@ def test_type_mapping(registry, item_type):
         assert mapping['properties']['reverse_es'].get('type', 'object') != 'nested'  # should not occur here
 
 
+@pytest.mark.skip  # includeme occurs before the patch, so this test doesn't work but will if you set this variable
 @mock.patch.dict(os.environ, {'MAP_WITH_NESTED': 'True'})
 def test_type_mapping_nested(registry):
     """
     Tests that mapping a field with a list of dicts in it maps with type=nested if told to do so
+    TODO: patch USE_NESTED in create_mapping? - will
     """
     mapping = type_mapping(registry[TYPES], 'TestingLinkTargetElasticSearch')
     assert mapping

@@ -115,6 +115,8 @@ def main(global_config, **local_config):
 
     if 'elasticsearch.server' in config.registry.settings:
         config.include('snovault.elasticsearch')
+    else:  # we must include create_mapping so we know whether or not to map with type=nested
+        config.include('snovault.elasticsearch.create_mapping')
 
     config.include(changelogs)
 

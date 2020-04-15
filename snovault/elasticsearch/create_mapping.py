@@ -64,8 +64,8 @@ def includeme(config):
     settings = config.registry.settings
     nested_is_set = get_setting_from_context(settings, 'map.with.nested', env_var='MAP_WITH_NESTED')
     if nested_is_set:
+        global USE_NESTED
         USE_NESTED = True
-
 
 
 def determine_if_is_date_field(field, schema):
