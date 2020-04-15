@@ -11,7 +11,6 @@ import argparse
 import datetime
 import json
 import logging
-import os
 import structlog
 import sys
 import time
@@ -32,6 +31,7 @@ from elasticsearch_dsl import Index, Search
 from elasticsearch_dsl.connections import connections
 from functools import reduce
 from itertools import chain
+from dcicutils.misc_utils import get_setting_from_context
 from pyramid.paster import get_app
 from timeit import default_timer as timer
 from .. import COLLECTIONS, TYPES, set_logging
@@ -56,6 +56,16 @@ KW_IGNORE_ABOVE = 512
 # used to customize ngram filter behavior
 MIN_NGRAM = 2
 MAX_NGRAM = 10
+# used to tell if we are mapping with type=nested
+USE_NESTED = False
+
+
+def includeme(config):
+    settings = config.registry.settings
+    nested_is_set = get_setting_from_context(settings, 'map.with.nested', env_var='MAP_WITH_NESTED')
+    if nested_is_set:
+        USE_NESTED = True
+
 
 
 def determine_if_is_date_field(field, schema):
@@ -124,7 +134,7 @@ def schema_mapping(field, schema, top_level=False, from_array=False):
                 'include_in_all': True,
                 'properties': properties,
             }
-        elif from_array and os.environ.get('MAP_WITH_NESTED', False):  # only do this if we said so
+        elif from_array and USE_NESTED:  # only do this if we said so
             return {
                 'type': 'nested',
                 'properties': properties
@@ -639,7 +649,7 @@ def type_mapping(types, item_type, embed=True):
                 break
             curr_m = update_mapping_by_embed(curr_m, curr_e, curr_s)
             if curr_e != 'update_items' and curr_m.get('properties') and curr_e in schema['properties'] and curr_e in \
-                    mapping['properties'] and schema['properties'][curr_e]['type'] == 'array' and os.environ.get('MAP_WITH_NESTED', False):
+                    mapping['properties'] and schema['properties'][curr_e]['type'] == 'array' and USE_NESTED:
                 # If this is a list of linkTos and has properties to be embedded, make it 'nested' for more aggregations.
                 curr_m['type'] = "nested"
     return mapping
