@@ -45,7 +45,8 @@ DCIC Snovault is pip installable as the ``dcicsnovault`` package with::
 However, at the present time, the functionality it provides might only be useful in conjunction
 with other 4DN-DCIC components.
 
-NOTE: If you'd like to enable Elasticsearch mapping with type=nested, set the environment variable "MAP_WITH_NESTED".
+NOTE: If you'd like to enable Elasticsearch mapping with type=nested, set the environment variable "MAPPINGS_USE_NESTED"
+or set the registry setting "mappings.use_nested".
 
 Installation for Development
 ============================

@@ -35,7 +35,6 @@ def includeme(config):
     config.include('.esstorage')
     config.include('.indexer_queue')
     config.include('.indexer')
-    config.include('.create_mapping')
     if asbool(settings.get('mpindexer')) and not PY2:
         config.include('.mpindexer')
 

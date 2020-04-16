@@ -31,7 +31,6 @@ from elasticsearch_dsl import Index, Search
 from elasticsearch_dsl.connections import connections
 from functools import reduce
 from itertools import chain
-from dcicutils.misc_utils import get_setting_from_context
 from pyramid.paster import get_app
 from timeit import default_timer as timer
 from .. import COLLECTIONS, TYPES, set_logging
