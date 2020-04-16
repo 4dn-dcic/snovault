@@ -1165,8 +1165,9 @@ def run(app, collections=None, dry_run=False, check_first=False, skip_indexing=F
             # up newly rev linked items. Print out an error and deal with it
             # for now
             if not strict:
-                 # arbitrary large number, that hopefully is within ES limits
-                if len_all_uuids > 50000 or total_reindex:
+                # XXX: this used to check if len(uuids) > 50000 and if so trigger a full reindex
+                #      no idea why such a thing was needed/desired -will 4-16-2020
+                if total_reindex:
                     log.warning('___MAPPING ALL ITEMS WITH STRICT=TRUE TO SAVE TIME___')
                     # get all the uuids from EVERY item type
                     for i_type in registry[COLLECTIONS].by_item_type:
