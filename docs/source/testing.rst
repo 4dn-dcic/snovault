@@ -1,12 +1,26 @@
-#######
 Testing
-#######
+========================
 
-************
-Python Tests
-************
+Since there is no deployable application using solely Snovault, tests are extra important and can be used to learn about the features on Snovault. We use the PyTest framework. Below is a brief walkthrough on several important aspects of how Snovault is tested.
 
-Snovault is tested using the PyTest framework. Below is a brief walkthrough on several important aspects of how Snovault is tested.
+Running tests
+=============
+
+To run specific tests locally::
+
+    $ bin/test -k test_name
+
+To run with a debugger::
+
+    $ bin/test --pdb
+
+Specific tests to run locally for schema changes::
+
+    $ bin/test -k test_load_workbook
+
+Run the Pyramid tests with::
+
+    $ bin/test
 
 Testing Views
 =============

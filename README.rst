@@ -1,63 +1,142 @@
-========================
-Snovault
-========================
-
-Snovault is a JSON-LD Database Framework that serves as the backend for the 4DN Data portal and CGAP. Check out our full documentation `here
-<https://snovault.readthedocs.io/en/latest/>`_.
+=============
+DCIC Snovault
+=============
 
 |Build status|_
 
 .. |Build status| image:: https://travis-ci.org/4dn-dcic/snovault.svg?branch=master
 .. _Build status: https://travis-ci.org/4dn-dcic/snovault
 
-Installation Instructions
-=========================
+.. Important::
+
+ DCIC Snovault is a FORK of `snovault <https://pypi.org/project/snovault/>`_
+ created at the `ENCODE DCC project at Stanford <https://github.com/ENCODE-DCC>`_.
+ Our fork supports other projects of the
+ `4D Nucleome Data Coordination and Integration Center (4DN-DCIC)
+ <https://github.com/4dn-dcic>`_.
+ Although this software is available as open source software,
+ its primary function is to support our layered projects,
+ and we are not at this time able to offer any active support for other uses.
+ In particular, this fork does not purport to supersede
+ the original `snovault <https://pypi.org/project/snovault/>`_.
+ we just have a different use case that we are actively exploring.
+
+Overview
+========
+
+DCIC Snovault is a JSON-LD Database Framework that serves as the backend for the 4DN Data portal and CGAP. Check out our full documentation `here
+<https://snovault.readthedocs.io/en/latest/>`_.
+
+.. note::
+
+    This repository contains a core piece of functionality shared amongst several projects
+    in the 4DN-DCIC. It is meant to be used internally by the DCIC team
+    in support of `Fourfront <https://data.4dnucleome.org>`_\ ,
+    the 4DN data portal, and at this point in time it is not expected to be useful
+    in a standalone/plug-and-play way to others.
+
+Installation in 4DN components
+==============================
+
+DCIC Snovault is pip installable as the ``dcicsnovault`` package with::
+
+    $ pip install dcicsnovault``
+
+However, at the present time, the functionality it provides might only be useful in conjunction
+with other 4DN-DCIC components.
+
+NOTE: If you'd like to enable Elasticsearch mapping with type=nested, set the environment variable "MAPPINGS_USE_NESTED"
+or set the registry setting "mappings.use_nested".
+
+Installation for Development
+============================
 
 Currently these are for Mac OSX using homebrew. If using linux, install dependencies with a different package manager.
 
-Step 0: Install Xcode (from App Store) and homebrew: http://brew.sh::
+Step 0: Install Xcode
+---------------------
 
-Step 1: Verify that homebrew is working properly::
+Install Xcode (from App Store) and homebrew: http://brew.sh
 
-    $ sudo brew doctor
+Step 1: Verify Homebrew Itself
+------------------------------
 
+Verify that homebrew is working properly::
 
-Step 2: Install or update dependencies::
+    $ brew doctor
+
+Step 2: Install Homebrewed Dependencies
+---------------------------------------
+
+Install or update dependencies::
 
     $ brew install libevent libmagic libxml2 libxslt openssl postgresql graphviz python3
     $ brew install freetype libjpeg libtiff littlecms webp  # Required by Pillow
     $ brew cask install adoptopenjdk8
-    $ brew tap homebrew/versions
     $ brew install elasticsearch@5.6
 
-If you need to update dependencies::
+NOTES:
+
+* If installation of adtopopenjdk8 fails due to an ambiguity, it should work to do this instead::
+
+    $ brew cask install homebrew/cask-versions/adoptopenjdk8
+
+* If you try to invoke elasticsearch and it is not found,
+  you may need to link the brew-installed elasticsearch::
+
+    $ brew link --force elasticsearch@5.6
+
+* If you need to update dependencies::
+
+    $ brew update
+    $ rm -rf encoded/eggs
+
+* If you need to upgrade brew-installed packages that don't have pinned versions,
+  you can use the following. However, take care because there is no command to directly
+  undo this effect::
 
     $ brew update
     $ brew upgrade
-    $ rm -rf snowflakes/eggs
+    $ rm -rf encoded/eggs
+
+Step 3: Running Poetry
+----------------------
+
+To locally install using versions of Python libraries that have worked before, use this::
+
+    $ poetry install
 
 
-Step 3: Run buildout::
+Updating dependencies
+=====================
 
-    $ python3 bootstrap.py --buildout-version 2.9.5 --setuptools-version 36.6.0
-    $ bin/buildout
+To update the version dependencies, use::
 
-    NOTE:
-    If you have issues with postgres or the python interface to it (psycogpg2) you probably need to install postgresql
-    via homebrew (as above)
-    If you have issues with Pillow you may need to install new xcode command line tools:
-    - First update Xcode from AppStore (reboot)
-    $ xcode-select --install
-    If you are running macOS Mojave, you may need to run the below command as well:
-    $ sudo installer -pkg /Library/Developer/CommandLineTools/Packages/macOS_SDK_headers_for_macOS_10.14.pkg -target /
+    $ poetry update
+
+This command also takes space-separated names of specific packages to update. For more information, do::
+
+    $ poetry help update
 
 
+Managing poetry.lock after update
+---------------------------------
 
-If you wish to completely rebuild the application, or have updated dependencies:
-    $ make clean
+There may be situations where you do this with no intent to check in the resulting updates,
+but once you have checked that the updates are sound, you may wish to check the resulting
+``poetry.lock`` file.
 
-    Then goto Step 3.
+Publishing
+==========
 
+Normally, a successful build on a tagged branch will cause publication automatically.
+It should not be necessary for you to manually use::
+
+    $ poetry publish
+
+Also, you would need appropriate credentials on PyPi for such publication to succeed. As presently configured,
+these credentials need to be in the environment variables ``PYPI_USER`` and ``PYPI_PASSWORD``.
+If you attempt to do this manually, be sure the version is set properly!
 
 Running tests
 =============
@@ -77,3 +156,4 @@ Specific tests to run locally for schema changes::
 Run the Pyramid tests with::
 
     $ bin/test
+
