@@ -232,10 +232,13 @@ class PickStorage(object):
                 )
 
             # delete item from ES and mirrored ES, and queue reindexing
-            self.read.purge_uuid(rid, item_type, max_sid)
+            proceed = self.read.purge_uuid(rid, item_type, max_sid)
 
         # delete the item from DB
-        self.write.purge_uuid(rid)
+        if proceed:
+            self.write.purge_uuid(rid)
+        else:
+            raise HTTPInternalServerError('Deletion of rid %s unsuccessful in Elasticsearch, aborting deletion' % rid)
 
     def get_rev_links(self, model, rel, *item_types):
         """
