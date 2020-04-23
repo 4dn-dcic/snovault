@@ -248,6 +248,9 @@ def index_settings():
             'number_of_replicas': NUM_REPLICAS,
             'max_result_window': SEARCH_MAX,
             'mapping': {
+                'nested_fields': {
+                    'limit': 100
+                },
                 'total_fields': {
                     'limit': 5000
                 },

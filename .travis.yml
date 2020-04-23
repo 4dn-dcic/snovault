@@ -69,7 +69,7 @@ install:
 - pip install "moto[server]"
 script:
 - |
-  if test -n "$UNIT"; then bin/test -v -v --timeout=400 --aws-auth --cov snovault --es search-fourfront-builds-uhevxdzfcv7mkm5pj5svcri3aq.us-east-1.es.amazonaws.com:80;
+  if test -n "$UNIT"; then bin/test -v -v --timeout=400 --aws-auth --cov snovault --es search-fourfront-builds-68-bqejj2i7ilhzh6wgslqhvuqtnm.us-east-1.es.amazonaws.com:443;
   fi
 - |
   if [[ $TRAVIS_BRANCH == 'master' ]]; then
@@ -77,7 +77,7 @@ script:
   curl -X POST -d "branches=master" -d "token=$DOCS_TOKEN" https://readthedocs.org/api/v2/webhook/snovault/99596/
   fi
 - echo $TRAVIS_JOB_ID
-- poetry run wipe-test-indices $TRAVIS_JOB_ID search-fourfront-builds-uhevxdzfcv7mkm5pj5svcri3aq.us-east-1.es.amazonaws.com:80
+- poetry run wipe-test-indices $TRAVIS_JOB_ID search-fourfront-builds-68-bqejj2i7ilhzh6wgslqhvuqtnm.us-east-1.es.amazonaws.com:443
 deploy:
   provider: script
   script: poetry publish --build --username=$PYPI_USER --password=$PYPI_PASSWORD
