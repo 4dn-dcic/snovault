@@ -217,6 +217,7 @@ class PickStorage(object):
         and also remove the given item from Elasticsearch
         """
         log.warning('PURGE: purging %s' % rid)
+        proceed = True
         # requires ES for searching item links
         if self.read is not None:
             # model and max_sid are used later, in second `if self.read` block
