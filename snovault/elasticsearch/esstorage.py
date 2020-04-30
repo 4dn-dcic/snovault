@@ -3,6 +3,7 @@ from elasticsearch.helpers import scan
 from elasticsearch_dsl import Search, Q
 from zope.interface import alsoProvides
 from uuid import UUID
+from time import sleep
 from .interfaces import (
     ELASTIC_SEARCH,
     INDEXER_QUEUE_MIRROR,
@@ -232,10 +233,10 @@ class ElasticSearchStorage(object):
         return None
 
     @staticmethod
-    def delete_from_es(es, rid, index_name, item_type):
+    def _delete_from_es(es, rid, index_name, item_type):
         """
-        Helper method that deletes an item from Elasticsearch, returning True if the given rid
-        no longer/does not exist in ES and False otherwise.
+        Helper method that deletes an item from Elasticsearch, returning a boolean success value.
+        Success means the given rid did not exist or no longer exists in ES.
 
         :param es: es client to use
         :param rid: resource id to purge
@@ -256,7 +257,33 @@ class ElasticSearchStorage(object):
             log.info('PURGE: successfully deleted %s in ElasticSearch' % rid)
         return True
 
-    def purge_uuid_from_mirror(self, rid, item_type):
+    def _get_cached_mirror_health(self, mirror_env):
+
+        cached_mirror_health = self.registry.settings['mirror_health']
+        if 'error' not in cached_mirror_health:
+            return cached_mirror_health
+
+        mirror_env = self.registry.settings['mirror.env.name']
+        mirror_health_now = ff_utils.get_health_page(ff_env=mirror_env)
+        if 'error' not in mirror_health_now:
+            return mirror_health_now
+
+        raise RuntimeError('PURGE: Could not resolve mirror health on retry with error: %s' % mirror_health_now)
+
+    def _assure_mirror_client(self, es_mirror_server_and_port):
+        if not self.mirror:
+            raise RuntimeError("Attempt to call ._assure_mirror_client() when there is no self.mirror.")
+
+        use_aws_auth = self.registry.settings.get('elasticsearch.aws_auth')
+
+        # make sure use_aws_auth is bool
+        if not isinstance(use_aws_auth, bool):
+            use_aws_auth = True if use_aws_auth == 'true' else False
+
+        if not self.mirror_client:  # only recompute if we've never done this before
+            self.mirror_client = es_utils.create_es_client(es_mirror_server_and_port, use_aws_auth=use_aws_auth)
+
+    def _purge_uuid_from_mirror_es(self, rid, item_type):
         """
         Helper method for purge_uuid that purges rid from the mirror on ESStorage
 
@@ -265,55 +292,54 @@ class ElasticSearchStorage(object):
         :returns: result of 'delete_from_es'
         :raises: RuntimeError if we are unable to get the mirror health page
         """
+
+        if not self.mirror:
+            raise RuntimeError("Attempt to call ._purge_uuid_from_mirror_es() when there is no self.mirror.")
+
         mirror_env = self.registry.settings['mirror.env.name']
-        cached_mirror_health = self.registry.settings['mirror_health']
-        use_aws_auth = self.registry.settings.get('elasticsearch.aws_auth')
         log.info('PURGE: attempting to purge %s from mirror storage %s' % (rid, mirror_env))
 
-        # if we could not get mirror health, bail here
-        if 'error' in cached_mirror_health:
-            log.error(
-                'PURGE: Tried to purge %s from mirror storage but couldn\'t get health page. Is staging up?' % rid)
-            log.error('PURGE: Mirror health error: %s' % cached_mirror_health)
-            log.error('PURGE: Recomputing mirror health...')
-            cached_mirror_health = ff_utils.get_health_page(ff_env=mirror_env)
-            if 'error' in cached_mirror_health:
-                raise RuntimeError('PURGE: Could not resolve mirror health on retry with error: %s'
-                                   % cached_mirror_health)
-            self.registry.settings['mirror_health'] = cached_mirror_health
+        try:
+            mirror_health = self._get_cached_mirror_health()
+        except RuntimeError:
+            log.error("PURGE: Tried to purge %s from mirror storage but couldn't get health page. Is staging up?" % rid)
+            raise
 
-        # make sure use_aws_auth is bool
-        if not isinstance(use_aws_auth, bool):
-            use_aws_auth = True if use_aws_auth == 'true' else False
+        self._assure_mirror_client(es_mirror_server_and_port=mirror_health['elasticsearch'])
 
-        if not self.mirror_client:  # only recompute if we've never done this before
-            self.mirror_client = es_utils.create_es_client(cached_mirror_health['elasticsearch'],
-                                                           use_aws_auth=use_aws_auth)
+        mirror_index_name = namespace_index_from_health(health=mirror_health, index=item_type)
+        return self._delete_from_es(es=self.mirror_client, rid=rid, index_name=mirror_index_name, item_type=item_type)
 
-        mirror_index = namespace_index_from_health(cached_mirror_health, item_type)
-        return self.delete_from_es(self.mirror_client, rid, mirror_index, item_type)
+    def _purge_uuid_from_primary_es(self, rid, item_type, max_sid=None):
+
+        index_name = get_namespaced_index(config=self.registry, index=item_type)
+        if not self._delete_from_es(es=self.es, rid=rid, index_name=index_name, item_type=item_type):
+            return False
+
+        # queue related items for reindexing if deletion was successful
+        self.registry[INDEXER].find_and_queue_secondary_items({rid}, set(), sid=max_sid)
+
+        return True
 
     def purge_uuid(self, rid, item_type, max_sid=None):
         """
         Purge a uuid from the write storage (Elasticsearch)
-        If there is a mirror environment set up for the indexer, also attempt
-        to remove the uuid from the mirror Elasticsearch
+        If the indexer has an ElasticSearch mirror environment, also attempt to remove the uuid from that mirror.
 
-        Returns True if the deletion was successful or the item was not present, False otherwise
+        Returns True if the deletion was successful or the item was not present, and False otherwise.
         """
-        index_name = get_namespaced_index(self.registry, item_type)
-        proceed = self.delete_from_es(self.es, rid, index_name, item_type)
 
-        # queue related items for reindexing if deletion was successful
-        if proceed:
-            self.registry[INDEXER].find_and_queue_secondary_items(set([rid]), set(), sid=max_sid)
+        if not self._purge_uuid_from_primary_es(rid=rid, item_type=item_type, max_sid=max_sid):
+            return False
 
         # if configured, delete the item from the mirrored ES as well
-        if self.mirror and proceed:
-            return self.purge_uuid_from_mirror(rid, item_type)
+        if self.mirror:
+            self._purge_uuid_from_mirror_es(rid=rid, item_type=item_type)
+        else:
+            # We don't usually need over and over in logs for cgap, where it's normal for there to be no mirror.
+            log.debug('PURGE: Did not find a mirror env. Continuing.')
 
-        log.info('PURGE: Did not find a mirror env. Continuing.')
-        return proceed
+        return True
 
     def __iter__(self, *item_types):
         """
