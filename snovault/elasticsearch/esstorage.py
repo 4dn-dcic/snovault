@@ -332,14 +332,13 @@ class ElasticSearchStorage(object):
         if not self._purge_uuid_from_primary_es(rid=rid, item_type=item_type, max_sid=max_sid):
             return False
 
-        # if configured, delete the item from the mirrored ES as well
+        # if configured, delete the item from the mirrored ES as well.
+        # If that is successful, we were successful, otherwise not.
         if self.mirror:
-            self._purge_uuid_from_mirror_es(rid=rid, item_type=item_type)
+            return self._purge_uuid_from_mirror_es(rid=rid, item_type=item_type)
         else:
             # We don't usually need over and over in logs for cgap, where it's normal for there to be no mirror.
             log.debug('PURGE: Did not find a mirror env. Continuing.')
-
-        return True
 
     def __iter__(self, *item_types):
         """
