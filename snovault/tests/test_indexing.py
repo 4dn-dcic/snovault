@@ -60,7 +60,7 @@ def app_settings(wsgi_server_host_port, elasticsearch_server, postgresql_server,
     settings['sqlalchemy.url'] = postgresql_server
     settings['collection_datastore'] = 'elasticsearch'
     settings['item_datastore'] = 'elasticsearch'
-    settings['indexer'] = True
+    settings['indexer'] = False  # when testing, do not test as if we are an indexer application
     settings['indexer.namespace'] = os.environ.get('TRAVIS_JOB_ID', '')
 
     # use aws auth to access elasticsearch

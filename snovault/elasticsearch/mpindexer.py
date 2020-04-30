@@ -166,7 +166,7 @@ class MPIndexer(Indexer):
         """
         num_cpu = cpu_count()
         if registry.settings.get('indexer', ''):
-            return round((num_cpu - 2) * 1.5)  # done somewhat arbitrarily, should be benchmarked -Will 04/30/2020
+            return round((num_cpu - 2) * 1.5) + 1  # done somewhat arbitrarily, should be benchmarked -Will 04/30/2020
         return num_cpu - 2 if num_cpu - 2 > 1 else 1
 
     def init_pool(self):
