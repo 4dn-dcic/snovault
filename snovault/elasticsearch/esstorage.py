@@ -9,7 +9,7 @@ from .interfaces import (
     INDEXER,
     ICachedItem,
 )
-from .indexer_utils import get_namespaced_index, find_uuids_for_indexing
+from .indexer_utils import get_namespaced_index, namespace_index_from_health, find_uuids_for_indexing
 from .create_mapping import SEARCH_MAX
 from ..storage import register_storage
 from dcicutils import es_utils, ff_utils
@@ -233,44 +233,64 @@ class ElasticSearchStorage(object):
 
     @staticmethod
     def delete_from_es(es, rid, index_name, item_type):
-        """ Helper method that deletes an item from Elasticsearch """
+        """
+        Helper method that deletes an item from Elasticsearch, returning True if the given rid
+        no longer/does not exist in ES and False otherwise.
+
+        :param es: es client to use
+        :param rid: resource id to purge
+        :param index_name: index_name to purge rid from
+        :param item_type: type of rid
+        :returns: True if rid does not exist in ES, False if it does (AT THIS TIME)
+        """
         try:
             es.delete(id=rid, index=index_name, doc_type=item_type)
         except elasticsearch.exceptions.NotFoundError:
             # Case: Not yet indexed
             log.error('PURGE: Could not find %s in ElasticSearch. Continuing.' % rid)
         except Exception as exc:
-            log.error('PURGE: Cannot delete %s in ElasticSearch. Error: %s Continuing.' % (item_type, str(exc)))
-            return False
+            log.error('PURGE: Cannot delete %s in ElasticSearch. Error: %s. NOT proceeding with deletion.'
+                      % (item_type, str(exc)))
+            return False  # only return False here as this is the only scenario where we want to STOP the purge process
         else:
             log.info('PURGE: successfully deleted %s in ElasticSearch' % rid)
         return True
 
     def purge_uuid_from_mirror(self, rid, item_type):
-        """ Helper method for purge_uuid that purges rid from the mirror on ESStorage """
+        """
+        Helper method for purge_uuid that purges rid from the mirror on ESStorage
+
+        :param rid: resource id to purge
+        :param item_type: type of rid
+        :returns: result of 'delete_from_es'
+        :raises: RuntimeError if we are unable to get the mirror health page
+        """
         mirror_env = self.registry.settings['mirror.env.name']
-        mirror_health = self.registry.settings['mirror_health']
+        cached_mirror_health = self.registry.settings['mirror_health']
         use_aws_auth = self.registry.settings.get('elasticsearch.aws_auth')
         log.info('PURGE: attempting to purge %s from mirror storage %s' % (rid, mirror_env))
 
         # if we could not get mirror health, bail here
-        if 'error' in mirror_health:
+        if 'error' in cached_mirror_health:
             log.error(
                 'PURGE: Tried to purge %s from mirror storage but couldn\'t get health page. Is staging up?' % rid)
-            log.error('PURGE: Mirror health error: %s' % mirror_health)
+            log.error('PURGE: Mirror health error: %s' % cached_mirror_health)
             log.error('PURGE: Recomputing mirror health...')
-            self.registry.settings['mirror_health'] = ff_utils.get_health_page(ff_env=mirror_env)
-            return True  # in this case proceed with the DB deletion
+            cached_mirror_health = ff_utils.get_health_page(ff_env=mirror_env)
+            if 'error' in cached_mirror_health:
+                raise RuntimeError('PURGE: Could not resolve mirror health on retry with error: %s'
+                                   % cached_mirror_health)
+            self.registry.settings['mirror_health'] = cached_mirror_health
 
         # make sure use_aws_auth is bool
         if not isinstance(use_aws_auth, bool):
             use_aws_auth = True if use_aws_auth == 'true' else False
 
-        if not self.mirror_client:  # cached on this object
-            self.mirror_client = es_utils.create_es_client(mirror_health['elasticsearch'],
-                                                            use_aws_auth=use_aws_auth)
+        if not self.mirror_client:  # only recompute if we've never done this before
+            self.mirror_client = es_utils.create_es_client(cached_mirror_health['elasticsearch'],
+                                                           use_aws_auth=use_aws_auth)
 
-        mirror_index = mirror_health.get('namespace', '') + item_type
+        mirror_index = namespace_index_from_health(cached_mirror_health, item_type)
         return self.delete_from_es(self.mirror_client, rid, mirror_index, item_type)
 
     def purge_uuid(self, rid, item_type, max_sid=None):
@@ -289,7 +309,7 @@ class ElasticSearchStorage(object):
             self.registry[INDEXER].find_and_queue_secondary_items(set([rid]), set(), sid=max_sid)
 
         # if configured, delete the item from the mirrored ES as well
-        if self.mirror:
+        if self.mirror and proceed:
             return self.purge_uuid_from_mirror(rid, item_type)
 
         log.info('PURGE: Did not find a mirror env. Continuing.')
