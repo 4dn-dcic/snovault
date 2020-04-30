@@ -165,7 +165,7 @@ class MPIndexer(Indexer):
         in which case we will 1.5x the number of indexing processes.
         """
         num_cpu = cpu_count()
-        if registry.settings.get('ENCODED_INDEXER', ''):
+        if registry.settings.get('indexer', ''):
             return round((num_cpu - 2) * 1.5)  # done somewhat arbitrarily, should be benchmarked -Will 04/30/2020
         return num_cpu - 2 if num_cpu - 2 > 1 else 1
 
