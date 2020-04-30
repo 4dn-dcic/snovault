@@ -3,7 +3,6 @@ from elasticsearch.helpers import scan
 from elasticsearch_dsl import Search, Q
 from zope.interface import alsoProvides
 from uuid import UUID
-from time import sleep
 from .interfaces import (
     ELASTIC_SEARCH,
     INDEXER_QUEUE_MIRROR,
