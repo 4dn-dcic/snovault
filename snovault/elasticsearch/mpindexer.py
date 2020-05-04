@@ -166,7 +166,7 @@ class MPIndexer(Indexer):
         """
         num_cpu = cpu_count()
         cpus_to_use = num_cpu
-        if registry.settings.get('INDEX_SERVER', ''):
+        if registry.settings.get('index_server', 'false').upper() == 'TRUE':  # XXX: option should be imported
             # done somewhat arbitrarily, should be benchmarked -Will 04/30/2020
             cpus_to_use = round((num_cpu - 2) * 1.5) + 1
         return max(cpus_to_use, 1)
