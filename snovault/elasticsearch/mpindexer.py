@@ -155,19 +155,21 @@ class MPIndexer(Indexer):
     def __init__(self, registry):
         super(MPIndexer, self).__init__(registry)
         self.chunksize = int(registry.settings.get('indexer.chunk_size', 1024))
-        self.processes = self.configure_processes(registry)
+        self.processes = self.suggested_number_of_processes(registry)
         self.initargs = (registry[APP_FACTORY], registry.settings,)
 
     @staticmethod
-    def configure_processes(registry):
+    def suggested_number_of_processes(registry):
         """
         Called by the initializer. Will check the application registry for the 'ENCODED_INDEXER' option,
         in which case we will 1.5x the number of indexing processes.
         """
         num_cpu = cpu_count()
+        cpus_to_use = num_cpu
         if registry.settings.get('indexer', ''):
-            return round((num_cpu - 2) * 1.5) + 1  # done somewhat arbitrarily, should be benchmarked -Will 04/30/2020
-        return num_cpu - 2 if num_cpu - 2 > 1 else 1
+            # done somewhat arbitrarily, should be benchmarked -Will 04/30/2020
+            cpus_to_use = round((num_cpu - 2) * 1.5) + 1
+        return max(cpus_to_use, 1)
 
     def init_pool(self):
         """
