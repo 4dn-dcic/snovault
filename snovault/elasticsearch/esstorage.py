@@ -327,7 +327,6 @@ class ElasticSearchStorage(object):
 
         Returns True if the deletion was successful or the item was not present, and False otherwise.
         """
-
         if not self._purge_uuid_from_primary_es(rid=rid, item_type=item_type, max_sid=max_sid):
             return False
 
@@ -338,6 +337,7 @@ class ElasticSearchStorage(object):
         else:
             # We don't usually need over and over in logs for cgap, where it's normal for there to be no mirror.
             log.debug('PURGE: Did not find a mirror env. Continuing.')
+            return True
 
     def __iter__(self, *item_types):
         """
