@@ -17,6 +17,13 @@ def get_namespaced_index(config, index):
     return namespace + index
 
 
+def namespace_index_from_health(health, index):
+    """ Namespaces the given index based on health page data """
+    if 'error' in health:
+        raise RuntimeError('Mirror health unresolved: %s' % health)
+    return health.get('namespace', '') + index
+
+
 def find_uuids_for_indexing(registry, updated, find_index=None):
     """
     Run a search to find uuids of objects with that contain the given set of
