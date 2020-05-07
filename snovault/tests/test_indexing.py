@@ -1603,13 +1603,17 @@ def test_assert_transactions_table_is_gone(app):
     assert 'propsheets_tid_fkey' not in constraints
 
 
-
-
-
 def test_wait_until_purge_queue_allowed():
 
+    # We really don't need a registry for this mock, but one of the arguments needs to be a registry.
+    # It's more than sufficient to use a dictionary. Probably any value would work.
     mocked_registry = {}
 
+    # All we want to do is test a method on QueueManager, but in order to do that we need to instantiate
+    # the class. We do that here by bypassing the init method, so we don't have to mock all the structures
+    # we won't use. We need only a few variables:
+    #  - .queue_url, .second_queue_url, and .dlq_url are needed because they get passed to something to be ignored.
+    #  - purge_queue_timestamp wouuld be initalized by the regular init method in the same way as we do here.
     class UninitializedQueueManager(indexer_queue.QueueManager):
         def __init__(self, registry, mirror_env=None, override_url=None):
             if False:
@@ -1619,9 +1623,18 @@ def test_wait_until_purge_queue_allowed():
             # These values don't matter. It only matters that there be values.
             self.queue_url, self.second_queue_url, self.dlq_url = ('queue-url', 'second-queue-url', 'dlq-url')
 
+    # The function now() will get us the time. This assure us that binding datetime.datetime
+    # will not be affecting us.
     now = datetime.now
+
+    # real_t0 is the actual wallclock time at the start of this test. We use it only to make sure
+    # that all these other tests are really going through our mock. In spite of longer mocked
+    # timescales, this test should run quickly.
     real_t0 = now()
     print("Starting test at", real_t0)
+
+    # dt will be our substitute for datetime.datetime.
+    # (it also has a sleep method that we can substitute for time.sleep)
     dt = ControlledTime(tick_seconds=1)
 
     class Logger:
@@ -1632,8 +1645,11 @@ def test_wait_until_purge_queue_allowed():
         def warning(self, msg):
             self.log.append(msg)
 
-    with mock.patch.object(datetime_module, "datetime", dt):
-        with mock.patch.object(time, "sleep", dt.sleep):
+    with mock.patch("datetime.datetime", dt):
+        with mock.patch("time.sleep", dt.sleep):
+            # The following call to mock.patch.object is the same as doing:
+            #   with mock.patch("snovault.elasticsearch.indexer_queue.log", Logger()) as mock_log:
+            # but it avoids presuming the name 'snovault' and so works better with relative naming. -kmp 7-May-2020
             with mock.patch.object(indexer_queue, "log", Logger()) as mock_log:
 
                 assert isinstance(datetime_module.datetime, ControlledTime)
@@ -1701,5 +1717,3 @@ def test_wait_until_purge_queue_allowed():
         real_t1 = now()
         print("Done testing at", real_t1)
         assert (real_t1 - real_t0).total_seconds() < 0.5  # Whole test should happen much faster, less than a half second
-
-
