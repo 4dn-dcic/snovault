@@ -5,24 +5,28 @@ elasticsearch running as subprocesses.
 Does not include data dependent tests
 """
 
+import datetime as datetime_module
 import json
 import os
 import pytest
+import pytz
 import time
 import transaction as transaction_management
 import uuid
 import webtest
 import yaml
 
-from datetime import datetime
+from datetime import datetime, timedelta
+from dcicutils.qa_utils import ControlledTime
 from elasticsearch.exceptions import NotFoundError
 from pyramid.paster import get_appsettings
 from pyramid.traversal import traverse
 from sqlalchemy import MetaData
+from unittest import mock
 from zope.sqlalchemy import mark_changed
 from .. import COLLECTIONS, DBSESSION, STORAGE, TYPES, main, util
 from ..commands.es_index_data import run as run_index_data
-from ..elasticsearch import create_mapping, indexer_utils
+from ..elasticsearch import create_mapping, indexer_utils, indexer_queue
 from ..elasticsearch.create_mapping import (
     build_index_record,
     check_and_reindex_existing,
@@ -1597,3 +1601,105 @@ def test_assert_transactions_table_is_gone(app):
     # make sure fkey constraint is also removed
     constraints = [c.name for c in meta.tables['propsheets'].constraints]
     assert 'propsheets_tid_fkey' not in constraints
+
+
+
+
+
+def test_wait_until_purge_queue_allowed():
+
+    mocked_registry = {}
+
+    class UninitializedQueueManager(indexer_queue.QueueManager):
+        def __init__(self, registry, mirror_env=None, override_url=None):
+            if False:
+                # noqa - This line initialization is not reachable, but that's what we want for this test
+                super(UninitializedQueueManager, self).__init__(registry, mirror_env, override_url)
+            self.purge_queue_timestamp = self.PURGE_QUEUE_TIMESTAMP0
+            # These values don't matter. It only matters that there be values.
+            self.queue_url, self.second_queue_url, self.dlq_url = ('queue-url', 'second-queue-url', 'dlq-url')
+
+    now = datetime.now
+    real_t0 = now()
+    print("Starting test at", real_t0)
+    dt = ControlledTime(tick_seconds=1)
+
+    class Logger:
+
+        def __init__(self):
+            self.log = []
+
+        def warning(self, msg):
+            self.log.append(msg)
+
+    with mock.patch.object(datetime_module, "datetime", dt):
+        with mock.patch.object(time, "sleep", dt.sleep):
+            with mock.patch.object(indexer_queue, "log", Logger()) as mock_log:
+
+                assert isinstance(datetime_module.datetime, ControlledTime)
+
+
+                manager = UninitializedQueueManager(mocked_registry)
+                assert not hasattr(manager, 'client')  # Just for safety, we don't need a client for this test
+
+                t0 = dt.just_now()
+
+                manager._wait_until_purge_queue_allowed()
+
+                t1 = dt.just_now()
+
+                print("t0=", t0)
+                print("t1=", t1)
+
+                # We've set the clock to increment 1 second on every call to datetime.datetime.now(),
+                # and we expect exactly two calls to be made in the called function:
+                #  - Once on entry to get the current time prior to purging
+                #  - Once on exit to set the timestamp after purging.
+                # We expect no sleeps, so that doesn't play in.
+                assert (t1 - t0).total_seconds() == 2
+
+                assert mock_log.log == []
+
+                manager._wait_until_purge_queue_allowed()
+
+                t2 = dt.just_now()
+
+                print("t2=", t2)
+
+                # We've set the clock to increment 1 second on every call to datetime.datetime.now(),
+                # and we expect exactly two calls to be made in the called function, plus we also
+                # expect to sleep for 60 seconds of the 61 seconds it wants to reserve (one second having
+                # passed since the last purge).
+
+                assert (t2 - t1).total_seconds() == 62
+
+                assert mock_log.log == ['Last purge_queue attempt was at 2010-01-01 12:00:02 (1.0 seconds ago).'
+                                        ' Waiting 60.0 seconds before attempting another.']
+
+                mock_log.log = []  # Reset the log
+
+                dt.sleep(30)  # Simulate 30 seconds of time passing
+
+                t3 = dt.just_now()
+                print("t3=", t3)
+
+                manager._wait_until_purge_queue_allowed()
+
+                t4 = dt.just_now()
+                print("t4=", t4)
+
+                # We've set the clock to increment 1 second on every call to datetime.datetime.now(),
+                # and we expect exactly two calls to be made in the called function, plus we also
+                # expect to sleep for 30 seconds of the 61 seconds it wants to reserve (31 seconds having
+                # passed since the last purge).
+
+                assert (t4 - t3).total_seconds() == 32
+
+                assert mock_log.log == ['Last purge_queue attempt was at 2010-01-01 12:01:04 (31.0 seconds ago).'
+                                        ' Waiting 30.0 seconds before attempting another.']
+
+        real_t1 = now()
+        print("Done testing at", real_t1)
+        assert (real_t1 - real_t0).total_seconds() < 0.5  # Whole test should happen much faster, less than a half second
+
+

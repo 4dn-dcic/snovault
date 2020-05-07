@@ -1,5 +1,5 @@
 clean:
-	@echo "No cleaning action taken. Doing 'make clean' is no longer meaningful for this repository."
+	rm -rf *.egg-info
 
 configure:  # does any pre-requisite installs
 	pip install poetry
