@@ -9,7 +9,6 @@ import datetime as datetime_module
 import json
 import os
 import pytest
-import pytz
 import time
 import transaction as transaction_management
 import uuid
@@ -17,6 +16,7 @@ import webtest
 import yaml
 
 from datetime import datetime, timedelta
+from dcicutils.misc_utils import ignored
 from dcicutils.qa_utils import ControlledTime
 from elasticsearch.exceptions import NotFoundError
 from pyramid.paster import get_appsettings
@@ -169,7 +169,7 @@ def test_indexer_namespacing(app, testapp, indexer_testapp):
         assert jid in idx
     app.registry.settings['indexer.namespace'] = '' # unset namespace, check raw is given
     raw_idx = indexer_utils.get_namespaced_index(app, TEST_TYPE)
-    star_idx = indexer_utils.get_namespaced_index(app.registry, '*') # registry should work as well
+    star_idx = indexer_utils.get_namespaced_index(app.registry, '*')  # registry should work as well
     assert raw_idx == TEST_TYPE
     assert star_idx == '*'
     app.registry.settings['indexer.namespace'] = jid # reset jid
@@ -214,7 +214,7 @@ def test_indexer_queue(app):
     to_index, failed = indexer_queue.add_uuids(app.registry, [test_message], strict=True)
     assert to_index == [test_message]
     assert not failed
-    time.sleep(5) # make sure all msgs are received
+    time.sleep(5)  # make sure all msgs are received
     received = indexer_queue.receive_messages()
     assert len(received) == 1
     msg_body = json.loads(received[0]['Body'])
@@ -878,7 +878,7 @@ def test_es_indices(app, elasticsearch):
             item_index = es.indices.get(index=namespaced_index)
         except:
             assert False
-        found_index_mapping = item_index.get(namespaced_index, {}).get('mappings').get(item_type, {}).get('properties', {}).get('embedded')
+        found_index_mapping = item_index.get(namespaced_index, {}).get('mappings', {}).get(item_type, {}).get('properties', {}).get('embedded')
         found_index_settings = item_index.get(namespaced_index, {}).get('settings')
         assert found_index_mapping
         assert found_index_settings
@@ -982,7 +982,7 @@ def test_es_purge_uuid(app, testapp, indexer_testapp, session):
     es = app.registry[ELASTIC_SEARCH]
     ## Adding new test resource to DB
     storage = app.registry[STORAGE]
-    test_body = {'required': '', 'simple1' : 'foo', 'simple2' : 'bar' }
+    test_body = {'required': '', 'simple1': 'foo', 'simple2': 'bar'}
     res = testapp.post_json(TEST_COLL, test_body)
     test_uuid = res.json['@graph'][0]['uuid']
     check = storage.get_by_uuid(test_uuid)
@@ -1016,7 +1016,7 @@ def test_es_purge_uuid(app, testapp, indexer_testapp, session):
 
     assert check_post_from_rdb_2 is None
 
-    time.sleep(5) # Allow time for ES API to send network request to ES server to perform delete.
+    time.sleep(5)  # Allow time for ES API to send network request to ES server to perform delete.
     check_post_from_es_2 = es.get(index=namespaced_index, doc_type=TEST_TYPE, id=test_uuid, ignore=[404])
     assert check_post_from_es_2['found'] == False
 
@@ -1206,8 +1206,8 @@ def test_aggregated_items(app, testapp, indexer_testapp):
     )
     # generate a uuid for the aggregate item
     agg_res_uuid = str(uuid.uuid4())
-    target1  = {'name': 'one', 'uuid': '775795d3-4410-4114-836b-8eeecf1d0c2f'}
-    target2  = {'name': 'two', 'uuid': '775795d3-4410-4114-836b-8eeecf1daabc'}
+    target1 = {'name': 'one', 'uuid': '775795d3-4410-4114-836b-8eeecf1d0c2f'}
+    target2 = {'name': 'two', 'uuid': '775795d3-4410-4114-836b-8eeecf1daabc'}
     aggregated = {
         'name': 'A',
         'targets': [
@@ -1594,6 +1594,7 @@ def test_assert_transactions_table_is_gone(app):
     """
     session = app.registry[DBSESSION]
     connection = session.connection().connect()
+    ignored(connection)
     meta = MetaData(bind=session.connection(), reflect=True)
     assert 'transactions' not in meta.tables
     # make sure tid column is removed
@@ -1615,7 +1616,9 @@ def test_wait_until_purge_queue_allowed():
     #  - .queue_url, .second_queue_url, and .dlq_url are needed because they get passed to something to be ignored.
     #  - purge_queue_timestamp wouuld be initalized by the regular init method in the same way as we do here.
     class UninitializedQueueManager(indexer_queue.QueueManager):
+
         def __init__(self, registry, mirror_env=None, override_url=None):
+            ignored(registry, mirror_env, override_url)
             if False:
                 # noqa - This line initialization is not reachable, but that's what we want for this test
                 super(UninitializedQueueManager, self).__init__(registry, mirror_env, override_url)
@@ -1653,7 +1656,6 @@ def test_wait_until_purge_queue_allowed():
             with mock.patch.object(indexer_queue, "log", Logger()) as mock_log:
 
                 assert isinstance(datetime_module.datetime, ControlledTime)
-
 
                 manager = UninitializedQueueManager(mocked_registry)
                 assert not hasattr(manager, 'client')  # Just for safety, we don't need a client for this test
@@ -1716,4 +1718,5 @@ def test_wait_until_purge_queue_allowed():
 
         real_t1 = now()
         print("Done testing at", real_t1)
-        assert (real_t1 - real_t0).total_seconds() < 0.5  # Whole test should happen much faster, less than a half second
+        # Whole test should happen much faster, less than a half second
+        assert (real_t1 - real_t0).total_seconds() < 0.5
