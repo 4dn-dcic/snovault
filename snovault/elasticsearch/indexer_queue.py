@@ -1,10 +1,11 @@
-### Class to manage the items for indexing
-# First round will use a standard SQS queue from AWS without Elasticache.
+"""
+Class to manage the items for indexing
+First round will use a standard SQS queue from AWS without Elasticache.
+"""
 
 import datetime
 import json
 import socket
-import sys
 import os
 import time
 from collections import OrderedDict
@@ -53,11 +54,13 @@ def queue_indexing(context, request):
     """
     req_uuids = request.json.get('uuids', None)
     req_collections = request.json.get('collections', None)
-    queue_mode = None  # either queueing 'uuids' or 'collection'
+    # TODO: This variable is unused. Is it work-in-progress or something that should go away? -kmp 7-May-2020
+    # queue_mode = None  # either queueing 'uuids' or 'collection'
     response = {
         'notification': 'Failure',
         'number_queued': 0,
-        'detail': 'Nothing was queued. Make sure to past in a list of uuids in in "uuids" key OR list of collections in the "collections" key of request the POST request.'
+        'detail': 'Nothing was queued. Make sure to past in a list of uuids in in "uuids" key'
+                  ' OR list of collections in the "collections" key of request the POST request.'
     }
     telemetry_id = request.params.get('telemetry_id', None)
 
@@ -67,10 +70,12 @@ def queue_indexing(context, request):
         response['detail'] = 'Nothing was queued. You cannot provide both uuids and a collection for queueing at once.'
         return response
     if req_uuids and not isinstance(req_uuids, list):
-        response['detail'] = 'Nothing was queued. When queueing uuids, make to sure to put a list of string uuids in the POST request.'
+        response['detail'] = ('Nothing was queued. When queueing uuids,'
+                              ' make to sure to put a list of string uuids in the POST request.')
         return response
     if req_collections and not isinstance(req_collections, list):
-        response['detail'] = 'Nothing was queued. When queueing a collection, make sure to provide a list of string collection names in the POST request.'
+        response['detail'] = ('Nothing was queued. When queueing a collection,'
+                              ' make sure to provide a list of string collection names in the POST request.')
         return response
     queue_indexer = request.registry[INDEXER_QUEUE]
     # strict mode means uuids should be indexed without finding associates
@@ -174,7 +179,7 @@ class QueueManager(object):
         # local development
         if not self.env_name:
             # make sure it's something aws likes
-            backup = socket.gethostname()[:80].replace('.','-')
+            backup = socket.gethostname()[:80].replace('.', '-')
             # last case scenario
             self.env_name = backup if backup else 'fourfront-backup'
 
@@ -270,7 +275,7 @@ class QueueManager(object):
         for uuid in uuids:
             temp = {'uuid': uuid, 'sid': None, 'strict': strict, 'timestamp': curr_time}
             if telemetry_id:
-                temp['telemetry_id']= telemetry_id
+                temp['telemetry_id'] = telemetry_id
             items.append(temp)
         failed = self.send_messages(items, target_queue=target_queue)
         return uuids, failed
@@ -283,7 +288,7 @@ class QueueManager(object):
             response = self.client.get_queue_url(
                 QueueName=queue_name
             )
-        except:
+        except Exception:
             response = {}
         return response.get('QueueUrl')
 
