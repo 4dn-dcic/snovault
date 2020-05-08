@@ -75,7 +75,7 @@ pyramid-retry = "^1.0"
 pyramid-tm = "^2.2.1"
 pyramid-translogger = "^0.1"
 python-dateutil = "^2.5.3"
-python_magic = ">=0.4.15,!=0.4.18,<1" # ">=0.4.15,!=0.4.18,<1"
+python_magic = "0.4.15"  # ">=0.4.11,<1"
 pytz = ">=2016.4"
 # There was no version 4 of PyYAML. We upgraded today to PyYAML 5 per compatibility info in:
 # https://github.com/yaml/pyyaml/issues/265
