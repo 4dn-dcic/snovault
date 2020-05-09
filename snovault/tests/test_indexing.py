@@ -5,6 +5,7 @@ elasticsearch running as subprocesses.
 Does not include data dependent tests
 """
 
+import datetime as datetime_module
 import json
 import os
 import pytest
@@ -15,14 +16,18 @@ import webtest
 import yaml
 
 from datetime import datetime
+from dcicutils.misc_utils import ignored
+from dcicutils.qa_utils import ControlledTime
 from elasticsearch.exceptions import NotFoundError
-from pyramid.paster import get_appsettings
 from pyramid.traversal import traverse
 from sqlalchemy import MetaData
+from unittest import mock
 from zope.sqlalchemy import mark_changed
-from .. import COLLECTIONS, DBSESSION, STORAGE, TYPES, main, util
-from ..commands.es_index_data import run as run_index_data
-from ..elasticsearch import create_mapping, indexer_utils
+from .. import (
+    TYPES,  # noqa - PyCharm bogusly warns about TYPES not being a module in Python 3.6, but this isn't that
+    DBSESSION, STORAGE, main, util,
+)
+from ..elasticsearch import create_mapping, indexer_utils, indexer_queue
 from ..elasticsearch.create_mapping import (
     build_index_record,
     check_and_reindex_existing,
@@ -36,10 +41,10 @@ from ..elasticsearch.create_mapping import (
 )
 from ..elasticsearch.indexer import check_sid, SidException
 from ..elasticsearch.interfaces import ELASTIC_SEARCH, INDEXER_QUEUE, INDEXER_QUEUE_MIRROR
-from .pyramidfixtures import dummy_request
+from .pyramidfixtures import dummy_request  # noqa - this fixture is actually used even if PyCharm doesn't agree
 from .testappfixtures import _app_settings
-from .testing_views import TestingLinkSourceSno
-from .toolfixtures import registry, root, elasticsearch
+from .testing_views import TestingLinkSourceSno  # noqa - data collection is used even if PyCharm doesn't agree
+from .toolfixtures import registry, root, elasticsearch  # noqa - fixtures used even if PyCharm doesn't agree
 
 
 pytestmark = [pytest.mark.indexing]
@@ -165,7 +170,7 @@ def test_indexer_namespacing(app, testapp, indexer_testapp):
         assert jid in idx
     app.registry.settings['indexer.namespace'] = '' # unset namespace, check raw is given
     raw_idx = indexer_utils.get_namespaced_index(app, TEST_TYPE)
-    star_idx = indexer_utils.get_namespaced_index(app.registry, '*') # registry should work as well
+    star_idx = indexer_utils.get_namespaced_index(app.registry, '*')  # registry should work as well
     assert raw_idx == TEST_TYPE
     assert star_idx == '*'
     app.registry.settings['indexer.namespace'] = jid # reset jid
@@ -210,7 +215,7 @@ def test_indexer_queue(app):
     to_index, failed = indexer_queue.add_uuids(app.registry, [test_message], strict=True)
     assert to_index == [test_message]
     assert not failed
-    time.sleep(5) # make sure all msgs are received
+    time.sleep(5)  # make sure all msgs are received
     received = indexer_queue.receive_messages()
     assert len(received) == 1
     msg_body = json.loads(received[0]['Body'])
@@ -874,7 +879,7 @@ def test_es_indices(app, elasticsearch):
             item_index = es.indices.get(index=namespaced_index)
         except:
             assert False
-        found_index_mapping = item_index.get(namespaced_index, {}).get('mappings').get(item_type, {}).get('properties', {}).get('embedded')
+        found_index_mapping = item_index.get(namespaced_index, {}).get('mappings', {}).get(item_type, {}).get('properties', {}).get('embedded')
         found_index_settings = item_index.get(namespaced_index, {}).get('settings')
         assert found_index_mapping
         assert found_index_settings
@@ -978,7 +983,7 @@ def test_es_purge_uuid(app, testapp, indexer_testapp, session):
     es = app.registry[ELASTIC_SEARCH]
     ## Adding new test resource to DB
     storage = app.registry[STORAGE]
-    test_body = {'required': '', 'simple1' : 'foo', 'simple2' : 'bar' }
+    test_body = {'required': '', 'simple1': 'foo', 'simple2': 'bar'}
     res = testapp.post_json(TEST_COLL, test_body)
     test_uuid = res.json['@graph'][0]['uuid']
     check = storage.get_by_uuid(test_uuid)
@@ -1012,7 +1017,7 @@ def test_es_purge_uuid(app, testapp, indexer_testapp, session):
 
     assert check_post_from_rdb_2 is None
 
-    time.sleep(5) # Allow time for ES API to send network request to ES server to perform delete.
+    time.sleep(5)  # Allow time for ES API to send network request to ES server to perform delete.
     check_post_from_es_2 = es.get(index=namespaced_index, doc_type=TEST_TYPE, id=test_uuid, ignore=[404])
     assert check_post_from_es_2['found'] == False
 
@@ -1202,8 +1207,8 @@ def test_aggregated_items(app, testapp, indexer_testapp):
     )
     # generate a uuid for the aggregate item
     agg_res_uuid = str(uuid.uuid4())
-    target1  = {'name': 'one', 'uuid': '775795d3-4410-4114-836b-8eeecf1d0c2f'}
-    target2  = {'name': 'two', 'uuid': '775795d3-4410-4114-836b-8eeecf1daabc'}
+    target1 = {'name': 'one', 'uuid': '775795d3-4410-4114-836b-8eeecf1d0c2f'}
+    target2 = {'name': 'two', 'uuid': '775795d3-4410-4114-836b-8eeecf1daabc'}
     aggregated = {
         'name': 'A',
         'targets': [
@@ -1590,6 +1595,7 @@ def test_assert_transactions_table_is_gone(app):
     """
     session = app.registry[DBSESSION]
     connection = session.connection().connect()
+    ignored(connection)
     meta = MetaData(bind=session.connection(), reflect=True)
     assert 'transactions' not in meta.tables
     # make sure tid column is removed
@@ -1597,3 +1603,121 @@ def test_assert_transactions_table_is_gone(app):
     # make sure fkey constraint is also removed
     constraints = [c.name for c in meta.tables['propsheets'].constraints]
     assert 'propsheets_tid_fkey' not in constraints
+
+
+def test_wait_until_purge_queue_allowed():
+
+    # We really don't need a registry for this mock, but one of the arguments needs to be a registry.
+    # It's more than sufficient to use a dictionary. Probably any value would work.
+    mocked_registry = {}
+
+    # All we want to do is test a method on QueueManager, but in order to do that we need to instantiate
+    # the class. We do that here by bypassing the init method, so we don't have to mock all the structures
+    # we won't use. We need only a few variables:
+    #  - .queue_url, .second_queue_url, and .dlq_url are needed because they get passed to something to be ignored.
+    #  - purge_queue_timestamp wouuld be initalized by the regular init method in the same way as we do here.
+    class UninitializedQueueManager(indexer_queue.QueueManager):
+
+        def __init__(self, registry, mirror_env=None, override_url=None):
+            ignored(registry, mirror_env, override_url)
+            if False:
+                # noqa - This line initialization is not reachable, but that's what we want for this test
+                super(UninitializedQueueManager, self).__init__(registry, mirror_env, override_url)
+            self.purge_queue_timestamp = self.PURGE_QUEUE_TIMESTAMP0
+            # These values don't matter. It only matters that there be values.
+            self.queue_url, self.second_queue_url, self.dlq_url = ('queue-url', 'second-queue-url', 'dlq-url')
+
+    # The function now() will get us the time. This assure us that binding datetime.datetime
+    # will not be affecting us.
+    now = datetime.now
+
+    # real_t0 is the actual wallclock time at the start of this test. We use it only to make sure
+    # that all these other tests are really going through our mock. In spite of longer mocked
+    # timescales, this test should run quickly.
+    real_t0 = now()
+    print("Starting test at", real_t0)
+
+    # dt will be our substitute for datetime.datetime.
+    # (it also has a sleep method that we can substitute for time.sleep)
+    dt = ControlledTime(tick_seconds=1)
+
+    class Logger:
+
+        def __init__(self):
+            self.log = []
+
+        def warning(self, msg):
+            self.log.append(msg)
+
+    with mock.patch("datetime.datetime", dt):
+        with mock.patch("time.sleep", dt.sleep):
+            # The following call to mock.patch.object is the same as doing:
+            #   with mock.patch("snovault.elasticsearch.indexer_queue.log", Logger()) as mock_log:
+            # but it avoids presuming the name 'snovault' and so works better with relative naming. -kmp 7-May-2020
+            with mock.patch.object(indexer_queue, "log", Logger()) as mock_log:
+
+                assert isinstance(datetime_module.datetime, ControlledTime)
+
+                manager = UninitializedQueueManager(mocked_registry)
+                assert not hasattr(manager, 'client')  # Just for safety, we don't need a client for this test
+
+                t0 = dt.just_now()
+
+                manager._wait_until_purge_queue_allowed()
+
+                t1 = dt.just_now()
+
+                print("t0=", t0)
+                print("t1=", t1)
+
+                # We've set the clock to increment 1 second on every call to datetime.datetime.now(),
+                # and we expect exactly two calls to be made in the called function:
+                #  - Once on entry to get the current time prior to purging
+                #  - Once on exit to set the timestamp after purging.
+                # We expect no sleeps, so that doesn't play in.
+                assert (t1 - t0).total_seconds() == 2
+
+                assert mock_log.log == []
+
+                manager._wait_until_purge_queue_allowed()
+
+                t2 = dt.just_now()
+
+                print("t2=", t2)
+
+                # We've set the clock to increment 1 second on every call to datetime.datetime.now(),
+                # and we expect exactly two calls to be made in the called function, plus we also
+                # expect to sleep for 60 seconds of the 61 seconds it wants to reserve (one second having
+                # passed since the last purge).
+
+                assert (t2 - t1).total_seconds() == 62
+
+                assert mock_log.log == ['Last purge_queue attempt was at 2010-01-01 12:00:02 (1.0 seconds ago).'
+                                        ' Waiting 60.0 seconds before attempting another.']
+
+                mock_log.log = []  # Reset the log
+
+                dt.sleep(30)  # Simulate 30 seconds of time passing
+
+                t3 = dt.just_now()
+                print("t3=", t3)
+
+                manager._wait_until_purge_queue_allowed()
+
+                t4 = dt.just_now()
+                print("t4=", t4)
+
+                # We've set the clock to increment 1 second on every call to datetime.datetime.now(),
+                # and we expect exactly two calls to be made in the called function, plus we also
+                # expect to sleep for 30 seconds of the 61 seconds it wants to reserve (31 seconds having
+                # passed since the last purge).
+
+                assert (t4 - t3).total_seconds() == 32
+
+                assert mock_log.log == ['Last purge_queue attempt was at 2010-01-01 12:01:04 (31.0 seconds ago).'
+                                        ' Waiting 30.0 seconds before attempting another.']
+
+        real_t1 = now()
+        print("Done testing at", real_t1)
+        # Whole test should happen much faster, less than a half second
+        assert (real_t1 - real_t0).total_seconds() < 0.5
