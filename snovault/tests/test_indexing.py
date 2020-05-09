@@ -15,17 +15,18 @@ import uuid
 import webtest
 import yaml
 
-from datetime import datetime, timedelta
+from datetime import datetime
 from dcicutils.misc_utils import ignored
 from dcicutils.qa_utils import ControlledTime
 from elasticsearch.exceptions import NotFoundError
-from pyramid.paster import get_appsettings
 from pyramid.traversal import traverse
 from sqlalchemy import MetaData
 from unittest import mock
 from zope.sqlalchemy import mark_changed
-from .. import COLLECTIONS, DBSESSION, STORAGE, TYPES, main, util
-from ..commands.es_index_data import run as run_index_data
+from .. import (
+    TYPES,  # noqa - PyCharm bogusly warns about TYPES not being a module in Python 3.6, but this isn't that
+    DBSESSION, STORAGE, main, util,
+)
 from ..elasticsearch import create_mapping, indexer_utils, indexer_queue
 from ..elasticsearch.create_mapping import (
     build_index_record,
@@ -40,10 +41,10 @@ from ..elasticsearch.create_mapping import (
 )
 from ..elasticsearch.indexer import check_sid, SidException
 from ..elasticsearch.interfaces import ELASTIC_SEARCH, INDEXER_QUEUE, INDEXER_QUEUE_MIRROR
-from .pyramidfixtures import dummy_request
+from .pyramidfixtures import dummy_request  # noqa - this fixture is actually used even if PyCharm doesn't agree
 from .testappfixtures import _app_settings
-from .testing_views import TestingLinkSourceSno
-from .toolfixtures import registry, root, elasticsearch
+from .testing_views import TestingLinkSourceSno  # noqa - data collection is used even if PyCharm doesn't agree
+from .toolfixtures import registry, root, elasticsearch  # noqa - fixtures used even if PyCharm doesn't agree
 
 
 pytestmark = [pytest.mark.indexing]
