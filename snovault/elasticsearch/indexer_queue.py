@@ -1,10 +1,11 @@
-### Class to manage the items for indexing
-# First round will use a standard SQS queue from AWS without Elasticache.
+"""
+Class to manage the items for indexing
+First round will use a standard SQS queue from AWS without Elasticache.
+"""
 
 import datetime
 import json
 import socket
-import sys
 import os
 import time
 from collections import OrderedDict
@@ -53,11 +54,13 @@ def queue_indexing(context, request):
     """
     req_uuids = request.json.get('uuids', None)
     req_collections = request.json.get('collections', None)
-    queue_mode = None  # either queueing 'uuids' or 'collection'
+    # TODO: This variable is unused. Is it work-in-progress or something that should go away? -kmp 7-May-2020
+    # queue_mode = None  # either queueing 'uuids' or 'collection'
     response = {
         'notification': 'Failure',
         'number_queued': 0,
-        'detail': 'Nothing was queued. Make sure to past in a list of uuids in in "uuids" key OR list of collections in the "collections" key of request the POST request.'
+        'detail': 'Nothing was queued. Make sure to past in a list of uuids in in "uuids" key'
+                  ' OR list of collections in the "collections" key of request the POST request.'
     }
     telemetry_id = request.params.get('telemetry_id', None)
 
@@ -67,10 +70,12 @@ def queue_indexing(context, request):
         response['detail'] = 'Nothing was queued. You cannot provide both uuids and a collection for queueing at once.'
         return response
     if req_uuids and not isinstance(req_uuids, list):
-        response['detail'] = 'Nothing was queued. When queueing uuids, make to sure to put a list of string uuids in the POST request.'
+        response['detail'] = ('Nothing was queued. When queueing uuids,'
+                              ' make to sure to put a list of string uuids in the POST request.')
         return response
     if req_collections and not isinstance(req_collections, list):
-        response['detail'] = 'Nothing was queued. When queueing a collection, make sure to provide a list of string collection names in the POST request.'
+        response['detail'] = ('Nothing was queued. When queueing a collection,'
+                              ' make sure to provide a list of string collection names in the POST request.')
         return response
     queue_indexer = request.registry[INDEXER_QUEUE]
     # strict mode means uuids should be indexed without finding associates
@@ -181,6 +186,15 @@ class QueueManager(object):
     3. Dead letter queue (dlq) for handling items that have issues processing
        from either the primary or secondary queues.
     """
+
+    PURGE_QUEUE_TIMESTAMP0 = datetime.datetime(datetime.MINYEAR, 1, 1)  # maybe useful for testing
+    # Amazon says we shouldn't do anything for this amount of time after a purge request.
+    PURGE_QUEUE_LOCKOUT_TIME_ACCORDING_TO_AMAZON = 60
+    # Amount of safety margin we reserve to make sure our computations match Amazon's.
+    PURGE_QUEUE_SAFETY_MARGIN = 1
+    # This is the effective lockout time
+    PURGE_QUEUE_EFFECTIVE_LOCKOUT_TIME = PURGE_QUEUE_LOCKOUT_TIME_ACCORDING_TO_AMAZON + PURGE_QUEUE_SAFETY_MARGIN
+
     def __init__(self, registry, mirror_env=None, override_url=None):
         """
         __init__ will build all three queues needed with the desired settings.
@@ -191,12 +205,13 @@ class QueueManager(object):
         self.receive_batch_size = 10
         self.delete_batch_size = 10
         self.replace_batch_size = 10
+        self.purge_queue_timestamp = self.PURGE_QUEUE_TIMESTAMP0
         self.env_name = mirror_env if mirror_env else registry.settings.get('env.name')
         self.override_url = override_url
         # local development
         if not self.env_name:
             # make sure it's something aws likes
-            backup = socket.gethostname()[:80].replace('.','-')
+            backup = socket.gethostname()[:80].replace('.', '-')
             # last case scenario
             self.env_name = backup if backup else 'fourfront-backup'
 
@@ -292,7 +307,7 @@ class QueueManager(object):
         for uuid in uuids:
             temp = {'uuid': uuid, 'sid': None, 'strict': strict, 'timestamp': curr_time}
             if telemetry_id:
-                temp['telemetry_id']= telemetry_id
+                temp['telemetry_id'] = telemetry_id
             items.append(temp)
         failed = self.send_messages(items, target_queue=target_queue)
         return uuids, failed
@@ -305,7 +320,7 @@ class QueueManager(object):
             response = self.client.get_queue_url(
                 QueueName=queue_name
             )
-        except:
+        except Exception:
             response = {}
         return response.get('QueueUrl')
 
@@ -406,16 +421,41 @@ class QueueManager(object):
             queue_urls[queue_name] = queue_url
         return queue_urls
 
+    def _wait_until_purge_queue_allowed(self):
+        now = datetime.datetime.now()
+        # Note that this quantity is always positive because now is always bigger than the timestamp.
+        seconds_since_last_purge = (now - self.purge_queue_timestamp).total_seconds()
+        # Note again that because seconds_since_last_attempt is positive, the wait seconds will
+        # never exceed self.PURGE_QUEUE_EFFECTIVE_LOCKOUT_TIME, so
+        #   0 <= wait_seconds <= self.self.PURGE_QUEUE_EFFECTIVE_LOCKOUT_TIME
+        wait_seconds = max(0, self.PURGE_QUEUE_EFFECTIVE_LOCKOUT_TIME - seconds_since_last_purge)
+        if wait_seconds > 0:
+            log.warning("Last purge_queue attempt was at %s (%s seconds ago)."
+                        " Waiting %s seconds before attempting another."
+                        % (self.purge_queue_timestamp, seconds_since_last_purge, wait_seconds))
+            time.sleep(wait_seconds)
+        self.purge_queue_timestamp = datetime.datetime.now()
+
     def purge_queue(self):
         """
-        Clear out the queue and dlq completely. You can no longer retrieve
-        these messages. Takes up to 60 seconds.
+        Clear out the queue and dlq completely. You can no longer retrieve these messages.
+        AWS says this operation takes up to 60 seconds, that operations queued before will start to disappear,
+        and that operations queued within 60 seconds after may also disappear.
         """
         for queue_url in [self.queue_url, self.second_queue_url, self.dlq_url]:
             try:
+                self._wait_until_purge_queue_allowed()
                 self.client.purge_queue(
                     QueueUrl=queue_url
                 )
+                # NOTE: It's possible that we should be again calling ._wait_Until_purge_queue_allowed() here, too.
+                #       The reason for the two calls would be this:
+                #       - A wait before would be because we could get an error if we needed to wait and didn't.
+                #         If we waited after, the only case where the wait before would matter is if there was an
+                #         aborted wait that didn't wait the relevant time after. That's a possible scenario in testing.
+                #       - A wait after would be to protect other operations that might be unreliable if done too soon.
+                #       For now I'm going to try the simpler strategy, but I wanted to identify this as a potential
+                #       source of lingering trouble. -kmp 6-May-2020
             except self.client.exceptions.PurgeQueueInProgress:
                 log.warning('\n___QUEUE IS ALREADY BEING PURGED: %s___\n' % queue_url,
                             queue_url=queue_url)
