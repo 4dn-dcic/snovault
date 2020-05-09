@@ -322,7 +322,7 @@ def test_queue_indexing_after_post_patch(app, testapp):
     indexer_queue.delete_messages(received)
 
 
-@pytest.mark.flaky
+#@pytest.mark.flaky
 def test_dlq_to_primary(app, anontestapp, indexer_testapp):
     """
     Tests the dlq_to_primary route
@@ -331,27 +331,44 @@ def test_dlq_to_primary(app, anontestapp, indexer_testapp):
     """
     indexer_queue = app.registry[INDEXER_QUEUE]
     indexer_queue.clear_queue()
+    # Hmm. These items are not in the data format that's usually required, so hopefully nothing is checking.
+    # -kmp 9-May-2020
     test_bodies = ["destined for primary!", "i am also destined!"]
-    success, failed = indexer_queue.add_uuids(app.registry, test_bodies,
-                                        target_queue='dlq')
-    assert not failed
-    assert len(success) == 2
+    print("Setup phase. Placing 2 dummy messages directly into the DLQ...")
+    success, failed = indexer_queue.add_uuids(app.registry, test_bodies, target_queue='dlq')
+    assert not failed, "Failed. .add_uuids() reported failure during test setup phase."
+    n = len(success)
+    print(n, "messages queued to DLQ:")
+    for i, msg in enumerate(success):
+        print(i, json.dumps(msg, indent=2, default=str))
+    assert n == 2
+    print("Done with setup phase. Entering test phase.")
+    print("Executing .get('/dlq_to_primary') [authenticated]")
     res = indexer_testapp.get('/dlq_to_primary').json
+    print(".json result:", json.dumps(res, indent=2, default=str))
     assert res['number_migrated'] == 2
     assert res['number_failed'] == 0
+    print("Receiving messages from Primary indexer_queue.")
     msgs = indexer_queue.receive_messages()  # receive from primary
-    assert len(msgs) == 2
-    for msg in msgs:
+    n = len(msgs)
+    print(n, "messages received from Primary indexer_queue:")
+    for i, msg in enumerate(msgs):
+        print(i, json.dumps(msg, indent=2, default=str))
         body = json.loads(msg['Body'])['uuid']
         assert body in test_bodies
-
+    assert n == 2, "Expected 2 messages from primary, but got %s" % n
+    print("executing .get('dlq_to_primary') [authenticated] hoping it's empty")
     # hit route with no messages, should see 0 migrated
     res = indexer_testapp.get('/dlq_to_primary').json
+    print(".json result:", json.dumps(res, indent=2, default=str))
     assert res['number_migrated'] == 0
     assert res['number_failed'] == 0
-
     # hit route from unauthenticated testapp, should fail
+    print("executing .get('dlq_to_primary') [unauthenticated] hoping for a 403 error")
     anontestapp.get('/dlq_to_primary', status=403)
+    print("All done.")
+    # Uncomment next line for debugging
+    assert False, "PASSED"
 
 
 @pytest.mark.flaky
