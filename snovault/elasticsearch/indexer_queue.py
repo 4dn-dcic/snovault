@@ -129,8 +129,40 @@ def dlq_to_primary(context, request):
     Endpoint to move all uuids on the DLQ to the primary queue
     """
     queue_indexer = request.registry[INDEXER_QUEUE]
-    dlq_messages = queue_indexer.receive_messages(target_queue='dlq')
+    # What comes out of .receive_messages() looks like:
+    # [{
+    #     "Body": "{\"uuid\": \"some-uuid\", \"sid\": null, \"strict\": false,"
+    #             " \"timestamp\": \"2020-05-08T15:06:13.229594\"}",
+    #     "Attributes": {
+    #         "ApproximateFirstReceiveTimestamp": "1588950373247",
+    #         "SenderId": "AIDAIT2UOQQ...",
+    #         "ApproximateReceiveCount": "1",
+    #         "SentTimestamp": "1588950373237"
+    #     },
+    #     "ReceiptHandle": "tvsvyhlhyaukymgulgjmchpnedkllhmckmheclfnrafnboqiflfjdjrwnwzwgxgomhxznpvgysgnr..."
+    #     "MD5OfBody": "3e0e82e521a522...",
+    #     "MessageId": "ca0886a7-9f95-..."
+    # }, ...]
+    # NOTES by kmp 8-May-2020:
+    #   - If .send_messages() is going to take care of packing the body JSON into a string, then really
+    #     .receive_messages() should do the inverse so that functions like this don't have to know anything
+    #     about that storage form.
+    #   - .send_messages() adds an envelope/wrapper that contains a 'MessageBody' key (with the JSON payload
+    #     in string form as its value), and other keywords that are header metadata.
+    #        {'Id': ..., 'MessageBody': json.dumps(msg)}
+    #     Later, though, this wrapped structure shows up looking like:
+    #        {'MessageId': ..., 'Body': ...}
+    #     as if the key 'Id' had become 'MessageId' (a longer name) and 'MessageBody' had become 'Body'
+    #     (a shorter name). What's up with that weird asymmetry??
+    #   - I'm not sure why the Body/MessageBody is being stored as string at all and not just left as JSON,
+    #     but maybe that's an SQS thing -- it seems to only have datatypes String, Number, and Binary.
+    #   - TODO: Make .send_messages and .receive_messages more representationally symmetric so that if we switch
+    #           to another queueing system that can store JSON directly, we don't have code doing weird coercions.
+    dlq_messages_with_headers = queue_indexer.receive_messages(target_queue='dlq')
+    dlq_messages = [msg['Body'] for msg in dlq_messages_with_headers]
     response = {}
+    # .send_messages expects a list of items having the form:
+    #   {"uuid": ..., "sid": ..., "strict": ..., "timestamp": ..., "detail": ...}
     failed = queue_indexer.send_messages(dlq_messages) if dlq_messages else []
     response['number_failed'] = len(failed)
     response['number_migrated'] = len(dlq_messages) - len(failed)

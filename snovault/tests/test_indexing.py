@@ -342,8 +342,7 @@ def test_dlq_to_primary(app, anontestapp, indexer_testapp):
     msgs = indexer_queue.receive_messages()  # receive from primary
     assert len(msgs) == 2
     for msg in msgs:
-        # sqs msg reading is super busted so the below is necessary
-        body = json.loads(json.loads(msg['Body'])['Body'])['uuid']
+        body = json.loads(msg['Body'])['uuid']
         assert body in test_bodies
 
     # hit route with no messages, should see 0 migrated
