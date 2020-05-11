@@ -24,12 +24,14 @@ def run(app, uuids=None):
 
 
 def main():
-    ''' Indexes app data loaded to elasticsearch '''
+    """ Indexes app data loaded to elasticsearch """
 
     parser = argparse.ArgumentParser(
-        description="Index data in Elastic Search", epilog=EPILOG,
+        description="Index data in Elastic Search",
+        epilog=EPILOG,
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
+
     parser.add_argument('--uuid', action='append', help="uuid to index")
     parser.add_argument('--app-name', help="Pyramid app name in configfile")
     parser.add_argument('config_uri', help="path to configfile")
