@@ -28,10 +28,10 @@ description = "Universal Command Line Environment for AWS."
 name = "awscli"
 optional = false
 python-versions = "*"
-version = "1.18.55"
+version = "1.18.56"
 
 [package.dependencies]
-botocore = "1.16.5"
+botocore = "1.16.6"
 docutils = ">=0.10,<0.16"
 rsa = ">=3.1.2,<=3.5.0"
 s3transfer = ">=0.3.0,<0.4.0"
@@ -97,10 +97,10 @@ description = "The AWS SDK for Python"
 name = "boto3"
 optional = false
 python-versions = "*"
-version = "1.13.5"
+version = "1.13.6"
 
 [package.dependencies]
-botocore = ">=1.16.5,<1.17.0"
+botocore = ">=1.16.6,<1.17.0"
 jmespath = ">=0.7.1,<1.0.0"
 s3transfer = ">=0.3.0,<0.4.0"
 
@@ -110,7 +110,7 @@ description = "Low-level, data-driven core of boto 3."
 name = "botocore"
 optional = false
 python-versions = "*"
-version = "1.16.5"
+version = "1.16.6"
 
 [package.dependencies]
 docutils = ">=0.10,<0.16"
@@ -222,7 +222,7 @@ description = "Utility package for interacting with the 4DN Data Portal and othe
 name = "dcicutils"
 optional = false
 python-versions = ">=3.4,<3.7"
-version = "0.24.0"
+version = "0.25.0"
 
 [package.dependencies]
 aws-requests-auth = ">=0.4.2,<1"
@@ -1577,7 +1577,7 @@ transaction = ">=1.6.0"
 test = ["zope.testing"]
 
 [metadata]
-content-hash = "0a7e3811503c7cd75a21860921c209d046e9606885c229a1c03a5fc7cc29ec01"
+content-hash = "4ceeacdbf7e2759241e966ad1c6d4a3c14d37595c881d0ce6df5fad6f08608cc"
 python-versions = ">=3.4,<3.7"
 
 [metadata.files]
@@ -1589,8 +1589,8 @@ aws-xray-sdk = [
     {file = "aws_xray_sdk-0.95-py2.py3-none-any.whl", hash = "sha256:72791618feb22eaff2e628462b0d58f398ce8c1bacfa989b7679817ab1fad60c"},
 ]
 awscli = [
-    {file = "awscli-1.18.55-py2.py3-none-any.whl", hash = "sha256:ea28364bf92acaee46a3b5cbd026185500496a8638f8a88967019c713a071536"},
-    {file = "awscli-1.18.55.tar.gz", hash = "sha256:4863c5f8d06c9d2512f4f98a71f7ed5409c4b3da3c4732b9ff0a118fe14c7180"},
+    {file = "awscli-1.18.56-py2.py3-none-any.whl", hash = "sha256:66690af980afb786c76613ebf301073c729230e76a9cdde41355a345d772e232"},
+    {file = "awscli-1.18.56.tar.gz", hash = "sha256:3a442ea0d18d8a60228f1115850b5b8bdc739cd436d34a279bdf711fb918aaa0"},
 ]
 "backports.ssl-match-hostname" = [
     {file = "backports.ssl_match_hostname-3.7.0.1.tar.gz", hash = "sha256:bb82e60f9fbf4c080eabd957c39f0641f0fc247d9a16e31e26d594d8f42b9fd2"},
@@ -1609,12 +1609,12 @@ boto = [
     {file = "boto-2.49.0.tar.gz", hash = "sha256:ea0d3b40a2d852767be77ca343b58a9e3a4b00d9db440efb8da74b4e58025e5a"},
 ]
 boto3 = [
-    {file = "boto3-1.13.5-py2.py3-none-any.whl", hash = "sha256:60d9833685713815fb3fd72a513813a2810d75179c35d781388825a09cccf6cb"},
-    {file = "boto3-1.13.5.tar.gz", hash = "sha256:85155ebc55a4437ce48e45e900c10794f8372bba74e2c4c3c738b3b56d08139a"},
+    {file = "boto3-1.13.6-py2.py3-none-any.whl", hash = "sha256:05f75d30aa10094eb96bba22b25b6005126de748188f196a5fffab8a76d821ac"},
+    {file = "boto3-1.13.6.tar.gz", hash = "sha256:f1ac7eb23ff8b1d7e314123668ff1e93b874dd396ac5424adc443d68bd8a6fbf"},
 ]
 botocore = [
-    {file = "botocore-1.16.5-py2.py3-none-any.whl", hash = "sha256:eaaffe84db50281f589c8eee343064294d82eee9966b172778f5c795ffe43149"},
-    {file = "botocore-1.16.5.tar.gz", hash = "sha256:75fb94cb4dac9fd4967a536a212fd0cc1def9ef8f41d97fc52e1f14b4c465647"},
+    {file = "botocore-1.16.6-py2.py3-none-any.whl", hash = "sha256:1f5e57f41f9f9400feffc62f17b517a601643ffec69f7ee927555604112cc012"},
+    {file = "botocore-1.16.6.tar.gz", hash = "sha256:b9c8e0aa07770b7b371d586db41eef46e70bfc4ab47f7a1ee1acd4e9c811c6c9"},
 ]
 certifi = [
     {file = "certifi-2020.4.5.1-py2.py3-none-any.whl", hash = "sha256:1d987a998c75633c40847cc966fcf5904906c920a7f17ef374f5aa4282abd304"},
@@ -1737,8 +1737,8 @@ cryptography = [
     {file = "cryptography-2.9.2.tar.gz", hash = "sha256:a0c30272fb4ddda5f5ffc1089d7405b7a71b0b0f51993cb4e5dbb4590b2fc229"},
 ]
 dcicutils = [
-    {file = "dcicutils-0.24.0-py3-none-any.whl", hash = "sha256:505a0c94e28f8fb42980535f267995b6e95a1080cc36d076154e01d05541855f"},
-    {file = "dcicutils-0.24.0.tar.gz", hash = "sha256:517937b545fd656a33f81e65634a7ccdb5cbb0a869636d2c4796bc8382232222"},
+    {file = "dcicutils-0.25.0-py3-none-any.whl", hash = "sha256:0a1cf22e42b56fd97e602a4defee680ac50474235f3061c66fe4201729e4dc81"},
+    {file = "dcicutils-0.25.0.tar.gz", hash = "sha256:b5549c473acd2c0f8247dc5465c52f52737e43cdff969fde9be95185607bc34c"},
 ]
 docker = [
     {file = "docker-3.7.3-py2.py3-none-any.whl", hash = "sha256:2434b396e616a5ef682fbf80e04839a59e8b81880ece5662c33dff34b8863519"},
