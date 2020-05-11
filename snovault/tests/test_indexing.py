@@ -114,6 +114,10 @@ def setup_and_teardown(app):
     # AFTER THE TEST
     session = app.registry[DBSESSION]
     connection = session.connection().connect()
+    # The reflect=True argument to MetaData was deprecated. Instead, one is supposed to call the .reflect()
+    # method after creation. (This comment is transitional and can go away if things seem to work normally.)
+    # -kmp 11-May-2020
+    # Ref: https://stackoverflow.com/questions/44193823/get-existing-table-using-sqlalchemy-metadata/44205552
     meta = MetaData(bind=session.connection())
     meta.reflect()
     for table in meta.sorted_tables:
@@ -1628,6 +1632,10 @@ def test_assert_transactions_table_is_gone(app):
     session = app.registry[DBSESSION]
     connection = session.connection().connect()
     ignored(connection)
+    # The reflect=True argument to MetaData was deprecated. Instead, one is supposed to call the .reflect()
+    # method after creation. (This comment is transitional and can go away if things seem to work normally.)
+    # -kmp 11-May-2020
+    # Ref: https://stackoverflow.com/questions/44193823/get-existing-table-using-sqlalchemy-metadata/44205552
     meta = MetaData(bind=session.connection())
     meta.reflect()
     assert 'transactions' not in meta.tables
