@@ -125,7 +125,7 @@ class AbstractCollection(BaseAbstractCollection):
 
 class Collection(BaseCollection):
     def __init__(self, *args, **kw):
-        super(BaseCollection, self).__init__(*args, **kw)
+        super(Collection, self).__init__(*args, **kw)
         if hasattr(self, '__acl__'):
             return
         # XXX collections should be setup after all types are registered.

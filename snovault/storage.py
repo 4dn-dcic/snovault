@@ -111,7 +111,7 @@ bakery = baked.bakery()
 baked_query_resource = bakery(lambda session: session.query(Resource))
 baked_query_unique_key = bakery(
     lambda session: session.query(Key).options(
-        orm.joinedload_all(
+        orm.joinedload(
             Key.resource,
             Resource.data,
             CurrentPropertySheet.propsheet,

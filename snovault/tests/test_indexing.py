@@ -113,7 +113,8 @@ def setup_and_teardown(app):
     # AFTER THE TEST
     session = app.registry[DBSESSION]
     connection = session.connection().connect()
-    meta = MetaData(bind=session.connection(), reflect=True)
+    meta = MetaData(bind=session.connection())
+    meta.reflect()
     for table in meta.sorted_tables:
         print('Clear table %s' % table)
         print('Count before -->', str(connection.scalar("SELECT COUNT(*) FROM %s" % table)))
@@ -1613,13 +1614,13 @@ def test_assert_transactions_table_is_gone(app):
     session = app.registry[DBSESSION]
     connection = session.connection().connect()
     ignored(connection)
-    meta = MetaData(bind=session.connection(), reflect=True)
+    meta = MetaData(bind=session.connection())
+    meta.reflect()
     assert 'transactions' not in meta.tables
     # make sure tid column is removed
-    assert 'tid' not in meta.tables['propsheets'].columns
+    assert not any(column.name == 'tid' for column in meta.tables['propsheets'].columns)
     # make sure fkey constraint is also removed
-    constraints = [c.name for c in meta.tables['propsheets'].constraints]
-    assert 'propsheets_tid_fkey' not in constraints
+    assert not any(constraint.name == 'propsheets_tid_fkey' for constraint in meta.tables['propsheets'].constraints)
 
 
 def test_wait_until_purge_queue_allowed():
