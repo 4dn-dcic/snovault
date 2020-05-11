@@ -389,7 +389,7 @@ def test_dlq_to_primary(app, anontestapp, indexer_testapp):
     print(res)  # this is not expected to be in JSON format, so we don't try to parse it
     print("Test succeeded.")
     # Uncomment next line for debugging
-    assert False, "PASSED"
+    # assert False, "PASSED"
 
 
 @pytest.mark.flaky
