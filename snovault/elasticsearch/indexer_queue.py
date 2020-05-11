@@ -557,8 +557,11 @@ class QueueManager(object):
         Recieves up to self.receive_batch_size number of messages from the queue.
         Fewer (even 0) messages may be returned on any given run.
 
-        Returns a list of messages with message metdata
+        Returns a list of messages with message metadata
         """
+        # TODO: Consider whether "long polling" would be useful here to avoid some useless re-polling when queue empty.
+        #  Ref: https://stackoverflow.com/questions/50558084/how-to-long-poll-amazon-sqs-service-using-boto
+        #  Ref: https://aws.amazon.com/sqs/faqs/
         queue_url = self.choose_queue_url(target_queue)
         response = self.client.receive_message(
             QueueUrl=queue_url,
