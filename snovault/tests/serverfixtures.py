@@ -37,9 +37,9 @@ def pytest_configure():
 
 @pytest.mark.fixture_cost(10)
 @pytest.yield_fixture(scope='session')
-def engine_url(request):
+def engine_url(tmpdir_factory):
     # Ideally this would use a different database on the same postgres server
-    tmpdir = request.config._tmpdirhandler.mktemp('postgresql-engine', numbered=True)
+    tmpdir = tmpdir_factory.mktemp('postgresql-engine', numbered=True)
     tmpdir = str(tmpdir)
     initdb(tmpdir)
     process = postgres_server_process(tmpdir)
@@ -53,8 +53,8 @@ def engine_url(request):
 
 @pytest.mark.fixture_cost(10)
 @pytest.yield_fixture(scope='session')
-def postgresql_server(request):
-    tmpdir = request.config._tmpdirhandler.mktemp('postgresql', numbered=True)
+def postgresql_server(tmpdir_factory):
+    tmpdir = tmpdir_factory.mktemp('postgresql', numbered=True)
     tmpdir = str(tmpdir)
     initdb(tmpdir)
     process = postgres_server_process(tmpdir)
@@ -72,11 +72,11 @@ def elasticsearch_host_port():
 
 @pytest.mark.fixture_cost(10)
 @pytest.yield_fixture(scope='session')
-def elasticsearch_server(request, elasticsearch_host_port, remote_es):
+def elasticsearch_server(tmpdir_factory, elasticsearch_host_port, remote_es):
     if not remote_es:
         # spawn a new one
         host, port = elasticsearch_host_port
-        tmpdir = request.config._tmpdirhandler.mktemp('elasticsearch', numbered=True)
+        tmpdir = tmpdir_factory.mktemp('elasticsearch', numbered=True)
         tmpdir = str(tmpdir)
         process = elasticsearch_server_process(str(tmpdir), host=host, port=port)
 

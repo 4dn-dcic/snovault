@@ -15,7 +15,8 @@ import uuid
 import webtest
 import yaml
 
-from datetime import datetime
+from datetime import datetime, timedelta
+from dcicutils.lang_utils import n_of
 from dcicutils.misc_utils import ignored
 from dcicutils.qa_utils import ControlledTime
 from elasticsearch.exceptions import NotFoundError
@@ -113,7 +114,12 @@ def setup_and_teardown(app):
     # AFTER THE TEST
     session = app.registry[DBSESSION]
     connection = session.connection().connect()
-    meta = MetaData(bind=session.connection(), reflect=True)
+    # The reflect=True argument to MetaData was deprecated. Instead, one is supposed to call the .reflect()
+    # method after creation. (This comment is transitional and can go away if things seem to work normally.)
+    # -kmp 11-May-2020
+    # Ref: https://stackoverflow.com/questions/44193823/get-existing-table-using-sqlalchemy-metadata/44205552
+    meta = MetaData(bind=session.connection())
+    meta.reflect()
     for table in meta.sorted_tables:
         print('Clear table %s' % table)
         print('Count before -->', str(connection.scalar("SELECT COUNT(*) FROM %s" % table)))
@@ -340,27 +346,40 @@ def test_dlq_to_primary(app, anontestapp, indexer_testapp):
     print("Setup phase. Placing 2 dummy UUIDs directly into the DLQ...")
     success, failed = indexer_queue.add_uuids(app.registry, test_uuids, target_queue='dlq')
     assert not failed, "Failed. .add_uuids() reported failure during test setup phase."
-    n = len(success)
-    print(n, "UUIDs queued to DLQ:")
+    n_queued = len(success)
+    print(n_queued, "UUIDs queued to DLQ:")
     for i, uuid in enumerate(success):
         print("UUID", i, json.dumps(uuid, indent=2, default=str))
-    assert n == 2
+    assert n_queued == 2
     print("Done with setup phase. Entering test phase.")
     print("Executing .get('/dlq_to_primary') [authenticated]")
     res = indexer_testapp.get('/dlq_to_primary').json
     print("Got back result JSON:", json.dumps(res, indent=2, default=str))
     assert res['number_migrated'] == 2
     assert res['number_failed'] == 0
-    print("Receiving messages from Primary indexer_queue.")
-    msgs = indexer_queue.receive_messages()  # receive from primary
-    n = len(msgs)  # We'll test the length after we examine the content..
-    print(n, "messages received from Primary indexer_queue:")
-    for i, msg in enumerate(msgs):
-        print("Msg", i, json.dumps(msg, indent=2, default=str))
-        msg_uuid = json.loads(msg['Body'])['uuid']
-        # They might be in either order, or one might be missing, but at this point just make sure they're ours
-        assert msg_uuid in test_uuids
-    assert n == 2, "Expected 2 messages from primary, but got %s" % n
+    deadline = datetime.now() + timedelta(seconds=10)
+    n_received = 0
+    attempt_number = 0
+    while n_received < n_queued and datetime.now() < deadline:
+        attempt_number += 1
+        print("Attempt #%d to receive messages from Primary indexer_queue." % attempt_number)
+        msgs = indexer_queue.receive_messages()  # receive from primary
+        n = len(msgs)  # We'll test the length after we examine the content..
+        n_received += n
+        punctuation = "." if n_received == 0 else ":"
+        print("On receipt attempt #{attempt_number}, {things} received from Primary indexer_queue{punctuation}"
+              .format(attempt_number=attempt_number, things=n_of(n, "new message"), punctuation=punctuation))
+        for i, msg in enumerate(msgs):
+            print("Attempt #%d Msg %d" % (attempt_number, i), json.dumps(msg, indent=2, default=str))
+            msg_uuid = json.loads(msg['Body'])['uuid']
+            # They might be in either order, or one might be missing, but at this point just make sure they're ours
+            assert msg_uuid in test_uuids
+        if n_received < n_queued:
+            time.sleep(1)  # Leave time between retrying
+    assert n_received == n_queued, ("Expected {things} from primary, but got {count}."
+                                    .format(things=n_of(n_queued, "message"), count=n_received))
+    # If we didn't fail on the prior assert, we should be good (other than some pro forma checks that follow)
+    print("Got all the messages we expected.")
     print("Executing .get('dlq_to_primary') [authenticated] hoping it's empty")
     # hit route with no messages, should see 0 migrated
     res = indexer_testapp.get('/dlq_to_primary').json
@@ -1613,13 +1632,17 @@ def test_assert_transactions_table_is_gone(app):
     session = app.registry[DBSESSION]
     connection = session.connection().connect()
     ignored(connection)
-    meta = MetaData(bind=session.connection(), reflect=True)
+    # The reflect=True argument to MetaData was deprecated. Instead, one is supposed to call the .reflect()
+    # method after creation. (This comment is transitional and can go away if things seem to work normally.)
+    # -kmp 11-May-2020
+    # Ref: https://stackoverflow.com/questions/44193823/get-existing-table-using-sqlalchemy-metadata/44205552
+    meta = MetaData(bind=session.connection())
+    meta.reflect()
     assert 'transactions' not in meta.tables
     # make sure tid column is removed
-    assert 'tid' not in meta.tables['propsheets'].columns
+    assert not any(column.name == 'tid' for column in meta.tables['propsheets'].columns)
     # make sure fkey constraint is also removed
-    constraints = [c.name for c in meta.tables['propsheets'].constraints]
-    assert 'propsheets_tid_fkey' not in constraints
+    assert not any(constraint.name == 'propsheets_tid_fkey' for constraint in meta.tables['propsheets'].constraints)
 
 
 def test_wait_until_purge_queue_allowed():

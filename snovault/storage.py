@@ -111,7 +111,10 @@ bakery = baked.bakery()
 baked_query_resource = bakery(lambda session: session.query(Resource))
 baked_query_unique_key = bakery(
     lambda session: session.query(Key).options(
-        orm.joinedload_all(
+        # This formerly called orm.joinedload_all, but that function has been deprecated since sqlalchemy 0.9.
+        # The advice in the documentation was to just use orm.joinedload in apparently the same way. -kmp 11-May-2020
+        # Ref: https://docs.sqlalchemy.org/en/13/orm/loading_relationships.html#sqlalchemy.orm.joinedload_all
+        orm.joinedload(
             Key.resource,
             Resource.data,
             CurrentPropertySheet.propsheet,
