@@ -81,10 +81,10 @@ class TimedRequestsHttpConnection(RequestsHttpConnection):
 
     def log_request_success(self, method, full_url, path, body, status_code, response, duration):
         self.stats_record(duration)
-        return super(RequestsHttpConnection, self).log_request_success(
+        return super(TimedRequestsHttpConnection, self).log_request_success(
             method, full_url, path, body, status_code, response, duration)
 
-    def log_request_fail(self, method, full_url, path, body, duration, status_code=None, exception=None):
+    def log_request_fail(self, method, full_url, path, body, duration, status_code=None, response=None, exception=None):
         self.stats_record(duration)
-        return super(RequestsHttpConnection, self).log_request_fail(
-            method, full_url, path, body, duration, status_code, exception)
+        return super(TimedRequestsHttpConnection, self).log_request_fail(
+            method, full_url, path, body, duration, status_code=status_code, response=response, exception=exception)
