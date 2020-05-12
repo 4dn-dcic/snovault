@@ -1,9 +1,6 @@
 import os.path
 import sys
-try:
-    import subprocess32 as subprocess
-except ImportError:
-    import subprocess
+import subprocess
 
 
 def server_process(datadir, host='localhost', port=9200, prefix='', echo=False):

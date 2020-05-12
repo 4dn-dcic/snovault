@@ -1,10 +1,7 @@
 from urllib.parse import quote
 import os.path
 import sys
-try:
-    import subprocess32 as subprocess
-except ImportError:
-    import subprocess
+import subprocess
 
 
 def initdb(datadir, prefix='', echo=False):
