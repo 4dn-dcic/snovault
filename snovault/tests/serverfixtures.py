@@ -254,6 +254,8 @@ def execute_counter(conn, zsa_savepoints, check_constraints):
     """ Count calls to execute
     """
 
+    # TODO: There's no reason this can't be at toplevel, outside this definition.
+    #       It just slows things down to define this every time. -kmp 12-May-2020
     class Counter(object):
         def __init__(self):
             self.reset()
@@ -267,7 +269,10 @@ def execute_counter(conn, zsa_savepoints, check_constraints):
             start = self.count
             yield
             difference = self.count - start
-            assert difference == count
+            assert difference == count, (
+                    "Counter mismatch. Expected %s but got %s:\n%s" % (count, difference, "\n".join(counted)))
+
+    counted = []
 
     counter = Counter()
 
@@ -276,6 +281,7 @@ def execute_counter(conn, zsa_savepoints, check_constraints):
         # Ignore the testing savepoints
         if zsa_savepoints.state != 'begun' or check_constraints.state == 'checking':
             return
+        counted.append({"statement": statement, "parameters": parameters})
         counter.count += 1
 
     yield counter
