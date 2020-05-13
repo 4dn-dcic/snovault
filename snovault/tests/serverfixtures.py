@@ -252,6 +252,7 @@ def check_constraints(conn, _DBSession):
 
 class ExecutionWatcher(object):
     def __init__(self, filter=None):
+        self._active = False
         self.reset()
         self.conn = conn
         self.filter = filter
@@ -260,24 +261,29 @@ class ExecutionWatcher(object):
         self.events = []
 
     def notice(self, event):
-        self.events.append(event)
+        if self._active:
+            self.events.append(event)
 
     @contextmanager
     def expect(self, expected_count):
+        if self._active:
+            raise RuntimeError("Attempt to enter execute_counter.expect(...) while it is already executing.")
+        self._active = True
+        self.reset()  # Probably redundant but just in case.
         yield
         annotated_events = []
         counted_events = 0
         for event in self.events:
-            counted = not self.filter or self.filter(event)
-            if counted:
+            to_count = (not self.filter) or self.filter(event)
+            if to_count:
                 counted_events += 1
-            annotated_events.append({'counted': counted, 'event': event})
+            annotated_events.append({'counted': to_count, 'event': event})
         assert counted_events == expected_count, (
                 "Counter mismatch. Expected %s but got %s:\n%s"
                 % (expected_count, counted_events, "\n".join([
             "{marker} {event}".format(marker="*" if ae['counted'] else " ", event=ae['event'])
             for ae in annotated_events])))
-
+        self._active = False
 
 @pytest.yield_fixture
 def execute_counter(conn, zsa_savepoints, check_constraints, filter=None):
@@ -288,12 +294,17 @@ def execute_counter(conn, zsa_savepoints, check_constraints, filter=None):
 
     @sqlalchemy.event.listens_for(conn, 'after_cursor_execute')
     def after_cursor_execute(conn, cursor, statement, parameters, context, executemany):
-        ignored(conn)
+        ignored(conn, cursor)
         # Ignore the testing savepoints
-        if zsa_savepoints.state != 'begun' or check_constraints.state == 'checking':
-            return
-        event_data = {"statement": statement, "parameters": parameters}
-        watcher.notice(event_data)
+        if zsa_savepoints.state == 'begun' and check_constraints.state != 'checking':
+            watcher.notice({
+                "zsa_savepoints-state": zsa_savepoints.state,
+                "check_constraints-state": check_constraints.state,
+                "statement": statement,
+                "parameters": parameters,
+                "context": context,
+                "executemany": executemany,
+            })
 
     yield watcher
 
