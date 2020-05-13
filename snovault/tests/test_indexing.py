@@ -18,7 +18,7 @@ import yaml
 from datetime import datetime, timedelta
 from dcicutils.lang_utils import n_of
 from dcicutils.misc_utils import ignored
-from dcicutils.qa_utils import ControlledTime
+from dcicutils.qa_utils import ControlledTime, notice_pytest_fixtures
 from elasticsearch.exceptions import NotFoundError
 from pyramid.traversal import traverse
 from sqlalchemy import MetaData
@@ -42,10 +42,13 @@ from ..elasticsearch.create_mapping import (
 )
 from ..elasticsearch.indexer import check_sid, SidException
 from ..elasticsearch.interfaces import ELASTIC_SEARCH, INDEXER_QUEUE, INDEXER_QUEUE_MIRROR
-from .pyramidfixtures import dummy_request  # noqa - this fixture is actually used even if PyCharm doesn't agree
+from .pyramidfixtures import dummy_request
 from .testappfixtures import _app_settings
-from .testing_views import TestingLinkSourceSno  # noqa - data collection is used even if PyCharm doesn't agree
-from .toolfixtures import registry, root, elasticsearch  # noqa - fixtures used even if PyCharm doesn't agree
+from .testing_views import TestingLinkSourceSno
+from .toolfixtures import registry, root, elasticsearch
+
+
+notice_pytest_fixtures(dummy_request, TestingLinkSourceSno, registry, root, elasticsearch)
 
 
 pytestmark = [pytest.mark.indexing]

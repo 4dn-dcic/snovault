@@ -8,6 +8,7 @@ import zope.sqlalchemy
 
 from contextlib import contextmanager
 from dcicutils.misc_utils import ignored
+from dcicutils.qa_utils import notice_pytest_fixtures
 from transaction.interfaces import ISynchronizer
 from urllib.parse import quote
 from zope.interface import implementer
@@ -39,6 +40,8 @@ def pytest_configure():
 @pytest.mark.fixture_cost(10)
 @pytest.yield_fixture(scope='session')
 def engine_url(tmpdir_factory):
+    notice_pytest_fixtures(tmpdir_factory)
+
     # Ideally this would use a different database on the same postgres server
     tmpdir = tmpdir_factory.mktemp('postgresql-engine', numbered=True)
     tmpdir = str(tmpdir)
@@ -55,6 +58,7 @@ def engine_url(tmpdir_factory):
 @pytest.mark.fixture_cost(10)
 @pytest.yield_fixture(scope='session')
 def postgresql_server(tmpdir_factory):
+    notice_pytest_fixtures(tmpdir_factory)
     tmpdir = tmpdir_factory.mktemp('postgresql', numbered=True)
     tmpdir = str(tmpdir)
     initdb(tmpdir)
@@ -74,6 +78,7 @@ def elasticsearch_host_port():
 @pytest.mark.fixture_cost(10)
 @pytest.yield_fixture(scope='session')
 def elasticsearch_server(tmpdir_factory, elasticsearch_host_port, remote_es):
+    notice_pytest_fixtures(tmpdir_factory, elasticsearch_host_port, remote_es)
     if not remote_es:
         # spawn a new one
         host, port = elasticsearch_host_port
@@ -96,7 +101,7 @@ def elasticsearch_server(tmpdir_factory, elasticsearch_host_port, remote_es):
 
 @pytest.yield_fixture(scope='session')
 def conn(engine_url):
-
+    notice_pytest_fixtures(engine_url)
     engine_settings = {
         'sqlalchemy.url': engine_url,
     }
@@ -115,6 +120,7 @@ def conn(engine_url):
 
 @pytest.fixture(scope='session')
 def _DBSession(conn):
+    notice_pytest_fixtures(conn)
     # ``server`` thread must be in same scope
     DBSession = sqlalchemy.orm.scoped_session(sqlalchemy.orm.sessionmaker(bind=conn), scopefunc=lambda: 0)
     zope.sqlalchemy.register(DBSession)
@@ -128,6 +134,7 @@ def DBSession(_DBSession, zsa_savepoints, check_constraints):
 
 @pytest.yield_fixture
 def external_tx(request, conn):
+    notice_pytest_fixtures(request)
     # print('BEGIN external_tx')
     tx = conn.begin_nested()
     yield tx
@@ -139,6 +146,7 @@ def external_tx(request, conn):
 
 @pytest.fixture
 def transaction(request, external_tx, zsa_savepoints, check_constraints):
+    notice_pytest_fixtures(request, external_tx, zsa_savepoints, check_constraints)
     transaction_management.begin()
     request.addfinalizer(transaction_management.abort)
     return transaction_management
@@ -151,7 +159,7 @@ def zsa_savepoints(conn):
     This means failed requests rollback to the db state when they began rather
     than that at the start of the test.
     """
-
+    notice_pytest_fixtures(conn)
     @implementer(ISynchronizer)
     class Savepoints(object):
         def __init__(self, conn):
@@ -198,17 +206,20 @@ def session(transaction, DBSession):
 
     Depends on transaction as storage relies on some interaction there.
     """
+    notice_pytest_fixtures(transaction, DBSession)
     return DBSession()
 
 
 @pytest.yield_fixture(scope='session')
 def check_constraints(conn, _DBSession):
-    '''Check deffered constraints on zope transaction commit.
+    """
+    Check deferred constraints on zope transaction commit.
 
     Deferred foreign key constraints are only checked at the outer transaction
     boundary, not at a savepoint. With the Pyramid transaction bound to a
     subtransaction check them manually.
-    '''
+    """
+    notice_pytest_fixtures(_DBSession)
 
     @implementer(ISynchronizer)
     class CheckConstraints(object):
@@ -285,10 +296,12 @@ class ExecutionWatcher(object):
             for ae in annotated_events])))
         self._active = False
 
+
 @pytest.yield_fixture
 def execute_counter(conn, zsa_savepoints, check_constraints, filter=None):
     """ Count calls to execute
     """
+    notice_pytest_fixtures(conn, zsa_savepoints, check_constraints)
 
     watcher = ExecutionWatcher(filter=filter)
 
@@ -313,6 +326,7 @@ def execute_counter(conn, zsa_savepoints, check_constraints, filter=None):
 
 @pytest.yield_fixture
 def no_deps(conn, DBSession):
+    notice_pytest_fixtures(conn, DBSession)
 
     session = DBSession()
 
@@ -335,12 +349,14 @@ def wsgi_server_host_port():
 
 @pytest.fixture(scope='session')
 def wsgi_server_app(app):
+    notice_pytest_fixtures(app)
     return app
 
 
 @pytest.mark.fixture_cost(100)
 @pytest.yield_fixture(scope='session')
 def wsgi_server(request, wsgi_server_app, wsgi_server_host_port):
+    notice_pytest_fixtures(request, wsgi_server_app, wsgi_server_host_port)
     host, port = wsgi_server_host_port
 
     server = webtest.http.StopableWSGIServer.create(

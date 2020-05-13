@@ -1,17 +1,13 @@
 import json
-import sys
 
-from aws_requests_auth.boto_utils import BotoAWSRequestsAuth
+# from aws_requests_auth.boto_utils import BotoAWSRequestsAuth
 from dcicutils.es_utils import create_es_client
 from elasticsearch.connection import RequestsHttpConnection
 from elasticsearch.serializer import SerializationError
-from pyramid.settings import asbool, aslist
+from pyramid.settings import asbool
 from ..json_renderer import json_renderer
 from ..util import get_root_request
 from .interfaces import APP_FACTORY, ELASTIC_SEARCH
-
-
-PY2 = sys.version_info.major == 2
 
 
 def includeme(config):
@@ -35,7 +31,7 @@ def includeme(config):
     config.include('.esstorage')
     config.include('.indexer_queue')
     config.include('.indexer')
-    if asbool(settings.get('mpindexer')) and not PY2:
+    if asbool(settings.get('mpindexer')):
         config.include('.mpindexer')
 
 
@@ -45,7 +41,8 @@ class PyramidJSONSerializer(object):
     def __init__(self, renderer):
         self.renderer = renderer
 
-    def loads(self, s):
+    @staticmethod
+    def loads(s):
         try:
             return json.loads(s)
         except (ValueError, TypeError) as e:
