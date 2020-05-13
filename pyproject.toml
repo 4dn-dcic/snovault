@@ -1,7 +1,7 @@
 [tool.poetry]
 name = "dcicsnovault"
 # Version 3 drops support for Python 3.4 and 3.5, which neither Fourfront nor CGAP care about any more.
-version = "3.0.0b1"
+version = "3.0.0b2"
 description = "Storage support for 4DN Data Portals."
 authors = ["4DN-DCIC Team <support@4dnucleome.org>"]
 license = "MIT"

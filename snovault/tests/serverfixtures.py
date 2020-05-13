@@ -270,7 +270,7 @@ def execute_counter(conn, zsa_savepoints, check_constraints):
             yield
             difference = self.count - start
             assert difference == count, (
-                    "Counter mismatch. Expected %s but got %s:\n%s" % (count, difference, "\n".join(counted)))
+                    "Counter mismatch. Expected %s but got %s:\n%s" % (count, difference, "\n".join(map(str, counted))))
 
     counted = []
 
