@@ -7,6 +7,7 @@ import webtest.http
 import zope.sqlalchemy
 
 from contextlib import contextmanager
+from dcicutils.misc_utils import ignored
 from transaction.interfaces import ISynchronizer
 from urllib.parse import quote
 from zope.interface import implementer
@@ -249,42 +250,52 @@ def check_constraints(conn, _DBSession):
     transaction_management.manager.unregisterSynch(check_constraints)
 
 
+class ExecutionWatcher(object):
+    def __init__(self, filter=None):
+        self.reset()
+        self.conn = conn
+        self.filter = filter
+
+    def reset(self):
+        self.events = []
+
+    def notice(self, event):
+        self.events.append(event)
+
+    @contextmanager
+    def expect(self, expected_count):
+        yield
+        annotated_events = []
+        counted_events = 0
+        for event in self.events:
+            counted = not self.filter or self.filter(event)
+            if counted:
+                counted_events += 1
+            annotated_events.append({'counted': counted, 'event': event})
+        assert counted_events == expected_count, (
+                "Counter mismatch. Expected %s but got %s:\n%s"
+                % (expected_count, counted_events, "\n".join([
+            "{marker} {event}".format(marker="*" if ae['counted'] else " ", event=ae['event'])
+            for ae in annotated_events])))
+
+
 @pytest.yield_fixture
-def execute_counter(conn, zsa_savepoints, check_constraints):
+def execute_counter(conn, zsa_savepoints, check_constraints, filter=None):
     """ Count calls to execute
     """
 
-    # TODO: There's no reason this can't be at toplevel, outside this definition.
-    #       It just slows things down to define this every time. -kmp 12-May-2020
-    class Counter(object):
-        def __init__(self):
-            self.reset()
-            self.conn = conn
-
-        def reset(self):
-            self.count = 0
-
-        @contextmanager
-        def expect(self, count):
-            start = self.count
-            yield
-            difference = self.count - start
-            assert difference == count, (
-                    "Counter mismatch. Expected %s but got %s:\n%s" % (count, difference, "\n".join(map(str, counted))))
-
-    counted = []
-
-    counter = Counter()
+    watcher = ExecutionWatcher(filter=filter)
 
     @sqlalchemy.event.listens_for(conn, 'after_cursor_execute')
     def after_cursor_execute(conn, cursor, statement, parameters, context, executemany):
+        ignored(conn)
         # Ignore the testing savepoints
         if zsa_savepoints.state != 'begun' or check_constraints.state == 'checking':
             return
-        counted.append({"statement": statement, "parameters": parameters})
-        counter.count += 1
+        event_data = {"statement": statement, "parameters": parameters}
+        watcher.notice(event_data)
 
-    yield counter
+    yield watcher
 
     sqlalchemy.event.remove(conn, 'after_cursor_execute', after_cursor_execute)
 
