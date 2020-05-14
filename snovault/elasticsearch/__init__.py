@@ -1,6 +1,5 @@
 import json
 
-# from aws_requests_auth.boto_utils import BotoAWSRequestsAuth
 from dcicutils.es_utils import create_es_client
 from elasticsearch.connection import RequestsHttpConnection
 from elasticsearch.serializer import SerializationError
