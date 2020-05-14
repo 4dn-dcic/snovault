@@ -114,10 +114,11 @@ baked_query_unique_key = bakery(
         # This formerly called orm.joinedload_all, but that function has been deprecated since sqlalchemy 0.9.
         # The advice in the documentation was to just use orm.joinedload in apparently the same way. -kmp 11-May-2020
         # Ref: https://docs.sqlalchemy.org/en/13/orm/loading_relationships.html#sqlalchemy.orm.joinedload_all
-        # OK, well, we found that the doc was impoverished and that doing it in the same way isn't right.
-        # The release notes for sqlalchemy 0.9, when the change was made, offer better advice which is to rewrite
-        # this as a chain. No advice is given about the keyword arguments (innerjoin=True), but I assume they
-        # must be distributed to each such call. -kmp 14-May-2020
+        # OK, well, I had misread the doc, which agrees with the release notes for sqlalchemy 0.9 (when the change
+        # was made), both say to use a chain. No advice is given about the keyword arguments (innerjoin=True),
+        # but I assume they must be distributed to each such call. It's possible the right result was happening
+        # anyway, but that it took more queries to get that result when not chained properly.
+        # -kmp 14-May-2020
         # Ref: https://docs.sqlalchemy.org/en/13/changelog/migration_09.html
         orm.joinedload(Key.resource, innerjoin=True)
            .joinedload(Resource.data, innerjoin=True)
