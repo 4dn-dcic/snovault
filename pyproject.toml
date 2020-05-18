@@ -65,6 +65,7 @@ Pillow = "^3.1.1"
 psutil = ">=4.3.0,<5"
 # psycopg2 = "2.8.4"
 psycopg2 = "^2.7.3"
+py = "1.8.1"  # used by pytest. pinned here just for clarity in what is known to work here and in fourfront/cgap
 PyBrowserID = "^0.10.0"
 pyramid = "1.10.4"
 pyramid_localroles = ">=0.1,<1"
