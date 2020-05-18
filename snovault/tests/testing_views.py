@@ -111,7 +111,7 @@ def paths_filtered_by_status(request, paths, exclude=('deleted', 'replaced'), in
 
 class AbstractCollection(BaseAbstractCollection):
     def get(self, name, default=None):
-        resource = super(BaseAbstractCollection, self).get(name, None)
+        resource = super(AbstractCollection, self).get(name, None)
         if resource is not None:
             return resource
         if ':' in name:
@@ -125,7 +125,7 @@ class AbstractCollection(BaseAbstractCollection):
 
 class Collection(BaseCollection):
     def __init__(self, *args, **kw):
-        super(BaseCollection, self).__init__(*args, **kw)
+        super(Collection, self).__init__(*args, **kw)
         if hasattr(self, '__acl__'):
             return
         # XXX collections should be setup after all types are registered.
