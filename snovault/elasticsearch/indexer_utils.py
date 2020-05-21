@@ -84,6 +84,8 @@ def get_uuids_for_types(registry, types=[]):
     Yields:
         str: uuid of item in collections
     """
+    if not isinstance(types, list) or not all(isinstance(t, str) for t in types):  # type check for safety
+        raise TypeError('Expected type=list (of strings) for argument "types"')
     collections = registry[COLLECTIONS]
     # might as well sort collections alphatbetically, as this was done earlier
     for coll_name in sorted(collections.by_item_type):
