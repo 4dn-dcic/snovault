@@ -299,7 +299,7 @@ class ElasticSearchStorage(object):
         log.info('PURGE: attempting to purge %s from mirror storage %s' % (rid, mirror_env))
 
         try:
-            mirror_health = self._get_cached_mirror_health()
+            mirror_health = self._get_cached_mirror_health(mirror_env)
         except RuntimeError:
             log.error("PURGE: Tried to purge %s from mirror storage but couldn't get health page. Is staging up?" % rid)
             raise
