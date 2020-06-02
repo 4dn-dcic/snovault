@@ -1763,7 +1763,69 @@ def test_queue_manager_creation():
                 test_it('some-env', override_url="http://foo")  # Another override option we allow
 
 
-def test_chunk_messages():
+def test_queue_manager_purge_queue_wait():
+
+    myenv = 'some-env'
+
+    class MockRegistry:
+        settings = {'env.name': myenv}
+
+    class MockSqsClient:
+        def __init__(self, **kwargs):
+            ignored(kwargs)
+            self.purge_queue = mock.MagicMock()
+
+    def mocked_boto3_client(kind, **kwargs):
+        assert kind == "sqs"  # we only handle this case
+        return MockSqsClient(**kwargs)
+
+    with mock.patch("boto3.client") as mock_boto3_client:
+        mock_boto3_client.side_effect = mocked_boto3_client
+        with mock.patch.object(QueueManager, "initialize") as mock_initialize:
+            primary, secondary, dlq = 'http://primary', 'http://secondary', 'http://dlq'
+            mock_initialize.return_value = {
+                myenv + '-indexer-queue': primary,
+                myenv + '-secondary-indexer-queue': secondary,
+                myenv + '-dlq': dlq,
+            }
+            with mock.patch("socket.gethostname") as mock_gethostname:
+                with mock.patch.object(QueueManager, "get_queue_url") as mock_get_queue_url:
+
+                    registry = MockRegistry()
+                    manager = QueueManager(registry)
+
+                    # Make sure things are set up for our test
+                    assert isinstance(manager.client, MockSqsClient)
+
+                    dt = ControlledTime()
+
+                    with mock.patch("datetime.datetime", dt):
+                        with mock.patch("time.sleep", dt.sleep):
+
+                            start_time = dt.just_now()
+                            assert start_time > manager.PURGE_QUEUE_TIMESTAMP0
+                            assert manager.purge_queue_timestamp == manager.PURGE_QUEUE_TIMESTAMP0
+                            assert manager.client.purge_queue.call_count == 0  # Just to be sure
+                            manager.purge_queue()
+                            assert manager.client.purge_queue.call_count == 3  # Called once for each queue
+                            # The first time it shouldn't wait, but does check the time twice
+                            assert manager.purge_queue_timestamp == start_time + timedelta(seconds=2)
+
+                            # Try again now...
+
+                            start_time = dt.just_now()
+                            assert manager.purge_queue_timestamp == start_time
+                            assert manager.client.purge_queue.call_count == 3  # Just to be sure
+                            manager.purge_queue()
+                            assert manager.client.purge_queue.call_count == 6  # Called once for each queue
+                            # The second time the wait should be 61 seconds, plus we check the time twice
+                            # (once within the 61 second wait time, so it doesn't count) and we count 1 second
+                            # for each check outside the interval, so 62 total. But most importantly, we do NOT
+                            # wait for whole extra minutes. :) -kmp 2-Jun-2020
+                            assert manager.purge_queue_timestamp == start_time + timedelta(seconds=62)
+
+
+def test_queue_manager_chunk_messages():
 
     # Really this could be anything generated series we're chunking
 

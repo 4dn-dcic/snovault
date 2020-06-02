@@ -187,10 +187,13 @@ class QueueManager(object):
        from either the primary or secondary queues.
     """
 
-    # The belief is that this may be making things slow in production, and the chance of collisions there is low,
-    # so for now we enable this only during testing when the odds of collision are dramatically higher.
-    # -kmp 28-May-2020
-    PURGE_QUEUE_SLEEP_FOR_SAFETY = False
+    # The belief was that this may be making things slow in production, and the chance of collisions there is low,
+    # so for now we were going to enable this only during testing when the odds of collision are dramatically higher.
+    # HOWEVER, now I have a new theory that this wasn't the problem at all, so the first pass at this will be to try
+    # leaving this set True and see if just moving the sleep to a better place is enough to avoid setting this False.
+    # If that doesn't work, we've also tested that a setting oF False here would work and that will be our backup plan.
+    # -kmp 2-Jun-2020
+    PURGE_QUEUE_SLEEP_FOR_SAFETY = True
 
     PURGE_QUEUE_TIMESTAMP0 = datetime.datetime(datetime.MINYEAR, 1, 1)  # maybe useful for testing
     # Amazon says we shouldn't do anything for this amount of time after a purge request.
@@ -452,9 +455,9 @@ class QueueManager(object):
         AWS says this operation takes up to 60 seconds, that operations queued before will start to disappear,
         and that operations queued within 60 seconds after may also disappear.
         """
+        self._wait_until_purge_queue_allowed()
         for queue_url in [self.queue_url, self.second_queue_url, self.dlq_url]:
             try:
-                self._wait_until_purge_queue_allowed()
                 self.client.purge_queue(
                     QueueUrl=queue_url
                 )
