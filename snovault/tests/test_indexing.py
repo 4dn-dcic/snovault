@@ -41,6 +41,7 @@ from ..elasticsearch.create_mapping import (
     type_mapping,
 )
 from ..elasticsearch.indexer import check_sid, SidException
+from ..elasticsearch.indexer_queue import QueueManager
 from ..elasticsearch.interfaces import ELASTIC_SEARCH, INDEXER_QUEUE, INDEXER_QUEUE_MIRROR
 from .pyramidfixtures import dummy_request
 from .testappfixtures import _app_settings
@@ -1646,6 +1647,194 @@ def test_assert_transactions_table_is_gone(app):
     assert not any(column.name == 'tid' for column in meta.tables['propsheets'].columns)
     # make sure fkey constraint is also removed
     assert not any(constraint.name == 'propsheets_tid_fkey' for constraint in meta.tables['propsheets'].constraints)
+
+
+def test_queue_manager_creation():
+
+    with mock.patch("boto3.client") as mock_boto3_client:
+        with mock.patch.object(QueueManager, "initialize") as mock_initialize:
+            with mock.patch("socket.gethostname") as mock_gethostname:
+
+                def test_it(myenv, mirror_env=None, override_url=None):
+
+                    # Allow this test to be called more than once.
+                    mock_boto3_client.reset_mock()
+                    mock_initialize.reset_mock()
+                    mock_gethostname.reset_mock()
+
+                    class MockRegistry:
+                        settings = {'env.name': myenv}
+
+                    host_len80_hyph = "myhostname-111111111-222222222-333333333-444444444-555555555-666666666-777777777"
+                    host_len80_dots = "myhostname.111111111.222222222.333333333.444444444.555555555.666666666.777777777"
+                    full_host = host_len80_dots + ".888888888.cgap.hms.harvard.edu"
+                    # If myenv is None, QueueManager generates its own env name one by
+                    #  - truncating hostname to 80 chars
+                    #  - changing dot (.) to hyphen (-)
+                    mock_gethostname.return_value = full_host
+
+                    if mirror_env:
+                        expected_env = mirror_env
+                    elif myenv is None:
+                        expected_env = host_len80_hyph
+                    else:
+                        expected_env = myenv
+
+                    # Set up expectations for mock return values
+
+                    expected_primary_queue_name = expected_env + '-indexer-queue'
+                    expected_secondary_queue_name = expected_env + '-secondary-indexer-queue'
+                    expected_dlq_name = expected_env + '-indexer-queue-dlq'
+
+                    mocked_primary_queue_url = 'http://primary'
+                    mocked_secondary_queue_url = 'http://secondary'
+                    mocked_dlq_url = 'http://dlq'
+
+                    expected_queue_urls = {
+                        expected_primary_queue_name: mocked_primary_queue_url,
+                        expected_secondary_queue_name: mocked_secondary_queue_url,
+                        expected_dlq_name: mocked_dlq_url,
+                    }
+                    mock_initialize.return_value = expected_queue_urls
+
+                    registry = MockRegistry()
+
+                    with mock.patch.object(QueueManager, "get_queue_url") as mock_get_queue_url:
+                        mock_get_queue_url.side_effect = lambda queue_name: expected_queue_urls.get(queue_name)
+
+                        # Finally all the mocking is set up, now do the QueueManager call we're testing.
+
+                        manager = QueueManager(registry, mirror_env=mirror_env, override_url=override_url)
+
+                    # Check the aftermath...
+
+                    # Values that would have been due to class variables
+                    assert manager.PURGE_QUEUE_SLEEP_FOR_SAFETY is True
+                    assert manager.PURGE_QUEUE_TIMESTAMP0 < datetime(datetime.now().year - 2, 1, 1)  # long ago
+                    assert (manager.PURGE_QUEUE_EFFECTIVE_LOCKOUT_TIME
+                            > manager.PURGE_QUEUE_LOCKOUT_TIME_ACCORDING_TO_AMAZON)
+
+                    assert manager.env_name == expected_env
+
+                    assert mock_boto3_client.call_count == 1
+                    if override_url:
+                        assert manager.override_url == override_url
+                        mock_boto3_client.assert_called_with('sqs', region_name='us-east-1', endpoint_url=override_url)
+                    else:
+                        assert manager.override_url is None
+                        mock_boto3_client.assert_called_with('sqs', region_name='us-east-1')
+
+                    if mirror_env:
+                        assert mock_initialize.call_count == 0
+                    else:
+                        assert mock_initialize.call_count == 1
+                        mock_initialize.assert_called_with(dlq=True)
+
+                    assert manager.queue_attrs == {
+                        expected_primary_queue_name: {
+                            'DelaySeconds': '1',
+                            'MessageRetentionPeriod': '1209600',
+                            'ReceiveMessageWaitTimeSeconds': '2',
+                            'VisibilityTimeout': '600'
+                        },
+                        expected_secondary_queue_name: {
+                            'MessageRetentionPeriod': '1209600',
+                            'ReceiveMessageWaitTimeSeconds': '2',
+                            'VisibilityTimeout': '600'
+                        },
+                        expected_dlq_name: {
+                            'MessageRetentionPeriod': '1209600',
+                            'ReceiveMessageWaitTimeSeconds': '2',
+                            'VisibilityTimeout': '600'
+                        }
+                    }
+
+                    # manager.queue_targets is an OrderedDict but we don't care. Just make sure data is right:
+                    assert json.loads(json.dumps(manager.queue_targets)) == {
+                        'primary': mocked_primary_queue_url,
+                        'secondary': mocked_secondary_queue_url,
+                        'dlq': mocked_dlq_url,
+                    }
+
+                # These are the arg configurations we probably care about ...
+                test_it('some-env')  # Normal case of setting up an env
+                test_it('some-env', mirror_env='emos-env')  # Normal case of setting up a mirror
+                test_it(None)  # Weird case we allow who knows why
+                test_it('some-env', override_url="http://foo")  # Another override option we allow
+
+
+def test_queue_manager_purge_queue_wait():
+
+    myenv = 'some-env'
+
+    class MockRegistry:
+        settings = {'env.name': myenv}
+
+    class MockSqsClient:
+        def __init__(self, **kwargs):
+            ignored(kwargs)
+            self.purge_queue = mock.MagicMock()
+
+    def mocked_boto3_client(kind, **kwargs):
+        assert kind == "sqs"  # we only handle this case
+        return MockSqsClient(**kwargs)
+
+    with mock.patch("boto3.client") as mock_boto3_client:
+        mock_boto3_client.side_effect = mocked_boto3_client
+        with mock.patch.object(QueueManager, "initialize") as mock_initialize:
+            primary, secondary, dlq = 'http://primary', 'http://secondary', 'http://dlq'
+            mock_initialize.return_value = {
+                myenv + '-indexer-queue': primary,
+                myenv + '-secondary-indexer-queue': secondary,
+                myenv + '-dlq': dlq,
+            }
+            with mock.patch("socket.gethostname") as mock_gethostname:
+                with mock.patch.object(QueueManager, "get_queue_url") as mock_get_queue_url:
+
+                    registry = MockRegistry()
+                    manager = QueueManager(registry)
+
+                    # Make sure things are set up for our test
+                    assert isinstance(manager.client, MockSqsClient)
+
+                    dt = ControlledTime()
+
+                    with mock.patch("datetime.datetime", dt):
+                        with mock.patch("time.sleep", dt.sleep):
+
+                            start_time = dt.just_now()
+                            assert start_time > manager.PURGE_QUEUE_TIMESTAMP0
+                            assert manager.purge_queue_timestamp == manager.PURGE_QUEUE_TIMESTAMP0
+                            assert manager.client.purge_queue.call_count == 0  # Just to be sure
+                            manager.purge_queue()
+                            assert manager.client.purge_queue.call_count == 3  # Called once for each queue
+                            # The first time it shouldn't wait, but does check the time twice
+                            assert manager.purge_queue_timestamp == start_time + timedelta(seconds=2)
+
+                            # Try again now...
+
+                            start_time = dt.just_now()
+                            assert manager.purge_queue_timestamp == start_time
+                            assert manager.client.purge_queue.call_count == 3  # Just to be sure
+                            manager.purge_queue()
+                            assert manager.client.purge_queue.call_count == 6  # Called once for each queue
+                            # The second time the wait should be 61 seconds, plus we check the time twice
+                            # (once within the 61 second wait time, so it doesn't count) and we count 1 second
+                            # for each check outside the interval, so 62 total. But most importantly, we do NOT
+                            # wait for whole extra minutes. :) -kmp 2-Jun-2020
+                            assert manager.purge_queue_timestamp == start_time + timedelta(seconds=62)
+
+
+def test_queue_manager_chunk_messages():
+
+    # Really this could be anything generated series we're chunking
+
+    assert list(QueueManager.chunk_messages(list(range(0)), 5)) == []
+    assert list(QueueManager.chunk_messages(list(range(3)), 5)) == [[0, 1, 2]]
+    assert list(QueueManager.chunk_messages(list(range(5)), 5)) == [[0, 1, 2, 3, 4]]
+    assert list(QueueManager.chunk_messages(list(range(6)), 5)) == [[0, 1, 2, 3, 4], [5]]
+    assert list(QueueManager.chunk_messages(list(range(10)), 5)) == [[0, 1, 2, 3, 4], [5, 6, 7, 8, 9]]
+    assert list(QueueManager.chunk_messages(list(range(11)), 5)) == [[0, 1, 2, 3, 4], [5, 6, 7, 8, 9], [10]]
 
 
 def test_wait_until_purge_queue_allowed():

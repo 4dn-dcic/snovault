@@ -5,6 +5,8 @@ import pytest
 import logging
 import subprocess
 
+from ..elasticsearch.indexer_queue import QueueManager
+
 
 pytest_plugins = [
     'snovault.tests.serverfixtures',
@@ -71,3 +73,4 @@ def start_moto_server_sqs():
 def pytest_configure():
     logging.basicConfig()
     logging.getLogger('snovault').setLevel(logging.INFO)
+    QueueManager.PURGE_QUEUE_SLEEP_FOR_SAFETY = True
