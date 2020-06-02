@@ -187,6 +187,11 @@ class QueueManager(object):
        from either the primary or secondary queues.
     """
 
+    # The belief is that this may be making things slow in production, and the chance of collisions there is low,
+    # so for now we enable this only during testing when the odds of collision are dramatically higher.
+    # -kmp 28-May-2020
+    PURGE_QUEUE_SLEEP_FOR_SAFETY = False
+
     PURGE_QUEUE_TIMESTAMP0 = datetime.datetime(datetime.MINYEAR, 1, 1)  # maybe useful for testing
     # Amazon says we shouldn't do anything for this amount of time after a purge request.
     PURGE_QUEUE_LOCKOUT_TIME_ACCORDING_TO_AMAZON = 60
@@ -428,12 +433,17 @@ class QueueManager(object):
         # Note again that because seconds_since_last_attempt is positive, the wait seconds will
         # never exceed self.PURGE_QUEUE_EFFECTIVE_LOCKOUT_TIME, so
         #   0 <= wait_seconds <= self.self.PURGE_QUEUE_EFFECTIVE_LOCKOUT_TIME
-        wait_seconds = max(0, self.PURGE_QUEUE_EFFECTIVE_LOCKOUT_TIME - seconds_since_last_purge)
-        if wait_seconds > 0:
-            log.warning("Last purge_queue attempt was at %s (%s seconds ago)."
-                        " Waiting %s seconds before attempting another."
-                        % (self.purge_queue_timestamp, seconds_since_last_purge, wait_seconds))
-            time.sleep(wait_seconds)
+        wait_seconds = max(0.0, self.PURGE_QUEUE_EFFECTIVE_LOCKOUT_TIME - seconds_since_last_purge)
+        if wait_seconds > 0.0:
+            shared_message = ("Last purge_queue attempt was at %s (%s seconds ago)."
+                              % (self.purge_queue_timestamp, seconds_since_last_purge))
+            if self.PURGE_QUEUE_SLEEP_FOR_SAFETY:
+                action_message = "Waiting %s seconds before attempting another." % wait_seconds
+                log.warning("%s %s" % (shared_message, action_message))
+                time.sleep(wait_seconds)
+            else:
+                action_message = "Continuing anyway because QueueManager.PURGE_QUEUE_SLEEP_FOR_SAFETY is False."
+                log.warning("%s %s" % (shared_message, action_message))
         self.purge_queue_timestamp = datetime.datetime.now()
 
     def purge_queue(self):
@@ -482,7 +492,8 @@ class QueueManager(object):
         setattr(self, queue_url, None)
         return response
 
-    def chunk_messages(self, messages, chunksize):
+    @staticmethod
+    def chunk_messages(messages, chunksize):
         """
         Chunk a given number of messages into chunks of given chunksize
         """
