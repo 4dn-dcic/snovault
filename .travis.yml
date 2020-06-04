@@ -68,7 +68,7 @@ install:
 - pip install "moto[server]"
 script:
 - |
-  if test -n "$UNIT"; then bin/test -v -v --timeout=400 --aws-auth --cov snovault --es search-fourfront-builds-uhevxdzfcv7mkm5pj5svcri3aq.us-east-1.es.amazonaws.com:80;
+  if test -n "$UNIT"; then pytest -v -v --timeout=400 --aws-auth --cov snovault --es search-fourfront-builds-uhevxdzfcv7mkm5pj5svcri3aq.us-east-1.es.amazonaws.com:80;
   fi
 - |
   if [[ $TRAVIS_BRANCH == 'master' ]]; then

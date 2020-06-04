@@ -1,4 +1,14 @@
 import pytest
+import tempfile
+
+
+pytest_plugins = [
+    'snovault.tests.serverfixtures',
+    'snovault.tests.testappfixtures',
+    'snovault.tests.toolfixtures',
+    'snovault.tests.pyramidfixtures',
+]
+
 
 def pytest_addoption(parser):
     parser.addoption("--es", action="store", default="", dest='es',
@@ -15,3 +25,7 @@ def remote_es(request):
 @pytest.fixture(scope='session')
 def aws_auth(request):
     return request.config.getoption("--aws-auth")
+
+
+def pytest_configure():
+    tempfile.tempdir = '/tmp'

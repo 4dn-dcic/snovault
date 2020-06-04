@@ -1,7 +1,7 @@
 clean:
 	rm -rf *.egg-info
 
-configure:  # does any pre-requisite installs
+configure:
 	pip install poetry
 
 moto-setup:
@@ -21,12 +21,19 @@ build:
 	make moto-setup
 
 test:
-	bin/test -vv --timeout=400
+	pytest -vv --timeout=400 snovault
+
+update:
+	poetry update
+
+help:
+	@make info
 
 info:
 	@: $(info Here are some 'make' options:)
+	   $(info - Use 'make clean' to clear out (non-python) dependencies)
 	   $(info - Use 'make configure' to install poetry, though 'make build' will do it automatically.)
-	   $(info - Use 'make build' to install dependencies using poetry.)
-	   $(info - Use 'make macbuild' if 'make build' gets errors on MacOS Catalina.)
+	   $(info - Use 'make build' to build only application dependencies (or 'make macbuild' on OSX Catalina))
 	   $(info - Use 'make moto-setup' if you did 'poetry install' but did not set up moto for testing.)
 	   $(info - Use 'make test' to run tests with the normal options we use on travis)
+	   $(info - Use 'make update' to update dependencies (and the lock file))

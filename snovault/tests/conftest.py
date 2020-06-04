@@ -5,6 +5,7 @@ import pytest
 import logging
 import subprocess
 
+from dcicutils.qa_utils import notice_pytest_fixtures
 from ..elasticsearch.indexer_queue import QueueManager
 
 
@@ -19,6 +20,7 @@ pytest_plugins = [
 # required so that db transactions are properly rolled back in tests
 @pytest.fixture(autouse=True)
 def autouse_external_tx(external_tx):
+    notice_pytest_fixtures(external_tx)
     pass
 
 
