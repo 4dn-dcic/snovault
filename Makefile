@@ -1,7 +1,7 @@
 clean:
 	rm -rf *.egg-info
 
-configure:
+configure:  # does any pre-requisite installs
 	pip install poetry
 
 moto-setup:
@@ -21,7 +21,7 @@ build:
 	make moto-setup
 
 test:
-	pytest -vv --timeout=400 snovault
+	pytest -vv --timeout=400 --pyargs snovault.tests
 
 update:
 	poetry update
