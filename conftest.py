@@ -2,12 +2,12 @@ import pytest
 import tempfile
 
 
-pytest_plugins = [
-    'snovault.tests.serverfixtures',
-    'snovault.tests.testappfixtures',
-    'snovault.tests.toolfixtures',
-    'snovault.tests.pyramidfixtures',
-]
+# pytest_plugins = [
+#     'snovault.tests.serverfixtures',
+#     'snovault.tests.testappfixtures',
+#     'snovault.tests.toolfixtures',
+#     'snovault.tests.pyramidfixtures',
+# ]
 
 
 def pytest_addoption(parser):
