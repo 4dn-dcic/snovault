@@ -2,7 +2,6 @@ import json
 import pytest
 import structlog
 import time
-# import logging
 import yaml
 
 from unittest import mock

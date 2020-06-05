@@ -2,14 +2,6 @@ import pytest
 import tempfile
 
 
-# pytest_plugins = [
-#     'snovault.tests.serverfixtures',
-#     'snovault.tests.testappfixtures',
-#     'snovault.tests.toolfixtures',
-#     'snovault.tests.pyramidfixtures',
-# ]
-
-
 def pytest_addoption(parser):
     parser.addoption("--es", action="store", default="", dest='es',
         help="use a remote es for testing")
