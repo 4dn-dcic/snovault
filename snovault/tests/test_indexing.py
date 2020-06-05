@@ -62,6 +62,18 @@ TEST_TYPE = 'testing_post_put_patch_sno'  # use one collection for testing
 create_mapping.NUM_SHARDS = 1
 
 
+def generate_indexer_namespace_for_testing():
+    travis_job_id = os.environ.get('TRAVIS_JOB_ID')
+    if travis_job_id:
+        return travis_job_id
+    else:
+        # We've experimentally determined that it works pretty well to just use the timestamp.
+        return "sno-test-%s" % int(datetime_module.datetime.now().timestamp() * 1000000)
+
+
+INDEXER_NAMESPACE_FOR_TESTING = generate_indexer_namespace_for_testing()
+
+
 @pytest.fixture(scope='session')
 def app_settings(wsgi_server_host_port, elasticsearch_server, postgresql_server, aws_auth):
     settings = _app_settings.copy()
@@ -71,7 +83,7 @@ def app_settings(wsgi_server_host_port, elasticsearch_server, postgresql_server,
     settings['collection_datastore'] = 'elasticsearch'
     settings['item_datastore'] = 'elasticsearch'
     settings['indexer'] = True
-    settings['indexer.namespace'] = os.environ.get('TRAVIS_JOB_ID', '')
+    settings['indexer.namespace'] = INDEXER_NAMESPACE_FOR_TESTING
 
     # use aws auth to access elasticsearch
     if aws_auth:
@@ -170,7 +182,7 @@ def test_indexer_namespacing(app, testapp, indexer_testapp):
     Tests that namespacing indexes works as expected. This test has no real
     effect on local but does on Travis
     """
-    jid = os.environ.get('TRAVIS_JOB_ID')
+    jid = INDEXER_NAMESPACE_FOR_TESTING
     idx = indexer_utils.get_namespaced_index(app, TEST_TYPE)
     testapp.post_json(TEST_COLL, {'required': ''})
     indexer_testapp.post_json('/index', {'record': True})

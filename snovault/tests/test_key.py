@@ -6,11 +6,6 @@ from .. import DBSESSION
 
 # Test for storage.keys
 
-pytest_plugins = [
-    'snovault.tests.serverfixtures',
-    'snovault.tests.testappfixtures',
-]
-
 items = [
     {'name': 'one', 'accession': 'TEST1'},
     {'name': 'two', 'accession': 'TEST2'},
