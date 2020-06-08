@@ -1,8 +1,13 @@
 import pytest
-from .. import TYPES
+
+from dcicutils.qa_utils import notice_pytest_fixtures
+from .. import TYPES  # noqa - PyCharm wrongly fusses that we're trying to use an obsolete 'types' library here.
 from ..schema_utils import load_schema
 from .test_views import PARAMETERIZED_NAMES
 from .toolfixtures import registry
+
+
+notice_pytest_fixtures(registry)
 
 
 @pytest.mark.parametrize('schema', PARAMETERIZED_NAMES)
