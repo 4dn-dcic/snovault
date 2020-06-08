@@ -224,7 +224,7 @@ def test_indexer_queue_adds_telemetry_id(app):
 @pytest.mark.flaky
 def test_indexer_queue(app):
     indexer_queue_mirror = app.registry[INDEXER_QUEUE_MIRROR]
-    # this is only set up for webprod/webprod2
+    # An indexing queue mirror would only be set up for production servers.
     assert indexer_queue_mirror is None
 
     indexer_queue = app.registry[INDEXER_QUEUE]

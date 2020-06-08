@@ -4,7 +4,7 @@ import pytest
 from base64 import b64encode
 from jsonschema_serialize_fork import Draft4Validator
 from pyramid.compat import ascii_native_
-from .. import TYPES
+from .. import TYPES  # noqa - PyCharm wrongly fusses that we're trying to use an obsolete 'types' library here.
 from .toolfixtures import registry, root
 
 
@@ -14,6 +14,7 @@ TYPE_NAMES = ['TestingPostPutPatchSno', 'TestingDownload']
 def get_parameterized_names():
     """ Get all item types from schema names """
     return [name.split('.')[0] for name in os.listdir(os.getcwd() + '/snovault/test_schemas')]
+
 
 PARAMETERIZED_NAMES = get_parameterized_names()
 
@@ -72,15 +73,15 @@ def test_collection_limit(testapp):
     """ Post 3 EmbeddingTests, check that limit=all, limit=2 works """
     obj1 = {
         'title': "Testing1",
-        'description': "This is testig object 1",
+        'description': "This is testing object 1",
     }
     obj2 = {
         'title': "Testing2",
-        'description': "This is testig object 2",
+        'description': "This is testing object 2",
     }
     obj3 = {
         'title': "Testing3",
-        'description': "This is testig object 3",
+        'description': "This is testing object 3",
     }
     testapp.post_json('/embedding-tests', obj1, status=201)
     testapp.post_json('/embedding-tests', obj2, status=201)

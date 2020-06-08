@@ -5,14 +5,15 @@ First round will use a standard SQS queue from AWS without Elasticache.
 
 import datetime
 import json
-import socket
 import os
+import socket
 import time
 from collections import OrderedDict
 
 import boto3
 import structlog
 from dcicutils.env_utils import blue_green_mirror_env
+from dcicutils.misc_utils import ignored
 from pyramid.view import view_config
 
 from .indexer_utils import get_uuids_for_types
@@ -52,6 +53,7 @@ def queue_indexing(context, request):
     or a list of collections under "collections" key of its body. Can also
     optionally take "strict" boolean and "target_queue" string.
     """
+    ignored(context)
     req_uuids = request.json.get('uuids', None)
     req_collections = request.json.get('collections', None)
     # TODO: This variable is unused. Is it work-in-progress or something that should go away? -kmp 7-May-2020
@@ -112,6 +114,7 @@ def indexing_status(context, request):
     """
     Endpoint to check what is currently on the queue. Uses GET requests
     """
+    ignored(context)
     queue_indexer = request.registry[INDEXER_QUEUE]
     response = {}
     try:
@@ -133,6 +136,7 @@ def dlq_to_primary(context, request):
     """
     Endpoint to move all uuids on the DLQ to the primary queue
     """
+    ignored(context)
     queue_indexer = request.registry[INDEXER_QUEUE]
     # What comes out of .receive_messages() looks like:
     # [{
@@ -286,6 +290,7 @@ class QueueManager(object):
         Returns a list of queued uuids and a list of any uuids that failed to
         be queued.
         """
+        ignored(registry)
         curr_time = datetime.datetime.utcnow().isoformat()
         items = []
         for uuid in uuids:
