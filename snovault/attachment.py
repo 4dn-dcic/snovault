@@ -13,7 +13,11 @@ from pyramid.traversal import find_root
 from pyramid.view import view_config
 from structlog import getLogger
 from urllib.parse import quote, unquote
-from . import BLOBS, Item
+
+# from . import BLOBS, Item
+from .resources import Item
+from .interfaces import BLOBS
+
 from .util import debug_log
 from .validation import ValidationFailure
 

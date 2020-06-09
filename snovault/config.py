@@ -8,6 +8,7 @@ from .interfaces import (
     ROOT,
     TYPES,
 )
+from .resources import Root
 
 
 def includeme(config):
@@ -21,7 +22,7 @@ def includeme(config):
 
 
 def set_default_root(registry):
-    from .resources import Root
+#    from .resources import Root
     if ROOT not in registry:
         registry[ROOT] = Root(registry)
 

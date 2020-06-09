@@ -1,10 +1,4 @@
 import sys
-if sys.version_info.major == 2:
-    from future.standard_library import install_aliases
-    install_aliases()
-    import functools
-    from backports.functools_lru_cache import lru_cache
-    functools.lru_cache = lru_cache
 import netaddr
 from pyramid.config import Configurator
 from pyramid.settings import (
@@ -38,6 +32,10 @@ import logging
 import os
 from dcicutils.log_utils import set_logging
 from dcicutils.ff_utils import get_health_page
+
+# Moved from definition internals
+from .elasticsearch import APP_FACTORY
+from pyramid_localroles import LocalRolesAuthorizationPolicy
 
 
 def includeme(config):
@@ -90,12 +88,12 @@ def main(global_config, **local_config):
     settings['snovault.jsonld.terms_prefix'] = 'snovault'
 
     config = Configurator(settings=settings)
-    from .elasticsearch import APP_FACTORY
+#   from .elasticsearch import APP_FACTORY
     config.registry[APP_FACTORY] = main  # used by mp_indexer
     config.include(app_version)
 
     config.include('pyramid_multiauth')  # must be before calling set_authorization_policy
-    from pyramid_localroles import LocalRolesAuthorizationPolicy
+#   from pyramid_localroles import LocalRolesAuthorizationPolicy
     # Override default authz policy set by pyramid_multiauth
     config.set_authorization_policy(LocalRolesAuthorizationPolicy())
     config.include(session)
