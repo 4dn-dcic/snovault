@@ -3,8 +3,7 @@ import logging
 import webtest
 
 from pyramid.paster import get_app
-from .. import set_logging
-
+from dcicutils.log_utils import set_logging
 
 EPILOG = __doc__
 

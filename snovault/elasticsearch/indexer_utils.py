@@ -1,9 +1,5 @@
-import time
-
-from elasticsearch.exceptions import ConnectionTimeout
 from elasticsearch.helpers import scan
-from .. import COLLECTIONS, STORAGE
-from ..util import find_collection_subtypes
+from ..interfaces import COLLECTIONS
 from .interfaces import ELASTIC_SEARCH
 
 

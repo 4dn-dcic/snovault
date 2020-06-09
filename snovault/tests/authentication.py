@@ -19,7 +19,7 @@ from pyramid.security import (
 )
 from pyramid.settings import asbool, aslist
 from pyramid.view import view_config
-from .. import ROOT, COLLECTIONS
+from ..interfaces import ROOT, COLLECTIONS
 from ..storage import User
 from ..calculated import calculate_properties
 from ..validators import no_validate_item_content_post

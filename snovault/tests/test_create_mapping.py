@@ -2,7 +2,7 @@ import os
 import pytest
 import mock
 
-from .. import TYPES
+from ..interfaces import TYPES
 from ..elasticsearch.create_mapping import merge_schemas, type_mapping, update_mapping_by_embed
 from ..elasticsearch.interfaces import ELASTIC_SEARCH
 from .pyramidfixtures import dummy_request

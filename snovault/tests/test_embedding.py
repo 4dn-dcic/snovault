@@ -2,7 +2,7 @@ import pytest
 
 from dcicutils.qa_utils import ignored, notice_pytest_fixtures
 from re import findall
-from .. import TYPES  # noqa - PyCharm wrongly fusses that we're trying to use an obsolete 'types' library here.
+from ..interfaces import TYPES
 from ..util import add_default_embeds, crawl_schemas_by_embeds
 from .pyramidfixtures import dummy_request, threadlocals
 from .test_views import PARAMETERIZED_NAMES

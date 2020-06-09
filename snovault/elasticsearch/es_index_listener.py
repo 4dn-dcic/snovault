@@ -22,8 +22,7 @@ import time
 import webtest
 
 from pyramid import paster
-from urllib.parse import parse_qsl
-from .. import set_logging
+from dcicutils.log_utils import set_logging
 from .interfaces import ELASTIC_SEARCH, INDEXER_QUEUE
 
 

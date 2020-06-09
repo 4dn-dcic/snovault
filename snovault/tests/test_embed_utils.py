@@ -2,7 +2,7 @@ import copy
 import pytest
 
 from dcicutils.qa_utils import notice_pytest_fixtures
-from .. import TYPES  # noqa - PyCharm wrongly fusses that we're trying to use an obsolete 'types' library here.
+from ..interfaces import TYPES
 from ..util import (
     build_default_embeds,
     find_default_embeds_for_schema,
