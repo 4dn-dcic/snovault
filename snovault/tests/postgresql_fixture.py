@@ -3,6 +3,10 @@ import os.path
 import sys
 import subprocess
 
+import atexit
+import shutil
+import tempfile
+
 
 def initdb(datadir, prefix='', echo=False):
     init_args = [
@@ -60,9 +64,6 @@ def server_process(datadir, prefix='', echo=False):
 
 
 def main():
-    import atexit
-    import shutil
-    import tempfile
     datadir = tempfile.mkdtemp()
 
     print('Starting in dir: %s' % datadir)

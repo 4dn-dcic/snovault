@@ -1,6 +1,8 @@
 from base64 import b64decode
 import pytest
-from pyramid.httpexceptions import HTTPNotFound
+import webtest
+
+# from pyramid.httpexceptions import HTTPNotFound
 
 
 # Test for blob storage
@@ -61,7 +63,6 @@ def test_download_create(testapp, testing_download):
 
 
 def test_download_update(testapp, testing_download):
-    from base64 import b64decode
     item = {
         'attachment': {
             'download': 'blue-dot.png',
