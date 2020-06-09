@@ -22,7 +22,6 @@ def includeme(config):
 
 
 def set_default_root(registry):
-#    from .resources import Root
     if ROOT not in registry:
         registry[ROOT] = Root(registry)
 

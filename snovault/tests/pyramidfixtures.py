@@ -16,7 +16,6 @@ notice_pytest_fixtures(registry)
 
 @pytest.yield_fixture
 def config():
-#   from pyramid.testing import setUp, tearDown
     yield setUp()
     tearDown()
 
@@ -24,8 +23,6 @@ def config():
 @pytest.yield_fixture
 def threadlocals(request, dummy_request, registry):
     notice_pytest_fixtures(request, dummy_request, registry)
-
-#   from pyramid.threadlocal import manager
     manager.push({'request': dummy_request, 'registry': registry})
     yield manager.get()
     manager.pop()
@@ -33,7 +30,6 @@ def threadlocals(request, dummy_request, registry):
 
 @pytest.fixture
 def dummy_request(root, registry, app):
-#   from pyramid.request import apply_request_extensions
     request = app.request_factory.blank('/dummy')
     request.root = root
     request.registry = registry

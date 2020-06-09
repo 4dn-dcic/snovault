@@ -14,7 +14,6 @@ from pyramid.view import view_config
 from structlog import getLogger
 from urllib.parse import quote, unquote
 
-# from . import BLOBS, Item
 from .resources import Item
 from .interfaces import BLOBS
 

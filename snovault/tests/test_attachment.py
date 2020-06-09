@@ -2,8 +2,6 @@ from base64 import b64decode
 import pytest
 import webtest
 
-# from pyramid.httpexceptions import HTTPNotFound
-
 
 # Test for blob storage
 
