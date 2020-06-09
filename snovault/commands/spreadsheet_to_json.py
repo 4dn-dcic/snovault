@@ -5,6 +5,10 @@ Example:
 
 """
 
+import argparse
+# TODO: I doubt this script is ever used because this import of loadxl would fail.
+#       Pretty much identical scripts are defined in each of Fourfront and CGAP, but loadxl is defined there.
+#       Can we just remove this file? -kmp 9-Jun-2020
 from .. import loadxl
 import json
 import os.path
@@ -45,7 +49,6 @@ def convert(filename, sheetname=None, outputdir=None, skip_blanks=False):
 
 
 def main():
-    import argparse
     parser = argparse.ArgumentParser(
         description="Convert spreadsheet to json list", epilog=EPILOG,
         formatter_class=argparse.RawDescriptionHelpFormatter,
