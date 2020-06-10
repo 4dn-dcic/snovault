@@ -40,4 +40,3 @@ info:
 	   $(info - Use 'make moto-setup' if you did 'poetry install' but did not set up moto for testing.)
 	   $(info - Use 'make test' to run tests with the normal options we use on travis)
 	   $(info - Use 'make update' to update dependencies (and the lock file))
-
