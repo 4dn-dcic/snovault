@@ -1,4 +1,4 @@
-from .. import COLLECTIONS
+from ..interfaces import COLLECTIONS
 
 
 def groupfinder(login, request):

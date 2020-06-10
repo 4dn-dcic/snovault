@@ -11,15 +11,14 @@ from pyramid.traversal import find_root, traverse
 from pyramid.view import view_config
 from sqlalchemy import inspect
 from transaction.interfaces import TransientError
-from .. import (
+from ..resources import (
     AbstractCollection as BaseAbstractCollection,
     Collection as BaseCollection,
     Item as BaseItem,
-    calculated_property,
-    collection,
-    abstract_collection,
-    load_schema,
 )
+from ..calculated import calculated_property
+from ..config import collection, abstract_collection
+from ..schema_utils import load_schema
 from ..attachment import ItemWithAttachment
 from ..interfaces import CONNECTION
 from .root import TestRoot

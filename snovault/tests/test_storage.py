@@ -5,7 +5,7 @@ import uuid
 from dcicutils.qa_utils import notice_pytest_fixtures
 from pyramid.threadlocal import manager
 from sqlalchemy.orm.exc import FlushError
-from .. import DBSESSION, STORAGE
+from ..interfaces import DBSESSION, STORAGE
 from ..storage import (
     Blob,
     CurrentPropertySheet,

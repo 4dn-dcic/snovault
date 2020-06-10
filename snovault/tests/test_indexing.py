@@ -24,10 +24,9 @@ from pyramid.traversal import traverse
 from sqlalchemy import MetaData
 from unittest import mock
 from zope.sqlalchemy import mark_changed
-from .. import (
-    TYPES,  # noqa - PyCharm bogusly warns about TYPES not being a module in Python 3.6, but this isn't that
-    DBSESSION, STORAGE, main, util,
-)
+from ..interfaces import TYPES, DBSESSION, STORAGE
+from .. import util  # The filename util.py, not something in __init__.py
+from .. import main  # Function main actually defined in __init__.py (should maybe be defined elsewhere)
 from ..elasticsearch import create_mapping, indexer_utils, indexer_queue
 from ..elasticsearch.create_mapping import (
     build_index_record,

@@ -21,7 +21,8 @@ from pyramid.threadlocal import (
 )
 from sqlalchemy import orm
 
-from .. import DBSESSION, set_logging
+from ..interfaces import DBSESSION
+from dcicutils.log_utils import set_logging
 from ..app import configure_engine
 from .indexer import (
     INDEXER,

@@ -5,7 +5,7 @@ import time
 import yaml
 
 from unittest import mock
-from .. import stats
+from .. import stats  # The filename stats.py, not something in __init__.py
 from ..crud_views import log as crud_view_log
 from .test_post_put_patch import COLLECTION_URL, item_with_uuid
 
