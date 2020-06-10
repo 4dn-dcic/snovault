@@ -48,7 +48,7 @@ env:
   - secure: Dzs4p1PuHdNXyBJu8FEWp839RhxvetKQrKonNeon3CvcN0xbxtICKr6ekj7+Y8hejxnUFGRwnypGmjbeee9evCC0bcvRQCjy/9aX7Kfuykn4IhvDAAYcWr533wqxC78A4TMyFJEJxYiZ4eJy+M/DnH+lr4zaoAwpsO1mxq92uPfjmj+gYZEAO5mvOUyCKQu5tKYYi9UTJ9Rxz0lJKRbaSQtEGRHs6+kU0qFc6QJGsYXXIbc/BOmfhKkrcJ+6jfvG7eli7cQSK1ve8h1VX0n/Eonk9heH4umCyTT2RTfhcARrc2ZwWYKXTka0jxmAck9gELcGEYOSV5dL/Qy9zykLeH7dL0UbNMnnrNY+89/b2WJfav9KtoG3e0dgiQZp5oMgC1MtkDxQif+V7In9baZA4rafgW+Bw/O3Uzz+VAPpl4xDVjk/29GLQ5iWnj9eJT9a7jIQIOMD6WKxAKH2O3XD6ZyUWvjKYEqT9BIxfchWnd+z2tIPDQBBI3Az+jDh6Quyrmb7AQVveTc+CtmzP98lhnIqAfIz8hwHyRgCo+i27wUGyKHMnKCJeHVSEPbANqXxeg1l8rgG5ht8H0AznkPpzTjajZRmZowDQRg9b9plM5AQsIxhPtAHBHAHcpXx8reN9NHrPuKLoMV3KRTUoq6UqTUrPz/qKCCSbaSbR7UNK7E=
 matrix:
   include:
-  - python: '3.4'
+  - python: '3.6'
     env: UNIT=Test
 notifications:
   slack:
@@ -68,7 +68,7 @@ install:
 - pip install "moto[server]"
 script:
 - |
-  if test -n "$UNIT"; then bin/test -v -v --timeout=400 --aws-auth --cov snovault --es search-fourfront-builds-uhevxdzfcv7mkm5pj5svcri3aq.us-east-1.es.amazonaws.com:80;
+  if test -n "$UNIT"; then make travis-test;
   fi
 - |
   if [[ $TRAVIS_BRANCH == 'master' ]]; then
@@ -82,4 +82,4 @@ deploy:
   script: poetry publish --build --username=$PYPI_USER --password=$PYPI_PASSWORD
   on:
     tags: true
-    condition: "$TRAVIS_PYTHON_VERSION == 3.4"
+    condition: "$TRAVIS_PYTHON_VERSION == 3.6"

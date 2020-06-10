@@ -5,13 +5,7 @@ import pytest
 import logging
 import subprocess
 
-
-pytest_plugins = [
-    'snovault.tests.serverfixtures',
-    'snovault.tests.testappfixtures',
-    'snovault.tests.toolfixtures',
-    'snovault.tests.pyramidfixtures',
-]
+from ..elasticsearch.indexer_queue import QueueManager
 
 
 # required so that db transactions are properly rolled back in tests
@@ -71,3 +65,4 @@ def start_moto_server_sqs():
 def pytest_configure():
     logging.basicConfig()
     logging.getLogger('snovault').setLevel(logging.INFO)
+    QueueManager.PURGE_QUEUE_SLEEP_FOR_SAFETY = True

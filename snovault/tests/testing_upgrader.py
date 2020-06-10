@@ -1,4 +1,5 @@
-from .. import Item, collection
+from ..resources import Item
+from ..config import collection
 from ..upgrader import upgrade_step, upgrade_finalizer
 
 

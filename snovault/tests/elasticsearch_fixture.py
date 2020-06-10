@@ -1,9 +1,10 @@
 import os.path
 import sys
-try:
-    import subprocess32 as subprocess
-except ImportError:
-    import subprocess
+import subprocess
+
+import atexit
+import shutil
+import tempfile
 
 
 def server_process(datadir, host='localhost', port=9200, prefix='', echo=False):
@@ -70,9 +71,6 @@ def server_process(datadir, host='localhost', port=9200, prefix='', echo=False):
 
 
 def main():
-    import atexit
-    import shutil
-    import tempfile
     datadir = tempfile.mkdtemp()
 
     print('Starting in dir: %s' % datadir)

@@ -3,12 +3,20 @@ import collections
 import copy
 import json
 
+# In jsonschema_serialize_fork, where we got the RefResolver code, requests was defined for the module as:
+#   try:
+#       import requests
+#   except ImportError:
+#       requests = None
+# but since we are in Python 3.6 now, requests should reliably import.
+import requests
+
 from jsonschema_serialize_fork import (
     Draft4Validator,
     FormatChecker,
     RefResolver,
 )
-# TODO: remove these imports when RefResolverOrdered is removed
+# TODO (C4-177): remove these imports (urlsplit, urlopen) when RefResolverOrdered is removed
 from jsonschema_serialize_fork.compat import urlsplit, urlopen
 from jsonschema_serialize_fork.exceptions import ValidationError
 from pyramid.path import AssetResolver, caller_package
@@ -16,6 +24,10 @@ from pyramid.threadlocal import get_current_request
 from pyramid.traversal import find_resource
 from uuid import UUID
 from .util import ensurelist
+
+# This was originally an internal import from "." (__init__.py), but I have replaced that reference
+# to avoid a circularity. No files should refer upward to "." for imports. -kmp 9-Jun-2020
+from .resources import Item, COLLECTIONS
 
 
 SERVER_DEFAULTS = {}
@@ -35,6 +47,7 @@ class RefResolverOrdered(RefResolver):
     argument to fix this.
     WHEN ELASTICBEANSTALK IS RUNNING PY 3.6 WE CAN REMOVE THIS
     """
+    # TODO (C4-177): The stated condition is now met. We are reliably in Python 3.6, so this code should be removed.
 
     def resolve_remote(self, uri):
         """
@@ -57,6 +70,10 @@ class RefResolverOrdered(RefResolver):
             result = self.handlers[scheme](uri)
         elif (
             scheme in ["http", "https"] and
+            # TODO (C4-177): PyCharm flagged free references to 'requests' in this file as undefined,
+            #                so I've added an import at top of file. However, that suggests this 'elif'
+            #                branch is never entered. When this tangled code is removed, I'll be happier.
+            #                Meanwhile having a definition seems safer than not. -kmp 9-Jun-2020
             requests and
             getattr(requests.Response, "json", None) is not None
         ):
@@ -116,9 +133,12 @@ def mixinSchemas(schema, resolver, key_name = 'properties'):
 
 
 def linkTo(validator, linkTo, instance, schema):
-    # TODO: Eliminate this circularity issue. -kmp 10-Feb-2020
-    # avoid circular import
-    from . import Item, COLLECTIONS
+
+    # Hopefully not needed now that I'm importing from ".resources" instead of "." -kmp 9-Jun-2020
+    #
+    # # TODO: Eliminate this circularity issue. -kmp 10-Feb-2020
+    # # avoid circular import
+    # from . import Item, COLLECTIONS
 
     if not validator.is_type(instance, "string"):
         return

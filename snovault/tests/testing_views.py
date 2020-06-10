@@ -11,15 +11,14 @@ from pyramid.traversal import find_root, traverse
 from pyramid.view import view_config
 from sqlalchemy import inspect
 from transaction.interfaces import TransientError
-from .. import (
+from ..resources import (
     AbstractCollection as BaseAbstractCollection,
     Collection as BaseCollection,
     Item as BaseItem,
-    calculated_property,
-    collection,
-    abstract_collection,
-    load_schema,
 )
+from ..calculated import calculated_property
+from ..config import collection, abstract_collection
+from ..schema_utils import load_schema
 from ..attachment import ItemWithAttachment
 from ..interfaces import CONNECTION
 from .root import TestRoot
@@ -111,7 +110,7 @@ def paths_filtered_by_status(request, paths, exclude=('deleted', 'replaced'), in
 
 class AbstractCollection(BaseAbstractCollection):
     def get(self, name, default=None):
-        resource = super(BaseAbstractCollection, self).get(name, None)
+        resource = super(AbstractCollection, self).get(name, None)
         if resource is not None:
             return resource
         if ':' in name:
@@ -125,7 +124,7 @@ class AbstractCollection(BaseAbstractCollection):
 
 class Collection(BaseCollection):
     def __init__(self, *args, **kw):
-        super(BaseCollection, self).__init__(*args, **kw)
+        super(Collection, self).__init__(*args, **kw)
         if hasattr(self, '__acl__'):
             return
         # XXX collections should be setup after all types are registered.

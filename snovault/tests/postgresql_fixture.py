@@ -3,6 +3,9 @@ import sys
 import subprocess
 
 from urllib.parse import urlencode
+import atexit
+import shutil
+import tempfile
 
 
 def initdb(datadir, prefix='', echo=False):
@@ -95,9 +98,6 @@ def server_process(datadir, prefix='', echo=False):
 
 
 def main():
-    import atexit
-    import shutil
-    import tempfile
     datadir = tempfile.mkdtemp()
 
     def clean_datadir():
