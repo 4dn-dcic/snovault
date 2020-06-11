@@ -40,7 +40,7 @@ def pytest_configure():
 
 
 @pytest.mark.fixture_cost(10)
-@pytest.yield_fixture(name='engine_url', scope='session')
+@pytest.yield_fixture(scope='session')
 def engine_url(tmpdir_factory):
     notice_pytest_fixtures(tmpdir_factory)
 
