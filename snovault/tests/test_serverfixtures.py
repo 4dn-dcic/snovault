@@ -1,10 +1,10 @@
+import pytest
 from urllib3.util import parse_url
 
-from .helpers import call_fixture
+from dcicutils.qa_utils import notice_pytest_fixtures
 from .postgresql_fixture import (
     SNOVAULT_DB_TEST_DBNAME, SNOVAULT_DB_TEST_HOSTNAME, SNOVAULT_DB_TEST_PORT, SNOVAULT_DB_TEST_USERNAME,
 )
-from .serverfixtures import postgresql_server, engine_url
 
 
 def _check_postgresql_url(url):
@@ -16,13 +16,13 @@ def _check_postgresql_url(url):
     assert url.query.startswith("host=")  # The next character is either / or %2F (hopefully the latter)
 
 
-def test_postgresql_server(request):
-    with call_fixture(postgresql_server, request) as ps:
-        url = parse_url(ps)
-        _check_postgresql_url(url)
+def test_postgresql_server(postgresql_server, request):
+    notice_pytest_fixtures(request)
+    url = parse_url(postgresql_server)
+    _check_postgresql_url(url)
 
 
-def test_engine_url(request):
-    with call_fixture(engine_url, request) as eu:
-        url = parse_url(eu)
-        _check_postgresql_url(url)
+def test_engine_url(engine_url, request):
+    notice_pytest_fixtures(request)
+    url = parse_url(engine_url)
+    _check_postgresql_url(url)

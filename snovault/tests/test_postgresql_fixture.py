@@ -2,7 +2,8 @@ import os
 import pytest
 import subprocess
 from .postgresql_fixture import SNOVAULT_DB_TEST_PORT, DEFAULT_SNOVAULT_DB_TEST_PORT
-from ..util import environ_bindings
+from dcicutils.qa_utils import override_environ
+
 
 def test_snovault_db_test_port():
 
@@ -17,7 +18,7 @@ def test_snovault_db_test_port():
         output = subprocess.check_output(command)
         return output.decode('utf-8').strip()
 
-    with environ_bindings(SNOVAULT_DB_TEST_PORT=None):
+    with override_environ(SNOVAULT_DB_TEST_PORT=None):
         actual_port = _check_db_port()
         default_port = str(DEFAULT_SNOVAULT_DB_TEST_PORT)
         print('actual_port=', actual_port)
@@ -25,7 +26,7 @@ def test_snovault_db_test_port():
         assert actual_port == default_port
 
     custom_port = "314159"
-    with environ_bindings(SNOVAULT_DB_TEST_PORT=custom_port):
+    with override_environ(SNOVAULT_DB_TEST_PORT=custom_port):
         actual_port = _check_db_port()
         print('actual_port=', actual_port)
         print('custom_port=', custom_port)
