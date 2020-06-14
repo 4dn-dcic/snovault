@@ -1,7 +1,6 @@
 import copy
 import pytest
 
-from dcicutils.qa_utils import notice_pytest_fixtures
 from ..interfaces import TYPES
 from ..util import (
     build_default_embeds,
@@ -10,10 +9,6 @@ from ..util import (
     expand_embedded_list,
     crawl_schema
 )
-# from .toolfixtures import registry
-
-
-# notice_pytest_fixtures(registry)
 
 
 def test_find_collection_subtypes(app):

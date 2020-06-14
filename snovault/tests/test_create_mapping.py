@@ -1,13 +1,8 @@
-import os
 import pytest
-import mock
 
 from ..interfaces import TYPES
 from ..elasticsearch.create_mapping import merge_schemas, type_mapping, update_mapping_by_embed
-from ..elasticsearch.interfaces import ELASTIC_SEARCH
-# from .pyramidfixtures import dummy_request
 from .test_views import PARAMETERIZED_NAMES
-# from .toolfixtures import registry
 from ..settings import Settings
 from contextlib import contextmanager
 

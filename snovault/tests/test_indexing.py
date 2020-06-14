@@ -42,16 +42,10 @@ from ..elasticsearch.create_mapping import (
 from ..elasticsearch.indexer import check_sid, SidException
 from ..elasticsearch.indexer_queue import QueueManager
 from ..elasticsearch.interfaces import ELASTIC_SEARCH, INDEXER_QUEUE, INDEXER_QUEUE_MIRROR
-# from .pyramidfixtures import dummy_request
-# from .testappfixtures import _app_settings
 from .testing_views import TestingLinkSourceSno
-# from .toolfixtures import registry, root, elasticsearch
 
 
-notice_pytest_fixtures(
-    # dummy_request, registry, root, elasticsearch,
-    TestingLinkSourceSno,
-)
+notice_pytest_fixtures(TestingLinkSourceSno)
 
 
 pytestmark = [pytest.mark.indexing]

@@ -5,7 +5,6 @@ from base64 import b64encode
 from jsonschema_serialize_fork import Draft4Validator
 from pyramid.compat import ascii_native_
 from ..interfaces import TYPES
-# from .toolfixtures import registry, root
 
 
 TYPE_NAMES = ['TestingPostPutPatchSno', 'TestingDownload']

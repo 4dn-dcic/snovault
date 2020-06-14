@@ -8,10 +8,6 @@ from dcicutils.qa_utils import notice_pytest_fixtures
 from pyramid.request import apply_request_extensions
 from pyramid.testing import setUp, tearDown
 from pyramid.threadlocal import manager
-# from .toolfixtures import registry
-
-
-# notice_pytest_fixtures(registry)
 
 
 @pytest.yield_fixture
