@@ -4,12 +4,12 @@ from dcicutils.qa_utils import ignored, notice_pytest_fixtures
 from re import findall
 from ..interfaces import TYPES
 from ..util import add_default_embeds, crawl_schemas_by_embeds
-from .pyramidfixtures import dummy_request, threadlocals
+ #from .pyramidfixtures import dummy_request, threadlocals
 from .test_views import PARAMETERIZED_NAMES
-from .toolfixtures import registry, root
+# from .toolfixtures import registry, root
 
 
-notice_pytest_fixtures(dummy_request, threadlocals, registry, root)
+# notice_pytest_fixtures(dummy_request, threadlocals, registry, root)
 
 
 targets = [

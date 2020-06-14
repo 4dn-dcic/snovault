@@ -1,6 +1,6 @@
 import pytest
 
-from .toolfixtures import registry, root
+# from .toolfixtures import registry, root
 
 
 targets = [

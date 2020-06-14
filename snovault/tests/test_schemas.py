@@ -4,10 +4,10 @@ from dcicutils.qa_utils import notice_pytest_fixtures
 from ..interfaces import TYPES
 from ..schema_utils import load_schema
 from .test_views import PARAMETERIZED_NAMES
-from .toolfixtures import registry
+# from .toolfixtures import registry
 
 
-notice_pytest_fixtures(registry)
+# notice_pytest_fixtures(registry)
 
 
 @pytest.mark.parametrize('schema', PARAMETERIZED_NAMES)

@@ -10,10 +10,10 @@ from ..util import (
     expand_embedded_list,
     crawl_schema
 )
-from .toolfixtures import registry
+# from .toolfixtures import registry
 
 
-notice_pytest_fixtures(registry)
+# notice_pytest_fixtures(registry)
 
 
 def test_find_collection_subtypes(app):

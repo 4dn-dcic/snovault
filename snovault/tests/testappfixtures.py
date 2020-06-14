@@ -35,10 +35,14 @@ _app_settings = {
 
 
 @pytest.fixture(scope='session')
-def app_settings(request, wsgi_server_host_port, conn, DBSession):
-    settings = _app_settings.copy()
-    settings[DBSESSION] = DBSession
-    return settings
+def app_settings_dictionary():
+    return _app_settings.copy()
+
+
+@pytest.fixture(scope='session')
+def app_settings(request, wsgi_server_host_port, conn, DBSession, app_settings_dictionary):
+    app_settings_dictionary[DBSESSION] = DBSession
+    return app_settings_dictionary
 
 
 @pytest.fixture(scope='session')
