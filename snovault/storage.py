@@ -720,7 +720,7 @@ class Key(Base):
     # the unique value
     value = Column(types.String, primary_key=True)
 
-    rid = Column(UUID, ForeignKey('resources.rid', ondelete='CASCADE'),
+    rid = Column(UUID, ForeignKey('resources.rid'),
                  nullable=False, index=True)
 
     # Be explicit about dependencies to the ORM layer
@@ -732,12 +732,10 @@ class Link(Base):
     """ indexed relations
     """
     __tablename__ = 'links'
-    source_rid = Column(
-        'source', UUID, ForeignKey('resources.rid', ondelete='CASCADE'), primary_key=True)
+    source_rid = Column('source', UUID, ForeignKey('resources.rid'), primary_key=True)
     rel = Column(types.String, primary_key=True)
-    target_rid = Column(
-        'target', UUID, ForeignKey('resources.rid', ondelete='CASCADE'), primary_key=True,
-        index=True)  # Single column index for reverse lookup
+    target_rid = Column('target', UUID, ForeignKey('resources.rid'), primary_key=True,
+                        index=True)  # Single column index for reverse lookup
 
     source = orm.relationship(
         'Resource', foreign_keys=[source_rid], backref=backref('rels',
@@ -757,16 +755,12 @@ class PropertySheet(Base):
             ('rid', 'name'),
             ('current_propsheets.rid', 'current_propsheets.name'),
             name='fk_property_sheets_rid_name', use_alter=True,
-            deferrable=True, initially='DEFERRED', ondelete='CASCADE',
+            deferrable=True, initially='DEFERRED',
         ),
     )
     # The sid column also serves as the order.
     sid = Column(types.Integer, autoincrement=True, primary_key=True)
-    rid = Column(UUID,
-                 ForeignKey('resources.rid',
-                            deferrable=True,
-                            initially='DEFERRED', ondelete='CASCADE'),
-                 nullable=False)
+    rid = Column(UUID, ForeignKey('resources.rid', deferrable=True, initially='DEFERRED'), nullable=False)
     name = Column(types.String, nullable=False)
     properties = Column(JSON)
     resource = orm.relationship('Resource')
@@ -774,9 +768,8 @@ class PropertySheet(Base):
 
 class CurrentPropertySheet(Base):
     __tablename__ = 'current_propsheets'
-    rid = Column(UUID, ForeignKey('resources.rid', ondelete='CASCADE'),
-                 nullable=False, primary_key=True)
-    name = Column(types.String, nullable=False, primary_key=True)
+    rid = Column(UUID, ForeignKey('resources.rid'), primary_key=True, nullable=False)
+    name = Column(types.String, primary_key=True, nullable=False)
     sid = Column(types.Integer, ForeignKey('propsheets.sid', ondelete='CASCADE'), nullable=False)
     propsheet = orm.relationship(
         'PropertySheet', lazy='joined', innerjoin=True,
