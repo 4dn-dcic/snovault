@@ -132,11 +132,17 @@ def setup_and_teardown(app):
     # Ref: https://stackoverflow.com/questions/44193823/get-existing-table-using-sqlalchemy-metadata/44205552
     meta = MetaData(bind=session.connection())
     meta.reflect()
-    for table in meta.sorted_tables:
-        print('Clear table %s' % table)
-        print('Count before -->', str(connection.scalar("SELECT COUNT(*) FROM %s" % table)))
+    # Note that .sorted_tables returns a list of Table objects sorted in order of foreign key dependency.
+    # To get the order in which the tables would be dropped, we need to reverse that list.
+    # Ref: https://docs.sqlalchemy.org/en/13/core/metadata.html
+    tables_sorted_for_deletion = list(reversed(meta.sorted_tables))
+    for table in tables_sorted_for_deletion:
+        print('Table %s count before --> %s' % (table, connection.scalar("SELECT COUNT(*) FROM %s" % table)))
+    for table in tables_sorted_for_deletion:
+        print('Table %s being cleared...' % table)
         connection.execute(table.delete())
-        print('Count after -->', str(connection.scalar("SELECT COUNT(*) FROM %s" % table)), '\n')
+    for table in tables_sorted_for_deletion:
+        print('Table %s count after --> %s' % (table, connection.scalar("SELECT COUNT(*) FROM %s" % table)))
     session.flush()
     mark_changed(session())
     transaction_management.commit()
