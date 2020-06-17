@@ -17,6 +17,8 @@ addons:
 env:
   global:
   - JAVA_HOME=/usr/lib/jvm/java-8-oracle
+  - ls -dal /usr/lib/postgresql/*/bin/postgres
+  - find /usr/lib/postgresql -name 'postgres' -print
   - PATH="/usr/share/elasticsearch/bin:/usr/lib/postgresql/11/bin:$PATH"
   - secure: |-
       TcTEKSEjlu05k3azfO3LMc9NMiZMBqj1pOqg4FOxcprU3Bw7+k5aC/6wMUHI
