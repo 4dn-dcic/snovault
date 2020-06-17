@@ -17,8 +17,6 @@ addons:
 env:
   global:
   - JAVA_HOME=/usr/lib/jvm/java-8-oracle
-  - ls -dal /usr/lib/postgresql/*/bin/postgres
-  - find /usr/lib/postgresql -name 'postgres' -print
   - PATH="/usr/share/elasticsearch/bin:/usr/lib/postgresql/11/bin:$PATH"
   - secure: |-
       TcTEKSEjlu05k3azfO3LMc9NMiZMBqj1pOqg4FOxcprU3Bw7+k5aC/6wMUHI
@@ -56,6 +54,8 @@ notifications:
   slack:
     secure: DQyUTk6evwPpO0P5+OPhBSgl+fGEerOjBlBwQliXAkDaMKH3Cpi4cTQ3ETR/+3g6bGqPGK+QJ1R+6Ht+hJD7dNomyVIoQmvF0P5afJtpk/A3cDILe90t76ET9jc/iBjWeUFQdokFUJ7Gt1GGYtI6e5XcVu/Qc/xqCvFMtsBN6mnBFuvcQki+WkoIIPPawyhfryCNOLo5vvbi4SZ5dZI+M0MGq9HQjOyF1sdIgKuXhxjupmL+kVPVXAq9kiOANYFkwbNsP9j0BTYW5wFHpAztBqz3NT6EchgCdue8tgV4hC4rRFvM/bsA4qz/TJ5wRRLBRXtnNtPcyhAqTiU+wC6qWt++fjSEMGe4KYqtRRV1YuxQiTVHN84t77DILLNfMh/6uSs0KijwOT+Oazwd/UsN1zYOH93AM4FZ0h92yyb6j6JQ+DUk4WFel1Zr4kZzhtHSPGw+K4fxY0zIt1qpaDPXjtZHQ0+LwIIMtwMp5bBcwDn9d1ADnUhUAuuIN2hHaXrVy4vP2hIcd0LzezBqvc7JXimyd5yRgUeOCTrKGkAeSo8VA7XIj0ZmlpQRYKNTJP+gz4Y6C/RCxISnFDF/vcX+IsDdvreZXJMplE1Aqxf0uR6Zj8Sr8q+QWGKydv6ettlLZuqDuv0l/l/9qpzYfRqLSZcetGRVFHHcR9wuQiDyums=
 before_install:
+- ls -dal /usr/lib/postgresql/*/bin/postgres
+- find /usr/lib/postgresql -name 'postgres' -print
 - postgres --version
 - initdb --version
 install:
