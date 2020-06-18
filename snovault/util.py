@@ -65,7 +65,9 @@ def dictionary_lookup(dictionary, key):
     dictionary_lookup(d, k) is the same as d[k] but with more informative error reporting.
     """
     if not isinstance(dictionary, dict) or (key not in dictionary):
-        raise DictionaryKeyError(dictionary=dictionary, key=key)
+        log.error('Got dictionary KeyError with %s and %s' % (dictionary, key))
+        return None
+        #raise DictionaryKeyError(dictionary=dictionary, key=key)  this causes MPIndexer exception - will 3/10/2020
     else:
         return dictionary[key]
 

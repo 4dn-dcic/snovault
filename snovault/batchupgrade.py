@@ -20,7 +20,9 @@ from pyramid import paster
 from pyramid.traversal import find_resource
 from pyramid.view import view_config
 from structlog import getLogger
-from . import CONNECTION, STORAGE, UPGRADER
+
+from .interfaces import CONNECTION, STORAGE, UPGRADER
+
 from .schema_utils import validate
 from .util import debug_log
 

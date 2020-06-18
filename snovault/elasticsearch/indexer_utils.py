@@ -1,9 +1,5 @@
-import time
-
-from elasticsearch.exceptions import ConnectionTimeout
 from elasticsearch.helpers import scan
-from .. import COLLECTIONS, STORAGE
-from ..util import find_collection_subtypes
+from ..interfaces import COLLECTIONS
 from .interfaces import ELASTIC_SEARCH
 
 
@@ -15,6 +11,13 @@ def get_namespaced_index(config, index):
         settings = config.settings
     namespace = settings.get('indexer.namespace') or ''
     return namespace + index
+
+
+def namespace_index_from_health(health, index):
+    """ Namespaces the given index based on health page data """
+    if 'error' in health:
+        raise RuntimeError('Mirror health unresolved: %s' % health)
+    return health.get('namespace', '') + index
 
 
 def find_uuids_for_indexing(registry, updated, find_index=None):
@@ -77,6 +80,8 @@ def get_uuids_for_types(registry, types=[]):
     Yields:
         str: uuid of item in collections
     """
+    if not isinstance(types, list) or not all(isinstance(t, str) for t in types):  # type check for safety
+        raise TypeError('Expected type=list (of strings) for argument "types"')
     collections = registry[COLLECTIONS]
     # might as well sort collections alphatbetically, as this was done earlier
     for coll_name in sorted(collections.by_item_type):

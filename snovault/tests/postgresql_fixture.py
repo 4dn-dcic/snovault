@@ -2,6 +2,10 @@ import os.path
 import sys
 import subprocess
 
+import atexit
+import shutil
+import tempfile
+
 from urllib.parse import urlencode
 
 
@@ -95,9 +99,6 @@ def server_process(datadir, prefix='', echo=False):
 
 
 def main():
-    import atexit
-    import shutil
-    import tempfile
     datadir = tempfile.mkdtemp()
 
     def clean_datadir():
