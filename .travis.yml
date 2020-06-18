@@ -15,7 +15,6 @@ addons:
     - graphviz
 env:
   global:
-  - PGPORT=5433
   - JAVA_HOME=/usr/lib/jvm/java-8-oracle
   - PATH="/usr/share/elasticsearch/bin:/usr/lib/postgresql/11/bin:$PATH"
 matrix:
@@ -24,7 +23,6 @@ matrix:
     env: UNIT=Test
 before_install:
 - ls -dal /usr/lib/postgresql/*/bin/postgres
-- find /usr/lib/postgresql -name 'postgres' -print
 - ps auxww | grep postgres
 - sudo apt-get install -yq --no-install-suggests --no-install-recommends postgresql-common
 - sudo service postgresql stop
@@ -35,7 +33,6 @@ before_install:
 - postgres --version
 - initdb --version
 - ls -dal /usr/lib/postgresql/*/bin/postgres
-- find /usr/lib/postgresql -name 'postgres' -print
 - ps auxww | grep postgres
 install:
 - pip install --upgrade pip==19.0.3
