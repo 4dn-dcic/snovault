@@ -6,7 +6,6 @@ cache:
   directories:
   - eggs
 addons:
-  postgresql: '11'
   apt:
     packages:
     - oracle-java9-set-default
@@ -14,8 +13,6 @@ addons:
     - build-essential
     - make
     - graphviz
-    - postgresql-11
-    - postgresql-client-11
 env:
   global:
   - PGPORT=5433
@@ -62,7 +59,10 @@ before_install:
 - ps auxww | grep postgres
 - sudo service postgresql status
 - postgres --version
+- sudo apt-get install -yq --no-install-suggests --no-install-recommends postgresql-common
 - sudo service postgresql stop
+- sudo apt install -yq --no-install-suggests --no-install-recommends postgresql-11 postgresql-client-11
+- sudo service postgresql start 11
 - initdb --version
 install:
 # need to manually change the version of six used by Travis for some reason
