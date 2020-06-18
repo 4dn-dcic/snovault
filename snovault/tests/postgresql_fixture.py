@@ -2,10 +2,11 @@ import os.path
 import sys
 import subprocess
 
-from urllib.parse import urlencode
 import atexit
 import shutil
 import tempfile
+
+from urllib.parse import urlencode
 
 
 def initdb(datadir, prefix='', echo=False):
@@ -24,7 +25,7 @@ def initdb(datadir, prefix='', echo=False):
         print(output.decode('utf-8'))
 
 
-DEFAULT_SNOVAULT_DB_TEST_PORT = 6431
+DEFAULT_SNOVAULT_DB_TEST_PORT = 5440
 
 _custom_port = os.environ.get("SNOVAULT_DB_TEST_PORT", None)
 try:
