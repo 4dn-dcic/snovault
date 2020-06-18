@@ -33,7 +33,6 @@ before_install:
 - postgres --version
 - initdb --version
 - ls -dal /usr/lib/postgresql/*/bin/postgres
-- ps auxww | grep postgres
 install:
 - pip install --upgrade pip==19.0.3
 - pip install poetry
