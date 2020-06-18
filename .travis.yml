@@ -69,15 +69,12 @@ before_install:
 - find /usr/lib/postgresql -name 'postgres' -print
 - ps auxww | grep postgres
 install:
-# need to manually change the version of six used by Travis for some reason
-# - pip uninstall -y six
-# - pip install six==1.11.0
 - pip install --upgrade pip==19.0.3
 - pip install poetry
 - pip install coveralls
 - pip install codacy-coverage
 - poetry install
-- pip install "moto[server]"
+- make moto-setup
 script:
 - |
   if test -n "$UNIT"; then make travis-test;
