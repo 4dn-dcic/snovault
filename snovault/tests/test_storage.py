@@ -1,9 +1,11 @@
 import pytest
+import re
 import transaction as transaction_management
 import uuid
 
 from dcicutils.qa_utils import notice_pytest_fixtures
 from pyramid.threadlocal import manager
+from sqlalchemy import func
 from sqlalchemy.orm.exc import FlushError
 from ..interfaces import DBSESSION, STORAGE
 from ..storage import (
@@ -26,6 +28,16 @@ notice_pytest_fixtures(session, registry, storage)
 
 
 pytestmark = pytest.mark.storage
+
+
+POSTGRES_MAJOR_VERSION_EXPECTED = 11
+
+def test_postgres_version(session):
+
+    (version_info,) = session.query(func.version()).one()
+    print("version_info=", version_info)
+    assert isinstance(version_info, str)
+    assert re.match("PostgreSQL %s([.][0-9]+)? " % POSTGRES_MAJOR_VERSION_EXPECTED, version_info)
 
 
 def test_storage_creation(session):
