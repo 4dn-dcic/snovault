@@ -6,6 +6,7 @@ cache:
   directories:
   - eggs
 addons:
+  postgresql: '11'
   apt:
     packages:
     - oracle-java9-set-default
@@ -13,7 +14,8 @@ addons:
     - build-essential
     - make
     - graphviz
-  postgresql: '11.1'
+    - postgresql-11
+    - postgresql-client-11
 env:
   global:
   - JAVA_HOME=/usr/lib/jvm/java-8-oracle
