@@ -7,6 +7,10 @@ from dcicutils.qa_utils import override_environ
 
 def test_snovault_db_test_port():
 
+    # Will made this point during code review (18-Jun-2020):
+    #  This makes virtualenv a requirement for successfully running the tests.
+    #  Maybe that's something we want to do, but wanted to point it out
+    #  just in case.
     command1 = "source %s/bin/activate" % os.environ['VIRTUAL_ENV']
     command2 = "python -c 'from snovault.tests.postgresql_fixture import SNOVAULT_DB_TEST_PORT; print(SNOVAULT_DB_TEST_PORT)'"
 
