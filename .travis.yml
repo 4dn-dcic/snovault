@@ -18,6 +18,7 @@ addons:
     - postgresql-client-11
 env:
   global:
+  - PGPORT=5433
   - JAVA_HOME=/usr/lib/jvm/java-8-oracle
   - PATH="/usr/share/elasticsearch/bin:/usr/lib/postgresql/11/bin:$PATH"
   - secure: |-
