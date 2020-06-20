@@ -136,13 +136,21 @@ def setup_and_teardown(app):
     # To get the order in which the tables would be dropped, we need to reverse that list.
     # Ref: https://docs.sqlalchemy.org/en/13/core/metadata.html
     tables_sorted_for_deletion = list(reversed(meta.sorted_tables))
+    found = False
     for table in tables_sorted_for_deletion:
-        print('Table %s count before --> %s' % (table, connection.scalar("SELECT COUNT(*) FROM %s" % table)))
-    for table in tables_sorted_for_deletion:
-        print('Table %s being cleared...' % table)
-        connection.execute(table.delete())
-    for table in tables_sorted_for_deletion:
-        print('Table %s count after --> %s' % (table, connection.scalar("SELECT COUNT(*) FROM %s" % table)))
+        n = connection.scalar("SELECT COUNT(*) FROM %s" % table)
+        if not isinstance(n, int):
+            # This test is just for debugging and can go away before merging this PR. -kmp 20-Jun-2020
+            raise ValueError("Expected %s to be an integer." % repr(n))
+        found = found or (n != 0)
+        print('Table %s count before --> %s' % (table, n))
+    if found:
+        for table in tables_sorted_for_deletion:
+            print('Table %s being cleared...' % table)
+            connection.execute(table.delete())
+            session.flush()
+        for table in tables_sorted_for_deletion:
+            print('Table %s count after --> %s' % (table, connection.scalar("SELECT COUNT(*) FROM %s" % table)))
     session.flush()
     mark_changed(session())
     transaction_management.commit()
