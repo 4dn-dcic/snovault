@@ -135,7 +135,7 @@ def setup_and_teardown(app):
     # Note that .sorted_tables returns a list of Table objects sorted in order of foreign key dependency.
     # To get the order in which the tables would be dropped, we need to reverse that list.
     # Ref: https://docs.sqlalchemy.org/en/13/core/metadata.html
-    tables_sorted_for_deletion = meta.sorted_tables  # list(reversed(meta.sorted_tables))
+    tables_sorted_for_deletion = list(reversed(meta.sorted_tables))
     for table in tables_sorted_for_deletion:
         print('Table %s count before --> %s' % (table, connection.scalar("SELECT COUNT(*) FROM %s" % table)))
     for table in tables_sorted_for_deletion:
