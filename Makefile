@@ -29,6 +29,9 @@ travis-test:
 update:
 	poetry update
 
+publish:
+	scripts/publish
+
 help:
 	@make info
 
