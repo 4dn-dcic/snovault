@@ -1,4 +1,4 @@
-from .elasticsearch.interfaces import INDEXER_QUEUE, INDEXER_QUEUE_MIRROR
+from .elasticsearch.interfaces import INDEXER_QUEUE, INDEXER_QUEUE_MIRROR, ELASTIC_SEARCH
 import structlog
 import datetime
 
@@ -33,7 +33,7 @@ def add_to_indexing_queue(success, request, item, edit_or_add):
                     indexer_queue_mirror.send_messages([item], target_queue='primary')
             else:
                 # if the indexer queue is not configured but ES is, log an error
-                from .elasticsearch.interfaces import ELASTIC_SEARCH
+#               from .elasticsearch.interfaces import ELASTIC_SEARCH
                 es = request.registry.get(ELASTIC_SEARCH)
                 if es:
                     raise Exception("Indexer queue not configured! Attempted to queue %s for method %s." % (str(item), edit_or_add))

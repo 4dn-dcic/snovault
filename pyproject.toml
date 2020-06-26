@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "dcicsnovault"
-version = "3.0.0b0"
+version = "4.0.0"
 description = "Storage support for 4DN Data Portals."
 authors = ["4DN-DCIC Team <support@4dnucleome.org>"]
 license = "MIT"
@@ -30,15 +30,12 @@ classifiers = [
 
     # Specify the Python versions you support here. In particular, ensure
     # that you indicate whether you support Python 2, Python 3 or both.
-    'Programming Language :: Python :: 2.7',
     'Programming Language :: Python :: 3',
-    'Programming Language :: Python :: 3.4',
-    'Programming Language :: Python :: 3.5',
     'Programming Language :: Python :: 3.6'
 ]
 
 [tool.poetry.dependencies]
-python = ">=3.4,<3.7"
+python = ">=3.6,<3.7"
 aws_requests_auth = "^0.4.1"
 # Not sure this is strictly needed but it seems useful.
 # It might be a dev dependency, but with a server there's not much distinction. -kmp 20-Feb-2020
@@ -47,8 +44,8 @@ awscli = "^1.15.42"
 #       so may no longer be needed. Something to investigate later. -kmp 20-Feb-2020
 "backports.statistics" = "0.1.0"
 boto3 = "^1.7.42"
-dcicutils = "0.17.0b0"
 elasticsearch_dsl = "6.4.0"
+dcicutils = ">=0.25.0,<1"
 # TODO: Probably want ">=0.15.2,<1" here since "^" is different for "0.xx" than for higher versions. Changing it
 #       would require re-testing I don't have time for, so it'll have to be a future future change. -kmp 20-Feb-2020
 future = "^0.15.2"
@@ -75,8 +72,14 @@ pyramid-retry = "^1.0"
 pyramid-tm = "^2.2.1"
 pyramid-translogger = "^0.1"
 python-dateutil = "^2.5.3"
-python_magic = ">=0.4.11,<1"
-pytz = ">=2016.4"
+# For now we're pinning python_magic at 0.4.15. We've observed problems with 0.4.17 and 0.4.18, and there's
+# no version above 0.4.18 that is compatible with Python 3.4. -kmp 9-May-2020
+# TODO Reconsider this version pinning when we release the 3.4 and/or 3.5 support.
+# Refs:
+#  - https://travis-ci.org/github/4dn-dcic/snovault/builds/684503833
+#  - https://github.com/4dn-dcic/snovault/pull/147
+python_magic = "0.4.15"  # ">=0.4.11,<1"
+pytz = ">=2020.1"
 # There was no version 4 of PyYAML. We upgraded today to PyYAML 5 per compatibility info in:
 # https://github.com/yaml/pyyaml/issues/265
 # We must have 5.1 to get the new yaml.safe_load method.
@@ -110,21 +113,22 @@ xlrd = "^1.0.0"
 "zope.sqlalchemy" = "^1.2"
 
 [tool.poetry.dev-dependencies]
-coverage = "^4.1"
+coverage = ">=4.1"
 moto = "1.3.7"
 flake8 = "^3.7.8"
 flaky = "3.6.1"
-# TODO: Investigate whether a major version upgrade is allowable for 'pytest', which is several versions behind.
-pytest = "^2.7.1"
-pytest-cov = "^2.2.1"
-pytest-exact-fixtures = ">=0.1,<1"
-pytest-instafail = "^0.3.0"
+# Experimental upgrade to PyPi 4.5. It may be possible to upgrade further, but I think this is an improvement.
+# -kmp 11-May-2020
+pytest = "4.5.0"
+pytest-cov = ">=2.2.1"
+pytest-exact-fixtures = ">=0.1"
+pytest-instafail = ">=0.3.0"
 # TODO: Investigate whether a major version upgrade is allowable for 'pytest-mock'.
-pytest-mock = ">=0.11.0,<1"
+pytest-mock = ">=0.11.0"
 # TODO: Investigate whether a major version upgrade is allowable for 'pytest-runner'.
-pytest-runner = "^4.0"
-pytest-timeout = "^1.0.0"
-"repoze.debug" = "^1.0.2"
+pytest-runner = ">=4.0"
+pytest-timeout = ">=1.0.0"
+"repoze.debug" = ">=1.0.2"
 responses = "^0"
 
 [tool.poetry.scripts]

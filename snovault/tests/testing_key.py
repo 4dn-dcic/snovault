@@ -1,7 +1,9 @@
-from .. import Item, collection
+"""
+Test class for keys
+"""
 
-
-# Test class for keys
+from ..resources import Item
+from ..config import collection
 
 
 def includeme(config):

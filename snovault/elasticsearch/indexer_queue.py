@@ -1,17 +1,19 @@
-### Class to manage the items for indexing
-# First round will use a standard SQS queue from AWS without Elasticache.
+"""
+Class to manage the items for indexing
+First round will use a standard SQS queue from AWS without Elasticache.
+"""
 
 import datetime
 import json
-import socket
-import sys
 import os
+import socket
 import time
 from collections import OrderedDict
 
 import boto3
 import structlog
 from dcicutils.env_utils import blue_green_mirror_env
+from dcicutils.misc_utils import ignored
 from pyramid.view import view_config
 
 from .indexer_utils import get_uuids_for_types
@@ -51,13 +53,16 @@ def queue_indexing(context, request):
     or a list of collections under "collections" key of its body. Can also
     optionally take "strict" boolean and "target_queue" string.
     """
+    ignored(context)
     req_uuids = request.json.get('uuids', None)
     req_collections = request.json.get('collections', None)
-    queue_mode = None  # either queueing 'uuids' or 'collection'
+    # TODO: This variable is unused. Is it work-in-progress or something that should go away? -kmp 7-May-2020
+    # queue_mode = None  # either queueing 'uuids' or 'collection'
     response = {
         'notification': 'Failure',
         'number_queued': 0,
-        'detail': 'Nothing was queued. Make sure to past in a list of uuids in in "uuids" key OR list of collections in the "collections" key of request the POST request.'
+        'detail': 'Nothing was queued. Make sure to past in a list of uuids in in "uuids" key'
+                  ' OR list of collections in the "collections" key of request the POST request.'
     }
     telemetry_id = request.params.get('telemetry_id', None)
 
@@ -67,10 +72,12 @@ def queue_indexing(context, request):
         response['detail'] = 'Nothing was queued. You cannot provide both uuids and a collection for queueing at once.'
         return response
     if req_uuids and not isinstance(req_uuids, list):
-        response['detail'] = 'Nothing was queued. When queueing uuids, make to sure to put a list of string uuids in the POST request.'
+        response['detail'] = ('Nothing was queued. When queueing uuids,'
+                              ' make to sure to put a list of string uuids in the POST request.')
         return response
     if req_collections and not isinstance(req_collections, list):
-        response['detail'] = 'Nothing was queued. When queueing a collection, make sure to provide a list of string collection names in the POST request.'
+        response['detail'] = ('Nothing was queued. When queueing a collection,'
+                              ' make sure to provide a list of string collection names in the POST request.')
         return response
     queue_indexer = request.registry[INDEXER_QUEUE]
     # strict mode means uuids should be indexed without finding associates
@@ -107,6 +114,7 @@ def indexing_status(context, request):
     """
     Endpoint to check what is currently on the queue. Uses GET requests
     """
+    ignored(context)
     queue_indexer = request.registry[INDEXER_QUEUE]
     response = {}
     try:
@@ -128,9 +136,42 @@ def dlq_to_primary(context, request):
     """
     Endpoint to move all uuids on the DLQ to the primary queue
     """
+    ignored(context)
     queue_indexer = request.registry[INDEXER_QUEUE]
-    dlq_messages = queue_indexer.receive_messages(target_queue='dlq')
+    # What comes out of .receive_messages() looks like:
+    # [{
+    #     "Body": "{\"uuid\": \"some-uuid\", \"sid\": null, \"strict\": false,"
+    #             " \"timestamp\": \"2020-05-08T15:06:13.229594\"}",
+    #     "Attributes": {
+    #         "ApproximateFirstReceiveTimestamp": "1588950373247",
+    #         "SenderId": "AIDAIT2UOQQ...",
+    #         "ApproximateReceiveCount": "1",
+    #         "SentTimestamp": "1588950373237"
+    #     },
+    #     "ReceiptHandle": "tvsvyhlhyaukymgulgjmchpnedkllhmckmheclfnrafnboqiflfjdjrwnwzwgxgomhxznpvgysgnr..."
+    #     "MD5OfBody": "3e0e82e521a522...",
+    #     "MessageId": "ca0886a7-9f95-..."
+    # }, ...]
+    # NOTES by kmp 8-May-2020:
+    #   - If .send_messages() is going to take care of packing the body JSON into a string, then really
+    #     .receive_messages() should do the inverse so that functions like this don't have to know anything
+    #     about that storage form.
+    #   - .send_messages() adds an envelope/wrapper that contains a 'MessageBody' key (with the JSON payload
+    #     in string form as its value), and other keywords that are header metadata.
+    #        {'Id': ..., 'MessageBody': json.dumps(msg)}
+    #     Later, though, this wrapped structure shows up looking like:
+    #        {'MessageId': ..., 'Body': ...}
+    #     as if the key 'Id' had become 'MessageId' (a longer name) and 'MessageBody' had become 'Body'
+    #     (a shorter name). What's up with that weird asymmetry??
+    #   - I'm not sure why the Body/MessageBody is being stored as string at all and not just left as JSON,
+    #     but maybe that's an SQS thing -- it seems to only have datatypes String, Number, and Binary.
+    #   - TODO: Make .send_messages and .receive_messages more representationally symmetric so that if we switch
+    #           to another queueing system that can store JSON directly, we don't have code doing weird coercions.
+    dlq_messages_with_headers = queue_indexer.receive_messages(target_queue='dlq')
+    dlq_messages = [msg['Body'] for msg in dlq_messages_with_headers]
     response = {}
+    # .send_messages expects a list of items having the form:
+    #   {"uuid": ..., "sid": ..., "strict": ..., "timestamp": ..., "detail": ...}
     failed = queue_indexer.send_messages(dlq_messages) if dlq_messages else []
     response['number_failed'] = len(failed)
     response['number_migrated'] = len(dlq_messages) - len(failed)
@@ -149,6 +190,23 @@ class QueueManager(object):
     3. Dead letter queue (dlq) for handling items that have issues processing
        from either the primary or secondary queues.
     """
+
+    # The belief was that this may be making things slow in production, and the chance of collisions there is low,
+    # so for now we were going to enable this only during testing when the odds of collision are dramatically higher.
+    # HOWEVER, now I have a new theory that this wasn't the problem at all, so the first pass at this will be to try
+    # leaving this set True and see if just moving the sleep to a better place is enough to avoid setting this False.
+    # If that doesn't work, we've also tested that a setting oF False here would work and that will be our backup plan.
+    # -kmp 2-Jun-2020
+    PURGE_QUEUE_SLEEP_FOR_SAFETY = True
+
+    PURGE_QUEUE_TIMESTAMP0 = datetime.datetime(datetime.MINYEAR, 1, 1)  # maybe useful for testing
+    # Amazon says we shouldn't do anything for this amount of time after a purge request.
+    PURGE_QUEUE_LOCKOUT_TIME_ACCORDING_TO_AMAZON = 60
+    # Amount of safety margin we reserve to make sure our computations match Amazon's.
+    PURGE_QUEUE_SAFETY_MARGIN = 1
+    # This is the effective lockout time
+    PURGE_QUEUE_EFFECTIVE_LOCKOUT_TIME = PURGE_QUEUE_LOCKOUT_TIME_ACCORDING_TO_AMAZON + PURGE_QUEUE_SAFETY_MARGIN
+
     def __init__(self, registry, mirror_env=None, override_url=None):
         """
         __init__ will build all three queues needed with the desired settings.
@@ -159,12 +217,13 @@ class QueueManager(object):
         self.receive_batch_size = 10
         self.delete_batch_size = 10
         self.replace_batch_size = 10
+        self.purge_queue_timestamp = self.PURGE_QUEUE_TIMESTAMP0
         self.env_name = mirror_env if mirror_env else registry.settings.get('env.name')
         self.override_url = override_url
         # local development
         if not self.env_name:
             # make sure it's something aws likes
-            backup = socket.gethostname()[:80].replace('.','-')
+            backup = socket.gethostname()[:80].replace('.', '-')
             # last case scenario
             self.env_name = backup if backup else 'fourfront-backup'
 
@@ -231,6 +290,7 @@ class QueueManager(object):
         Returns a list of queued uuids and a list of any uuids that failed to
         be queued.
         """
+        ignored(registry)
         curr_time = datetime.datetime.utcnow().isoformat()
         items = []
         for uuid in uuids:
@@ -260,7 +320,7 @@ class QueueManager(object):
         for uuid in uuids:
             temp = {'uuid': uuid, 'sid': None, 'strict': strict, 'timestamp': curr_time}
             if telemetry_id:
-                temp['telemetry_id']= telemetry_id
+                temp['telemetry_id'] = telemetry_id
             items.append(temp)
         failed = self.send_messages(items, target_queue=target_queue)
         return uuids, failed
@@ -273,7 +333,7 @@ class QueueManager(object):
             response = self.client.get_queue_url(
                 QueueName=queue_name
             )
-        except:
+        except Exception:
             response = {}
         return response.get('QueueUrl')
 
@@ -374,16 +434,46 @@ class QueueManager(object):
             queue_urls[queue_name] = queue_url
         return queue_urls
 
+    def _wait_until_purge_queue_allowed(self):
+        now = datetime.datetime.now()
+        # Note that this quantity is always positive because now is always bigger than the timestamp.
+        seconds_since_last_purge = (now - self.purge_queue_timestamp).total_seconds()
+        # Note again that because seconds_since_last_attempt is positive, the wait seconds will
+        # never exceed self.PURGE_QUEUE_EFFECTIVE_LOCKOUT_TIME, so
+        #   0 <= wait_seconds <= self.self.PURGE_QUEUE_EFFECTIVE_LOCKOUT_TIME
+        wait_seconds = max(0.0, self.PURGE_QUEUE_EFFECTIVE_LOCKOUT_TIME - seconds_since_last_purge)
+        if wait_seconds > 0.0:
+            shared_message = ("Last purge_queue attempt was at %s (%s seconds ago)."
+                              % (self.purge_queue_timestamp, seconds_since_last_purge))
+            if self.PURGE_QUEUE_SLEEP_FOR_SAFETY:
+                action_message = "Waiting %s seconds before attempting another." % wait_seconds
+                log.warning("%s %s" % (shared_message, action_message))
+                time.sleep(wait_seconds)
+            else:
+                action_message = "Continuing anyway because QueueManager.PURGE_QUEUE_SLEEP_FOR_SAFETY is False."
+                log.warning("%s %s" % (shared_message, action_message))
+        self.purge_queue_timestamp = datetime.datetime.now()
+
     def purge_queue(self):
         """
-        Clear out the queue and dlq completely. You can no longer retrieve
-        these messages. Takes up to 60 seconds.
+        Clear out the queue and dlq completely. You can no longer retrieve these messages.
+        AWS says this operation takes up to 60 seconds, that operations queued before will start to disappear,
+        and that operations queued within 60 seconds after may also disappear.
         """
+        self._wait_until_purge_queue_allowed()
         for queue_url in [self.queue_url, self.second_queue_url, self.dlq_url]:
             try:
                 self.client.purge_queue(
                     QueueUrl=queue_url
                 )
+                # NOTE: It's possible that we should be again calling ._wait_Until_purge_queue_allowed() here, too.
+                #       The reason for the two calls would be this:
+                #       - A wait before would be because we could get an error if we needed to wait and didn't.
+                #         If we waited after, the only case where the wait before would matter is if there was an
+                #         aborted wait that didn't wait the relevant time after. That's a possible scenario in testing.
+                #       - A wait after would be to protect other operations that might be unreliable if done too soon.
+                #       For now I'm going to try the simpler strategy, but I wanted to identify this as a potential
+                #       source of lingering trouble. -kmp 6-May-2020
             except self.client.exceptions.PurgeQueueInProgress:
                 log.warning('\n___QUEUE IS ALREADY BEING PURGED: %s___\n' % queue_url,
                             queue_url=queue_url)
@@ -410,7 +500,8 @@ class QueueManager(object):
         setattr(self, queue_url, None)
         return response
 
-    def chunk_messages(self, messages, chunksize):
+    @staticmethod
+    def chunk_messages(messages, chunksize):
         """
         Chunk a given number of messages into chunks of given chunksize
         """
@@ -485,8 +576,11 @@ class QueueManager(object):
         Recieves up to self.receive_batch_size number of messages from the queue.
         Fewer (even 0) messages may be returned on any given run.
 
-        Returns a list of messages with message metdata
+        Returns a list of messages with message metadata
         """
+        # TODO: Consider whether "long polling" would be useful here to avoid some useless re-polling when queue empty.
+        #  Ref: https://stackoverflow.com/questions/50558084/how-to-long-poll-amazon-sqs-service-using-boto
+        #  Ref: https://aws.amazon.com/sqs/faqs/
         queue_url = self.choose_queue_url(target_queue)
         response = self.client.receive_message(
             QueueUrl=queue_url,

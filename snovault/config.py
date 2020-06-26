@@ -8,6 +8,7 @@ from .interfaces import (
     ROOT,
     TYPES,
 )
+from .resources import Root
 
 
 def includeme(config):
@@ -21,7 +22,6 @@ def includeme(config):
 
 
 def set_default_root(registry):
-    from .resources import Root
     if ROOT not in registry:
         registry[ROOT] = Root(registry)
 
@@ -50,7 +50,7 @@ def root(factory):
 def collection(name, **kw):
     """
     Attach a collection at the location ``name``.
-    Use as a decorator on Collection subclasses.
+    This is intended for use as an @collection(...) decorator on Collection subclasses.
     """
 
     def set_collection(config, Collection, name, Item, **kw):
@@ -61,7 +61,8 @@ def collection(name, **kw):
         registry[COLLECTIONS].register(name, collection)
 
     def decorate(Item):
-
+        # https://stackoverflow.com/questions/58624641/how-to-prevent-pytestcollectionwarning-when-testing-class-testament-via-pytest  # noqa
+        Item.__test__ = False  # Notwithstanding the name of this decorated collection class, it is not a test class
         def callback(scanner, factory_name, factory):
             scanner.config.action(('collection', name), set_collection,
                                   args=(scanner.config, Item.Collection, name, Item),

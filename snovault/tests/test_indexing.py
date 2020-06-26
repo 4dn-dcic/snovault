@@ -5,6 +5,7 @@ elasticsearch running as subprocesses.
 Does not include data dependent tests
 """
 
+import datetime as datetime_module
 import json
 import os
 import pytest
@@ -14,15 +15,19 @@ import uuid
 import webtest
 import yaml
 
-from datetime import datetime
+from datetime import datetime, timedelta
+from dcicutils.lang_utils import n_of
+from dcicutils.misc_utils import ignored
+from dcicutils.qa_utils import ControlledTime, notice_pytest_fixtures
 from elasticsearch.exceptions import NotFoundError
-from pyramid.paster import get_appsettings
 from pyramid.traversal import traverse
 from sqlalchemy import MetaData
+from unittest import mock
 from zope.sqlalchemy import mark_changed
-from .. import COLLECTIONS, DBSESSION, STORAGE, TYPES, main, util
-from ..commands.es_index_data import run as run_index_data
-from ..elasticsearch import create_mapping, indexer_utils
+from ..interfaces import TYPES, DBSESSION, STORAGE
+from .. import util  # The filename util.py, not something in __init__.py
+from .. import main  # Function main actually defined in __init__.py (should maybe be defined elsewhere)
+from ..elasticsearch import create_mapping, indexer_utils, indexer_queue
 from ..elasticsearch.create_mapping import (
     build_index_record,
     check_and_reindex_existing,
@@ -35,11 +40,15 @@ from ..elasticsearch.create_mapping import (
     type_mapping,
 )
 from ..elasticsearch.indexer import check_sid, SidException
+from ..elasticsearch.indexer_queue import QueueManager
 from ..elasticsearch.interfaces import ELASTIC_SEARCH, INDEXER_QUEUE, INDEXER_QUEUE_MIRROR
 from .pyramidfixtures import dummy_request
 from .testappfixtures import _app_settings
 from .testing_views import TestingLinkSourceSno
 from .toolfixtures import registry, root, elasticsearch
+
+
+notice_pytest_fixtures(dummy_request, TestingLinkSourceSno, registry, root, elasticsearch)
 
 
 pytestmark = [pytest.mark.indexing]
@@ -52,6 +61,18 @@ TEST_TYPE = 'testing_post_put_patch_sno'  # use one collection for testing
 create_mapping.NUM_SHARDS = 1
 
 
+def generate_indexer_namespace_for_testing():
+    travis_job_id = os.environ.get('TRAVIS_JOB_ID')
+    if travis_job_id:
+        return travis_job_id
+    else:
+        # We've experimentally determined that it works pretty well to just use the timestamp.
+        return "sno-test-%s" % int(datetime_module.datetime.now().timestamp() * 1000000)
+
+
+INDEXER_NAMESPACE_FOR_TESTING = generate_indexer_namespace_for_testing()
+
+
 @pytest.fixture(scope='session')
 def app_settings(wsgi_server_host_port, elasticsearch_server, postgresql_server, aws_auth):
     settings = _app_settings.copy()
@@ -61,7 +82,7 @@ def app_settings(wsgi_server_host_port, elasticsearch_server, postgresql_server,
     settings['collection_datastore'] = 'elasticsearch'
     settings['item_datastore'] = 'elasticsearch'
     settings['indexer'] = True
-    settings['indexer.namespace'] = os.environ.get('TRAVIS_JOB_ID', '')
+    settings['indexer.namespace'] = INDEXER_NAMESPACE_FOR_TESTING
 
     # use aws auth to access elasticsearch
     if aws_auth:
@@ -108,7 +129,12 @@ def setup_and_teardown(app):
     # AFTER THE TEST
     session = app.registry[DBSESSION]
     connection = session.connection().connect()
-    meta = MetaData(bind=session.connection(), reflect=True)
+    # The reflect=True argument to MetaData was deprecated. Instead, one is supposed to call the .reflect()
+    # method after creation. (This comment is transitional and can go away if things seem to work normally.)
+    # -kmp 11-May-2020
+    # Ref: https://stackoverflow.com/questions/44193823/get-existing-table-using-sqlalchemy-metadata/44205552
+    meta = MetaData(bind=session.connection())
+    meta.reflect()
     for table in meta.sorted_tables:
         print('Clear table %s' % table)
         print('Count before -->', str(connection.scalar("SELECT COUNT(*) FROM %s" % table)))
@@ -155,7 +181,7 @@ def test_indexer_namespacing(app, testapp, indexer_testapp):
     Tests that namespacing indexes works as expected. This test has no real
     effect on local but does on Travis
     """
-    jid = os.environ.get('TRAVIS_JOB_ID')
+    jid = INDEXER_NAMESPACE_FOR_TESTING
     idx = indexer_utils.get_namespaced_index(app, TEST_TYPE)
     testapp.post_json(TEST_COLL, {'required': ''})
     indexer_testapp.post_json('/index', {'record': True})
@@ -165,7 +191,7 @@ def test_indexer_namespacing(app, testapp, indexer_testapp):
         assert jid in idx
     app.registry.settings['indexer.namespace'] = '' # unset namespace, check raw is given
     raw_idx = indexer_utils.get_namespaced_index(app, TEST_TYPE)
-    star_idx = indexer_utils.get_namespaced_index(app.registry, '*') # registry should work as well
+    star_idx = indexer_utils.get_namespaced_index(app.registry, '*')  # registry should work as well
     assert raw_idx == TEST_TYPE
     assert star_idx == '*'
     app.registry.settings['indexer.namespace'] = jid # reset jid
@@ -197,7 +223,7 @@ def test_indexer_queue_adds_telemetry_id(app):
 #@pytest.mark.flaky
 def test_indexer_queue(app):
     indexer_queue_mirror = app.registry[INDEXER_QUEUE_MIRROR]
-    # this is only set up for webprod/webprod2
+    # An indexing queue mirror would only be set up for production servers.
     assert indexer_queue_mirror is None
 
     indexer_queue = app.registry[INDEXER_QUEUE]
@@ -210,7 +236,7 @@ def test_indexer_queue(app):
     to_index, failed = indexer_queue.add_uuids(app.registry, [test_message], strict=True)
     assert to_index == [test_message]
     assert not failed
-    time.sleep(5) # make sure all msgs are received
+    time.sleep(5)  # make sure all msgs are received
     received = indexer_queue.receive_messages()
     assert len(received) == 1
     msg_body = json.loads(received[0]['Body'])
@@ -331,28 +357,58 @@ def test_dlq_to_primary(app, anontestapp, indexer_testapp):
     """
     indexer_queue = app.registry[INDEXER_QUEUE]
     indexer_queue.clear_queue()
-    test_bodies = ["destined for primary!", "i am also destined!"]
-    success, failed = indexer_queue.add_uuids(app.registry, test_bodies,
-                                        target_queue='dlq')
-    assert not failed
-    assert len(success) == 2
+    test_uuids = ["destined for primary!", "i am also destined!"]
+    print("Setup phase. Placing 2 dummy UUIDs directly into the DLQ...")
+    success, failed = indexer_queue.add_uuids(app.registry, test_uuids, target_queue='dlq')
+    assert not failed, "Failed. .add_uuids() reported failure during test setup phase."
+    n_queued = len(success)
+    print(n_queued, "UUIDs queued to DLQ:")
+    for i, uuid in enumerate(success):
+        print("UUID", i, json.dumps(uuid, indent=2, default=str))
+    assert n_queued == 2
+    print("Done with setup phase. Entering test phase.")
+    print("Executing .get('/dlq_to_primary') [authenticated]")
     res = indexer_testapp.get('/dlq_to_primary').json
+    print("Got back result JSON:", json.dumps(res, indent=2, default=str))
     assert res['number_migrated'] == 2
     assert res['number_failed'] == 0
-    msgs = indexer_queue.receive_messages()  # receive from primary
-    assert len(msgs) == 2
-    for msg in msgs:
-        # sqs msg reading is super busted so the below is necessary
-        body = json.loads(json.loads(msg['Body'])['Body'])['uuid']
-        assert body in test_bodies
-
+    deadline = datetime.now() + timedelta(seconds=10)
+    n_received = 0
+    attempt_number = 0
+    while n_received < n_queued and datetime.now() < deadline:
+        attempt_number += 1
+        print("Attempt #%d to receive messages from Primary indexer_queue." % attempt_number)
+        msgs = indexer_queue.receive_messages()  # receive from primary
+        n = len(msgs)  # We'll test the length after we examine the content..
+        n_received += n
+        punctuation = "." if n_received == 0 else ":"
+        print("On receipt attempt #{attempt_number}, {things} received from Primary indexer_queue{punctuation}"
+              .format(attempt_number=attempt_number, things=n_of(n, "new message"), punctuation=punctuation))
+        for i, msg in enumerate(msgs):
+            print("Attempt #%d Msg %d" % (attempt_number, i), json.dumps(msg, indent=2, default=str))
+            msg_uuid = json.loads(msg['Body'])['uuid']
+            # They might be in either order, or one might be missing, but at this point just make sure they're ours
+            assert msg_uuid in test_uuids
+        if n_received < n_queued:
+            time.sleep(1)  # Leave time between retrying
+    assert n_received == n_queued, ("Expected {things} from primary, but got {count}."
+                                    .format(things=n_of(n_queued, "message"), count=n_received))
+    # If we didn't fail on the prior assert, we should be good (other than some pro forma checks that follow)
+    print("Got all the messages we expected.")
+    print("Executing .get('dlq_to_primary') [authenticated] hoping it's empty")
     # hit route with no messages, should see 0 migrated
     res = indexer_testapp.get('/dlq_to_primary').json
+    print("Got back result JSON:", json.dumps(res, indent=2, default=str))
     assert res['number_migrated'] == 0
     assert res['number_failed'] == 0
-
     # hit route from unauthenticated testapp, should fail
-    anontestapp.get('/dlq_to_primary', status=403)
+    print("executing .get('dlq_to_primary') [unauthenticated] hoping for a 403 error")
+    res = anontestapp.get('/dlq_to_primary', status=403)
+    print("Got back result:")
+    print(res)  # this is not expected to be in JSON format, so we don't try to parse it
+    print("Test succeeded.")
+    # Uncomment next line for debugging
+    # assert False, "PASSED"
 
 
 #@pytest.mark.flaky
@@ -875,7 +931,7 @@ def test_es_indices(app, elasticsearch):
             item_index = es.indices.get(index=namespaced_index)
         except:
             assert False
-        found_index_mapping = item_index.get(namespaced_index, {}).get('mappings').get(item_type, {}).get('properties', {}).get('embedded')
+        found_index_mapping = item_index.get(namespaced_index, {}).get('mappings', {}).get(item_type, {}).get('properties', {}).get('embedded')
         found_index_settings = item_index.get(namespaced_index, {}).get('settings')
         assert found_index_mapping
         assert found_index_settings
@@ -979,7 +1035,7 @@ def test_es_purge_uuid(app, testapp, indexer_testapp, session):
     es = app.registry[ELASTIC_SEARCH]
     ## Adding new test resource to DB
     storage = app.registry[STORAGE]
-    test_body = {'required': '', 'simple1' : 'foo', 'simple2' : 'bar' }
+    test_body = {'required': '', 'simple1': 'foo', 'simple2': 'bar'}
     res = testapp.post_json(TEST_COLL, test_body)
     test_uuid = res.json['@graph'][0]['uuid']
     check = storage.get_by_uuid(test_uuid)
@@ -1013,7 +1069,7 @@ def test_es_purge_uuid(app, testapp, indexer_testapp, session):
 
     assert check_post_from_rdb_2 is None
 
-    time.sleep(5) # Allow time for ES API to send network request to ES server to perform delete.
+    time.sleep(5)  # Allow time for ES API to send network request to ES server to perform delete.
     check_post_from_es_2 = es.get(index=namespaced_index, doc_type=TEST_TYPE, id=test_uuid, ignore=[404])
     assert check_post_from_es_2['found'] == False
 
@@ -1203,8 +1259,8 @@ def test_aggregated_items(app, testapp, indexer_testapp):
     )
     # generate a uuid for the aggregate item
     agg_res_uuid = str(uuid.uuid4())
-    target1  = {'name': 'one', 'uuid': '775795d3-4410-4114-836b-8eeecf1d0c2f'}
-    target2  = {'name': 'two', 'uuid': '775795d3-4410-4114-836b-8eeecf1daabc'}
+    target1 = {'name': 'one', 'uuid': '775795d3-4410-4114-836b-8eeecf1d0c2f'}
+    target2 = {'name': 'two', 'uuid': '775795d3-4410-4114-836b-8eeecf1daabc'}
     aggregated = {
         'name': 'A',
         'targets': [
@@ -1591,10 +1647,321 @@ def test_assert_transactions_table_is_gone(app):
     """
     session = app.registry[DBSESSION]
     connection = session.connection().connect()
-    meta = MetaData(bind=session.connection(), reflect=True)
+    ignored(connection)
+    # The reflect=True argument to MetaData was deprecated. Instead, one is supposed to call the .reflect()
+    # method after creation. (This comment is transitional and can go away if things seem to work normally.)
+    # -kmp 11-May-2020
+    # Ref: https://stackoverflow.com/questions/44193823/get-existing-table-using-sqlalchemy-metadata/44205552
+    meta = MetaData(bind=session.connection())
+    meta.reflect()
     assert 'transactions' not in meta.tables
     # make sure tid column is removed
-    assert 'tid' not in meta.tables['propsheets'].columns
+    assert not any(column.name == 'tid' for column in meta.tables['propsheets'].columns)
     # make sure fkey constraint is also removed
-    constraints = [c.name for c in meta.tables['propsheets'].constraints]
-    assert 'propsheets_tid_fkey' not in constraints
+    assert not any(constraint.name == 'propsheets_tid_fkey' for constraint in meta.tables['propsheets'].constraints)
+
+
+def test_queue_manager_creation():
+
+    with mock.patch("boto3.client") as mock_boto3_client:
+        with mock.patch.object(QueueManager, "initialize") as mock_initialize:
+            with mock.patch("socket.gethostname") as mock_gethostname:
+
+                def test_it(myenv, mirror_env=None, override_url=None):
+
+                    # Allow this test to be called more than once.
+                    mock_boto3_client.reset_mock()
+                    mock_initialize.reset_mock()
+                    mock_gethostname.reset_mock()
+
+                    class MockRegistry:
+                        settings = {'env.name': myenv}
+
+                    host_len80_hyph = "myhostname-111111111-222222222-333333333-444444444-555555555-666666666-777777777"
+                    host_len80_dots = "myhostname.111111111.222222222.333333333.444444444.555555555.666666666.777777777"
+                    full_host = host_len80_dots + ".888888888.cgap.hms.harvard.edu"
+                    # If myenv is None, QueueManager generates its own env name one by
+                    #  - truncating hostname to 80 chars
+                    #  - changing dot (.) to hyphen (-)
+                    mock_gethostname.return_value = full_host
+
+                    if mirror_env:
+                        expected_env = mirror_env
+                    elif myenv is None:
+                        expected_env = host_len80_hyph
+                    else:
+                        expected_env = myenv
+
+                    # Set up expectations for mock return values
+
+                    expected_primary_queue_name = expected_env + '-indexer-queue'
+                    expected_secondary_queue_name = expected_env + '-secondary-indexer-queue'
+                    expected_dlq_name = expected_env + '-indexer-queue-dlq'
+
+                    mocked_primary_queue_url = 'http://primary'
+                    mocked_secondary_queue_url = 'http://secondary'
+                    mocked_dlq_url = 'http://dlq'
+
+                    expected_queue_urls = {
+                        expected_primary_queue_name: mocked_primary_queue_url,
+                        expected_secondary_queue_name: mocked_secondary_queue_url,
+                        expected_dlq_name: mocked_dlq_url,
+                    }
+                    mock_initialize.return_value = expected_queue_urls
+
+                    registry = MockRegistry()
+
+                    with mock.patch.object(QueueManager, "get_queue_url") as mock_get_queue_url:
+                        mock_get_queue_url.side_effect = lambda queue_name: expected_queue_urls.get(queue_name)
+
+                        # Finally all the mocking is set up, now do the QueueManager call we're testing.
+
+                        manager = QueueManager(registry, mirror_env=mirror_env, override_url=override_url)
+
+                    # Check the aftermath...
+
+                    # Values that would have been due to class variables
+                    assert manager.PURGE_QUEUE_SLEEP_FOR_SAFETY is True
+                    assert manager.PURGE_QUEUE_TIMESTAMP0 < datetime(datetime.now().year - 2, 1, 1)  # long ago
+                    assert (manager.PURGE_QUEUE_EFFECTIVE_LOCKOUT_TIME
+                            > manager.PURGE_QUEUE_LOCKOUT_TIME_ACCORDING_TO_AMAZON)
+
+                    assert manager.env_name == expected_env
+
+                    assert mock_boto3_client.call_count == 1
+                    if override_url:
+                        assert manager.override_url == override_url
+                        mock_boto3_client.assert_called_with('sqs', region_name='us-east-1', endpoint_url=override_url)
+                    else:
+                        assert manager.override_url is None
+                        mock_boto3_client.assert_called_with('sqs', region_name='us-east-1')
+
+                    if mirror_env:
+                        assert mock_initialize.call_count == 0
+                    else:
+                        assert mock_initialize.call_count == 1
+                        mock_initialize.assert_called_with(dlq=True)
+
+                    assert manager.queue_attrs == {
+                        expected_primary_queue_name: {
+                            'DelaySeconds': '1',
+                            'MessageRetentionPeriod': '1209600',
+                            'ReceiveMessageWaitTimeSeconds': '2',
+                            'VisibilityTimeout': '600'
+                        },
+                        expected_secondary_queue_name: {
+                            'MessageRetentionPeriod': '1209600',
+                            'ReceiveMessageWaitTimeSeconds': '2',
+                            'VisibilityTimeout': '600'
+                        },
+                        expected_dlq_name: {
+                            'MessageRetentionPeriod': '1209600',
+                            'ReceiveMessageWaitTimeSeconds': '2',
+                            'VisibilityTimeout': '600'
+                        }
+                    }
+
+                    # manager.queue_targets is an OrderedDict but we don't care. Just make sure data is right:
+                    assert json.loads(json.dumps(manager.queue_targets)) == {
+                        'primary': mocked_primary_queue_url,
+                        'secondary': mocked_secondary_queue_url,
+                        'dlq': mocked_dlq_url,
+                    }
+
+                # These are the arg configurations we probably care about ...
+                test_it('some-env')  # Normal case of setting up an env
+                test_it('some-env', mirror_env='emos-env')  # Normal case of setting up a mirror
+                test_it(None)  # Weird case we allow who knows why
+                test_it('some-env', override_url="http://foo")  # Another override option we allow
+
+
+def test_queue_manager_purge_queue_wait():
+
+    myenv = 'some-env'
+
+    class MockRegistry:
+        settings = {'env.name': myenv}
+
+    class MockSqsClient:
+        def __init__(self, **kwargs):
+            ignored(kwargs)
+            self.purge_queue = mock.MagicMock()
+
+    def mocked_boto3_client(kind, **kwargs):
+        assert kind == "sqs"  # we only handle this case
+        return MockSqsClient(**kwargs)
+
+    with mock.patch("boto3.client") as mock_boto3_client:
+        mock_boto3_client.side_effect = mocked_boto3_client
+        with mock.patch.object(QueueManager, "initialize") as mock_initialize:
+            primary, secondary, dlq = 'http://primary', 'http://secondary', 'http://dlq'
+            mock_initialize.return_value = {
+                myenv + '-indexer-queue': primary,
+                myenv + '-secondary-indexer-queue': secondary,
+                myenv + '-dlq': dlq,
+            }
+            with mock.patch("socket.gethostname") as mock_gethostname:
+                with mock.patch.object(QueueManager, "get_queue_url") as mock_get_queue_url:
+
+                    registry = MockRegistry()
+                    manager = QueueManager(registry)
+
+                    # Make sure things are set up for our test
+                    assert isinstance(manager.client, MockSqsClient)
+
+                    dt = ControlledTime()
+
+                    with mock.patch("datetime.datetime", dt):
+                        with mock.patch("time.sleep", dt.sleep):
+
+                            start_time = dt.just_now()
+                            assert start_time > manager.PURGE_QUEUE_TIMESTAMP0
+                            assert manager.purge_queue_timestamp == manager.PURGE_QUEUE_TIMESTAMP0
+                            assert manager.client.purge_queue.call_count == 0  # Just to be sure
+                            manager.purge_queue()
+                            assert manager.client.purge_queue.call_count == 3  # Called once for each queue
+                            # The first time it shouldn't wait, but does check the time twice
+                            assert manager.purge_queue_timestamp == start_time + timedelta(seconds=2)
+
+                            # Try again now...
+
+                            start_time = dt.just_now()
+                            assert manager.purge_queue_timestamp == start_time
+                            assert manager.client.purge_queue.call_count == 3  # Just to be sure
+                            manager.purge_queue()
+                            assert manager.client.purge_queue.call_count == 6  # Called once for each queue
+                            # The second time the wait should be 61 seconds, plus we check the time twice
+                            # (once within the 61 second wait time, so it doesn't count) and we count 1 second
+                            # for each check outside the interval, so 62 total. But most importantly, we do NOT
+                            # wait for whole extra minutes. :) -kmp 2-Jun-2020
+                            assert manager.purge_queue_timestamp == start_time + timedelta(seconds=62)
+
+
+def test_queue_manager_chunk_messages():
+
+    # Really this could be anything generated series we're chunking
+
+    assert list(QueueManager.chunk_messages(list(range(0)), 5)) == []
+    assert list(QueueManager.chunk_messages(list(range(3)), 5)) == [[0, 1, 2]]
+    assert list(QueueManager.chunk_messages(list(range(5)), 5)) == [[0, 1, 2, 3, 4]]
+    assert list(QueueManager.chunk_messages(list(range(6)), 5)) == [[0, 1, 2, 3, 4], [5]]
+    assert list(QueueManager.chunk_messages(list(range(10)), 5)) == [[0, 1, 2, 3, 4], [5, 6, 7, 8, 9]]
+    assert list(QueueManager.chunk_messages(list(range(11)), 5)) == [[0, 1, 2, 3, 4], [5, 6, 7, 8, 9], [10]]
+
+
+def test_wait_until_purge_queue_allowed():
+
+    # We really don't need a registry for this mock, but one of the arguments needs to be a registry.
+    # It's more than sufficient to use a dictionary. Probably any value would work.
+    mocked_registry = {}
+
+    # All we want to do is test a method on QueueManager, but in order to do that we need to instantiate
+    # the class. We do that here by bypassing the init method, so we don't have to mock all the structures
+    # we won't use. We need only a few variables:
+    #  - .queue_url, .second_queue_url, and .dlq_url are needed because they get passed to something to be ignored.
+    #  - purge_queue_timestamp wouuld be initalized by the regular init method in the same way as we do here.
+    class UninitializedQueueManager(indexer_queue.QueueManager):
+
+        def __init__(self, registry, mirror_env=None, override_url=None):
+            ignored(registry, mirror_env, override_url)
+            if False:
+                # noqa - This line initialization is not reachable, but that's what we want for this test
+                super(UninitializedQueueManager, self).__init__(registry, mirror_env, override_url)
+            self.purge_queue_timestamp = self.PURGE_QUEUE_TIMESTAMP0
+            # These values don't matter. It only matters that there be values.
+            self.queue_url, self.second_queue_url, self.dlq_url = ('queue-url', 'second-queue-url', 'dlq-url')
+
+    # The function now() will get us the time. This assure us that binding datetime.datetime
+    # will not be affecting us.
+    now = datetime.now
+
+    # real_t0 is the actual wallclock time at the start of this test. We use it only to make sure
+    # that all these other tests are really going through our mock. In spite of longer mocked
+    # timescales, this test should run quickly.
+    real_t0 = now()
+    print("Starting test at", real_t0)
+
+    # dt will be our substitute for datetime.datetime.
+    # (it also has a sleep method that we can substitute for time.sleep)
+    dt = ControlledTime(tick_seconds=1)
+
+    class Logger:
+
+        def __init__(self):
+            self.log = []
+
+        def warning(self, msg):
+            self.log.append(msg)
+
+    with mock.patch("datetime.datetime", dt):
+        with mock.patch("time.sleep", dt.sleep):
+            # The following call to mock.patch.object is the same as doing:
+            #   with mock.patch("snovault.elasticsearch.indexer_queue.log", Logger()) as mock_log:
+            # but it avoids presuming the name 'snovault' and so works better with relative naming. -kmp 7-May-2020
+            with mock.patch.object(indexer_queue, "log", Logger()) as mock_log:
+
+                assert isinstance(datetime_module.datetime, ControlledTime)
+
+                manager = UninitializedQueueManager(mocked_registry)
+                assert not hasattr(manager, 'client')  # Just for safety, we don't need a client for this test
+
+                t0 = dt.just_now()
+
+                manager._wait_until_purge_queue_allowed()
+
+                t1 = dt.just_now()
+
+                print("t0=", t0)
+                print("t1=", t1)
+
+                # We've set the clock to increment 1 second on every call to datetime.datetime.now(),
+                # and we expect exactly two calls to be made in the called function:
+                #  - Once on entry to get the current time prior to purging
+                #  - Once on exit to set the timestamp after purging.
+                # We expect no sleeps, so that doesn't play in.
+                assert (t1 - t0).total_seconds() == 2
+
+                assert mock_log.log == []
+
+                manager._wait_until_purge_queue_allowed()
+
+                t2 = dt.just_now()
+
+                print("t2=", t2)
+
+                # We've set the clock to increment 1 second on every call to datetime.datetime.now(),
+                # and we expect exactly two calls to be made in the called function, plus we also
+                # expect to sleep for 60 seconds of the 61 seconds it wants to reserve (one second having
+                # passed since the last purge).
+
+                assert (t2 - t1).total_seconds() == 62
+
+                assert mock_log.log == ['Last purge_queue attempt was at 2010-01-01 12:00:02 (1.0 seconds ago).'
+                                        ' Waiting 60.0 seconds before attempting another.']
+
+                mock_log.log = []  # Reset the log
+
+                dt.sleep(30)  # Simulate 30 seconds of time passing
+
+                t3 = dt.just_now()
+                print("t3=", t3)
+
+                manager._wait_until_purge_queue_allowed()
+
+                t4 = dt.just_now()
+                print("t4=", t4)
+
+                # We've set the clock to increment 1 second on every call to datetime.datetime.now(),
+                # and we expect exactly two calls to be made in the called function, plus we also
+                # expect to sleep for 30 seconds of the 61 seconds it wants to reserve (31 seconds having
+                # passed since the last purge).
+
+                assert (t4 - t3).total_seconds() == 32
+
+                assert mock_log.log == ['Last purge_queue attempt was at 2010-01-01 12:01:04 (31.0 seconds ago).'
+                                        ' Waiting 30.0 seconds before attempting another.']
+
+        real_t1 = now()
+        print("Done testing at", real_t1)
+        # Whole test should happen much faster, less than a half second
+        assert (real_t1 - real_t0).total_seconds() < 0.5

@@ -2,7 +2,6 @@ import copy
 import datetime
 import json
 import time
-import sys
 from timeit import default_timer as timer
 
 import structlog
@@ -14,7 +13,7 @@ from elasticsearch.exceptions import (
 from pyramid.view import view_config
 from urllib3.exceptions import ReadTimeoutError
 
-from .. import (
+from ..interfaces import (
     DBSESSION,
     STORAGE
 )

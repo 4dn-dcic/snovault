@@ -8,7 +8,9 @@ from pyramid.security import (
     Deny,
     Everyone,
 )
-from .. import calculated_property, Root, root
+from ..calculated import calculated_property
+from ..resources import Root
+from ..config import root
 
 
 accession_re = re.compile(r'^SNO(SS|FL)[0-9][0-9][0-9][A-Z][A-Z][A-Z]$')

@@ -1,6 +1,8 @@
 from past.builtins import basestring
 from pyramid.view import view_config
-from . import Item, Root, CONNECTION
+# Python thinks Item is unused, but it doesn't check for uses in other files, so I'm leaving mention of that
+# temporarily just in case someone is importing it from here. Remove these comments later. -kmp 9-Jun-2020
+from .resources import Root, CONNECTION  # , Item
 from .elasticsearch.indexer_utils import get_uuids_for_types
 from .util import debug_log
 
@@ -10,6 +12,9 @@ def includeme(config):
 
 
 def uuid_to_ref(obj, path):
+    # TODO: The compatibility code for basestring allows bytes (b'...') as within scope,
+    #       but to split bytes without error you'd have to do path.split(b'.'), so I don't think
+    #       we ever get that. I think we should rewrite this as just isinstance(path, str). -kmp 9-Jun-2020
     if isinstance(path, basestring):
         path = path.split('.')
     if not path:

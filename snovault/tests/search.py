@@ -17,11 +17,8 @@ from pyramid.httpexceptions import HTTPBadRequest
 from pyramid.view import view_config
 from urllib.parse import urlencode
 from webob.multidict import MultiDict
-from .. import (
-    AbstractCollection,
-    TYPES,
-    COLLECTIONS
-)
+from ..resources import AbstractCollection
+from ..interfaces import  TYPES, COLLECTIONS
 from ..elasticsearch import ELASTIC_SEARCH
 from ..elasticsearch.indexer_utils import get_namespaced_index
 from ..elasticsearch.create_mapping import determine_if_is_date_field

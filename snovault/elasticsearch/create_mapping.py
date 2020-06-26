@@ -12,28 +12,21 @@ import datetime
 import json
 import logging
 import structlog
-import sys
 import time
-# import transaction as transaction_proxy
 
 from collections import OrderedDict
-from elasticsearch import RequestError
 from elasticsearch.exceptions import (
-    ConflictError,
-    ConnectionError,
-    NotFoundError,
     TransportError,
     RequestError,
     ConnectionTimeout
 )
-from elasticsearch.helpers import bulk
-from elasticsearch_dsl import Index, Search
-from elasticsearch_dsl.connections import connections
+from elasticsearch_dsl import Search
 from functools import reduce
 from itertools import chain
 from pyramid.paster import get_app
 from timeit import default_timer as timer
-from .. import COLLECTIONS, TYPES, set_logging
+from ..interfaces import COLLECTIONS, TYPES
+from dcicutils.log_utils import set_logging
 from ..commands.es_index_data import run as run_index_data
 from ..schema_utils import combine_schemas
 from ..util import add_default_embeds, find_collection_subtypes
