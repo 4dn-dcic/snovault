@@ -324,6 +324,40 @@ class EmbeddingTest(Item):
     ]
 
 @collection(
+    name='nested-embedding-container',
+    unique_key='accession',
+    properties={
+        'title': 'NestedEmbeddingContainer',
+        'description': 'Test of ...'
+    })
+class NestedEmbeddingContainer(Item):
+    item_type = 'nested_embedding_container'
+    schema = load_schema('snovault:test_schemas/NestedEmbeddingContainer.json')
+    name_key = 'accession'
+
+    # use TestingDownload to test
+    embedded_list = [
+        'link_to_nested_object.associates.x',
+        'link_to_nested_object.associates.y',
+        'link_to_nested_objects.associates.x',
+        'link_to_nested_objects.associates.y',
+    ]
+
+@collection(
+    name='nested-object-link-target',
+    unique_key='accession',
+    properties={
+        'title': 'NestedObjectLinkTarget',
+        'description': '...'
+    })
+class NestedObjectLinkTarget(Item):
+    item_type = 'nested_object_link_target'
+    schema = load_schema('snovault:test_schemas/NestedObjectLinkTarget.json')
+    name_key = 'accession'
+
+
+
+@collection(
     'testing-downloads',
     properties={
         'title': 'Test download collection',
