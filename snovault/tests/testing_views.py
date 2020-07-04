@@ -1,9 +1,9 @@
 from pyramid.security import (
-    ALL_PERMISSIONS,
+    # ALL_PERMISSIONS,
     Allow,
-    Authenticated,
+    # Authenticated,
     Deny,
-    DENY_ALL,
+    # DENY_ALL,
     Everyone,
     principals_allowed_by_permission,
 )
@@ -21,7 +21,7 @@ from ..config import collection, abstract_collection
 from ..schema_utils import load_schema
 from ..attachment import ItemWithAttachment
 from ..interfaces import CONNECTION
-from .root import TestRoot
+# from .root import TestRoot
 
 
 def includeme(config):
@@ -29,6 +29,13 @@ def includeme(config):
 
 
 # Item acls
+
+def append_acls(acls1: list, acls2: list) -> list:
+    # PyCharm gets overly aggressive about type-checking lists of tuples when they are added,
+    # fearing every detail of every internal element has to match. This asserts that only list-ness
+    # is being relied upon.
+    return acls1 + acls2
+
 
 ONLY_ADMIN_VIEW = [
     (Allow, 'group.admin', ['view', 'edit']),
@@ -38,32 +45,43 @@ ONLY_ADMIN_VIEW = [
     (Allow, Everyone, ['view', 'edit']),
 ]
 
-ALLOW_EVERYONE_VIEW = [
-    (Allow, Everyone, ['view', 'list']),
-] + ONLY_ADMIN_VIEW
+ALLOW_EVERYONE_VIEW = append_acls(
+    [
+        (Allow, Everyone, ['view', 'list']),
+    ],
+    ONLY_ADMIN_VIEW)
 
+ALLOW_VIEWING_GROUP_VIEW = append_acls(
+    [
+        (Allow, 'role.viewing_group_member', 'view'),
+    ],
+    ONLY_ADMIN_VIEW)
 
-ALLOW_VIEWING_GROUP_VIEW = [
-    (Allow, 'role.viewing_group_member', 'view'),
-] + ONLY_ADMIN_VIEW
+ALLOW_LAB_SUBMITTER_EDIT = append_acls(
+    [
+        (Allow, 'role.viewing_group_member', 'view'),
+        (Allow, 'role.lab_submitter', 'edit'),
+    ],
+    ONLY_ADMIN_VIEW)
 
-ALLOW_LAB_SUBMITTER_EDIT = [
-    (Allow, 'role.viewing_group_member', 'view'),
-    (Allow, 'role.lab_submitter', 'edit'),
-] + ONLY_ADMIN_VIEW
+ALLOW_CURRENT_AND_SUBMITTER_EDIT = append_acls(
+    [
+        (Allow, Everyone, 'view'),
+        (Allow, 'role.lab_submitter', 'edit'),
+    ],
+    ONLY_ADMIN_VIEW)
 
-ALLOW_CURRENT_AND_SUBMITTER_EDIT = [
-    (Allow, Everyone, 'view'),
-    (Allow, 'role.lab_submitter', 'edit'),
-] + ONLY_ADMIN_VIEW
+ALLOW_CURRENT = append_acls(
+    [
+        (Allow, Everyone, 'view'),
+    ],
+    ONLY_ADMIN_VIEW)
 
-ALLOW_CURRENT = [
-    (Allow, Everyone, 'view'),
-] + ONLY_ADMIN_VIEW
-
-DELETED = [
-    (Deny, Everyone, 'visible_for_edit')
-] + ONLY_ADMIN_VIEW
+DELETED = append_acls(
+    [
+        (Deny, Everyone, 'visible_for_edit'),
+    ],
+    ONLY_ADMIN_VIEW)
 
 
 # Collection acls
@@ -88,6 +106,7 @@ def allowed(context, request):
         'has_permission': bool(request.has_permission(permission, context)),
         'principals_allowed_by_permission': principals_allowed_by_permission(context, permission),
     }
+
 
 def paths_filtered_by_status(request, paths, exclude=('deleted', 'replaced'), include=None):
     """
@@ -183,7 +202,8 @@ class Item(BaseItem):
         properties = self.upgrade_properties().copy()
         status = properties.get('status')
         if status is None:
-            return [(Allow, Everyone, ['list', 'add', 'view', 'edit', 'add_unvalidated', 'index', 'storage', 'import_items', 'search'])]
+            return [(Allow, Everyone, ['list', 'add', 'view', 'edit', 'add_unvalidated', 'index',
+                                       'storage', 'import_items', 'search'])]
         return self.STATUS_ACL.get(status, ALLOW_LAB_SUBMITTER_EDIT)
 
     def __ac_local_roles__(self):
@@ -193,6 +213,9 @@ class Item(BaseItem):
             lab_submitters = 'submits_for.%s' % properties['lab']
             roles[lab_submitters] = 'role.lab_submitter'
         if 'award' in properties:
+            # TODO: This will fail. There is no function _award_viewing_group anywhere in snovault.
+            #       Maybe we should create a hook that Fourfront but not CGAP can set that knows about awards.
+            #       Probably 'lab' above has the same issues. -kmp 4-Jul-2020
             viewing_group = _award_viewing_group(properties['award'], find_root(self))
             if viewing_group is not None:
                 viewing_group_members = 'viewing_group.%s' % viewing_group
@@ -215,7 +238,8 @@ class Item(BaseItem):
     },)
     def display_title(self):
         """create a display_title field."""
-        display_title = ""
+        # Unused
+        # display_title = ""
         look_for = [
             "title",
             "name",
@@ -229,10 +253,12 @@ class Item(BaseItem):
                 return display_title
         # if none of the existing terms are available, use @type + date_created
         try:
+            # TODO: PyCharm thinks self.__class__.__name__ will return 'property' not 'string'.
+            #       That's probably a bug in PyCharm I should report. -kmp 4-Jul-2020
             type_date = self.__class__.__name__ + " from " + self.properties.get("date_created", None)[:10]
             return type_date
         # last resort, use uuid
-        except:
+        except Exception:
             return self.properties.get('uuid', None)
 
 
@@ -323,6 +349,7 @@ class EmbeddingTest(Item):
         'attachment.*'
     ]
 
+
 @collection(
     name='nested-embedding-container',
     unique_key='accession',
@@ -343,6 +370,7 @@ class NestedEmbeddingContainer(Item):
         'link_to_nested_objects.associates.y',
     ]
 
+
 @collection(
     name='nested-object-link-target',
     unique_key='accession',
@@ -354,7 +382,6 @@ class NestedObjectLinkTarget(Item):
     item_type = 'nested_object_link_target'
     schema = load_schema('snovault:test_schemas/NestedObjectLinkTarget.json')
     name_key = 'accession'
-
 
 
 @collection(
