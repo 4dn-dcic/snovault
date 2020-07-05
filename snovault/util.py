@@ -487,20 +487,20 @@ def build_embedded_model(fields_to_embed):
      'biosource': {'fields_to_use': ['name']},
      'fields_to_use': ['*']}
     """
-    embedded_model = {'fields_to_use':['*']}
+    FIELDS_TO_USE = 'fields_to_use'
+    embedded_model = {FIELDS_TO_USE: ['*']}
     for field in fields_to_embed:
         split_field = field.split('.')
-        field_pointer = embedded_model
+        max_idx = len(split_field) - 1
+        cursor = embedded_model
         for idx, subfield in enumerate(split_field):
-            if idx == len(split_field) - 1:  # terminal field
-                if 'fields_to_use' in field_pointer:
-                    field_pointer['fields_to_use'].append(subfield)
-                else:
-                    field_pointer['fields_to_use'] = [subfield]
-                continue
-            elif subfield not in field_pointer:
-                field_pointer[subfield] = {}
-            field_pointer = field_pointer[subfield]
+            if idx == max_idx:  # terminal field
+                cursor[FIELDS_TO_USE] = fields_to_use = cursor.get(FIELDS_TO_USE, [])
+                fields_to_use.append(subfield)
+            else:
+                if subfield not in cursor:
+                    cursor[subfield] = {}
+                cursor = cursor[subfield]
     return embedded_model
 
 
