@@ -1,19 +1,20 @@
 import copy
 import pytest
 
-from dcicutils.qa_utils import notice_pytest_fixtures
+# from dcicutils.qa_utils import notice_pytest_fixtures
 from ..interfaces import TYPES
 from ..util import (
+    build_embedded_model,
     build_default_embeds,
-    find_default_embeds_for_schema,
-    find_collection_subtypes,
+    crawl_schema,
     expand_embedded_list,
-    crawl_schema
+    find_collection_subtypes,
+    find_default_embeds_for_schema,
 )
-from .toolfixtures import registry
 
-
-notice_pytest_fixtures(registry)
+# This is handled in pytest.ini and should not be redundantly here. -kmp 4-Jul-2020
+# from .toolfixtures import registry
+# notice_pytest_fixtures(registry)
 
 
 def test_find_collection_subtypes(app):
@@ -112,3 +113,84 @@ def test_crawl_schema(registry):
         crawl_schema(registry[TYPES], field_path, schema_copy)
     # different error, since it attempts to find the file locally
     assert 'Invalid linkTo' in str(exec_info4)
+
+
+def test_build_embedded_model():
+    res1 = build_embedded_model([
+        "link_to_nested_objects.display_title",
+        "link_to_nested_object.uuid",
+        "link_to_nested_object.@id",
+        "link_to_nested_object.display_title",
+        "link_to_nested_objects.principals_allowed.*",
+        "link_to_nested_objects.associates.y",
+        "principals_allowed.*",
+        "link_to_nested_objects.uuid",
+        "link_to_nested_object.principals_allowed.*",
+        "link_to_nested_objects.@type",
+        "link_to_nested_objects.@id",
+        "link_to_nested_object.associates.x",
+        "link_to_nested_object.@type"
+    ])
+    assert res1 == {
+        "fields_to_use": ["*"],
+        "link_to_nested_objects": {
+            "fields_to_use": ["display_title", "uuid", "@type", "@id"],
+            "principals_allowed": {
+                "fields_to_use": ["*"]},
+            "associates": {
+                "fields_to_use": ["y"]
+            }
+        },
+        "link_to_nested_object": {
+            "fields_to_use": ["uuid", "@id", "display_title", "@type"],
+            "principals_allowed": {
+                "fields_to_use": ["*"]
+            },
+            "associates": {
+                "fields_to_use": ["x"]
+            }
+        },
+        "principals_allowed": {
+            "fields_to_use": ["*"]
+        }
+    }
+    res2 = build_embedded_model([
+        "link_to_nested_objects.display_title",
+        "link_to_nested_object.uuid",
+        "link_to_nested_object.@id",
+        "link_to_nested_object.display_title",
+        "link_to_nested_objects.principals_allowed.*",
+        "link_to_nested_objects.associates.x",
+        "link_to_nested_objects.associates.y",
+        "principals_allowed.*",
+        "link_to_nested_objects.uuid",
+        "link_to_nested_object.principals_allowed.*",
+        "link_to_nested_objects.@type",
+        "link_to_nested_objects.@id",
+        "link_to_nested_object.associates.y",
+        "link_to_nested_object.associates.x",
+        "link_to_nested_object.@type"
+    ])
+    assert res2 == {
+        "fields_to_use": ["*"],
+        "link_to_nested_objects": {
+            "fields_to_use": ["display_title", "uuid", "@type", "@id"],
+            "principals_allowed": {
+                "fields_to_use": ["*"]},
+            "associates": {
+                "fields_to_use": ["x", "y"]
+            }
+        },
+        "link_to_nested_object": {
+            "fields_to_use": ["uuid", "@id", "display_title", "@type"],
+            "principals_allowed": {
+                "fields_to_use": ["*"]
+            },
+            "associates": {
+                "fields_to_use": ["y", "x"]
+            }
+        },
+        "principals_allowed": {
+            "fields_to_use": ["*"]
+        }
+    }

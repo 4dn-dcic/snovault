@@ -1,0 +1,32 @@
+{
+    "title": "NestedObjectLinkTarget",
+    "description": "Dummy Schema for testing an embeddable item",
+    "type": "object",
+    "required": ["title", "description"],
+    "properties": {
+        "schema_version": {
+            "type": "object",
+            "default": "1"
+        },
+        "associates": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "x": {
+                        "type": "string"
+                    },
+                    "y": {
+                        "type": "string"
+                    },
+                    "z": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "uuid": {
+            "type": "string"
+        }
+    }
+}
