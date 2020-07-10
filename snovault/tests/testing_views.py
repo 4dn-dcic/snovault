@@ -368,7 +368,25 @@ class NestedEmbeddingContainer(Item):
         'link_to_nested_object.associates.y',
         'link_to_nested_objects.associates.x',
         'link_to_nested_objects.associates.y',
+        'nested_calculated_property.associates.x',
+        'nested_calculated_property.associates.y',
     ]
+
+    @calculated_property(schema={
+            "title": "Nested Calculated property",
+            "description": "something calculated",
+            "type": "array",
+            "items": {
+                "title": "Nested Calculated Property",
+                "type": ["string", "object"],
+                "linkTo": "NestedObjectLinkTarget"
+            }
+        })
+    def nested_calculated_property(self):
+        return [  # These IDs are defined in test_views.py so this is a low-tech revlink
+            "b58bc82f-249e-418f-bbcd-8a80af2e58d3",
+            "b58bc82f-249e-418f-bbcd-8a80af2e58d3"
+        ]
 
 
 @collection(

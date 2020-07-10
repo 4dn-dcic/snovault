@@ -29,6 +29,7 @@ def test_nested_embed(testapp):
                                    "associates": [{"x": "1", "y": "2", "z": "3"}],
                                    "title": "required title",
                                    "description": "foo",
+                                   "uuid": "100a0bb8-2974-446b-a5de-6937aa313be4",
                                },
                                status=201).json
     res = testapp.post_json('/nested-embedding-container/',
@@ -36,14 +37,50 @@ def test_nested_embed(testapp):
                                    "link_to_nested_object": td_res['@graph'][0]['uuid'],
                                    "title": "required title",
                                    "description": "foo",
+                                   "uuid": "b58bc82f-249e-418f-bbcd-8a80af2e58d3",
                                },
                                status=201).json
     embedded_json = testapp.get(res['@graph'][0]['@id'] + "?frame=embedded").json
     print(json.dumps(embedded_json, indent=2))
-    [associate] = embedded_json['link_to_nested_object']['associates']
+
+    link_to_nested_object = embedded_json['link_to_nested_object']
+    assert 'associates' in link_to_nested_object
+    [associate] = link_to_nested_object['associates']
     assert associate['x'] == '1'
     assert associate['y'] == '2'
     assert 'z' not in associate
+
+def test_nested_embed_calculated(testapp):
+
+    td_res = testapp.post_json('/nested-object-link-target/',
+                               {
+                                   "associates": [{"x": "1", "y": "2", "z": "3"}],
+                                   "title": "required title",
+                                   "description": "foo",
+                                   "uuid": "100a0bb8-2974-446b-a5de-6937aa313be4",
+                               },
+                               status=201).json
+    res = testapp.post_json('/nested-embedding-container/',
+                               {
+                                   "link_to_nested_object": td_res['@graph'][0]['uuid'],
+                                   "title": "required title",
+                                   "description": "foo",
+                                   "uuid": "b58bc82f-249e-418f-bbcd-8a80af2e58d3",
+                               },
+                               status=201).json
+    embedded_json = testapp.get(res['@graph'][0]['@id'] + "?frame=embedded").json
+    print(json.dumps(embedded_json, indent=2))
+
+    link_to_nested_object = embedded_json['link_to_nested_object']
+    assert 'associates' in link_to_nested_object
+    [associate] = link_to_nested_object['associates']
+    assert associate['x'] == '1'
+    assert associate['y'] == '2'
+    assert 'z' not in associate
+
+    nested_calculated_property = embedded_json['nested_calculated_property']
+    for item in nested_calculated_property:
+        assert 'associates' in item
 
 
 def test_nested_embed_multi_trivial(testapp):
