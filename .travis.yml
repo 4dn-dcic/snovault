@@ -48,7 +48,7 @@ script:
 - echo $TRAVIS_JOB_ID
 - poetry run wipe-test-indices $TRAVIS_JOB_ID search-fourfront-builds-uhevxdzfcv7mkm5pj5svcri3aq.us-east-1.es.amazonaws.com:80
 after_success:
-- if [ "$TRAVIS_PYTHON_VERSION" == "3.6"]; then coveralls; fi
+- if [ "$TRAVIS_PYTHON_VERSION" == "3.6" ]; then coveralls; fi
 deploy:
   provider: script
   script: poetry publish --build --username=$PYPI_USER --password=$PYPI_PASSWORD
