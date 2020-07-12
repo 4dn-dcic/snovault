@@ -37,9 +37,7 @@ before_install:
 install:
 - make build
 script:
-- |
-  if test -n "$UNIT"; then make travis-test;
-  fi
+- if test -n "$UNIT"; then make travis-test; fi
 - |
   if [[ $TRAVIS_BRANCH == 'master' ]]; then
   echo 'Triggering docs build'
@@ -47,7 +45,7 @@ script:
   fi
 - echo $TRAVIS_JOB_ID
 - poetry run wipe-test-indices $TRAVIS_JOB_ID search-fourfront-builds-uhevxdzfcv7mkm5pj5svcri3aq.us-east-1.es.amazonaws.com:80
-after_success:
+after_script:
 - if [ "$TRAVIS_PYTHON_VERSION" == "3.6" ]; then coveralls; fi
 deploy:
   provider: script
