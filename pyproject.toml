@@ -60,7 +60,11 @@ loremipsum = "1.0.5"
 MarkupSafe = ">=0.23,<1"
 netaddr = ">=0.7.18,<1"
 passlib = "^1.6.5"
-Pillow = "^3.1.1"
+# NOTE: A version of Pillow higher than 3.1.1 might be causing a problem for CGAP/Fourfront,
+#       but Snovault isn't bothered. Pillow 3.4.2 is known to work in Snovault, for example.
+#       We pin it here to 3.1.1 rather than ^3.1.1 just so we're testing the version the
+#       deployed appliations are going to use (at least for now). -kmp 11-Jul-2020
+Pillow = "3.1.1"
 # TODO: Investigate whether a major version upgrade is allowable for 'psutil'.
 psutil = ">=4.3.0,<5"
 # psycopg2 = "2.8.4"
@@ -95,7 +99,7 @@ rutter = ">=0.2,<1"
 # setuptools = "^36.6.0"
 simplejson = "3.17.0"
 SPARQLWrapper = "^1.7.6"
-SQLAlchemy = "^1.2.16"
+SQLAlchemy = "1.3.16"  # Pinned because >=1.3.17 is a problem
 strict-rfc3339 = ">=0.7,<1"
 # Our use of structlog is pretty vanilla, so we should be OK with changes across the 18-19 major version boundary.
 structlog = ">=18.1.0,<20"
@@ -111,14 +115,16 @@ xlrd = "^1.0.0"
 # zope = "^4.2.1"
 "zope.deprecation" = "^4.4.0"
 "zope.interface" = "^4.6.0"
-"zope.sqlalchemy" = "^1.2"
+"zope.sqlalchemy" = "1.3"
 
 [tool.poetry.dev-dependencies]
-coverage = ">=4.1"
-moto = "1.3.7"
+coverage = ">=5.2"
+codacy-coverage = ">=1.3.11"
+coveralls = ">=2.1.1"
 flake8 = "^3.7.8"
 flaky = "3.6.1"
-# Experimental upgrade to PyPi 4.5. It may be possible to upgrade further, but I think this is an improvement.
+moto = "1.3.7"
+# Experimental upgrade to PyTest 4.5. It may be possible to upgrade further, but I think this is an improvement.
 # -kmp 11-May-2020
 pytest = "4.5.0"
 pytest-cov = ">=2.2.1"

@@ -2,6 +2,7 @@ clean:
 	rm -rf *.egg-info
 
 configure:  # does any pre-requisite installs
+	pip install --upgrade pip
 	pip install poetry
 
 moto-setup:
@@ -13,11 +14,14 @@ macpoetry-install:
 macbuild:
 	make configure
 	make macpoetry-install
-	make moto-setup
+	make build-after-poetry
 
 build:
 	make configure
 	poetry install
+	make build-after-poetry
+
+build-after-poetry:  # continuation of build after poetry install
 	make moto-setup
 
 test:
