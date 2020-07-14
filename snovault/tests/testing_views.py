@@ -380,9 +380,12 @@ class NestedEmbeddingContainer(Item):
             'linkTo': 'NestedObjectLinkTarget'
         }
     })
-    def cp_link(self, link_to_nested_objects):
+    def cp_link(self, link_to_nested_objects=None):
         """ Calculated property that sets this field from link_to_nested_objects """
-        return link_to_nested_objects
+        if link_to_nested_objects is not None:
+            return link_to_nested_objects
+        else:
+            return []
 
 
 
