@@ -368,7 +368,22 @@ class NestedEmbeddingContainer(Item):
         'link_to_nested_object.associates.y',
         'link_to_nested_objects.associates.x',
         'link_to_nested_objects.associates.y',
+        'cp_link.associates.x',
+        'cp_link.associates.y'
     ]
+
+    @calculated_property(schema={
+        'title': 'Calculated Property Embedding',
+        'type': 'array',
+        'items': {
+            'type': ['string', 'object'],
+            'linkTo': 'NestedObjectLinkTarget'
+        }
+    })
+    def cp_link(self, link_to_nested_objects):
+        """ Calculated property that sets this field from link_to_nested_objects """
+        return link_to_nested_objects
+
 
 
 @collection(

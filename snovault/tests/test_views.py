@@ -6,6 +6,7 @@ from base64 import b64encode
 from jsonschema_serialize_fork import Draft4Validator
 from pyramid.compat import ascii_native_
 from ..interfaces import TYPES
+from ..util import mappings_use_nested
 
 # These are taken care of by pytest.ini and should not be explicitly repeated.
 # -kmp 4-Jul-2020
@@ -22,107 +23,123 @@ def get_parameterized_names():
 
 PARAMETERIZED_NAMES = get_parameterized_names()
 
-def test_nested_embed(testapp):
 
-    td_res = testapp.post_json('/nested-object-link-target/',
-                               {
-                                   "associates": [{"x": "1", "y": "2", "z": "3"}],
-                                   "title": "required title",
-                                   "description": "foo",
-                               },
-                               status=201).json
-    res = testapp.post_json('/nested-embedding-container/',
-                               {
-                                   "link_to_nested_object": td_res['@graph'][0]['uuid'],
-                                   "title": "required title",
-                                   "description": "foo",
-                               },
-                               status=201).json
-    embedded_json = testapp.get(res['@graph'][0]['@id'] + "?frame=embedded").json
-    print(json.dumps(embedded_json, indent=2))
-    [associate] = embedded_json['link_to_nested_object']['associates']
-    assert associate['x'] == '1'
-    assert associate['y'] == '2'
-    assert 'z' not in associate
+def test_nested_embed(testapp):
+    with mappings_use_nested(True):
+        td_res = testapp.post_json('/nested-object-link-target/',
+                                   {
+                                       "associates": [{"x": "1", "y": "2", "z": "3"}],
+                                       "title": "required title",
+                                       "description": "foo",
+                                   },
+                                   status=201).json
+        res = testapp.post_json('/nested-embedding-container/',
+                                   {
+                                       "link_to_nested_object": td_res['@graph'][0]['uuid'],
+                                       "title": "required title",
+                                       "description": "foo",
+                                   },
+                                   status=201).json
+        embedded_json = testapp.get(res['@graph'][0]['@id'] + "?frame=embedded").json
+        print(json.dumps(embedded_json, indent=2))
+        [associate] = embedded_json['link_to_nested_object']['associates']
+        assert associate['x'] == '1'
+        assert associate['y'] == '2'
+        assert 'z' not in associate
 
 
 def test_nested_embed_multi_trivial(testapp):
-
-    td_res = testapp.post_json('/nested-object-link-target/',
-                               {
-                                   "associates": [{"x": "1", "y": "2", "z": "3"}],
-                                   "title": "required title",
-                                   "description": "foo",
-                               },
-                               status=201).json
-    res = testapp.post_json('/nested-embedding-container/',
-                               {
-                                   "link_to_nested_objects": [td_res['@graph'][0]['uuid']],
-                                   "title": "required title",
-                                   "description": "foo",
-                               },
-                               status=201).json
-    embedded_json = testapp.get(res['@graph'][0]['@id'] + "?frame=embedded").json
-    print(json.dumps(embedded_json, indent=2))
-    [item] = embedded_json['link_to_nested_objects']  # We only associated one uuid in our post
-    [associate] = item['associates'] # We only described one associate in the target
-    assert associate['x'] == '1'
-    assert associate['y'] == '2'
-    assert 'z' not in associate
+    with mappings_use_nested(True):
+        td_res = testapp.post_json('/nested-object-link-target/',
+                                   {
+                                       "associates": [{"x": "1", "y": "2", "z": "3"}],
+                                       "title": "required title",
+                                       "description": "foo",
+                                   },
+                                   status=201).json
+        res = testapp.post_json('/nested-embedding-container/',
+                                   {
+                                       "link_to_nested_objects": [td_res['@graph'][0]['uuid']],
+                                       "title": "required title",
+                                       "description": "foo",
+                                   },
+                                   status=201).json
+        embedded_json = testapp.get(res['@graph'][0]['@id'] + "?frame=embedded").json
+        print(json.dumps(embedded_json, indent=2))
+        [item] = embedded_json['link_to_nested_objects']  # We only associated one uuid in our post
+        [associate] = item['associates'] # We only described one associate in the target
+        assert associate['x'] == '1'
+        assert associate['y'] == '2'
+        assert 'z' not in associate
 
 
 def test_nested_embed_multi(testapp):
+    with mappings_use_nested(True):
+        n_targets = 5
+        props = ["x", "y", "z"]
+        embedded_props = ["x", "y"]
+        unembedded_props = sorted(set(props) - set(embedded_props))
+        assert unembedded_props == ["z"]  # a consistency check. needs to change if props or embedded props changes
+        props_count = len(props)  # unless test changes, this is probably 3
+        assert props_count == 3  # another consistency check. this needs to change if props changes.
 
-    n_targets = 5
-    props = ["x", "y", "z"]
-    embedded_props = ["x", "y"]
-    unembedded_props = sorted(set(props) - set(embedded_props))
-    assert unembedded_props == ["z"]  # a consistency check. needs to change if props or embedded props changes
-    props_count = len(props)  # unless test changes, this is probably 3
-    assert props_count == 3  # another consistency check. this needs to change if props changes.
+        target_uuid_list = []
+        for i in range(n_targets):
+            # k will step by the number of properties (probably 3, for "x", "y", "z", but we'll keep it abstract)
+            k = i * props_count
+            # e.g., prop_bindings will take on {"x": "0", "y": "1", "z": "2"}, {"x": "3", "y": "4", "z": "5"}, ...
+            prop_bindings = {key: str(k + pos) for pos, key in enumerate(props)}
+            target_result = testapp.post_json('/nested-object-link-target/',
+                                              {
+                                                  "associates": [prop_bindings],
+                                                  # Fields "title" and "description" are required, but might as well
+                                                  # include useful stuff in case it's needed for debugging. These values
+                                                  # do not affect the outcome. -kmp 4-Jul-2020
+                                                  "title": "Item {i} with props={props}".format(i=i, props=prop_bindings),
+                                                  "description": "This is item {}".format(i),
+                                              },
+                                              status=201).json
+            uuid = target_result['@graph'][0]['uuid']
+            target_uuid_list.append(uuid)
+        res = testapp.post_json('/nested-embedding-container/',
+                                {
+                                    "link_to_nested_objects": target_uuid_list,
+                                    "title": "Sample container for nested items",
+                                    "description": "This is just an example for testing.",
+                                },
+                                status=201).json
+        embedded_json = testapp.get(res['@graph'][0]['@id'] + "?frame=embedded").json
+        # This will show up if debugging is needed
+        print(json.dumps(embedded_json, indent=2))
+        items = embedded_json['link_to_nested_objects']
+        assert len(items) == n_targets
+        for i, item in enumerate(items):
+            [associate] = item['associates']
+            # Make sure that "x" and "y" (or whatever our embedded props are) exist in the example.
+            assert all(isinstance(associate[prop], str) for prop in embedded_props)
+            # Make sure that the fields we did NOT embed do not appear
+            assert all(prop not in associate for prop in unembedded_props)
+            # Get the values of each of the fields, which we expect to be strings coerceable to integers.
+            nums = [int(associate[prop]) for prop in embedded_props]
+            # for some item i, the numbers we'll expect are i*prop_count+pos
+            k = i * props_count   # Truncate to block of 3. e.g., (0,1,2) or (9,10,11)
+            for pos, prop in enumerate(embedded_props):
+                assert nums[pos] == k + pos
 
-    target_uuid_list = []
-    for i in range(n_targets):
-        # k will step by the number of properties (probably 3, for "x", "y", "z", but we'll keep it abstract)
-        k = i * props_count
-        # e.g., prop_bindings will take on {"x": "0", "y": "1", "z": "2"}, {"x": "3", "y": "4", "z": "5"}, ...
-        prop_bindings = {key: str(k + pos) for pos, key in enumerate(props)}
-        target_result = testapp.post_json('/nested-object-link-target/',
-                                          {
-                                              "associates": [prop_bindings],
-                                              # Fields "title" and "description" are required, but might as well
-                                              # include useful stuff in case it's needed for debugging. These values
-                                              # do not affect the outcome. -kmp 4-Jul-2020
-                                              "title": "Item {i} with props={props}".format(i=i, props=prop_bindings),
-                                              "description": "This is item {}".format(i),
-                                          },
-                                          status=201).json
-        uuid = target_result['@graph'][0]['uuid']
-        target_uuid_list.append(uuid)
-    res = testapp.post_json('/nested-embedding-container/',
-                            {
-                                "link_to_nested_objects": target_uuid_list,
-                                "title": "Sample container for nested items",
-                                "description": "This is just an example for testing.",
-                            },
-                            status=201).json
-    embedded_json = testapp.get(res['@graph'][0]['@id'] + "?frame=embedded").json
-    # This will show up if debugging is needed
-    print(json.dumps(embedded_json, indent=2))
-    items = embedded_json['link_to_nested_objects']
-    assert len(items) == n_targets
-    for i, item in enumerate(items):
-        [associate] = item['associates']
-        # Make sure that "x" and "y" (or whatever our embedded props are) exist in the example.
-        assert all(isinstance(associate[prop], str) for prop in embedded_props)
-        # Make sure that the fields we did NOT embed do not appear
-        assert all(prop not in associate for prop in unembedded_props)
-        # Get the values of each of the fields, which we expect to be strings coerceable to integers.
-        nums = [int(associate[prop]) for prop in embedded_props]
-        # for some item i, the numbers we'll expect are i*prop_count+pos
-        k = i * props_count   # Truncate to block of 3. e.g., (0,1,2) or (9,10,11)
-        for pos, prop in enumerate(embedded_props):
-            assert nums[pos] == k + pos
+        # repeat work on calculated property
+        calculated_property_items = embedded_json['cp_link']
+        for i, item in enumerate(calculated_property_items):
+            [associate] = item['associates']
+            # Make sure that "x" and "y" (or whatever our embedded props are) exist in the example.
+            assert all(isinstance(associate[prop], str) for prop in embedded_props)
+            # Make sure that the fields we did NOT embed do not appear
+            assert all(prop not in associate for prop in unembedded_props)
+            # Get the values of each of the fields, which we expect to be strings coerceable to integers.
+            nums = [int(associate[prop]) for prop in embedded_props]
+            # for some item i, the numbers we'll expect are i*prop_count+pos
+            k = i * props_count  # Truncate to block of 3. e.g., (0,1,2) or (9,10,11)
+            for pos, prop in enumerate(embedded_props):
+                assert nums[pos] == k + pos
 
 
 @pytest.mark.parametrize('item_type', PARAMETERIZED_NAMES)

@@ -8,22 +8,9 @@ from ..elasticsearch.interfaces import ELASTIC_SEARCH
 from .pyramidfixtures import dummy_request
 from .test_views import PARAMETERIZED_NAMES
 from .toolfixtures import registry
-from ..settings import Settings
-from contextlib import contextmanager
-
+from ..util import mappings_use_nested
 
 unit_test_type = 'EmbeddingTest'
-
-
-@contextmanager
-def mappings_use_nested(value=True):
-    """ Context manager that sets the MAPPINGS_USE_NESTED setting with the given value, default True """
-    old_setting = Settings.MAPPINGS_USE_NESTED
-    try:
-        Settings.MAPPINGS_USE_NESTED = value
-        yield
-    finally:
-        Settings.MAPPINGS_USE_NESTED = old_setting
 
 
 @pytest.mark.parametrize('item_type', PARAMETERIZED_NAMES)

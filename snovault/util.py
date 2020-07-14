@@ -7,6 +7,9 @@ import structlog
 from past.builtins import basestring
 from pyramid.httpexceptions import HTTPForbidden
 from pyramid.threadlocal import manager as threadlocal_manager
+from .settings import Settings
+from contextlib import contextmanager
+
 
 from .interfaces import CONNECTION, STORAGE, TYPES
 
@@ -16,6 +19,17 @@ log = structlog.getLogger(__name__)
 ###################
 # Misc. utilities #
 ###################
+
+
+@contextmanager
+def mappings_use_nested(value=True):
+    """ Context manager that sets the MAPPINGS_USE_NESTED setting with the given value, default True """
+    old_setting = Settings.MAPPINGS_USE_NESTED
+    try:
+        Settings.MAPPINGS_USE_NESTED = value
+        yield
+    finally:
+        Settings.MAPPINGS_USE_NESTED = old_setting
 
 
 class DictionaryKeyError(KeyError):
