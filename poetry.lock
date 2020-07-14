@@ -233,7 +233,7 @@ description = "Utility package for interacting with the 4DN Data Portal and othe
 name = "dcicutils"
 optional = false
 python-versions = ">=3.4,<3.8"
-version = "0.32.2"
+version = "0.33.2"
 
 [package.dependencies]
 aws-requests-auth = ">=0.4.2,<1"
@@ -388,7 +388,7 @@ description = "Python Git Library"
 name = "gitpython"
 optional = false
 python-versions = ">=3.4"
-version = "3.1.3"
+version = "3.1.7"
 
 [package.dependencies]
 gitdb = ">=4.0.1,<5"
@@ -709,11 +709,14 @@ dev = ["pre-commit", "tox"]
 
 [[package]]
 category = "main"
-description = "psutil is a cross-platform library for retrieving information onrunning processes and system utilization (CPU, memory, disks, network)in Python."
+description = "Cross-platform lib for process and system monitoring in Python."
 name = "psutil"
 optional = false
-python-versions = "*"
-version = "4.4.2"
+python-versions = ">=2.6, !=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*"
+version = "5.7.0"
+
+[package.extras]
+enum = ["enum34"]
 
 [[package]]
 category = "main"
@@ -1519,7 +1522,7 @@ transaction = ">=1.6.0"
 test = ["zope.testing"]
 
 [metadata]
-content-hash = "82870af859f6b0d8960870de7daeb57fbd74c85c7310f75fe7601d4f08bfc1a4"
+content-hash = "3e56679f52061b259f9c4569c32c404a71da7c9a2c0df3219e0c7fdbf142298a"
 python-versions = ">=3.6,<3.7"
 
 [metadata.files]
@@ -1672,8 +1675,8 @@ cryptography = [
     {file = "cryptography-2.9.2.tar.gz", hash = "sha256:a0c30272fb4ddda5f5ffc1089d7405b7a71b0b0f51993cb4e5dbb4590b2fc229"},
 ]
 dcicutils = [
-    {file = "dcicutils-0.32.2-py3-none-any.whl", hash = "sha256:7403d422a12160162a9691aff2af04f6f37869fc40252f2f61cd92a10076a4b2"},
-    {file = "dcicutils-0.32.2.tar.gz", hash = "sha256:888feae7870294fe12979fbe567b653874273d149bcc31ecef5817300b01c0f1"},
+    {file = "dcicutils-0.33.2-py3-none-any.whl", hash = "sha256:7a3d28293660f537efb647fa8919451df3c2a8ceaebea541c87a591cb65650d7"},
+    {file = "dcicutils-0.33.2.tar.gz", hash = "sha256:2657c628312aeaeb6423eac38c05cf0914d9e13d5ea82430d599a59537a526b2"},
 ]
 docker = [
     {file = "docker-4.2.2-py2.py3-none-any.whl", hash = "sha256:03a46400c4080cb6f7aa997f881ddd84fef855499ece219d75fbdb53289c17ab"},
@@ -1720,8 +1723,8 @@ gitdb = [
     {file = "gitdb-4.0.5.tar.gz", hash = "sha256:c9e1f2d0db7ddb9a704c2a0217be31214e91a4fe1dea1efad19ae42ba0c285c9"},
 ]
 gitpython = [
-    {file = "GitPython-3.1.3-py3-none-any.whl", hash = "sha256:ef1d60b01b5ce0040ad3ec20bc64f783362d41fa0822a2742d3586e1f49bb8ac"},
-    {file = "GitPython-3.1.3.tar.gz", hash = "sha256:e107af4d873daed64648b4f4beb89f89f0cfbe3ef558fc7821ed2331c2f8da1a"},
+    {file = "GitPython-3.1.7-py3-none-any.whl", hash = "sha256:fa3b92da728a457dd75d62bb5f3eb2816d99a7fe6c67398e260637a40e3fafb5"},
+    {file = "GitPython-3.1.7.tar.gz", hash = "sha256:2db287d71a284e22e5c2846042d0602465c7434d910406990d5b74df4afb0858"},
 ]
 html5lib = [
     {file = "html5lib-0.9999999.tar.gz", hash = "sha256:2612a191a8d5842bfa057e41ba50bbb9dcb722419d2408c78cff4758d0754868"},
@@ -1867,23 +1870,17 @@ pluggy = [
     {file = "pluggy-0.13.1.tar.gz", hash = "sha256:15b2acde666561e1298d71b523007ed7364de07029219b604cf808bfa1c765b0"},
 ]
 psutil = [
-    {file = "psutil-4.4.2-cp27-none-win32.whl", hash = "sha256:15aba78f0262d7839702913f5d2ce1e97c89e31456bb26da1a5f9f7d7fe6d336"},
-    {file = "psutil-4.4.2-cp27-none-win_amd64.whl", hash = "sha256:69e30d789c495b781f7cd47c13ee64452c58abfc7132d6dd1b389af312a78239"},
-    {file = "psutil-4.4.2-cp33-cp33m-win32.whl", hash = "sha256:e44d6b758a96539e3e02336430d3f85263d43c470c5bad93572e9b6a86c67f76"},
-    {file = "psutil-4.4.2-cp33-cp33m-win_amd64.whl", hash = "sha256:c2b0d8d1d8b5669b9884d0dd49ccb4094d163858d672d3d13a3fa817bc8a3197"},
-    {file = "psutil-4.4.2-cp34-cp34m-win32.whl", hash = "sha256:10fbb631142a3200623f4ab49f8bf82c32b79b8fe179f6056d01da3dfc589da1"},
-    {file = "psutil-4.4.2-cp34-cp34m-win_amd64.whl", hash = "sha256:e423dd9cb12256c742d1d56ec38bc7d2a7fa09287c82c41e475e68b9f932c2af"},
-    {file = "psutil-4.4.2-cp35-cp35m-win32.whl", hash = "sha256:7481f299ae0e966a10cb8dd93a327efd8f51995d9bdc8810dcc65d3b12d856ee"},
-    {file = "psutil-4.4.2-cp35-cp35m-win_amd64.whl", hash = "sha256:d96d31d83781c7f3d0df8ccb1cc50650ca84d4722c5070b71ce8f1cc112e02e0"},
-    {file = "psutil-4.4.2.tar.gz", hash = "sha256:1c37e6428f7fe3aeea607f9249986d9bb933bb98133c7919837fd9aac4996b07"},
-    {file = "psutil-4.4.2.win-amd64-py2.7.exe", hash = "sha256:11a20c0328206dce68f8da771461aeaef9c44811e639216fd935837e758632dc"},
-    {file = "psutil-4.4.2.win-amd64-py3.3.exe", hash = "sha256:642194ebefa573de62406883eb33868917bab2cc2e21b68d551248e194dd0b0a"},
-    {file = "psutil-4.4.2.win-amd64-py3.4.exe", hash = "sha256:c02b9fb5f1f3c857938b26a73b1ca92007e8b0b2fd64693b29300fae0ceaf679"},
-    {file = "psutil-4.4.2.win-amd64-py3.5.exe", hash = "sha256:6c40dc16b579f645e1804341322364203d0b21045747e62e360fae843d945e20"},
-    {file = "psutil-4.4.2.win32-py2.7.exe", hash = "sha256:c353ecc62e67bf7c7051c087670d49eae9472f1b30bb1623d667b0cd137e8934"},
-    {file = "psutil-4.4.2.win32-py3.3.exe", hash = "sha256:7106cb3722235ccb6fe4b18c51f60a548d4b111ec2d209abdcd3998661f4593a"},
-    {file = "psutil-4.4.2.win32-py3.4.exe", hash = "sha256:de1f53fe955dfba562f7791f72517935010a2e88f9caad36917e8c5c03de9051"},
-    {file = "psutil-4.4.2.win32-py3.5.exe", hash = "sha256:2eb123ca86057ed4f31cfc9880e098ee7a8e19c7ec02b068c45e7559ae7539a6"},
+    {file = "psutil-5.7.0-cp27-none-win32.whl", hash = "sha256:298af2f14b635c3c7118fd9183843f4e73e681bb6f01e12284d4d70d48a60953"},
+    {file = "psutil-5.7.0-cp27-none-win_amd64.whl", hash = "sha256:75e22717d4dbc7ca529ec5063000b2b294fc9a367f9c9ede1f65846c7955fd38"},
+    {file = "psutil-5.7.0-cp35-cp35m-win32.whl", hash = "sha256:f344ca230dd8e8d5eee16827596f1c22ec0876127c28e800d7ae20ed44c4b310"},
+    {file = "psutil-5.7.0-cp35-cp35m-win_amd64.whl", hash = "sha256:e2d0c5b07c6fe5a87fa27b7855017edb0d52ee73b71e6ee368fae268605cc3f5"},
+    {file = "psutil-5.7.0-cp36-cp36m-win32.whl", hash = "sha256:a02f4ac50d4a23253b68233b07e7cdb567bd025b982d5cf0ee78296990c22d9e"},
+    {file = "psutil-5.7.0-cp36-cp36m-win_amd64.whl", hash = "sha256:1413f4158eb50e110777c4f15d7c759521703bd6beb58926f1d562da40180058"},
+    {file = "psutil-5.7.0-cp37-cp37m-win32.whl", hash = "sha256:d008ddc00c6906ec80040d26dc2d3e3962109e40ad07fd8a12d0284ce5e0e4f8"},
+    {file = "psutil-5.7.0-cp37-cp37m-win_amd64.whl", hash = "sha256:73f35ab66c6c7a9ce82ba44b1e9b1050be2a80cd4dcc3352cc108656b115c74f"},
+    {file = "psutil-5.7.0-cp38-cp38-win32.whl", hash = "sha256:60b86f327c198561f101a92be1995f9ae0399736b6eced8f24af41ec64fb88d4"},
+    {file = "psutil-5.7.0-cp38-cp38-win_amd64.whl", hash = "sha256:d84029b190c8a66a946e28b4d3934d2ca1528ec94764b180f7d6ea57b0e75e26"},
+    {file = "psutil-5.7.0.tar.gz", hash = "sha256:685ec16ca14d079455892f25bd124df26ff9137664af445563c1bd36629b5e0e"},
 ]
 psycopg2 = [
     {file = "psycopg2-2.8.5-cp27-cp27m-win32.whl", hash = "sha256:a0984ff49e176062fcdc8a5a2a670c9bb1704a2f69548bce8f8a7bad41c661bf"},
@@ -1964,6 +1961,7 @@ pycryptodome = [
     {file = "pycryptodome-3.9.8-cp38-cp38-win_amd64.whl", hash = "sha256:55eb61aca2c883db770999f50d091ff7c14016f2769ad7bca3d9b75d1d7c1b68"},
     {file = "pycryptodome-3.9.8-cp39-cp39-manylinux1_i686.whl", hash = "sha256:39ef9fb52d6ec7728fce1f1693cb99d60ce302aeebd59bcedea70ca3203fda60"},
     {file = "pycryptodome-3.9.8-cp39-cp39-manylinux1_x86_64.whl", hash = "sha256:de6e1cd75677423ff64712c337521e62e3a7a4fc84caabbd93207752e831a85a"},
+    {file = "pycryptodome-3.9.8.tar.gz", hash = "sha256:0e24171cf01021bc5dc17d6a9d4f33a048f09d62cc3f62541e95ef104588bda4"},
 ]
 pyflakes = [
     {file = "pyflakes-2.2.0-py2.py3-none-any.whl", hash = "sha256:0d94e0e05a19e57a99444b6ddcf9a6eb2e5c68d3ca1e98e90707af8152c90a92"},

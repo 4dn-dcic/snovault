@@ -65,8 +65,7 @@ passlib = "^1.6.5"
 #       We pin it here to 3.1.1 rather than ^3.1.1 just so we're testing the version the
 #       deployed appliations are going to use (at least for now). -kmp 11-Jul-2020
 Pillow = "3.1.1"
-# TODO: Investigate whether a major version upgrade is allowable for 'psutil'.
-psutil = ">=4.3.0,<5"
+psutil = "^5.6.6"
 # psycopg2 = "2.8.4"
 psycopg2 = "^2.7.3"
 PyBrowserID = "^0.10.0"
