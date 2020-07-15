@@ -1,3 +1,4 @@
+import copy
 from pyramid.security import (
     # ALL_PERMISSIONS,
     Allow,
@@ -354,8 +355,13 @@ NESTED_OBJECT_LINK_TARGET_GUID_1 = 'f738e192-85f4-4886-bdc4-e099a2e2102a'
 NESTED_OBJECT_LINK_TARGET_GUID_2 = 'c48dfba9-ad62-4b32-ad29-a4b6ca47e5d4'
 
 # Formerly 100a0bb8-2974-446b-a5de-6937aa313be4
-NESTED_EMBEDDING_CONTAINER_GUID_1 = "6d3e9e27-cf87-4103-aa36-9f481c9d9a66"
-NESTED_EMBEDDING_CONTAINER_GUID_2 = "d7ce654d-e0ab-4bf2-a051-3e185165c2ee"
+NESTED_EMBEDDING_CONTAINER_GUID = "6d3e9e27-cf87-4103-aa36-9f481c9d9a66"
+
+NESTED_OBJECT_LINK_TARGET_GUIDS = [  # These IDs are defined in test_views.py so this is a low-tech revlink
+    NESTED_OBJECT_LINK_TARGET_GUID_1,
+    NESTED_OBJECT_LINK_TARGET_GUID_2,
+]
+
 
 @collection(
     name='nested-embedding-container',
@@ -390,10 +396,7 @@ class NestedEmbeddingContainer(Item):
             }
         })
     def nested_calculated_property(self):
-        return [  # These IDs are defined in test_views.py so this is a low-tech revlink
-            NESTED_OBJECT_LINK_TARGET_GUID_1,
-            NESTED_OBJECT_LINK_TARGET_GUID_2,
-        ]
+        return copy.copy(NESTED_OBJECT_LINK_TARGET_GUIDS)
 
 
 @collection(

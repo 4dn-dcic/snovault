@@ -10,7 +10,7 @@ from ..interfaces import TYPES
 from ..util import mappings_use_nested
 from .testing_views import (
     NESTED_OBJECT_LINK_TARGET_GUID_1, NESTED_OBJECT_LINK_TARGET_GUID_2,
-    NESTED_EMBEDDING_CONTAINER_GUID_1, NESTED_EMBEDDING_CONTAINER_GUID_2,
+    NESTED_EMBEDDING_CONTAINER_GUID, NESTED_OBJECT_LINK_TARGET_GUIDS,
 )
 
 
@@ -33,20 +33,23 @@ PARAMETERIZED_NAMES = get_parameterized_names()
 @pytest.mark.parametrize('use_nested', [False, True])
 def test_nested_embed(testapp, use_nested):
     with mappings_use_nested(use_nested):
-        td_res = testapp.post_json('/nested-object-link-target/',
-                                   {
-                                       "associates": [{"x": "1", "y": "2", "z": "3"}],
-                                       "title": "required title",
-                                       "description": "foo",
-                                       "uuid": NESTED_OBJECT_LINK_TARGET_GUID_1,
-                                   },
-                                   status=201).json
+        for uuid in NESTED_OBJECT_LINK_TARGET_GUIDS:
+            td_res = testapp.post_json('/nested-object-link-target/',
+                                       {
+                                           "associates": [{"x": "1", "y": "2", "z": "3"}],
+                                           "title": "required title",
+                                           "description": "foo",
+                                           "uuid": uuid,
+                                       },
+                                       status=201).json
+            assert td_res['@graph'][0]['uuid'] == uuid
+
         res = testapp.post_json('/nested-embedding-container/',
                                    {
                                        "link_to_nested_object": td_res['@graph'][0]['uuid'],
                                        "title": "required title",
                                        "description": "foo",
-                                       "uuid": NESTED_EMBEDDING_CONTAINER_GUID_1,
+                                       "uuid": NESTED_EMBEDDING_CONTAINER_GUID,
                                    },
                                    status=201).json
         embedded_json = testapp.get(res['@graph'][0]['@id'] + "?frame=embedded").json
@@ -64,31 +67,23 @@ def test_nested_embed(testapp, use_nested):
 @pytest.mark.parametrize('use_nested', [False, True])
 def test_nested_embed_calculated(testapp, use_nested):
     with mappings_use_nested(use_nested):
-        td_res1 = testapp.post_json('/nested-object-link-target/',
-                                    {
-                                        "associates": [{"x": "1", "y": "2", "z": "3"}],
-                                        "title": "required title",
-                                        "description": "foo",
-                                        "uuid": NESTED_OBJECT_LINK_TARGET_GUID_1,
-                                    },
-                                    status=201).json
-        assert td_res1['@graph'][0]['uuid'] == NESTED_OBJECT_LINK_TARGET_GUID_1
-        td_res2 = testapp.post_json('/nested-object-link-target/',
-                                    {
-                                        "associates": [{"x": "1", "y": "2", "z": "3"}],
-                                        "title": "required title",
-                                        "description": "foo",
-                                        "uuid": NESTED_OBJECT_LINK_TARGET_GUID_2,
-                                    },
-                                    status=201).json
-        assert td_res2['@graph'][0]['uuid'] == NESTED_OBJECT_LINK_TARGET_GUID_2
+        for uuid in NESTED_OBJECT_LINK_TARGET_GUIDS:
+            td_res = testapp.post_json('/nested-object-link-target/',
+                                       {
+                                           "associates": [{"x": "1", "y": "2", "z": "3"}],
+                                           "title": "required title",
+                                           "description": "foo",
+                                           "uuid": uuid,
+                                       },
+                                       status=201).json
+            assert td_res['@graph'][0]['uuid'] == uuid
 
         res = testapp.post_json('/nested-embedding-container/',
                                    {
                                        "link_to_nested_object": NESTED_OBJECT_LINK_TARGET_GUID_1,
                                        "title": "required title",
                                        "description": "foo",
-                                       "uuid": NESTED_EMBEDDING_CONTAINER_GUID_1,
+                                       "uuid": NESTED_EMBEDDING_CONTAINER_GUID,
                                    },
                                    status=201).json
         embedded_json = testapp.get(res['@graph'][0]['@id'] + "?frame=embedded").json
@@ -103,29 +98,32 @@ def test_nested_embed_calculated(testapp, use_nested):
         assert 'z' not in associate
 
         nested_calculated_property = embedded_json['nested_calculated_property']
-        assert len(nested_calculated_property) == 2
-        for item in nested_calculated_property:
-            assert item['uuid'] in {NESTED_OBJECT_LINK_TARGET_GUID_1, NESTED_OBJECT_LINK_TARGET_GUID_2}
+        assert len(nested_calculated_property) == len(NESTED_OBJECT_LINK_TARGET_GUIDS)
+        for expected_uuid, item in zip(NESTED_OBJECT_LINK_TARGET_GUIDS, nested_calculated_property):
+            assert item['uuid'] == expected_uuid
             assert 'associates' in item
 
 
 @pytest.mark.parametrize('use_nested', [False, True])
 def test_nested_embed_multi_trivial(testapp, use_nested):
     with mappings_use_nested(use_nested):
-        td_res = testapp.post_json('/nested-object-link-target/',
-                                   {
-                                       "associates": [{"x": "1", "y": "2", "z": "3"}],
-                                       "title": "required title",
-                                       "description": "foo",
-                                       "uuid": NESTED_OBJECT_LINK_TARGET_GUID_1,
-                                   },
-                                   status=201).json
+        for uuid in NESTED_OBJECT_LINK_TARGET_GUIDS:
+            td_res = testapp.post_json('/nested-object-link-target/',
+                                       {
+                                           "associates": [{"x": "1", "y": "2", "z": "3"}],
+                                           "title": "required title",
+                                           "description": "foo",
+                                           "uuid": uuid,
+                                       },
+                                       status=201).json
+            assert td_res['@graph'][0]['uuid'] == uuid
+
         res = testapp.post_json('/nested-embedding-container/',
                                    {
                                        "link_to_nested_objects": [td_res['@graph'][0]['uuid']],
                                        "title": "required title",
                                        "description": "foo",
-                                       "uuid": NESTED_EMBEDDING_CONTAINER_GUID_1,
+                                       "uuid": NESTED_EMBEDDING_CONTAINER_GUID,
                                    },
                                    status=201).json
         embedded_json = testapp.get(res['@graph'][0]['@id'] + "?frame=embedded").json
@@ -140,7 +138,9 @@ def test_nested_embed_multi_trivial(testapp, use_nested):
 @pytest.mark.parametrize('use_nested', [False, True])
 def test_nested_embed_multi(testapp, use_nested):
     with mappings_use_nested(use_nested):
+        minimum_n = len(NESTED_OBJECT_LINK_TARGET_GUIDS)
         n_targets = 5
+        assert n_targets >= minimum_n
         props = ["x", "y", "z"]
         embedded_props = ["x", "y"]
         unembedded_props = sorted(set(props) - set(embedded_props))
@@ -162,7 +162,10 @@ def test_nested_embed_multi(testapp, use_nested):
                                                   # do not affect the outcome. -kmp 4-Jul-2020
                                                   "title": "Item {i} with props={props}".format(i=i, props=prop_bindings),
                                                   "description": "This is item {}".format(i),
-                                                  "uuid": NESTED_OBJECT_LINK_TARGET_GUID_1 if i == 0 else str(uuid4()),
+                                                  # Here we make sure that we make sure that the various
+                                                  "uuid": (NESTED_OBJECT_LINK_TARGET_GUIDS[i]
+                                                           if i < minimum_n
+                                                           else str(uuid4())),
                                               },
                                               status=201).json
             uuid = target_result['@graph'][0]['uuid']
@@ -172,7 +175,7 @@ def test_nested_embed_multi(testapp, use_nested):
                                     "link_to_nested_objects": target_uuid_list,
                                     "title": "Sample container for nested items",
                                     "description": "This is just an example for testing.",
-                                    "uuid": NESTED_EMBEDDING_CONTAINER_GUID_1,
+                                    "uuid": NESTED_EMBEDDING_CONTAINER_GUID,
                                 },
                                 status=201).json
         embedded_json = testapp.get(res['@graph'][0]['@id'] + "?frame=embedded").json
