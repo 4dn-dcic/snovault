@@ -30,8 +30,9 @@ def get_parameterized_names():
 PARAMETERIZED_NAMES = get_parameterized_names()
 
 
-def test_nested_embed(testapp):
-    with mappings_use_nested():
+@pytest.mark.parametrize('use_nested', [False, True])
+def test_nested_embed(testapp, use_nested):
+    with mappings_use_nested(use_nested):
         td_res = testapp.post_json('/nested-object-link-target/',
                                    {
                                        "associates": [{"x": "1", "y": "2", "z": "3"}],
@@ -60,8 +61,9 @@ def test_nested_embed(testapp):
 
 
 # @pytest.mark.xfail
-def test_nested_embed_calculated(testapp):
-    with mappings_use_nested():
+@pytest.mark.parametrize('use_nested', [False, True])
+def test_nested_embed_calculated(testapp, use_nested):
+    with mappings_use_nested(use_nested):
         td_res = testapp.post_json('/nested-object-link-target/',
                                    {
                                        "associates": [{"x": "1", "y": "2", "z": "3"}],
@@ -93,8 +95,9 @@ def test_nested_embed_calculated(testapp):
             assert 'associates' in item
 
 
-def test_nested_embed_multi_trivial(testapp):
-    with mappings_use_nested():
+@pytest.mark.parametrize('use_nested', [False, True])
+def test_nested_embed_multi_trivial(testapp, use_nested):
+    with mappings_use_nested(use_nested):
         td_res = testapp.post_json('/nested-object-link-target/',
                                    {
                                        "associates": [{"x": "1", "y": "2", "z": "3"}],
@@ -120,8 +123,9 @@ def test_nested_embed_multi_trivial(testapp):
         assert 'z' not in associate
 
 
-def test_nested_embed_multi(testapp):
-    with mappings_use_nested():
+@pytest.mark.parametrize('use_nested', [False, True])
+def test_nested_embed_multi(testapp, use_nested):
+    with mappings_use_nested(use_nested):
         n_targets = 5
         props = ["x", "y", "z"]
         embedded_props = ["x", "y"]
