@@ -178,7 +178,56 @@ def dlq_to_primary(context, request):
     return response
 
 
-class QueueManager(object):
+class LockoutManager:
+
+    EARLIEST_TIMESTAMP = datetime.datetime(datetime.MINYEAR, 1, 1)  # maybe useful for testing
+
+    def __init__(self, *, lockout_seconds, safety_seconds=0, action="metered action", enabled=True):
+        # This makes it easy to turn off the feature
+        self.lockout_enabled = enabled
+        self.lockout_seconds = lockout_seconds
+        self.safety_seconds = safety_seconds
+        self.action = action
+        self._timestamp = self.EARLIEST_TIMESTAMP
+
+    @property
+    def timestamp(self):
+        """The timestamp is read-only. Use update_timestamp() to set it."""
+        return self._timestamp
+
+    @property
+    def effective_lockout_seconds(self):
+        return self.lockout_seconds + self.safety_seconds
+
+    def wait_if_needed(self):
+        now = datetime.datetime.now()
+        # Note that this quantity is always positive because now is always bigger than the timestamp.
+        seconds_since_last_purge = (now - self._timestamp).total_seconds()
+        # Note again that because seconds_since_last_attempt is positive, the wait seconds will
+        # never exceed self.effective_lockout_seconds, so
+        #   0 <= wait_seconds <= self.effective_lockout_seconds
+        wait_seconds = max(0.0, self.effective_lockout_seconds - seconds_since_last_purge)
+        if wait_seconds > 0.0:
+            shared_message = ("Last %s attempt was at %s (%s seconds ago)."
+                              % (self.action, self._timestamp, seconds_since_last_purge))
+            if self.lockout_enabled:
+                action_message = "Waiting %s seconds before attempting another." % wait_seconds
+                log.warning("%s %s" % (shared_message, action_message))
+                time.sleep(wait_seconds)
+            else:
+                action_message = "Continuing anyway because lockout is disabled."
+                log.warning("%s %s" % (shared_message, action_message))
+        self.update_timestamp()
+
+    def update_timestamp(self):
+        """
+        Explicitly sets the reference time point for computation of our lockout.
+        This is called implicitly by .wait_if_needed(), and for some situations that may be sufficient.
+        """
+        self._timestamp = datetime.datetime.now()
+
+
+class QueueManager (object):
     """
     Class for handling the queues responsible for coordinating indexing.
     Contains methods to inititalize queues, add both uuids and collections of
@@ -191,22 +240,6 @@ class QueueManager(object):
        from either the primary or secondary queues.
     """
 
-    # The belief was that this may be making things slow in production, and the chance of collisions there is low,
-    # so for now we were going to enable this only during testing when the odds of collision are dramatically higher.
-    # HOWEVER, now I have a new theory that this wasn't the problem at all, so the first pass at this will be to try
-    # leaving this set True and see if just moving the sleep to a better place is enough to avoid setting this False.
-    # If that doesn't work, we've also tested that a setting oF False here would work and that will be our backup plan.
-    # -kmp 2-Jun-2020
-    PURGE_QUEUE_SLEEP_FOR_SAFETY = True
-
-    PURGE_QUEUE_TIMESTAMP0 = datetime.datetime(datetime.MINYEAR, 1, 1)  # maybe useful for testing
-    # Amazon says we shouldn't do anything for this amount of time after a purge request.
-    PURGE_QUEUE_LOCKOUT_TIME_ACCORDING_TO_AMAZON = 60
-    # Amount of safety margin we reserve to make sure our computations match Amazon's.
-    PURGE_QUEUE_SAFETY_MARGIN = 1
-    # This is the effective lockout time
-    PURGE_QUEUE_EFFECTIVE_LOCKOUT_TIME = PURGE_QUEUE_LOCKOUT_TIME_ACCORDING_TO_AMAZON + PURGE_QUEUE_SAFETY_MARGIN
-
     def __init__(self, registry, mirror_env=None, override_url=None):
         """
         __init__ will build all three queues needed with the desired settings.
@@ -217,7 +250,9 @@ class QueueManager(object):
         self.receive_batch_size = 10
         self.delete_batch_size = 10
         self.replace_batch_size = 10
-        self.purge_queue_timestamp = self.PURGE_QUEUE_TIMESTAMP0
+        # Amazon says we shouldn't do anything for 60 seconds after a purge request.
+        # Since we can't be sure they're counting from the same place as we are, we add 1 second margin for error.
+        self.lockout_manager = LockoutManager(action="purge_queue", lockout_seconds=60, safety_seconds=1)
         self.env_name = mirror_env if mirror_env else registry.settings.get('env.name')
         self.override_url = override_url
         # local development
@@ -435,24 +470,7 @@ class QueueManager(object):
         return queue_urls
 
     def _wait_until_purge_queue_allowed(self):
-        now = datetime.datetime.now()
-        # Note that this quantity is always positive because now is always bigger than the timestamp.
-        seconds_since_last_purge = (now - self.purge_queue_timestamp).total_seconds()
-        # Note again that because seconds_since_last_attempt is positive, the wait seconds will
-        # never exceed self.PURGE_QUEUE_EFFECTIVE_LOCKOUT_TIME, so
-        #   0 <= wait_seconds <= self.self.PURGE_QUEUE_EFFECTIVE_LOCKOUT_TIME
-        wait_seconds = max(0.0, self.PURGE_QUEUE_EFFECTIVE_LOCKOUT_TIME - seconds_since_last_purge)
-        if wait_seconds > 0.0:
-            shared_message = ("Last purge_queue attempt was at %s (%s seconds ago)."
-                              % (self.purge_queue_timestamp, seconds_since_last_purge))
-            if self.PURGE_QUEUE_SLEEP_FOR_SAFETY:
-                action_message = "Waiting %s seconds before attempting another." % wait_seconds
-                log.warning("%s %s" % (shared_message, action_message))
-                time.sleep(wait_seconds)
-            else:
-                action_message = "Continuing anyway because QueueManager.PURGE_QUEUE_SLEEP_FOR_SAFETY is False."
-                log.warning("%s %s" % (shared_message, action_message))
-        self.purge_queue_timestamp = datetime.datetime.now()
+        self.lockout_manager.wait_if_needed()
 
     def purge_queue(self):
         """
