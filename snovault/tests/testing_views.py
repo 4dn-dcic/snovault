@@ -392,8 +392,7 @@ class NestedEmbeddingContainer(Item):
     def nested_calculated_property(self):
         return [  # These IDs are defined in test_views.py so this is a low-tech revlink
             NESTED_OBJECT_LINK_TARGET_GUID_1,
-            # Keeping it simple, let's just use 1
-            # NESTED_OBJECT_LINK_TARGET_GUID_2,
+            NESTED_OBJECT_LINK_TARGET_GUID_2,
         ]
 
 
