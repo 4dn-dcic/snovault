@@ -1717,15 +1717,6 @@ def test_queue_manager_creation():
 
                         manager = QueueManager(registry, mirror_env=mirror_env, override_url=override_url)
 
-                    # Check the aftermath...
-
-                    # Values that would have been due to class variables
-                    assert manager.rate_manager.lockout_enabled is True
-                    a_couple_of_years_ago = datetime(datetime.now().year - 2, 1, 1)
-                    assert manager.rate_manager.EARLIEST_TIMESTAMP < a_couple_of_years_ago
-                    assert (manager.rate_manager.effective_lockout_seconds
-                            > manager.rate_manager.lockout_seconds)
-
                     assert manager.env_name == expected_env
 
                     assert mock_boto3_client.call_count == 1
@@ -1809,31 +1800,32 @@ def test_queue_manager_purge_queue_wait():
                     # Make sure things are set up for our test
                     assert isinstance(manager.client, MockSqsClient)
 
-                    dt = ControlledTime()
+                    tick = 1/128
+                    dt = ControlledTime(tick_seconds=tick)
 
                     with mock.patch("datetime.datetime", dt):
                         with mock.patch("time.sleep", dt.sleep):
 
                             start_time = dt.just_now()
-                            assert start_time > manager.rate_manager.EARLIEST_TIMESTAMP
-                            assert manager.rate_manager.timestamp == manager.rate_manager.EARLIEST_TIMESTAMP
                             assert manager.client.purge_queue.call_count == 0  # Just to be sure
                             manager.purge_queue()
                             assert manager.client.purge_queue.call_count == 3  # Called once for each queue
                             # The first time it shouldn't wait, but does check the time twice
-                            assert manager.rate_manager.timestamp == start_time + timedelta(seconds=2)
+                            now = dt.just_now()
+                            assert now > start_time
+                            assert now < start_time + timedelta(seconds=5 * tick)
 
                             # Try again now...
                             start_time = dt.just_now()
-                            assert manager.rate_manager.timestamp == start_time
                             assert manager.client.purge_queue.call_count == 3  # Just to be sure
                             manager.purge_queue()
                             assert manager.client.purge_queue.call_count == 6  # Called once for each queue
-                            # The second time the wait should be 61 seconds, plus we check the time twice
-                            # (once within the 61 second wait time, so it doesn't count) and we count 1 second
-                            # for each check outside the interval, so 62 total. But most importantly, we do NOT
-                            # wait for whole extra minutes. :) -kmp 2-Jun-2020
-                            assert manager.rate_manager.timestamp == start_time + timedelta(seconds=62)
+                            # The second time the wait should be about 61 seconds, 60 + safety=1 + plus a few
+                            # clock ticks. We could say more precisely but not without overpromising an abstraction
+                            # maintained elsewhere, so this test is now fuzzy.
+                            now = dt.just_now()
+                            assert now > start_time + timedelta(seconds=60)
+                            assert now < start_time + timedelta(seconds=61 + 5 * tick)
 
 
 def test_queue_manager_chunk_messages():
