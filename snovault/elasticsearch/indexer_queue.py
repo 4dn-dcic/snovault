@@ -182,12 +182,13 @@ class LockoutManager:
 
     EARLIEST_TIMESTAMP = datetime.datetime(datetime.MINYEAR, 1, 1)  # maybe useful for testing
 
-    def __init__(self, *, lockout_seconds, safety_seconds=0, action="metered action", enabled=True):
+    def __init__(self, *, lockout_seconds, safety_seconds=0, action="metered action", enabled=True, log=None):
         # This makes it easy to turn off the feature
-        self.lockout_enabled = enabled
         self.lockout_seconds = lockout_seconds
         self.safety_seconds = safety_seconds
         self.action = action
+        self.lockout_enabled = enabled
+        self.log = log
         self._timestamp = self.EARLIEST_TIMESTAMP
 
     @property
@@ -212,11 +213,13 @@ class LockoutManager:
                               % (self.action, self._timestamp, seconds_since_last_purge))
             if self.lockout_enabled:
                 action_message = "Waiting %s seconds before attempting another." % wait_seconds
-                log.warning("%s %s" % (shared_message, action_message))
+                if self.log:
+                    self.log.warning("%s %s" % (shared_message, action_message))
                 time.sleep(wait_seconds)
             else:
                 action_message = "Continuing anyway because lockout is disabled."
-                log.warning("%s %s" % (shared_message, action_message))
+                if self.log:
+                    self.log.warning("%s %s" % (shared_message, action_message))
         self.update_timestamp()
 
     def update_timestamp(self):
@@ -252,7 +255,7 @@ class QueueManager (object):
         self.replace_batch_size = 10
         # Amazon says we shouldn't do anything for 60 seconds after a purge request.
         # Since we can't be sure they're counting from the same place as we are, we add 1 second margin for error.
-        self.lockout_manager = LockoutManager(action="purge_queue", lockout_seconds=60, safety_seconds=1)
+        self.lockout_manager = LockoutManager(action="purge_queue", lockout_seconds=60, safety_seconds=1, log=log)
         self.env_name = mirror_env if mirror_env else registry.settings.get('env.name')
         self.override_url = override_url
         # local development

@@ -1879,68 +1879,69 @@ def test_lockout_manager():
             # The following call to mock.patch.object is the same as doing:
             #   with mock.patch("snovault.elasticsearch.indexer_queue.log", Logger()) as mock_log:
             # but it avoids presuming the name 'snovault' and so works better with relative naming. -kmp 7-May-2020
-            with mock.patch.object(indexer_queue, "log", Logger()) as mock_log:
+            mock_log = Logger()
 
-                assert isinstance(datetime_module.datetime, ControlledTime)
+            assert isinstance(datetime_module.datetime, ControlledTime)
 
-                manager = LockoutManager(action=protected_action, lockout_seconds=60, safety_seconds=1)
-                assert not hasattr(manager, 'client')  # Just for safety, we don't need a client for this test
+            lockout_manager = LockoutManager(action=protected_action, lockout_seconds=60, safety_seconds=1,
+                                             log=mock_log)
+            assert not hasattr(lockout_manager, 'client')  # Just for safety, we don't need a client for this test
 
-                t0 = dt.just_now()
+            t0 = dt.just_now()
 
-                manager.wait_if_needed()
+            lockout_manager.wait_if_needed()
 
-                t1 = dt.just_now()
+            t1 = dt.just_now()
 
-                print("t0=", t0)
-                print("t1=", t1)
+            print("t0=", t0)
+            print("t1=", t1)
 
-                # We've set the clock to increment 1 second on every call to datetime.datetime.now(),
-                # and we expect exactly two calls to be made in the called function:
-                #  - Once on entry to get the current time prior to the protected action
-                #  - Once on exit to set the timestamp after the protected action.
-                # We expect no sleeps, so that doesn't play in.
-                assert (t1 - t0).total_seconds() == 2
+            # We've set the clock to increment 1 second on every call to datetime.datetime.now(),
+            # and we expect exactly two calls to be made in the called function:
+            #  - Once on entry to get the current time prior to the protected action
+            #  - Once on exit to set the timestamp after the protected action.
+            # We expect no sleeps, so that doesn't play in.
+            assert (t1 - t0).total_seconds() == 2
 
-                assert mock_log.log == []
+            assert mock_log.log == []
 
-                manager.wait_if_needed()
+            lockout_manager.wait_if_needed()
 
-                t2 = dt.just_now()
+            t2 = dt.just_now()
 
-                print("t2=", t2)
+            print("t2=", t2)
 
-                # We've set the clock to increment 1 second on every call to datetime.datetime.now(),
-                # and we expect exactly two calls to be made in the called function, plus we also
-                # expect to sleep for 60 seconds of the 61 seconds it wants to reserve (one second having
-                # passed since the last protected action).
+            # We've set the clock to increment 1 second on every call to datetime.datetime.now(),
+            # and we expect exactly two calls to be made in the called function, plus we also
+            # expect to sleep for 60 seconds of the 61 seconds it wants to reserve (one second having
+            # passed since the last protected action).
 
-                assert (t2 - t1).total_seconds() == 62
+            assert (t2 - t1).total_seconds() == 62
 
-                assert mock_log.log == ['Last %s attempt was at 2010-01-01 12:00:02 (1.0 seconds ago).'
-                                        ' Waiting 60.0 seconds before attempting another.' % protected_action]
+            assert mock_log.log == ['Last %s attempt was at 2010-01-01 12:00:02 (1.0 seconds ago).'
+                                    ' Waiting 60.0 seconds before attempting another.' % protected_action]
 
-                mock_log.log = []  # Reset the log
+            mock_log.log = []  # Reset the log
 
-                dt.sleep(30)  # Simulate 30 seconds of time passing
+            dt.sleep(30)  # Simulate 30 seconds of time passing
 
-                t3 = dt.just_now()
-                print("t3=", t3)
+            t3 = dt.just_now()
+            print("t3=", t3)
 
-                manager.wait_if_needed()
+            lockout_manager.wait_if_needed()
 
-                t4 = dt.just_now()
-                print("t4=", t4)
+            t4 = dt.just_now()
+            print("t4=", t4)
 
-                # We've set the clock to increment 1 second on every call to datetime.datetime.now(),
-                # and we expect exactly two calls to be made in the called function, plus we also
-                # expect to sleep for 30 seconds of the 61 seconds it wants to reserve (31 seconds having
-                # passed since the last protected action).
+            # We've set the clock to increment 1 second on every call to datetime.datetime.now(),
+            # and we expect exactly two calls to be made in the called function, plus we also
+            # expect to sleep for 30 seconds of the 61 seconds it wants to reserve (31 seconds having
+            # passed since the last protected action).
 
-                assert (t4 - t3).total_seconds() == 32
+            assert (t4 - t3).total_seconds() == 32
 
-                assert mock_log.log == ['Last %s attempt was at 2010-01-01 12:01:04 (31.0 seconds ago).'
-                                        ' Waiting 30.0 seconds before attempting another.' % protected_action]
+            assert mock_log.log == ['Last %s attempt was at 2010-01-01 12:01:04 (31.0 seconds ago).'
+                                    ' Waiting 30.0 seconds before attempting another.' % protected_action]
 
         real_t1 = now()
         print("Done testing at", real_t1)
