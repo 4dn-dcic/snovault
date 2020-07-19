@@ -13,7 +13,7 @@ from collections import OrderedDict
 import boto3
 import structlog
 from dcicutils.env_utils import blue_green_mirror_env
-from dcicutils.misc_utils import ignored, LockoutManager
+from dcicutils.misc_utils import ignored, RateManager
 from pyramid.view import view_config
 
 from .indexer_utils import get_uuids_for_types
@@ -203,7 +203,8 @@ class QueueManager (object):
         self.replace_batch_size = 10
         # Amazon says we shouldn't do anything for 60 seconds after a purge request.
         # Since we can't be sure they're counting from the same place as we are, we add 1 second margin for error.
-        self.lockout_manager = LockoutManager(action="purge_queue", lockout_seconds=60, safety_seconds=1, log=log)
+        self.rate_manager = RateManager(action="purge_queue", interval_seconds=60, safety_seconds=1,
+                                        allowed_attempts=1, log=log)
         self.env_name = mirror_env if mirror_env else registry.settings.get('env.name')
         self.override_url = override_url
         # local development
@@ -421,7 +422,7 @@ class QueueManager (object):
         return queue_urls
 
     def _wait_until_purge_queue_allowed(self):
-        self.lockout_manager.wait_if_needed()
+        self.rate_manager.wait_if_needed()
 
     def purge_queue(self):
         """

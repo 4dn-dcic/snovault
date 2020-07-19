@@ -17,7 +17,7 @@ import yaml
 
 from datetime import datetime, timedelta
 from dcicutils.lang_utils import n_of
-from dcicutils.misc_utils import ignored, LockoutManager
+from dcicutils.misc_utils import ignored
 from dcicutils.qa_utils import ControlledTime, notice_pytest_fixtures
 from elasticsearch.exceptions import NotFoundError
 from pyramid.traversal import traverse
@@ -1720,11 +1720,11 @@ def test_queue_manager_creation():
                     # Check the aftermath...
 
                     # Values that would have been due to class variables
-                    assert manager.lockout_manager.lockout_enabled is True
+                    assert manager.rate_manager.lockout_enabled is True
                     a_couple_of_years_ago = datetime(datetime.now().year - 2, 1, 1)
-                    assert manager.lockout_manager.EARLIEST_TIMESTAMP < a_couple_of_years_ago
-                    assert (manager.lockout_manager.effective_lockout_seconds
-                            > manager.lockout_manager.lockout_seconds)
+                    assert manager.rate_manager.EARLIEST_TIMESTAMP < a_couple_of_years_ago
+                    assert (manager.rate_manager.effective_lockout_seconds
+                            > manager.rate_manager.lockout_seconds)
 
                     assert manager.env_name == expected_env
 
@@ -1815,17 +1815,17 @@ def test_queue_manager_purge_queue_wait():
                         with mock.patch("time.sleep", dt.sleep):
 
                             start_time = dt.just_now()
-                            assert start_time > manager.lockout_manager.EARLIEST_TIMESTAMP
-                            assert manager.lockout_manager.timestamp == manager.lockout_manager.EARLIEST_TIMESTAMP
+                            assert start_time > manager.rate_manager.EARLIEST_TIMESTAMP
+                            assert manager.rate_manager.timestamp == manager.rate_manager.EARLIEST_TIMESTAMP
                             assert manager.client.purge_queue.call_count == 0  # Just to be sure
                             manager.purge_queue()
                             assert manager.client.purge_queue.call_count == 3  # Called once for each queue
                             # The first time it shouldn't wait, but does check the time twice
-                            assert manager.lockout_manager.timestamp == start_time + timedelta(seconds=2)
+                            assert manager.rate_manager.timestamp == start_time + timedelta(seconds=2)
 
                             # Try again now...
                             start_time = dt.just_now()
-                            assert manager.lockout_manager.timestamp == start_time
+                            assert manager.rate_manager.timestamp == start_time
                             assert manager.client.purge_queue.call_count == 3  # Just to be sure
                             manager.purge_queue()
                             assert manager.client.purge_queue.call_count == 6  # Called once for each queue
@@ -1833,7 +1833,7 @@ def test_queue_manager_purge_queue_wait():
                             # (once within the 61 second wait time, so it doesn't count) and we count 1 second
                             # for each check outside the interval, so 62 total. But most importantly, we do NOT
                             # wait for whole extra minutes. :) -kmp 2-Jun-2020
-                            assert manager.lockout_manager.timestamp == start_time + timedelta(seconds=62)
+                            assert manager.rate_manager.timestamp == start_time + timedelta(seconds=62)
 
 
 def test_queue_manager_chunk_messages():
@@ -1846,104 +1846,3 @@ def test_queue_manager_chunk_messages():
     assert list(QueueManager.chunk_messages(list(range(6)), 5)) == [[0, 1, 2, 3, 4], [5]]
     assert list(QueueManager.chunk_messages(list(range(10)), 5)) == [[0, 1, 2, 3, 4], [5, 6, 7, 8, 9]]
     assert list(QueueManager.chunk_messages(list(range(11)), 5)) == [[0, 1, 2, 3, 4], [5, 6, 7, 8, 9], [10]]
-
-
-def test_lockout_manager():
-
-    protected_action = "simulated action"
-
-    # The function now() will get us the time. This assure us that binding datetime.datetime
-    # will not be affecting us.
-    now = datetime.now
-
-    # real_t0 is the actual wallclock time at the start of this test. We use it only to make sure
-    # that all these other tests are really going through our mock. In spite of longer mocked
-    # timescales, this test should run quickly.
-    real_t0 = now()
-    print("Starting test at", real_t0)
-
-    # dt will be our substitute for datetime.datetime.
-    # (it also has a sleep method that we can substitute for time.sleep)
-    dt = ControlledTime(tick_seconds=1)
-
-    class Logger:
-
-        def __init__(self):
-            self.log = []
-
-        def warning(self, msg):
-            self.log.append(msg)
-
-    with mock.patch("datetime.datetime", dt):
-        with mock.patch("time.sleep", dt.sleep):
-            # The following call to mock.patch.object is the same as doing:
-            #   with mock.patch("snovault.elasticsearch.indexer_queue.log", Logger()) as mock_log:
-            # but it avoids presuming the name 'snovault' and so works better with relative naming. -kmp 7-May-2020
-            mock_log = Logger()
-
-            assert isinstance(datetime_module.datetime, ControlledTime)
-
-            lockout_manager = LockoutManager(action=protected_action, lockout_seconds=60, safety_seconds=1,
-                                             log=mock_log)
-            assert not hasattr(lockout_manager, 'client')  # Just for safety, we don't need a client for this test
-
-            t0 = dt.just_now()
-
-            lockout_manager.wait_if_needed()
-
-            t1 = dt.just_now()
-
-            print("t0=", t0)
-            print("t1=", t1)
-
-            # We've set the clock to increment 1 second on every call to datetime.datetime.now(),
-            # and we expect exactly two calls to be made in the called function:
-            #  - Once on entry to get the current time prior to the protected action
-            #  - Once on exit to set the timestamp after the protected action.
-            # We expect no sleeps, so that doesn't play in.
-            assert (t1 - t0).total_seconds() == 2
-
-            assert mock_log.log == []
-
-            lockout_manager.wait_if_needed()
-
-            t2 = dt.just_now()
-
-            print("t2=", t2)
-
-            # We've set the clock to increment 1 second on every call to datetime.datetime.now(),
-            # and we expect exactly two calls to be made in the called function, plus we also
-            # expect to sleep for 60 seconds of the 61 seconds it wants to reserve (one second having
-            # passed since the last protected action).
-
-            assert (t2 - t1).total_seconds() == 62
-
-            assert mock_log.log == ['Last %s attempt was at 2010-01-01 12:00:02 (1.0 seconds ago).'
-                                    ' Waiting 60.0 seconds before attempting another.' % protected_action]
-
-            mock_log.log = []  # Reset the log
-
-            dt.sleep(30)  # Simulate 30 seconds of time passing
-
-            t3 = dt.just_now()
-            print("t3=", t3)
-
-            lockout_manager.wait_if_needed()
-
-            t4 = dt.just_now()
-            print("t4=", t4)
-
-            # We've set the clock to increment 1 second on every call to datetime.datetime.now(),
-            # and we expect exactly two calls to be made in the called function, plus we also
-            # expect to sleep for 30 seconds of the 61 seconds it wants to reserve (31 seconds having
-            # passed since the last protected action).
-
-            assert (t4 - t3).total_seconds() == 32
-
-            assert mock_log.log == ['Last %s attempt was at 2010-01-01 12:01:04 (31.0 seconds ago).'
-                                    ' Waiting 30.0 seconds before attempting another.' % protected_action]
-
-        real_t1 = now()
-        print("Done testing at", real_t1)
-        # Whole test should happen much faster, less than a half second
-        assert (real_t1 - real_t0).total_seconds() < 0.5
