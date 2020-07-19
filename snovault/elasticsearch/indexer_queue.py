@@ -13,7 +13,7 @@ from collections import OrderedDict
 import boto3
 import structlog
 from dcicutils.env_utils import blue_green_mirror_env
-from dcicutils.misc_utils import ignored
+from dcicutils.misc_utils import ignored, LockoutManager
 from pyramid.view import view_config
 
 from .indexer_utils import get_uuids_for_types
@@ -176,58 +176,6 @@ def dlq_to_primary(context, request):
     response['number_failed'] = len(failed)
     response['number_migrated'] = len(dlq_messages) - len(failed)
     return response
-
-
-class LockoutManager:
-
-    EARLIEST_TIMESTAMP = datetime.datetime(datetime.MINYEAR, 1, 1)  # maybe useful for testing
-
-    def __init__(self, *, lockout_seconds, safety_seconds=0, action="metered action", enabled=True, log=None):
-        # This makes it easy to turn off the feature
-        self.lockout_seconds = lockout_seconds
-        self.safety_seconds = safety_seconds
-        self.action = action
-        self.lockout_enabled = enabled
-        self.log = log
-        self._timestamp = self.EARLIEST_TIMESTAMP
-
-    @property
-    def timestamp(self):
-        """The timestamp is read-only. Use update_timestamp() to set it."""
-        return self._timestamp
-
-    @property
-    def effective_lockout_seconds(self):
-        return self.lockout_seconds + self.safety_seconds
-
-    def wait_if_needed(self):
-        now = datetime.datetime.now()
-        # Note that this quantity is always positive because now is always bigger than the timestamp.
-        seconds_since_last_purge = (now - self._timestamp).total_seconds()
-        # Note again that because seconds_since_last_attempt is positive, the wait seconds will
-        # never exceed self.effective_lockout_seconds, so
-        #   0 <= wait_seconds <= self.effective_lockout_seconds
-        wait_seconds = max(0.0, self.effective_lockout_seconds - seconds_since_last_purge)
-        if wait_seconds > 0.0:
-            shared_message = ("Last %s attempt was at %s (%s seconds ago)."
-                              % (self.action, self._timestamp, seconds_since_last_purge))
-            if self.lockout_enabled:
-                action_message = "Waiting %s seconds before attempting another." % wait_seconds
-                if self.log:
-                    self.log.warning("%s %s" % (shared_message, action_message))
-                time.sleep(wait_seconds)
-            else:
-                action_message = "Continuing anyway because lockout is disabled."
-                if self.log:
-                    self.log.warning("%s %s" % (shared_message, action_message))
-        self.update_timestamp()
-
-    def update_timestamp(self):
-        """
-        Explicitly sets the reference time point for computation of our lockout.
-        This is called implicitly by .wait_if_needed(), and for some situations that may be sufficient.
-        """
-        self._timestamp = datetime.datetime.now()
 
 
 class QueueManager (object):

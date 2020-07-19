@@ -17,7 +17,7 @@ import yaml
 
 from datetime import datetime, timedelta
 from dcicutils.lang_utils import n_of
-from dcicutils.misc_utils import ignored
+from dcicutils.misc_utils import ignored, LockoutManager
 from dcicutils.qa_utils import ControlledTime, notice_pytest_fixtures
 from elasticsearch.exceptions import NotFoundError
 from pyramid.traversal import traverse
@@ -40,7 +40,7 @@ from ..elasticsearch.create_mapping import (
     type_mapping,
 )
 from ..elasticsearch.indexer import check_sid, SidException
-from ..elasticsearch.indexer_queue import QueueManager, LockoutManager
+from ..elasticsearch.indexer_queue import QueueManager
 from ..elasticsearch.interfaces import ELASTIC_SEARCH, INDEXER_QUEUE, INDEXER_QUEUE_MIRROR
 from .pyramidfixtures import dummy_request
 from .testappfixtures import _app_settings
