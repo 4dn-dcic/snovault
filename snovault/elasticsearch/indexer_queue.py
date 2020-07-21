@@ -178,7 +178,7 @@ def dlq_to_primary(context, request):
     return response
 
 
-class QueueManager (object):
+class QueueManager(object):
     """
     Class for handling the queues responsible for coordinating indexing.
     Contains methods to inititalize queues, add both uuids and collections of
