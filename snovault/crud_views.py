@@ -1,5 +1,4 @@
-from pyramid.settings import asbool
-import sys
+import json
 from uuid import (
     UUID,
     uuid4,
@@ -9,6 +8,7 @@ import transaction
 from pyramid.settings import asbool
 from pyramid.view import view_config
 from structlog import get_logger
+from dcicutils.diff_utils import DiffManager
 
 from .calculated import calculated_property
 from .interfaces import (
@@ -40,6 +40,18 @@ log = get_logger(__name__)
 def includeme(config):
     config.include('.calculated')
     config.scan(__name__)
+
+
+def build_diff_from_request(context, request):
+    """ Unpacks request.body as JSON and computes a diff """
+    try:
+        item_type = context.type_info.name
+        body = json.loads(request.body)
+        dm = DiffManager(label=item_type)
+    except Exception as e:
+        log.error('Error encountered building diff from request: %s' % e)
+        return None
+    return dm.patch_diffs(body)
 
 
 def create_item(type_info, request, properties, sheets=None):
@@ -91,7 +103,8 @@ def update_item(context, request, properties, sheets=None):
     registry.notify(BeforeModified(context, request))
     context.update(item_properties, sheets)
     # set up hook for queueing indexing
-    to_queue = {'uuid': str(context.uuid), 'sid': context.sid}
+    diff = build_diff_from_request(context, request)
+    to_queue = {'uuid': str(context.uuid), 'sid': context.sid, 'diff': diff}
     telemetry_id = request.params.get('telemetry_id', None)
     if telemetry_id:
         to_queue['telemetry_id'] = telemetry_id

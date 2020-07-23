@@ -234,7 +234,7 @@ description = "Utility package for interacting with the 4DN Data Portal and othe
 name = "dcicutils"
 optional = false
 python-versions = ">=3.4,<3.8"
-version = "0.35.1"
+version = "0.35.1.1b3"
 
 [package.dependencies]
 aws-requests-auth = ">=0.4.2,<1"
@@ -1520,7 +1520,7 @@ transaction = ">=1.6.0"
 test = ["zope.testing"]
 
 [metadata]
-content-hash = "765f6d2d6527d48cc8aec60ab441d375797ad9e60feea0d8952978857cdadeae"
+content-hash = "b3f42fabcbd6c853a0fdfd2e8c881ccb5893b478c5c2b1c03840d1a84b9f707e"
 python-versions = ">=3.6,<3.7"
 
 [metadata.files]
@@ -1673,8 +1673,8 @@ cryptography = [
     {file = "cryptography-3.0.tar.gz", hash = "sha256:8e924dbc025206e97756e8903039662aa58aa9ba357d8e1d8fc29e3092322053"},
 ]
 dcicutils = [
-    {file = "dcicutils-0.35.1-py3-none-any.whl", hash = "sha256:5f6cd17fb1c78adfaca9f2e23dedbe4a8a3d8c0dee2dc73cdd7f2dd832debc5d"},
-    {file = "dcicutils-0.35.1.tar.gz", hash = "sha256:7924f83de55673b580d02242a4bcc3440c290f1139a862f951ef00958a24fb71"},
+    {file = "dcicutils-0.35.1.1b3-py3-none-any.whl", hash = "sha256:3b9da03e110a54e5a3509d019cb56af7c80a92352bb30f08bddaea55f41270e3"},
+    {file = "dcicutils-0.35.1.1b3.tar.gz", hash = "sha256:9e75054802dd149a7c0e8c31c45737fe776b161db82a0c452a3622ac58219b9d"},
 ]
 docker = [
     {file = "docker-4.2.2-py2.py3-none-any.whl", hash = "sha256:03a46400c4080cb6f7aa997f881ddd84fef855499ece219d75fbdb53289c17ab"},
@@ -1965,6 +1965,7 @@ pycryptodome = [
     {file = "pycryptodome-3.9.8-cp38-cp38-win_amd64.whl", hash = "sha256:55eb61aca2c883db770999f50d091ff7c14016f2769ad7bca3d9b75d1d7c1b68"},
     {file = "pycryptodome-3.9.8-cp39-cp39-manylinux1_i686.whl", hash = "sha256:39ef9fb52d6ec7728fce1f1693cb99d60ce302aeebd59bcedea70ca3203fda60"},
     {file = "pycryptodome-3.9.8-cp39-cp39-manylinux1_x86_64.whl", hash = "sha256:de6e1cd75677423ff64712c337521e62e3a7a4fc84caabbd93207752e831a85a"},
+    {file = "pycryptodome-3.9.8.tar.gz", hash = "sha256:0e24171cf01021bc5dc17d6a9d4f33a048f09d62cc3f62541e95ef104588bda4"},
 ]
 pyflakes = [
     {file = "pyflakes-2.2.0-py2.py3-none-any.whl", hash = "sha256:0d94e0e05a19e57a99444b6ddcf9a6eb2e5c68d3ca1e98e90707af8152c90a92"},

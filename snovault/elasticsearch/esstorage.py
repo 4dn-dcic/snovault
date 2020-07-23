@@ -373,7 +373,7 @@ class ElasticSearchStorage(object):
         """
         linked_info = []
         # we only care about linkTos the item and not reverse links here
-        uuids_linking_to_item = find_uuids_for_indexing(self.registry, set([rid]))
+        uuids_linking_to_item, _ = find_uuids_for_indexing(self.registry, set([rid]))
         # remove the item itself from the list
         uuids_linking_to_item = uuids_linking_to_item - set([rid])
         if len(uuids_linking_to_item) > 0:

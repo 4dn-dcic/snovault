@@ -91,7 +91,7 @@ def app_settings(wsgi_server_host_port, elasticsearch_server, postgresql_server,
     return settings
 
 
-INDEXER_MODE = os.environ.get('INDEXER_MODE', "MPINDEX").upper()
+INDEXER_MODE = os.environ.get('INDEXER_MODE', "MPINDEX").upper()  # fix later
 if INDEXER_MODE == "MPINDEX":
     INDEXER_APP_PARAMS = [True]
 elif INDEXER_MODE == "INDEX":
@@ -339,6 +339,7 @@ def test_queue_indexing_after_post_patch(app, testapp):
     assert len(received) == 1
     msg_body = json.loads(received[0]['Body'])
     assert isinstance(msg_body, dict)
+    assert msg_body['diff'] == ['TestingPostPutPatchSno.required']
     assert msg_body['uuid'] == post_uuid
     assert msg_body['strict'] is False
     assert msg_body['method'] == 'PATCH'
@@ -570,7 +571,7 @@ def test_indexing_queue_records(app, testapp, indexer_testapp):
     assert indexing_record.get('_source') == indexing_doc_source
 
 
-@pytest.mark.flaky
+#@pytest.mark.flaky
 def test_sync_and_queue_indexing(app, testapp, indexer_testapp):
     es = app.registry[ELASTIC_SEARCH]
     indexer_queue = app.registry[INDEXER_QUEUE]
@@ -608,7 +609,7 @@ def test_sync_and_queue_indexing(app, testapp, indexer_testapp):
     assert doc_count == 2
 
 
-@pytest.mark.flaky
+#@pytest.mark.flaky
 def test_queue_indexing_with_linked(app, testapp, indexer_testapp, dummy_request):
     """
     Test a whole bunch of things here:
@@ -673,7 +674,8 @@ def test_queue_indexing_with_linked(app, testapp, indexer_testapp, dummy_request
     testapp.patch_json('/testing-link-sources-sno/' + source_uuid, {'name': patch_source_name})
     time.sleep(2)
     res = indexer_testapp.post_json('/index', {'record': True})
-    assert res.json['indexing_count'] == 2
+    # XXX: below used to be 2, but is now 1 since the 'name' field is not embedded
+    assert res.json['indexing_count'] == 1
 
     time.sleep(3)
     # check some stuff on the es results for source and target
@@ -1113,7 +1115,7 @@ def test_create_mapping_check_first(app, testapp, indexer_testapp):
 
 def delay_rerun(*args):
     """ Rerun function for flaky """
-    time.sleep(30)
+    time.sleep(10)
     return True
 
 
@@ -1475,7 +1477,7 @@ def test_elasticsearch_item_basic(app, testapp, indexer_testapp, es_based_target
     assert initial_count == after_count
 
 
-@pytest.mark.flaky(max_runs=2, rerun_filter=delay_rerun)
+#@pytest.mark.flaky(max_runs=2, rerun_filter=delay_rerun)
 def test_elasticsearch_item_with_source(app, testapp, indexer_testapp, es_based_target):
     """
     Test rev_linking with a TestingLinkTargetElasticSearch item, including

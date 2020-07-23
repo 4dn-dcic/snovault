@@ -480,7 +480,6 @@ def expand_val_for_embedded_model(request, obj_val, downstream_model, field_name
         return obj_val
 
 
-
 def build_embedded_model(fields_to_embed):
     """
     Takes a list of fields to embed and builds the framework used to generate

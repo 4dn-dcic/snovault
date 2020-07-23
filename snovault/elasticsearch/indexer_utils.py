@@ -20,6 +20,10 @@ def namespace_index_from_health(health, index):
     return health.get('namespace', '') + index
 
 
+def to_camel_case(snake_string):
+    return snake_string.title().replace("_", "")
+
+
 def find_uuids_for_indexing(registry, updated, find_index=None):
     """
     Run a search to find uuids of objects with that contain the given set of
@@ -59,8 +63,10 @@ def find_uuids_for_indexing(registry, updated, find_index=None):
     if not find_index:
         find_index = get_namespaced_index(registry, '*')
     results = scan(es, index=find_index, query=scan_query)
-    invalidated = {res['_id'] for res in results}
-    return invalidated | updated
+    invalidated_with_type = {(res['_id'], to_camel_case(res['_type'])) for res in results}
+    invalidated = {uuid for uuid, type in invalidated_with_type}
+
+    return updated | invalidated, invalidated_with_type
 
 
 def get_uuids_for_types(registry, types=[]):

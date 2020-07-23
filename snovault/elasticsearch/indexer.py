@@ -24,7 +24,7 @@ from .interfaces import (
     INDEXER_QUEUE
 )
 from ..embed import MissingIndexItemException
-from ..util import debug_log, dictionary_lookup
+from ..util import debug_log, dictionary_lookup, DEFAULT_EMBEDS
 
 
 log = structlog.getLogger(__name__)
@@ -178,7 +178,6 @@ class Indexer(object):
             errors, _ = self.update_objects_queue(request, counter)
         return errors
 
-
     def get_messages_from_queue(self):
         """
         Simple helper method. Attempt to get items from deferred queue first,
@@ -195,11 +194,10 @@ class Indexer(object):
                 break
         return messages, target_queue
 
-
     def find_and_queue_secondary_items(self, source_uuids, rev_linked_uuids,
-                                       sid=None, telemetry_id=None):
+                                       sid=None, telemetry_id=None, diff=None):
         """
-        Find all associated uuids of the given set of  non-strict uuids using ES
+        Find all associated uuids of the given set of non-strict uuids using ES
         and queue them in the secondary queue. Associated uuids include uuids
         that linkTo or are rev_linked to a given item.
         Add rev_linked_uuids linking to source items found from @@indexing-view
@@ -207,16 +205,82 @@ class Indexer(object):
         """
         # find_uuids_for_indexing() will return items linking to and items
         # rev_linking to this item currently in ES (find old rev_links)
-        associated_uuids = find_uuids_for_indexing(self.registry, source_uuids)
+        associated_uuids, invalidated_with_type = find_uuids_for_indexing(self.registry, source_uuids)
         # update this with rev_links found from @@indexing-view (includes new rev_links)
         associated_uuids |= rev_linked_uuids
         # remove already indexed primary uuids used to find them
-        secondary_uuids = list(associated_uuids - source_uuids)
+        secondary_uuids = associated_uuids - source_uuids
+
+        # XXX: Invalidation scope code
+        if diff is not None:  # we are updating from an edit and have a corresponding diff
+
+            # build representation of diffs
+            # item type -> modified fields mapping
+            diffs = {}
+            skip = False  # if a modified field is a default embed, EVERYTHING has to be invalidated
+            for _d in diff:
+                modified_item_type, modified_field = _d.split('.', 1)
+                if ('.' + modified_field) in DEFAULT_EMBEDS + ['.status']:  # XXX: 'status' is an unnamed default embed?
+                    skip = True
+                    break
+                elif modified_item_type not in diffs:
+                    diffs[modified_item_type] = [modified_field]
+                else:
+                    diffs[modified_item_type].append(modified_field)
+
+            # go through all invalidated uuids, looking at the embedded list of the item type
+            item_type_is_invalidated = {}
+            for invalidated_uuid, invalidated_item_type in invalidated_with_type:
+                print(skip)
+                if skip is True:  # if we detected a change to a default embed, invalidate everything
+                    break
+
+                # if the invalidated item type is not found in the diff, we can remove uuids of this
+                # type from the invalidation scope since an effected field was not modified
+                if invalidated_item_type not in diffs:
+                    secondary_uuids.discard(invalidated_uuid)
+                    continue
+
+                # remove this uuid if its item type has been seen before and found to
+                # not be invalidated
+                if invalidated_item_type in item_type_is_invalidated:
+                    if item_type_is_invalidated[invalidated_item_type] is False:
+                        secondary_uuids.discard(invalidated_uuid)
+                        continue
+
+                # if we get here, we are looking at an invalidated_item_type that exists in the
+                # diff and we need to inspect the embedded list to see if the diff fields are
+                # embedded
+                properties = self.registry['types'][invalidated_item_type].schema['properties']
+                embedded_list = self.registry['types'][invalidated_item_type].embedded_list
+                for embed in embedded_list:
+                    base_field, terminal_field = embed.split('.', 1)
+
+                    # base_field must be on properties
+                    # terminal_field should exist in the diffs collection if it was touched
+                    print(diffs, base_field, terminal_field, diffs[invalidated_item_type])
+                    print(properties.get(base_field, None))
+
+                    # The below logic is how we decide whether or not a given item_type needs to be invalidated
+                    # This procedure has to be done for every embed in the embedded list. There are 2 scenarios where
+                    # we need to invalid the entire item type
+                    #   1. any base_field is a calculated property
+                    #   2. any terminal_field exists in the diff
+                    if (properties.get(base_field, {}).get('items', {}).get('calculatedProperty')) or \
+                            (base_field in properties and terminal_field in diffs[invalidated_item_type]):
+                        item_type_is_invalidated[invalidated_item_type] = True
+                        break  # something from the embedded_list got invalidated
+
+                # if we didnt break out of the above loop, we never found an embedded field that was
+                # touched, so set this item type to False so all items of this type are NOT invalidated
+                if invalidated_item_type not in item_type_is_invalidated:
+                    secondary_uuids.discard(invalidated_uuid)
+                    item_type_is_invalidated[invalidated_item_type] = False
+
         # items queued through this function are ALWAYS strict in secondary queue
-        return self.queue.add_uuids(self.registry, secondary_uuids, strict=True,
+        return self.queue.add_uuids(self.registry, list(secondary_uuids), strict=True,
                                     target_queue='secondary', sid=sid,
                                     telemetry_id=telemetry_id)
-
 
     def update_objects_queue(self, request, counter):
         """
@@ -261,6 +325,7 @@ class Indexer(object):
                 msg_curr_time = msg_body['timestamp']
                 msg_detail = msg_body.get('detail')
                 msg_telemetry = msg_body.get('telemetry_id')
+                msg_diff = msg_body.get('diff', None)
 
                 # build the object and index into ES
                 # if strict, do not add uuids rev_linking to item to queue
@@ -306,20 +371,22 @@ class Indexer(object):
                     self.queue.delete_messages(to_delete, target_queue=target_queue)
                     to_delete = []
 
-            # add to secondary queue, if applicable
-            # search for all items that linkTo the non-strict items or contain
-            # a rev_link to to them
-            if non_strict_uuids or rev_linked_uuids:
-                queued, failed = self.find_and_queue_secondary_items(non_strict_uuids,
-                                                                     rev_linked_uuids,
-                                                                     msg_sid,
-                                                                     msg_telemetry)
-                if failed:
-                    error_msg = 'Failure(s) queueing secondary uuids: %s' % str(failed)
-                    log.error('INDEXER: ', error=error_msg)
-                    errors.append({'error_message': error_msg})
-                non_strict_uuids = set()
-                rev_linked_uuids = set()
+                # CHANGE - this needs to happen PER MESSAGE now
+                # add to secondary queue, if applicable
+                # search for all items that linkTo the non-strict items or contain
+                # a rev_link to to them
+                if non_strict_uuids or rev_linked_uuids:
+                    queued, failed = self.find_and_queue_secondary_items(non_strict_uuids,  # THIS IS NOW A SINGLE UUID
+                                                                         rev_linked_uuids,
+                                                                         msg_sid,
+                                                                         msg_telemetry,
+                                                                         diff=msg_diff)
+                    if failed:
+                        error_msg = 'Failure(s) queueing secondary uuids: %s' % str(failed)
+                        log.error('INDEXER: ', error=error_msg)
+                        errors.append({'error_message': error_msg})
+                    non_strict_uuids = set()
+                    rev_linked_uuids = set()
 
             # if we need to restart the worker, break out of while loop
             if deferred:
@@ -341,7 +408,6 @@ class Indexer(object):
             self.queue.delete_messages(to_delete, target_queue=target_queue)
         return errors, deferred
 
-
     def update_objects_sync(self, request, sync_uuids, counter):
         """
         Used with sync uuids (simply loop through)
@@ -360,7 +426,6 @@ class Indexer(object):
             else:
                 counter[0] += 1  # don't increment counter on an error
         return errors
-
 
     def update_object(self, request, uuid, add_to_secondary=None, sid=None,
                       max_sid=None, curr_time=None, telemetry_id=None):

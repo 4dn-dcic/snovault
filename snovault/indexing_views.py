@@ -48,12 +48,14 @@ def join_linked_uuids_sids(request, uuids):
 
     Args:
         request: current Request object
-        uuids: list of string uuids
+        uuids: list of 2-tuples (uuid, item_type)
 
     Returns:
         A list of dicts containing uuid and up-to-date db sid
     """
-    return [{'uuid': uuid, 'sid': request._sid_cache[uuid]} for uuid in uuids]
+    return [{'uuid': uuid,
+             'sid': request._sid_cache[uuid],
+             'item_type': item_type} for uuid, item_type in uuids]
 
 
 def get_rev_linked_items(request, uuid):
@@ -180,6 +182,9 @@ def item_index_data(context, request):
         except ValidationFailure:
             pass
 
+    # filter linked_uuids_embedded based on if a modification was actually made
+
+
     document = {
         'aggregated_items': aggregated_items,
         'embedded': embedded_view,
@@ -241,7 +246,7 @@ def indexing_info(context, request):
         path = '/' + uuid + '/@@index-data'
         index_view = request.invoke_view(path, index_uuid=uuid, as_user='INDEXER')
         response['indexing_stats'] = index_view['indexing_stats']
-        es_assc_uuids = find_uuids_for_indexing(request.registry, set([uuid]))
+        es_assc_uuids, _ = find_uuids_for_indexing(request.registry, set([uuid]))
         new_rev_link_uuids = get_rev_linked_items(request, uuid)
         # invalidated: items linking to this in es + newly rev linked items
         response['uuids_invalidated'] = list(es_assc_uuids | new_rev_link_uuids)

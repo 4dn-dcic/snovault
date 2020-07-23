@@ -451,6 +451,10 @@ def es_mapping(mapping, agg_items_mapping):
                     'sid': {
                         'type': 'keyword',
                         'ignore_above': KW_IGNORE_ABOVE
+                    },
+                    'item_type': {
+                        'type': 'keyword',
+                        'ignore_above': KW_IGNORE_ABOVE
                     }
                 },
                 'include_in_all': False
@@ -462,6 +466,10 @@ def es_mapping(mapping, agg_items_mapping):
                         'ignore_above': KW_IGNORE_ABOVE
                     },
                     'sid': {
+                        'type': 'keyword',
+                        'ignore_above': KW_IGNORE_ABOVE
+                    },
+                    'item_type': {
                         'type': 'keyword',
                         'ignore_above': KW_IGNORE_ABOVE
                     }
@@ -1176,7 +1184,7 @@ def run(app, collections=None, dry_run=False, check_first=False, skip_indexing=F
                         to_subtract = set(chain.from_iterable(
                             [v for k, v in uuids_to_index.items() if k != i_type]
                         ))
-                        all_assc_uuids = find_uuids_for_indexing(registry, all_uuids_to_index, i_type)
+                        all_assc_uuids, _ = find_uuids_for_indexing(registry, all_uuids_to_index, i_type)
                         uuids_to_index[i_type] = all_assc_uuids - to_subtract
                 log.error('___SYNC INDEXING WITH STRICT=FALSE MAY CAUSE REV_LINK INCONSISTENCY___')
             # sort by-type uuids into one list and index synchronously
