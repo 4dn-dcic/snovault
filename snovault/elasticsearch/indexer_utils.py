@@ -1,6 +1,7 @@
 from elasticsearch.helpers import scan
 from ..interfaces import COLLECTIONS
 from .interfaces import ELASTIC_SEARCH
+from ..util import DEFAULT_EMBEDS
 
 
 def get_namespaced_index(config, index):
@@ -95,3 +96,73 @@ def get_uuids_for_types(registry, types=[]):
             continue
         for uuid in collections.by_item_type[coll_name].iter_no_subtypes():
             yield str(uuid)
+
+
+def filter_invalidation_scope(registry, diff, invalidated_with_type, secondary_uuids):
+    """ Function that given a diff in the following format:
+            ItemType.base_field.terminal_field --> {ItemType: base_field.terminal_field} intermediary
+        And a list of invalidated uuids with their type information as a 2-tuple:
+            [(<uuid>, <item_type>), ...]
+        Removes uuids of item types that were not invalidated from the set of secondary_uuids.
+
+    :param registry: application registry, used to retrieve type information
+    :param diff: a diff of the change (from SQS), see build_diff_from_request
+    :param invalidated_with_type: list of 2-tuple (uuid, item_type)
+    :param secondary_uuids: primary set of uuids to be invalidated
+    """
+    # build representation of diffs
+    # item type -> modified fields mapping
+    diffs = {}
+    skip = False  # if a modified field is a default embed, EVERYTHING has to be invalidated
+    for _d in diff:
+        modified_item_type, modified_field = _d.split('.', 1)
+        if ('.' + modified_field) in DEFAULT_EMBEDS + ['.status']:  # XXX: 'status' is an unnamed default embed?
+            skip = True
+            break
+        elif modified_item_type not in diffs:
+            diffs[modified_item_type] = [modified_field]
+        else:
+            diffs[modified_item_type].append(modified_field)
+
+    # go through all invalidated uuids, looking at the embedded list of the item type
+    item_type_is_invalidated = {}
+    for invalidated_uuid, invalidated_item_type in invalidated_with_type:
+        if skip is True:  # if we detected a change to a default embed, invalidate everything
+            break
+
+        # remove this uuid if its item type has been seen before and found to
+        # not be invalidated
+        if invalidated_item_type in item_type_is_invalidated:
+            if item_type_is_invalidated[invalidated_item_type] is False:
+                secondary_uuids.discard(invalidated_uuid)
+                continue
+
+        # if we get here, we are looking at an invalidated_item_type that exists in the
+        # diff and we need to inspect the embedded list to see if the diff fields are
+        # embedded
+        properties = registry['types'][invalidated_item_type].schema['properties']
+        embedded_list = registry['types'][invalidated_item_type].embedded_list
+        for embed in embedded_list:
+            base_field, terminal_field = embed.split('.', 1)
+            # resolve the item type of the base field by looking at the linkTo field first
+            base_field_props = properties.get(base_field, {})
+            if 'linkTo' in base_field_props:
+                base_field_item_type = base_field_props['linkTo']
+            elif 'linkTo' in base_field_props.get('items', {}):
+                base_field_item_type = base_field_props['items']['linkTo']
+            else:
+                raise Exception("Encountered embed that is not a linkTo or array of linkTo's! \n"
+                                "embed: %s, base_field: %s, base_field_props: %s" % (embed, base_field,
+                                                                                     base_field_props))
+
+            # if this embedded field is a calculated property
+            if (properties.get(base_field, {}).get('items', {}).get('calculatedProperty', False)) or \
+                    (base_field in properties and terminal_field in diffs.get(base_field_item_type, [])):
+                item_type_is_invalidated[invalidated_item_type] = True
+                break  # something from the embedded_list got invalidated
+
+        # if we didnt break out of the above loop, we never found an embedded field that was
+        # touched, so set this item type to False so all items of this type are NOT invalidated
+        if invalidated_item_type not in item_type_is_invalidated:
+            secondary_uuids.discard(invalidated_uuid)
+            item_type_is_invalidated[invalidated_item_type] = False

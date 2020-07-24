@@ -17,14 +17,14 @@ from ..interfaces import (
     DBSESSION,
     STORAGE
 )
-from .indexer_utils import get_namespaced_index, find_uuids_for_indexing
+from .indexer_utils import get_namespaced_index, find_uuids_for_indexing, filter_invalidation_scope
 from .interfaces import (
     ELASTIC_SEARCH,
     INDEXER,
     INDEXER_QUEUE
 )
 from ..embed import MissingIndexItemException
-from ..util import debug_log, dictionary_lookup, DEFAULT_EMBEDS
+from ..util import debug_log, dictionary_lookup
 
 
 log = structlog.getLogger(__name__)
@@ -206,76 +206,17 @@ class Indexer(object):
         # find_uuids_for_indexing() will return items linking to and items
         # rev_linking to this item currently in ES (find old rev_links)
         associated_uuids, invalidated_with_type = find_uuids_for_indexing(self.registry, source_uuids)
-        # update this with rev_links found from @@indexing-view (includes new rev_links)
-        associated_uuids |= rev_linked_uuids
+
         # remove already indexed primary uuids used to find them
         secondary_uuids = associated_uuids - source_uuids
 
-        # XXX: Invalidation scope code
-        if diff is not None:  # we are updating from an edit and have a corresponding diff
+        # we are updating from an edit and have a corresponding diff
+        if diff is not None:
+            filter_invalidation_scope(self.registry, diff, invalidated_with_type, secondary_uuids)
 
-            # build representation of diffs
-            # item type -> modified fields mapping
-            diffs = {}
-            skip = False  # if a modified field is a default embed, EVERYTHING has to be invalidated
-            for _d in diff:
-                modified_item_type, modified_field = _d.split('.', 1)
-                if ('.' + modified_field) in DEFAULT_EMBEDS + ['.status']:  # XXX: 'status' is an unnamed default embed?
-                    skip = True
-                    break
-                elif modified_item_type not in diffs:
-                    diffs[modified_item_type] = [modified_field]
-                else:
-                    diffs[modified_item_type].append(modified_field)
-
-            # go through all invalidated uuids, looking at the embedded list of the item type
-            item_type_is_invalidated = {}
-            for invalidated_uuid, invalidated_item_type in invalidated_with_type:
-                print(skip)
-                if skip is True:  # if we detected a change to a default embed, invalidate everything
-                    break
-
-                # if the invalidated item type is not found in the diff, we can remove uuids of this
-                # type from the invalidation scope since an effected field was not modified
-                if invalidated_item_type not in diffs:
-                    secondary_uuids.discard(invalidated_uuid)
-                    continue
-
-                # remove this uuid if its item type has been seen before and found to
-                # not be invalidated
-                if invalidated_item_type in item_type_is_invalidated:
-                    if item_type_is_invalidated[invalidated_item_type] is False:
-                        secondary_uuids.discard(invalidated_uuid)
-                        continue
-
-                # if we get here, we are looking at an invalidated_item_type that exists in the
-                # diff and we need to inspect the embedded list to see if the diff fields are
-                # embedded
-                properties = self.registry['types'][invalidated_item_type].schema['properties']
-                embedded_list = self.registry['types'][invalidated_item_type].embedded_list
-                for embed in embedded_list:
-                    base_field, terminal_field = embed.split('.', 1)
-
-                    # base_field must be on properties
-                    # terminal_field should exist in the diffs collection if it was touched
-                    print(diffs, base_field, terminal_field, diffs[invalidated_item_type])
-                    print(properties.get(base_field, None))
-
-                    # The below logic is how we decide whether or not a given item_type needs to be invalidated
-                    # This procedure has to be done for every embed in the embedded list. There are 2 scenarios where
-                    # we need to invalid the entire item type
-                    #   1. any base_field is a calculated property
-                    #   2. any terminal_field exists in the diff
-                    if (properties.get(base_field, {}).get('items', {}).get('calculatedProperty')) or \
-                            (base_field in properties and terminal_field in diffs[invalidated_item_type]):
-                        item_type_is_invalidated[invalidated_item_type] = True
-                        break  # something from the embedded_list got invalidated
-
-                # if we didnt break out of the above loop, we never found an embedded field that was
-                # touched, so set this item type to False so all items of this type are NOT invalidated
-                if invalidated_item_type not in item_type_is_invalidated:
-                    secondary_uuids.discard(invalidated_uuid)
-                    item_type_is_invalidated[invalidated_item_type] = False
+        # update this with rev_links found from @@indexing-view (includes new rev_links)
+        # AFTER invalidation scope filtering, since invalidation scope does not account for rev-links
+        secondary_uuids |= rev_linked_uuids
 
         # items queued through this function are ALWAYS strict in secondary queue
         return self.queue.add_uuids(self.registry, list(secondary_uuids), strict=True,
