@@ -98,6 +98,16 @@ def get_uuids_for_types(registry, types=[]):
             yield str(uuid)
 
 
+def extract_type_properties(registry, invalidated_item_type):
+    """ Helper function, useful for mocking. """
+    return registry['types'][invalidated_item_type].schema['properties']
+
+
+def extract_type_embedded_list(registry, invalidated_item_type):
+    """ Helper function, useful for mocking """
+    return registry['types'][invalidated_item_type].embedded_list
+
+
 def filter_invalidation_scope(registry, diff, invalidated_with_type, secondary_uuids):
     """ Function that given a diff in the following format:
             ItemType.base_field.terminal_field --> {ItemType: base_field.terminal_field} intermediary
@@ -140,8 +150,8 @@ def filter_invalidation_scope(registry, diff, invalidated_with_type, secondary_u
         # if we get here, we are looking at an invalidated_item_type that exists in the
         # diff and we need to inspect the embedded list to see if the diff fields are
         # embedded
-        properties = registry['types'][invalidated_item_type].schema['properties']
-        embedded_list = registry['types'][invalidated_item_type].embedded_list
+        properties = extract_type_properties(registry, invalidated_item_type)
+        embedded_list = extract_type_embedded_list(registry, invalidated_item_type)
         for embed in embedded_list:
             base_field, terminal_field = embed.split('.', 1)
             # resolve the item type of the base field by looking at the linkTo field first
@@ -155,11 +165,15 @@ def filter_invalidation_scope(registry, diff, invalidated_with_type, secondary_u
                                 "embed: %s, base_field: %s, base_field_props: %s" % (embed, base_field,
                                                                                      base_field_props))
 
-            # if this embedded field is a calculated property
-            if (properties.get(base_field, {}).get('items', {}).get('calculatedProperty', False)) or \
-                    (base_field in properties and terminal_field in diffs.get(base_field_item_type, [])):
+            # if the base field is a field on the properties of this item type and
+            # the terminal field of the embed is in the diff (or this field is embedded with *,
+            # then we have definitely been invalidated.
+            # XXX VERY IMPORTANT: for this to work correctly, the fields used in calculated properties MUST
+            # be embedded!
+            if base_field in properties and \
+                    (terminal_field in diffs.get(base_field_item_type, []) or terminal_field.endswith('*')):
                 item_type_is_invalidated[invalidated_item_type] = True
-                break  # something from the embedded_list got invalidated
+                break
 
         # if we didnt break out of the above loop, we never found an embedded field that was
         # touched, so set this item type to False so all items of this type are NOT invalidated
