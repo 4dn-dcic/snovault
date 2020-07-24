@@ -174,11 +174,12 @@ def test_linked_uuids_index_data(content, dummy_request, threadlocals):
     assert res['rev_link_names'] == {}
     assert res['rev_linked_to_me'] == [targets[0]['uuid']]
     # object view linked uuids are contained within the embedded linked uuids
-    assert set([linked['uuid'] for linked in res['linked_uuids_object']]) <= dummy_request._linked_uuids
+    assert set((linked['uuid'], linked['item_type']) for linked in res['linked_uuids_object']) <= dummy_request._linked_uuids
 
     # now test the target. this will reset all attributes on dummy_request
     res2 = dummy_request.embed('/testing-link-targets-sno/', targets[0]['uuid'], '@@index-data', as_user='INDEXER')
-    assert dummy_request._linked_uuids == {sources[0]['uuid'], targets[0]['uuid']}
+    assert dummy_request._linked_uuids == {(sources[0]['uuid'], 'TestingLinkSourceSno'),
+                                           (targets[0]['uuid'], 'TestingLinkTargetSno')}
     assert dummy_request._rev_linked_uuids_by_item == {targets[0]['uuid']: {'reverse': [sources[0]['uuid']]}}
     assert res2['rev_link_names'] == {'reverse': [sources[0]['uuid']]}
     assert res2['rev_linked_to_me'] == []
