@@ -184,7 +184,8 @@ class TestInvalidationScope:
     @pytest.mark.parametrize('diff,embedded_list',
                              [(['Item_C.name', 'Item_X.value'], ['link_one.value']),
                               (['Item_D.value', 'Item_E.key'], ['link_two.name', 'link_three.value']),
-                              (['Item_C.key', 'Item_D.key', 'Item_E.key'], ['link_one.value', 'link_two.name'])])
+                              (['Item_C.key', 'Item_D.key', 'Item_E.key'], ['link_one.value', 'link_two.name']),
+                              (['Item_E.key.name'], ['link_three.key.value'])])
     def test_invalidation_scope_negative_diffs(self, testapp, test_link_source_schema, diff, embedded_list):
         """ Tests a few possible edit + embedding_list combinations that should NOT result
             in re-indexing (so the added item_type is removed from the invalidation scope).
@@ -204,7 +205,10 @@ class TestInvalidationScope:
                               (['Item_F.name'], ['link_four.name']),
                               (['Item_F.name'], ['link_four.*']),
                               (['Item_D.key', 'Item_F.value'], ['link_two.value', 'link_four.*']),
-                              (['Item_D.key', 'Item_F.value'], ['link_two.key', 'link_four.key'])])
+                              (['Item_D.key', 'Item_F.value'], ['link_two.key', 'link_four.key']),
+                              (['Item_E.key.name'], ['link_three.*']),
+                              (['Item_E.key.name'], ['link_three.key.*']),
+                              (['Item_E.key.name'], ['link_three.key.name'])])
     def test_invalidation_scope_positive_diffs(self, testapp, test_link_source_schema, diff, embedded_list):
         """ Tests a few possible edit + embedding_list combinations that should result in
             invalidation.

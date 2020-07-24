@@ -155,7 +155,6 @@ def test_linked_uuids_expand_target(content, dummy_request, threadlocals):
     }
 
 
-@pytest.mark.skip  # XXX: test is broken with invalidation scope changes
 def test_linked_uuids_index_data(content, dummy_request, threadlocals):
     notice_pytest_fixtures(content, dummy_request, threadlocals)
     # this is the main view use to create data model for indexing

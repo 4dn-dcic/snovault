@@ -246,7 +246,7 @@ def indexing_info(context, request):
         path = '/' + uuid + '/@@index-data'
         index_view = request.invoke_view(path, index_uuid=uuid, as_user='INDEXER')
         response['indexing_stats'] = index_view['indexing_stats']
-        es_assc_uuids, _ = find_uuids_for_indexing(request.registry, set([uuid]))
+        es_assc_uuids, invalidated_with_type = find_uuids_for_indexing(request.registry, set([uuid]))
         new_rev_link_uuids = get_rev_linked_items(request, uuid)
         # invalidated: items linking to this in es + newly rev linked items
         response['uuids_invalidated'] = list(es_assc_uuids | new_rev_link_uuids)

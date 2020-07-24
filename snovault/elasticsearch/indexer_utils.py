@@ -165,13 +165,12 @@ def filter_invalidation_scope(registry, diff, invalidated_with_type, secondary_u
                                 "embed: %s, base_field: %s, base_field_props: %s" % (embed, base_field,
                                                                                      base_field_props))
 
-            # if the base field is a field on the properties of this item type and
-            # the terminal field of the embed is in the diff (or this field is embedded with *,
-            # then we have definitely been invalidated.
             # XXX VERY IMPORTANT: for this to work correctly, the fields used in calculated properties MUST
-            # be embedded!
+            # be embedded! In addition, if you embed * on a linkTo, modifications to that linkTo will ALWAYS
+            # invalidate the item_type
             if base_field in properties and \
-                    (terminal_field in diffs.get(base_field_item_type, []) or terminal_field.endswith('*')):
+                    (any(field.endswith(terminal_field) for field in diffs.get(base_field_item_type, [])) or
+                     terminal_field.endswith('*')):
                 item_type_is_invalidated[invalidated_item_type] = True
                 break
 
