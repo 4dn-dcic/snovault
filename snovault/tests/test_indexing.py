@@ -91,7 +91,7 @@ def app_settings(wsgi_server_host_port, elasticsearch_server, postgresql_server,
     return settings
 
 
-INDEXER_MODE = os.environ.get('INDEXER_MODE', "MPINDEX").upper()  # fix later
+INDEXER_MODE = os.environ.get('INDEXER_MODE', "MPINDEX").upper()
 if INDEXER_MODE == "MPINDEX":
     INDEXER_APP_PARAMS = [True]
 elif INDEXER_MODE == "INDEX":
@@ -571,7 +571,7 @@ def test_indexing_queue_records(app, testapp, indexer_testapp):
     assert indexing_record.get('_source') == indexing_doc_source
 
 
-#@pytest.mark.flaky
+@pytest.mark.flaky
 def test_sync_and_queue_indexing(app, testapp, indexer_testapp):
     es = app.registry[ELASTIC_SEARCH]
     indexer_queue = app.registry[INDEXER_QUEUE]
@@ -609,7 +609,7 @@ def test_sync_and_queue_indexing(app, testapp, indexer_testapp):
     assert doc_count == 2
 
 
-#@pytest.mark.flaky
+@pytest.mark.flaky
 def test_queue_indexing_with_linked(app, testapp, indexer_testapp, dummy_request):
     """
     Test a whole bunch of things here:
@@ -1346,7 +1346,7 @@ def test_aggregated_items(app, testapp, indexer_testapp):
     indexer_testapp.post_json('/index', {'record': True})
 
 
-#@pytest.mark.flaky(max_runs=2, rerun_filter=delay_rerun)
+@pytest.mark.flaky(max_runs=2, rerun_filter=delay_rerun)
 def test_indexing_info(app, testapp, indexer_testapp):
     """
     Test the information on indexing-info for a given uuid and make sure that
@@ -1478,7 +1478,7 @@ def test_elasticsearch_item_basic(app, testapp, indexer_testapp, es_based_target
     assert initial_count == after_count
 
 
-#@pytest.mark.flaky(max_runs=2, rerun_filter=delay_rerun)
+@pytest.mark.flaky(max_runs=2, rerun_filter=delay_rerun)
 def test_elasticsearch_item_with_source(app, testapp, indexer_testapp, es_based_target):
     """
     Test rev_linking with a TestingLinkTargetElasticSearch item, including

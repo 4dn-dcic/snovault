@@ -1184,6 +1184,7 @@ def run(app, collections=None, dry_run=False, check_first=False, skip_indexing=F
                         to_subtract = set(chain.from_iterable(
                             [v for k, v in uuids_to_index.items() if k != i_type]
                         ))
+                        # NOTE: invalidation scope computation not possible here since there is no set of diffs
                         all_assc_uuids, _ = find_uuids_for_indexing(registry, all_uuids_to_index, i_type)
                         uuids_to_index[i_type] = all_assc_uuids - to_subtract
                 log.error('___SYNC INDEXING WITH STRICT=FALSE MAY CAUSE REV_LINK INCONSISTENCY___')

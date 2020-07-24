@@ -8,9 +8,6 @@ from ..elasticsearch.indexer_utils import filter_invalidation_scope
 # Mocked uuids
 UUID1 = 'UUID1'
 UUID2 = 'UUID2'
-UUID3 = 'UUID3'
-UUID4 = 'UUID4'
-UUID5 = 'UUID5'
 
 # Mocked item types
 ITEM_A = 'Item_A'
@@ -33,16 +30,18 @@ def mock_schema_and_embedded_list(schema, embedded_list):
 
 @pytest.fixture
 def test_link_source_schema():
-    """ Structure, combined with above:
+    """ Intended schema structure. Meant to test multiple different modification scenarios
             Item_A (uuid1):
-                    * link_one: linkTo C (uuid3) (embeds name)
-                    * link_two: linkTo D (uuid4) (embeds key)
-                    * link_three: linkTo E (uuid5) (embeds value)
+                * link_one: linkTo C
+                * link_two: linkTo D
+                * link_three: linkTo E
+                * link_four: array of linkTo F
 
             Item_B (uuid2):
-                * link_one: linkTo C (uuid3) (embeds key)
-                * link_two: linkTo D (uuid4) (embeds value)
-                * link_three: linkTo E (uuid5) (embeds name)
+                * link_one: linkTo C
+                * link_two: linkTo D
+                * link_three: linkTo E
+                * link_four: array of linkTo F
     """
     return {
         'link_one': {
@@ -129,7 +128,7 @@ class TestInvalidationScope:
         """
         registry = testapp.app.registry
         diff = [  # this diff should only invalidate Item_A
-            'Item_C.name'
+            ITEM_C + '.name'
         ]
         invalidated = [
             (UUID1, item_type)
@@ -151,9 +150,9 @@ class TestInvalidationScope:
         """
         registry = testapp.app.registry
         diff = [  # this diff should invalidate NONE, so secondary should be cleared
-            'Item_C.value',
-            'Item_D.name',
-            'Item_E.key'
+            ITEM_C + '.value',
+            ITEM_D + '.name',
+            ITEM_E + '.key'
         ]
         invalidated = [
             (UUID1, item_type)
@@ -171,8 +170,8 @@ class TestInvalidationScope:
         """
         registry = testapp.app.registry
         diff = [  # this diff invalidates BOTH
-            'Item_C.name',
-            'Item_D.value'
+            ITEM_C + '.name',
+            ITEM_D + '.value'
         ]
         invalidated = [
             (UUID1, item_type)
@@ -182,10 +181,10 @@ class TestInvalidationScope:
             self.run_test_and_reset_secondary(registry, diff, invalidated, secondary, 1)
 
     @pytest.mark.parametrize('diff,embedded_list',
-                             [(['Item_C.name', 'Item_X.value'], ['link_one.value']),
-                              (['Item_D.value', 'Item_E.key'], ['link_two.name', 'link_three.value']),
-                              (['Item_C.key', 'Item_D.key', 'Item_E.key'], ['link_one.value', 'link_two.name']),
-                              (['Item_E.key.name'], ['link_three.key.value'])])
+                             [([ITEM_C + '.name', 'Item_X.value'], ['link_one.value']),
+                              ([ITEM_D + '.value', ITEM_E + '.key'], ['link_two.name', 'link_three.value']),
+                              ([ITEM_C + '.key', ITEM_D + '.key', ITEM_E + '.key'], ['link_one.value', 'link_two.name']),
+                              ([ITEM_E + '.key.name'], ['link_three.key.value'])])
     def test_invalidation_scope_negative_diffs(self, testapp, test_link_source_schema, diff, embedded_list):
         """ Tests a few possible edit + embedding_list combinations that should NOT result
             in re-indexing (so the added item_type is removed from the invalidation scope).
@@ -199,16 +198,16 @@ class TestInvalidationScope:
             self.run_test_and_reset_secondary(registry, diff, invalidated, secondary, 0)
 
     @pytest.mark.parametrize('diff,embedded_list',
-                             [(['Item_C.value'], ['link_one.value']),
-                              (['Item_C.value'], ['link_one.*']),
-                              (['Item_C.name'], ['link_one.value', 'link_two.*']),
-                              (['Item_F.name'], ['link_four.name']),
-                              (['Item_F.name'], ['link_four.*']),
-                              (['Item_D.key', 'Item_F.value'], ['link_two.value', 'link_four.*']),
-                              (['Item_D.key', 'Item_F.value'], ['link_two.key', 'link_four.key']),
-                              (['Item_E.key.name'], ['link_three.*']),
-                              (['Item_E.key.name'], ['link_three.key.*']),
-                              (['Item_E.key.name'], ['link_three.key.name'])])
+                             [([ITEM_C + '.value'], ['link_one.value']),
+                              ([ITEM_C + '.value'], ['link_one.*']),
+                              ([ITEM_C + '.name'], ['link_one.value', 'link_two.*']),
+                              ([ITEM_F + '.name'], ['link_four.name']),
+                              ([ITEM_F + '.name'], ['link_four.*']),
+                              ([ITEM_D + '.key', ITEM_F + '.value'], ['link_two.value', 'link_four.*']),
+                              ([ITEM_D + '.key', ITEM_F + '.value'], ['link_two.key', 'link_four.key']),
+                              ([ITEM_E + '.key.name'], ['link_three.*']),
+                              ([ITEM_E + '.key.name'], ['link_three.key.*']),
+                              ([ITEM_E + '.key.name'], ['link_three.key.name'])])
     def test_invalidation_scope_positive_diffs(self, testapp, test_link_source_schema, diff, embedded_list):
         """ Tests a few possible edit + embedding_list combinations that should result in
             invalidation.
