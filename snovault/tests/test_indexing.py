@@ -161,7 +161,10 @@ def es_based_target(app, testapp):
     # clean up by deleting the index
     es = app.registry[ELASTIC_SEARCH]
     namespaced_indexing = indexer_utils.get_namespaced_index(app, 'testing_link_target_elastic_search')
-    es.indices.delete(index=namespaced_indexing)
+    try:
+        es.indices.delete(index=namespaced_indexing)
+    except NotFoundError:
+        pass
 
 
 def test_indexing_post_then_get_immediately(testapp, indexer_testapp):
