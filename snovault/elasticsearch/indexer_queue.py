@@ -296,7 +296,7 @@ class QueueManager(object):
        from either the primary or secondary queues.
     """
 
-    USE_LOCK_MANAGER = True
+    USE_RATE_MANAGER = False
 
     def __init__(self, registry, mirror_env=None, override_url=None):
         """
@@ -310,11 +310,11 @@ class QueueManager(object):
         self.replace_batch_size = 10
         # Amazon says we shouldn't do anything for 60 seconds after a purge request.
         # Since we can't be sure they're counting from the same place as we are, we add 1 second margin for error.
-        if self.USE_LOCK_MANAGER:
-            self.collision_manager = LockoutManager(lockout_seconds=60, safety_seconds=1, action="purge_queue", log=log)
-        else:
+        if self.USE_RATE_MANAGER:
             self.collision_manager = RateManager(action="purge_queue", interval_seconds=60, safety_seconds=1,
                                                  allowed_attempts=1, log=log)
+        else:
+            self.collision_manager = LockoutManager(lockout_seconds=60, safety_seconds=1, action="purge_queue", log=log)
         self.env_name = mirror_env if mirror_env else registry.settings.get('env.name')
         self.override_url = override_url
         # local development
