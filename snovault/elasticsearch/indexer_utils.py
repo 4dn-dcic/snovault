@@ -145,7 +145,7 @@ def filter_invalidation_scope(registry, diff, invalidated_with_type, secondary_u
         if invalidated_item_type in item_type_is_invalidated:
             if item_type_is_invalidated[invalidated_item_type] is False:
                 secondary_uuids.discard(invalidated_uuid)
-                continue
+            continue  # nothing else to do here
 
         # if we get here, we are looking at an invalidated_item_type that exists in the
         # diff and we need to inspect the embedded list to see if the diff fields are
