@@ -9,7 +9,7 @@ moto-setup:
 	pip install "moto[server]==1.3.7"
 
 macpoetry-install:
-	bin/macpoetry-install
+	scripts/macpoetry-install
 
 macbuild:
 	make configure
