@@ -1,5 +1,5 @@
 Elasticsearch Indexing
-=====================
+======================
 
 **Work in progress!**
 
