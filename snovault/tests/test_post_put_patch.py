@@ -251,7 +251,6 @@ def test_put_object_editing_child(content_with_child, testapp):
     # this is no longer allowed
     res = testapp.put_json(content_with_child['@id'], edit, status=422)
     assert res.json['description'] == 'Failed validation'
-    import pdb; pdb.set_trace()
     assert len(res.json['errors']) == 1
     res_error = res.json['errors'][0]
     assert res_error['name'] == 'Schema: reverse'
