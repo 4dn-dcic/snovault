@@ -244,7 +244,14 @@ def validators(validator, validators, instance, schema):
 
 
 def calculatedProperty(validator, linkTo, instance, schema):
-    yield ValidationError('submission of calculatedProperty disallowed')
+    """ This is the validator for calculatedProperty - if we see this field on a submitted item
+        we (normally) emit ValidationError since calculated properties cannot be submitted.
+
+        NEW: allow "submission of calculated properties" if the schema type is object in which case
+        we could be updating sub-embedded-object properties
+    """
+    if schema.get('type', None) != 'object' or not schema.get('sub-embedded', False):
+        yield ValidationError('submission of calculatedProperty disallowed')
 
 
 class SchemaValidator(Draft4Validator):

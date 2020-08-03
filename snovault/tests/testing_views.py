@@ -559,3 +559,33 @@ class TestingLinkTargetElasticSearch(Item):
     })
     def reverse_es(self, request):
         return self.rev_link_atids(request, "reverse_es")
+
+
+@collection('testing-calculated-properties',
+            unique_key='testing_calculated_properties:name')
+class TestingCalculatedProperties(Item):
+    """ An item type that has calculated properties on it meant for testing. """
+    item_type = 'testing_calculated_properties'
+    name_key = 'name'
+    schema = load_schema('snovault:test_schemas/TestingCalculatedProperties.json')
+
+    @calculated_property(schema={
+        "title": "combination",
+        "type": "object"
+    })
+    def combination(self, name, foo, bar):
+        return {
+            'name': name,
+            'foo': foo,
+            'bar': bar
+        }
+
+    @calculated_property(schema={  # THIS is the schema that will be "seen"
+        "title": "nested",
+        "type": "object",
+        "sub-embedded": True  # REQUIRED TO INDICATE
+    })
+    def nested(self, nested):  # nested is the calculated property path that will update and the input
+        """ Implements sub-embedded-object calculated properties. """
+        # RETURN a dictionary with all sub-embedded key, value pairs on this sub-embedded path
+        return {'keyvalue': nested['key'] + nested['value']}

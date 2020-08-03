@@ -189,6 +189,7 @@ def calculate_properties(context, request, ns=None, category='object'):
     if isinstance(context, type):
         context = None
     namespace = ItemNamespace(context, request, defined, ns)
+    import pdb; pdb.set_trace()
     return {
         name: value
         for name, value in (
