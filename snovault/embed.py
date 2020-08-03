@@ -32,7 +32,7 @@ class MissingIndexItemException(Exception):
     pass
 
 
-def make_subrequest(request, path, method='GET', json_body=None):
+def make_subrequest(request, path, method='GET', json_body=None, inherit_user=False, inherit_registry=False):
     """
     Make a subrequest from a parent request given a request path.
     Copies request environ data for authentication. Handles making the path
@@ -47,6 +47,8 @@ def make_subrequest(request, path, method='GET', json_body=None):
         path (str): path for the subrequest. Can include query string
         method (str): subrequest method, defaults to GET
         json_body (dict): optional dict to attach as json_body to subrequest
+        inherit_user (bool) : optional to inherit remote_user from parent request
+        inherit_registry (bool): optional to inherit registry from parent request
 
     Returns:
         Request: the subrequest
@@ -70,6 +72,10 @@ def make_subrequest(request, path, method='GET', json_body=None):
     subreq.remove_conditional_headers()
     # XXX "This does not remove headers like If-Match"
     subreq.__parent__ = request
+    if inherit_user:
+        subreq.remote_user = request.remote_user
+    if inherit_registry:
+        subreq.registry = request.registry
     return subreq
 
 

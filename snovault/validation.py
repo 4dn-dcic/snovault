@@ -160,5 +160,5 @@ class ValidatorsPredicate(object):
         for validator in self.validators:
             validator(context, request)
         if request.errors:
-            raise ValidationFailure()
+            raise ValidationFailure(request.errors)
         return True
