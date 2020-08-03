@@ -14,6 +14,9 @@ import simplejson as json
 
 
 def includeme(config):
+    """ XXX: This file needs to be refactored/documented as it is not immediately obvious what's going on here.
+             Expect to spend siginificant time figuring out what's going on.
+    """
     config.add_request_method(lambda request: {}, 'validated', reify=True)
     config.add_request_method(lambda request: Errors(), 'errors', reify=True)
     config.add_view(view=failed_validation, context=ValidationFailure)
@@ -159,6 +162,6 @@ class ValidatorsPredicate(object):
     def __call__(self, context, request):
         for validator in self.validators:
             validator(context, request)
-        if request.errors:
-            raise ValidationFailure(request.errors)
+        if request.errors:  # Source of empty validation error - see request.errors in traceback - Will
+            raise ValidationFailure()
         return True
