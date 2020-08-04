@@ -860,3 +860,27 @@ def validate_es_content(context, request, es_res, view='embedded'):
             use_es_result = False
             break
     return use_es_result
+
+
+def merge_calculated_into_properties(properties: dict, calculated: dict):
+    """ Performs a depth 2 dictionary merge into properties.
+
+    :param properties: base item properties
+    :param calculated: calculated properties
+    """
+    for key, value in calculated.items():
+        if key not in properties:
+            properties[key] = value
+        else:  # calculated property is in a sub-embedded object
+            calculated_sub_values = calculated[key]
+            properties_sub_values = properties[key]
+            if not isinstance(calculated_sub_values, dict) or not isinstance(properties_sub_values, dict):
+                raise ValueError('Calculated properties that override base properties disallowed: '
+                                 'calculated: %s \n properties: %s' %
+                                 (calculated_sub_values, properties_sub_values))
+            for k, v in calculated_sub_values.items():
+                if k in properties_sub_values:
+                    raise ValueError('Calculated properties that override base properties in sub-embedded object '
+                                     'disallowed: calculated: %s \n properties: %s' %
+                                     (calculated_sub_values, properties_sub_values))
+                properties_sub_values[k] = v

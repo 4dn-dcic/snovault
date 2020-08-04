@@ -24,5 +24,5 @@ def test_calculated_build_object(testapp, basic_calculated_item):
     for k in ['name', 'foo', 'bar']:
         assert k in res['combination']
     nested = res['nested']
-    for k in ['key', 'value', 'keyvalue']:  # XXX: get this to work
+    for k in ['key', 'value', 'keyvalue']:
         assert k in nested
