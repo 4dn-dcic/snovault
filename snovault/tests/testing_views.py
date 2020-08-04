@@ -589,3 +589,18 @@ class TestingCalculatedProperties(Item):
         """ Implements sub-embedded-object calculated properties. """
         # RETURN a dictionary with all sub-embedded key, value pairs on this sub-embedded path
         return {'keyvalue': nested['key'] + nested['value']}
+
+    @calculated_property(schema={
+        "title": "nested2",
+        "type": "array",
+        "sub-embedded": True
+    })
+    def nested2(self, nested2):
+        """ Implements sub-embedded object calculated property on array type field """
+        # return an ARRAY of dictionaries
+        result = []
+        for entry in nested2:
+            result.append({
+                'keyvalue': entry['key'] + entry['value']
+            })
+        return result

@@ -250,7 +250,7 @@ def calculatedProperty(validator, linkTo, instance, schema):
         NEW: allow "submission of calculated properties" if the schema type is object in which case
         we could be updating sub-embedded-object properties
     """
-    if schema.get('type', None) != 'object' or not schema.get('sub-embedded', False):
+    if schema.get('type', None) not in ['object', 'array'] or not schema.get('sub-embedded', False):
         yield ValidationError('submission of calculatedProperty disallowed')
 
 

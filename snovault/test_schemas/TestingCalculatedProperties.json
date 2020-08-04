@@ -2,7 +2,7 @@
   "title": "Testing Calculated Properties",
   "description": "Test object that has calculated properties to test",
   "type": "object",
-  "required": ["name", "foo", "bar"],
+  "required": ["name", "foo", "bar", "nested", "nested2"],
   "properties": {
     "schema_version": {
       "type": "object",
@@ -26,6 +26,20 @@
         },
         "value": {
           "type": "string"
+        }
+      }
+    },
+    "nested2" : {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "value": {
+            "type": "string"
+          }
         }
       }
     }

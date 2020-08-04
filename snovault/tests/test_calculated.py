@@ -13,7 +13,17 @@ def basic_calculated_item():
         'nested': {
             'key': 'foo',
             'value': 'bar'
-        }
+        },
+        'nested2': [
+            {
+                'key': 'foo',
+                'value': 'bar'
+            },
+            {
+                'key': 'bar',
+                'value': 'foo'
+            }
+        ]
     }
 
 
@@ -26,3 +36,7 @@ def test_calculated_build_object(testapp, basic_calculated_item):
     nested = res['nested']
     for k in ['key', 'value', 'keyvalue']:
         assert k in nested
+    nested2 = res['nested2']
+    for k in ['key', 'value', 'keyvalue']:
+        for entry in nested2:
+            assert k in entry

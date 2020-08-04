@@ -125,3 +125,43 @@ def test_merge_calculated_into_properties(simple_properties, simple_calculated, 
     with pytest.raises(ValueError):
         props_copy = copy.deepcopy(simple_properties)
         merge_calculated_into_properties(props_copy, failure_calculated2)
+
+
+@pytest.fixture
+def complex_properties():
+    return {
+        'abc': 123,
+        'nested': [
+            {
+                'key': 'hello',
+                'value': 'world'
+            },
+            {
+                'key': 'dog',
+                'value': 'cat'
+            }
+        ]
+    }
+
+
+@pytest.fixture
+def calculated_list():
+    return {
+        'nested': [
+            {
+                'keyvalue': 'helloworld'
+            },
+            {
+                'keyvalue': 'dogcat'
+            }
+        ]
+    }
+
+
+def test_merge_calculated_into_properties_array(complex_properties, calculated_list):
+    """ Tests that we can do calculated properties on arrays of sub-embedded objects """
+    props_copy = copy.deepcopy(complex_properties)
+    merge_calculated_into_properties(props_copy, calculated_list)
+    for entry in props_copy['nested']:
+        for field in ['key', 'value', 'keyvalue']:
+            assert field in entry

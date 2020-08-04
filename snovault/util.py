@@ -871,16 +871,25 @@ def merge_calculated_into_properties(properties: dict, calculated: dict):
     for key, value in calculated.items():
         if key not in properties:
             properties[key] = value
-        else:  # calculated property is in a sub-embedded object
+        else:
             calculated_sub_values = calculated[key]
             properties_sub_values = properties[key]
-            if not isinstance(calculated_sub_values, dict) or not isinstance(properties_sub_values, dict):
-                raise ValueError('Calculated properties that override base properties disallowed: '
-                                 'calculated: %s \n properties: %s' %
-                                 (calculated_sub_values, properties_sub_values))
-            for k, v in calculated_sub_values.items():
-                if k in properties_sub_values:
-                    raise ValueError('Calculated properties that override base properties in sub-embedded object '
-                                     'disallowed: calculated: %s \n properties: %s' %
-                                     (calculated_sub_values, properties_sub_values))
-                properties_sub_values[k] = v
+            if isinstance(calculated_sub_values, dict) and isinstance(properties_sub_values, dict):
+                for k, v in calculated_sub_values.items():
+                    if k in properties_sub_values:
+                        raise ValueError('Calculated properties that override base properties in sub-embedded object '
+                                         'disallowed: calculated: %s \n properties: %s' %
+                                         (calculated_sub_values, properties_sub_values))
+                    properties_sub_values[k] = v
+            elif isinstance(calculated_sub_values, list) and isinstance(properties_sub_values, list):
+                for calculated_entry, props_entry in zip(calculated_sub_values, properties_sub_values):
+                    for k, v in calculated_entry.items():
+                        if k in props_entry:
+                            raise ValueError(
+                                'Calculated properties that override base properties in sub-embedded object '
+                                'disallowed: calculated: %s \n properties: %s' %
+                                (calculated_sub_values, properties_sub_values))
+                        props_entry[k] = v
+            else:
+                raise ValueError('Got unexpected types for calculated/properties sub-values: '
+                                 'calculated: %s \n properties: %s' % (calculated_sub_values, properties_sub_values))

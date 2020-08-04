@@ -177,7 +177,7 @@ These include the JSON-LD boilerplate along with other dynamically calculated pr
         "characterizations": [],
     }
 
-Calculated properties can be top level fields or sub-embedded object fields. See the end of testing_views.py to see how one would declare a calculated property on a sub-embedded object. 
+Calculated properties can be top level fields or sub-embedded object fields. See the end of testing_views.py to see how one would declare a calculated property on a sub-embedded object.
 
 JSON result
 -----------
