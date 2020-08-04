@@ -583,7 +583,18 @@ class TestingCalculatedProperties(Item):
     @calculated_property(schema={  # THIS is the schema that will be "seen"
         "title": "nested",
         "type": "object",
-        "sub-embedded": True  # REQUIRED TO INDICATE
+        "sub-embedded": True,  # REQUIRED TO INDICATE
+        "properties": {
+            "key": {
+                "type": "string"
+            },
+            "value": {
+                "type": "string"
+            },
+            "keyvalue": {
+                "type": "string"
+            }
+        }
     })
     def nested(self, nested):  # nested is the calculated property path that will update and the input
         """ Implements sub-embedded-object calculated properties.
@@ -598,10 +609,24 @@ class TestingCalculatedProperties(Item):
         # return a dictionary with all sub-embedded key, value pairs on this sub-embedded path
         return {'keyvalue': nested['key'] + nested['value']}
 
-    @calculated_property(schema={
+    @calculated_property(schema={  # IN ORDER TO GET CORRECT MAPPINGS, YOU MUST SPECIFY THE ENTIRE SCHEMA
         "title": "nested2",
         "type": "array",
-        "sub-embedded": True
+        "sub-embedded": True,
+        "items": {
+            "type": "object",
+            "properties": {
+                "key": {
+                    "type": "string"
+                },
+                "value": {
+                    "type": "string"
+                },
+                "keyvalue": {
+                    "type": "string"
+                }
+            }
+        }
     })
     def nested2(self, nested2):
         """ Implements sub-embedded object calculated property on array (of objects) type field

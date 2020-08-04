@@ -39,6 +39,15 @@ def test_type_mapping(registry, item_type):
         if item_type == 'TestingLinkTargetElasticSearch':
             assert mapping['properties']['reverse_es'].get('type', 'object') != 'nested'  # should not occur here
 
+        # check calculated properties on objects/arrays of objects are mapped correctly
+        if item_type == 'TestingCalculatedProperties':
+            assert mapping['properties']['nested']['properties']['key']['type'] == 'text'
+            assert mapping['properties']['nested']['properties']['value']['type'] == 'text'
+            assert mapping['properties']['nested']['properties']['keyvalue']['type'] == 'text'
+            assert mapping['properties']['nested2']['properties']['key']['type'] == 'text'
+            assert mapping['properties']['nested2']['properties']['value']['type'] == 'text'
+            assert mapping['properties']['nested2']['properties']['keyvalue']['type'] == 'text'
+
 
 def test_type_mapping_nested(registry):
     """
