@@ -860,3 +860,44 @@ def validate_es_content(context, request, es_res, view='embedded'):
             use_es_result = False
             break
     return use_es_result
+
+
+class CalculatedOverrideOfBasePropertiesNotPermitted(ValueError):
+    """ Helper exception for below method """
+    def __init__(self, calculated_props, base_props):
+        self.calculated_props = calculated_props
+        self.base_props = base_props
+        super().__init__('Calculated properties are not permitted to override'
+                         ' base properties of a sub-embedded object:'
+                         '\n calculated: %s'
+                         '\n base props: %s' % (calculated_props, base_props))
+
+
+def merge_calculated_into_properties(properties: dict, calculated: dict):
+    """ Performs a depth 2 dictionary merge into properties.
+
+    :param properties: base item properties
+    :param calculated: calculated properties
+    """
+    for key, value in calculated.items():
+        if key not in properties:
+            properties[key] = value
+        else:
+            calculated_sub_values = calculated[key]
+            properties_sub_values = properties[key]
+            if isinstance(calculated_sub_values, dict) and isinstance(properties_sub_values, dict):
+                for k, v in calculated_sub_values.items():
+                    if k in properties_sub_values:
+                        raise CalculatedOverrideOfBasePropertiesNotPermitted(calculated_sub_values,
+                                                                             properties_sub_values)
+                    properties_sub_values[k] = v
+            elif isinstance(calculated_sub_values, list) and isinstance(properties_sub_values, list):
+                for calculated_entry, props_entry in zip(calculated_sub_values, properties_sub_values):
+                    for k, v in calculated_entry.items():
+                        if k in props_entry:
+                            raise CalculatedOverrideOfBasePropertiesNotPermitted(calculated_sub_values,
+                                                                                 properties_sub_values)
+                        props_entry[k] = v
+            else:
+                raise ValueError('Got unexpected types for calculated/properties sub-values: '
+                                 'calculated: %s \n properties: %s' % (calculated_sub_values, properties_sub_values))

@@ -31,7 +31,7 @@ This is the default object returned if frame is not specified.  It is the frame=
 
 
 Submission (POST)
-----------
+-----------------
 
 POST /biosample::
 
@@ -55,6 +55,7 @@ Validation
 * Link resolution
 * Value format validation
 * Permission checking
+* Are calculated properties legal?
 
 
 Link resolution
@@ -148,7 +149,7 @@ Rendering
             -> page expansion
 
 
-Link canonicalization
+Link Canonicalization
 ---------------------
 
 Specified in the schema. UUID's are converted to resource paths.
@@ -162,7 +163,7 @@ Specified in the schema. UUID's are converted to resource paths.
     }
 
 
-Calculated properties
+Calculated Properties
 ---------------------
 
 These include the JSON-LD boilerplate along with other dynamically calculated properties such as a consistently formatted title and reverse links pulled from the links table.
@@ -176,6 +177,7 @@ These include the JSON-LD boilerplate along with other dynamically calculated pr
         "characterizations": [],
     }
 
+Calculated properties can be top level fields or sub-embedded object fields. See the end of testing_views.py to see how one would declare a calculated property on a sub-embedded object.
 
 JSON result
 -----------
