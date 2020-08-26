@@ -20,8 +20,8 @@ def basic_calculated_item():
                 'value': 'bar'
             },
             {
-                'key': 'bar',
-                'value': 'foo'
+                'key': 'apple',
+                'value': 'orange'
             }
         ]
     }
@@ -34,8 +34,8 @@ def test_calculated_build_object(testapp, basic_calculated_item):
     for k in ['name', 'foo', 'bar']:
         assert k in res['combination']
     nested = res['nested']
-    for k in ['key', 'value', 'keyvalue']:
-        assert k in nested
+    for k, v in zip(['key', 'value', 'keyvalue'], ['foo', 'bar', 'foobar']):
+        assert nested[k] == v
     nested2 = res['nested2']
     for k in ['key', 'value', 'keyvalue']:
         for entry in nested2:
