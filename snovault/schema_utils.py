@@ -263,7 +263,7 @@ def calculatedProperty(validator, linkTo, instance, schema):
         return schema.get('type') == 'array' and schema_is_object(schema.get('items', {}))
 
     if not schema_is_sub_embedded(schema) or (
-        not schema_is_array_of_objects(schema) or not schema_is_object(schema)):
+        not schema_is_array_of_objects(schema) and not schema_is_object(schema)):
         yield ValidationError('submission of calculatedProperty disallowed')
 
 
