@@ -559,3 +559,95 @@ class TestingLinkTargetElasticSearch(Item):
     })
     def reverse_es(self, request):
         return self.rev_link_atids(request, "reverse_es")
+
+
+@collection('testing-calculated-properties',
+            unique_key='testing_calculated_properties:name')
+class TestingCalculatedProperties(Item):
+    """ An item type that has calculated properties on it meant for testing. """
+    item_type = 'testing_calculated_properties'
+    name_key = 'name'
+    schema = load_schema('snovault:test_schemas/TestingCalculatedProperties.json')
+
+    @calculated_property(schema={
+        "title": "combination",
+        "type": "object"
+    })
+    def combination(self, name, foo, bar):
+        return {
+            'name': name,
+            'foo': foo,
+            'bar': bar
+        }
+
+    @calculated_property(schema={  # THIS is the schema that will be "seen"
+        "title": "nested",
+        "type": "object",
+        "sub-embedded": True,  # REQUIRED TO INDICATE
+        "properties": {
+            "key": {
+                "type": "string"
+            },
+            "value": {
+                "type": "string"
+            },
+            "keyvalue": {
+                "type": "string"
+            }
+        }
+    })
+    def nested(self, nested):  # nested is the calculated property path that will update and the input
+        """ Implements sub-embedded-object calculated properties.
+
+            When merged into properties looks like this:
+            {
+                'nested' : {
+                    'keyvalue': val
+                }
+            }
+        """
+        # return a dictionary with all sub-embedded key, value pairs on this sub-embedded path
+        return {'keyvalue': nested['key'] + nested['value']}
+
+    @calculated_property(schema={  # IN ORDER TO GET CORRECT MAPPINGS, YOU MUST SPECIFY THE ENTIRE SCHEMA
+        "title": "nested2",
+        "type": "array",
+        "sub-embedded": True,
+        "items": {
+            "type": "object",
+            "properties": {
+                "key": {
+                    "type": "string"
+                },
+                "value": {
+                    "type": "string"
+                },
+                "keyvalue": {
+                    "type": "string"
+                }
+            }
+        }
+    })
+    def nested2(self, nested2):
+        """ Implements sub-embedded object calculated property on array (of objects) type field
+
+            When merged into properties looks like this:
+            {
+                'nested2': [
+                    {
+                        keyvalue: val
+                    },
+
+                    {
+                        keyvalue: val
+                    }
+                ]
+            }
+        """
+        # return an ARRAY of dictionaries
+        result = []
+        for entry in nested2:
+            result.append({
+                'keyvalue': entry['key'] + entry['value']
+            })
+        return result

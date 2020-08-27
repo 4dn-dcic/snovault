@@ -29,6 +29,7 @@ from .util import (
     check_es_and_cache_linked_sids,
     validate_es_content,
     debug_log,
+    merge_calculated_into_properties
 )
 from .util import filter_embedded
 
@@ -80,7 +81,7 @@ def collection_view_listing_db(context, request):
 def home(context, request):
     properties = request.embed(request.resource_path(context), '@@object')
     calculated = calculate_properties(context, request, properties, category='page')
-    properties.update(calculated)
+    merge_calculated_into_properties(properties, calculated)
     return properties
 
 
@@ -90,7 +91,7 @@ def home(context, request):
 def collection_view_object(context, request):
     properties = context.__json__(request)
     calculated = calculate_properties(context, request, properties)
-    properties.update(calculated)
+    merge_calculated_into_properties(properties, calculated)
     return properties
 
 
@@ -100,7 +101,7 @@ def collection_list(context, request):
     path = request.resource_path(context)
     properties = request.embed(path, '@@object')
     calculated = calculate_properties(context, request, properties, category='page')
-    properties.update(calculated)
+    merge_calculated_into_properties(properties, calculated)
 
     if request.query_string:
         properties['@id'] += '?' + request.query_string
@@ -168,7 +169,7 @@ def item_view_object(context, request):
 
     properties = context.item_with_links(request)
     calculated = calculate_properties(context, request, properties)
-    properties.update(calculated)
+    merge_calculated_into_properties(properties, calculated)
     return properties
 
 
@@ -236,7 +237,7 @@ def item_view_page(context, request):
     item_path = request.resource_path(context)
     properties = request.embed(item_path, '@@embedded', as_user=True)
     calculated = calculate_properties(context, request, properties, category='page')
-    properties.update(calculated)
+    merge_calculated_into_properties(properties, calculated)
     return properties
 
 

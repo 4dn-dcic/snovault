@@ -244,7 +244,27 @@ def validators(validator, validators, instance, schema):
 
 
 def calculatedProperty(validator, linkTo, instance, schema):
-    yield ValidationError('submission of calculatedProperty disallowed')
+    """ This is the validator for calculatedProperty - if we see this field on a submitted item
+        we (normally) emit ValidationError since calculated properties cannot be submitted.
+
+        However, if sub-embedded = True is set on the calculated property, allow submission
+        if the schema is in one of two valid formats:
+            1. It is an object field ie: calculated property on sub-embedded object
+            2. It is an array of objects ie: calculated property applied across an array of
+               sub-embedded objects.
+    """
+    def schema_is_sub_embedded(schema):
+        return schema.get('sub-embedded', False)
+
+    def schema_is_object(schema):
+        return schema.get('type') == 'object'
+
+    def schema_is_array_of_objects(schema):
+        return schema.get('type') == 'array' and schema_is_object(schema.get('items', {}))
+
+    if not schema_is_sub_embedded(schema) or (
+        not schema_is_array_of_objects(schema) and not schema_is_object(schema)):
+        yield ValidationError('submission of calculatedProperty disallowed')
 
 
 class SchemaValidator(Draft4Validator):
