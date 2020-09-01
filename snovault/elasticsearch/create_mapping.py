@@ -109,7 +109,8 @@ def schema_mapping(field, schema, top_level=False, from_array=False):
         for k, v in schema.get('properties', {}).items():
             mapping = schema_mapping(k, v)
             if mapping is not None:
-                properties[k] = mapping
+                if field == '*' or k == field:
+                    properties[k] = mapping
 
         if from_array and Settings.MAPPINGS_USE_NESTED:  # only do this if we said so
             return {
