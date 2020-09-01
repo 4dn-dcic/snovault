@@ -1,0 +1,15 @@
+{
+  "title": "Testing Mixin Properties",
+  "description": "Test object that has a mixin that should appear",
+  "type": "object",
+  "required": ["name"],
+  "mixinProperties": [
+    { "$ref": "mixins.json#/status" }
+  ],
+  "properties": {
+    "name": {
+      "type": "string",
+      "uniqueKey": true
+    }
+  }
+}

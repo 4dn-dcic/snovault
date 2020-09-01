@@ -1,0 +1,22 @@
+{
+  "title": "Mixin properties",
+  "status": {
+    "status": {
+      "title": "Status",
+      "exclude_from": ["submit4dn"],
+      "type": "string",
+      "default": "in review",
+      "permission": "import_items",
+      "enum": [
+        "current",
+        "released",
+        "replaced",
+        "in public review",
+        "in review",
+        "obsolete",
+        "inactive",
+        "deleted"
+      ]
+    }
+  }
+}

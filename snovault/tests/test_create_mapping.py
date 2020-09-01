@@ -9,6 +9,7 @@ from .pyramidfixtures import dummy_request
 from .test_views import PARAMETERIZED_NAMES
 from .toolfixtures import registry
 from ..settings import Settings
+from ..util import add_default_embeds
 from contextlib import contextmanager
 
 
@@ -93,3 +94,42 @@ def test_update_mapping_by_embed(registry):
         # this syntax needed for linkTos which could be arrays
         if 'linkTo' not in check.get('items', check):
             assert s_key in new_m['properties']
+
+
+# just testing order, nothing bigger than that here.
+ORDER = ['testing_mixins', 'embedding_test', 'nested_embedding_container', 'nested_object_link_target',
+         'testing_download', 'testing_link_source_sno', 'testing_link_aggregate_sno', 'testing_link_target_sno',
+         'testing_post_put_patch_sno', 'testing_server_default', 'testing_dependencies',
+         'testing_link_target_elastic_search']
+
+
+@pytest.mark.parametrize('item_type', ORDER)
+def test_create_mapping_correctly_maps_embeds(registry, item_type):
+    """
+    This test does not actually use elasticsearch
+    Only tests the mappings generated from schemas
+    This test existed in FF/CGAP and has been ported here so we can detect issues earlier
+    """
+    mapping = type_mapping(registry[TYPES], item_type)
+    assert mapping
+    type_info = registry[TYPES].by_item_type[item_type]
+    schema = type_info.schema
+    embeds = add_default_embeds(item_type, registry[TYPES], type_info.embedded_list, schema)
+    # assert that all embeds exist in mapping for the given type
+    for embed in embeds:
+        mapping_pointer = mapping
+        split_embed = embed.split('.')
+        for idx, split_ in enumerate(split_embed):
+            # see if this is last level of embedding- may be a field or object
+            if idx == len(split_embed) - 1:
+                if 'properties' in mapping_pointer and split_ in mapping_pointer['properties']:
+                    final_mapping = mapping_pointer['properties']
+                else:
+                    final_mapping = mapping_pointer
+                if split_ != '*':
+                    assert split_ in final_mapping
+                else:
+                    assert 'properties' in final_mapping or final_mapping.get('type') == 'object'
+            else:
+                assert split_ in mapping_pointer['properties']
+                mapping_pointer = mapping_pointer['properties'][split_]
