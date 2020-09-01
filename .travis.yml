@@ -36,23 +36,18 @@ before_install:
 - initdb --version
 - ls -dal /usr/lib/postgresql/*/bin/postgres
 install:
-- pip install --upgrade pip==19.0.3
-- pip install poetry
-- pip install coveralls
-- pip install codacy-coverage
-- poetry install
-- make moto-setup
+- make build
 script:
-- |
-  if test -n "$UNIT"; then make travis-test;
-  fi
+- if test -n "$UNIT"; then make travis-test; fi
 - |
   if [[ $TRAVIS_BRANCH == 'master' ]]; then
   echo 'Triggering docs build'
   curl -X POST -d "branches=master" -d "token=$DOCS_TOKEN" https://readthedocs.org/api/v2/webhook/snovault/99596/
   fi
 - echo $TRAVIS_JOB_ID
-- poetry run wipe-test-indices $TRAVIS_JOB_ID search-fourfront-builds-uhevxdzfcv7mkm5pj5svcri3aq.us-east-1.es.amazonaws.com:80 
+- poetry run wipe-test-indices $TRAVIS_JOB_ID search-fourfront-testing-hjozudm7pq5wwlssx2pjlsyz7y.us-east-1.es.amazonaws.com:80
+after_script:
+- if [ "$TRAVIS_PYTHON_VERSION" == "3.6" ]; then coveralls; fi
 deploy:
   provider: script
   script: poetry publish --build --username=$PYPI_USER --password=$PYPI_PASSWORD
