@@ -595,7 +595,7 @@ def type_mapping(types, item_type, embed=True):
     type_info = types[item_type]
     schema = type_info.schema
     # use top_level parameter here for schema_mapping
-    mapping = schema_mapping('*', schema, from_array=True)
+    mapping = schema_mapping('*', schema, from_array=False)  # XXX: True seems to be a problem in es6?
     if not embed:
         return mapping
 
