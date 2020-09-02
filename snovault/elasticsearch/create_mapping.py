@@ -142,6 +142,7 @@ def schema_mapping(field, schema, top_level=False, from_array=False):
     if type_ == ["number", "string"]:
         return {
             'type': 'text',
+            'copy_to': 'full_text',
             'fields': {
                 'value': {
                     'type': 'float',
@@ -182,6 +183,7 @@ def schema_mapping(field, schema, top_level=False, from_array=False):
 
         sub_mapping = {
             'type': 'text',
+            'copy_to': 'full_text',
             'fields': {
                 'raw': {
                     'type': 'keyword',
@@ -200,6 +202,7 @@ def schema_mapping(field, schema, top_level=False, from_array=False):
     if type_ == 'number':
         return {
             'type': 'float',
+            'copy_to': 'full_text',
             'fields': {
                 'raw': {
                     'type': 'keyword',
@@ -216,6 +219,7 @@ def schema_mapping(field, schema, top_level=False, from_array=False):
     if type_ == 'integer':
         return {
             'type': 'long',
+            'copy_to': 'full_text',
             'fields': {
                 'raw': {
                     'type': 'keyword',
