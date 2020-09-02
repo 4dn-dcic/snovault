@@ -142,7 +142,6 @@ def schema_mapping(field, schema, top_level=False, from_array=False):
     if type_ == ["number", "string"]:
         return {
             'type': 'text',
-            'copy_to': 'full_text',
             'fields': {
                 'value': {
                     'type': 'float',
@@ -183,7 +182,7 @@ def schema_mapping(field, schema, top_level=False, from_array=False):
 
         sub_mapping = {
             'type': 'text',
-            'copy_to': 'full_text',
+            'copy_to': ['full_text'],
             'fields': {
                 'raw': {
                     'type': 'keyword',
@@ -202,7 +201,6 @@ def schema_mapping(field, schema, top_level=False, from_array=False):
     if type_ == 'number':
         return {
             'type': 'float',
-            'copy_to': 'full_text',
             'fields': {
                 'raw': {
                     'type': 'keyword',
@@ -219,7 +217,6 @@ def schema_mapping(field, schema, top_level=False, from_array=False):
     if type_ == 'integer':
         return {
             'type': 'long',
-            'copy_to': 'full_text',
             'fields': {
                 'raw': {
                     'type': 'keyword',
@@ -638,7 +635,7 @@ def type_mapping(types, item_type, embed=True):
     properties = schema['properties']
     for _, sub_mapping in properties.items():  # TODO: filter based on field_name is probably a good idea
         if sub_mapping['type'] == 'text':
-            sub_mapping['copy_to'] = 'full_text'
+            sub_mapping['copy_to'] = ['full_text']
     return mapping
 
 
