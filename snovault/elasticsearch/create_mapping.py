@@ -596,7 +596,7 @@ def type_mapping(types, item_type, embed=True):
     type_info = types[item_type]
     schema = type_info.schema
     # use top_level parameter here for schema_mapping
-    mapping = schema_mapping('*', schema, from_array=False)  # XXX: True seems to be a problem in es6?
+    mapping = schema_mapping('*', schema, from_array=False)
     if not embed:
         return mapping
 
@@ -630,10 +630,11 @@ def type_mapping(types, item_type, embed=True):
             if map_with_nested:
                 curr_m['type'] = "nested"
 
-
     # Copy text fields to 'full_text' so we can still do _all searches
+    # TODO: At some point we should filter based on field_name, maybe we add a PHI tag
+    #       to relevant fields so that they are not mapped into full_text, for example.
     properties = schema['properties']
-    for _, sub_mapping in properties.items():  # TODO: filter based on field_name is probably a good idea
+    for _, sub_mapping in properties.items():
         if sub_mapping['type'] == 'text':
             sub_mapping['copy_to'] = ['full_text']
     return mapping

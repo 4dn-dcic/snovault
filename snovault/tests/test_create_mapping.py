@@ -96,13 +96,13 @@ def test_update_mapping_by_embed(registry):
             assert s_key in new_m['properties']
 
 
-# just testing order, nothing bigger than that here.
-ORDER = ['testing_mixins', 'embedding_test', 'nested_embedding_container', 'nested_object_link_target',
+# types to test
+TEST_TYPES = ['testing_mixins', 'embedding_test', 'nested_embedding_container', 'nested_object_link_target',
          'testing_download', 'testing_link_source_sno', 'testing_link_aggregate_sno', 'testing_link_target_sno',
          'testing_post_put_patch_sno', 'testing_dependencies', 'testing_link_target_elastic_search']
 
 
-@pytest.mark.parametrize('item_type', ORDER)
+@pytest.mark.parametrize('item_type', TEST_TYPES)
 def test_create_mapping_correctly_maps_embeds(registry, item_type):
     """
     This test does not actually use elasticsearch
