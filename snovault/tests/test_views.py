@@ -24,7 +24,7 @@ TYPE_NAMES = ['TestingPostPutPatchSno', 'TestingDownload']
 
 def get_parameterized_names():
     """ Get all item types from schema names """
-    return [name.split('.')[0] for name in os.listdir(os.getcwd() + '/snovault/test_schemas')
+    return [name.split('.')[0] for name in os.listdir(os.path.dirname(__file__) + '/../test_schemas')
             if 'mixins' not in name]
 
 

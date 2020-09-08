@@ -99,8 +99,7 @@ def test_update_mapping_by_embed(registry):
 # just testing order, nothing bigger than that here.
 ORDER = ['testing_mixins', 'embedding_test', 'nested_embedding_container', 'nested_object_link_target',
          'testing_download', 'testing_link_source_sno', 'testing_link_aggregate_sno', 'testing_link_target_sno',
-         'testing_post_put_patch_sno', 'testing_server_default', 'testing_dependencies',
-         'testing_link_target_elastic_search']
+         'testing_post_put_patch_sno', 'testing_dependencies', 'testing_link_target_elastic_search']
 
 
 @pytest.mark.parametrize('item_type', ORDER)
