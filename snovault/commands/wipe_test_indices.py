@@ -2,6 +2,7 @@ import sys
 import logging
 from dcicutils.es_utils import create_es_client
 
+
 logger = logging.getLogger(__name__)
 
 
@@ -14,7 +15,8 @@ def main():
     jid, r_es = sys.argv[1], sys.argv[2]
     logger.info('Wiping ES instances on %s with prefix %s\n' % (r_es, jid))
     try:
-        client = create_es_client(r_es, use_aws_auth=True)
+        es_options = {'use_ssl': True}
+        client = create_es_client(r_es, use_aws_auth=True, **es_options)
     except:
         logger.error('Failed to get ES client')
         exit(1)
@@ -25,6 +27,6 @@ def main():
     except Exception as exc:
         logger.error('Failed to delete indices with exception: %s\n' % str(exc))
         exit(1)
-        
+
 if __name__ == '__main__':
     main()
