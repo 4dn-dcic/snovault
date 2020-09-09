@@ -20,7 +20,8 @@ def includeme(config):
     # this previously-used option was causing problems (?)
     # 'connection_class': TimedUrllib3HttpConnection
     es_options = {'serializer': PyramidJSONSerializer(json_renderer),
-                  'connection_class': TimedRequestsHttpConnection}
+                  'connection_class': TimedRequestsHttpConnection,
+                  'use_ssl': True}  # XXX: BREAKING change on old clusters!
 
     config.registry[ELASTIC_SEARCH] = create_es_client(address,
                                                        use_aws_auth=use_aws_auth,
