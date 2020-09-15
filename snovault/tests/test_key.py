@@ -1,15 +1,16 @@
 import pytest
 
+from dcicutils.qa_utils import notice_pytest_fixtures
 from pyramid.config import Configurator
-from .. import DBSESSION
+from ..interfaces import DBSESSION
+from .serverfixtures import DBSession
+from .testappfixtures import testapp
+
+
+notice_pytest_fixtures(DBSession, testapp)
 
 
 # Test for storage.keys
-
-pytest_plugins = [
-    'snovault.tests.serverfixtures',
-    'snovault.tests.testappfixtures',
-]
 
 items = [
     {'name': 'one', 'accession': 'TEST1'},
@@ -24,6 +25,7 @@ bad_items = [
 
 @pytest.fixture(scope='session')
 def app(DBSession):
+    notice_pytest_fixtures(DBSession)
     config = Configurator()
     config.registry[DBSESSION] = DBSession
     config.include('snovault')
@@ -33,6 +35,7 @@ def app(DBSession):
 
 @pytest.fixture
 def content(testapp):
+    notice_pytest_fixtures(testapp)
     url = '/testing-keys/'
     for item in items:
         testapp.post_json(url, item, status=201)
@@ -40,18 +43,21 @@ def content(testapp):
 
 @pytest.mark.parametrize('item', items)
 def test_unique_key(testapp, content, item):
+    notice_pytest_fixtures(testapp, content)
     url = '/testing-keys/' + item['accession']
     res = testapp.get(url).maybe_follow()
     assert res.json['name'] == item['name']
 
 
 def test_keys_bad_items(testapp, content):
+    notice_pytest_fixtures(testapp, content)
     url = '/testing-keys/'
     for item in bad_items:
         testapp.post_json(url, item, status=409)
 
 
 def test_keys_update(testapp):
+    notice_pytest_fixtures(testapp)
     url = '/testing-keys/'
     item = items[0]
     res = testapp.post_json(url, item, status=201)
@@ -63,6 +69,7 @@ def test_keys_update(testapp):
 
 
 def test_keys_conflict(testapp):
+    notice_pytest_fixtures(testapp)
     url = '/testing-keys/'
     item = items[1]
     initial = testapp.get(url).json['@graph']

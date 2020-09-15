@@ -1,0 +1,16 @@
+{
+    "type": "object",
+    "properties": {
+        "link_to_nested_object": {
+            "type": "string",
+            "linkTo": "NestedObjectLinkTarget"
+        },
+        "link_to_nested_objects": {
+            "type": "array",
+            "items": {
+                "type": "string",
+                "linkTo": "NestedObjectLinkTarget"
+            }
+        }
+    }
+}

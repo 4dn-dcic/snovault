@@ -21,7 +21,8 @@ from pyramid.threadlocal import (
 )
 from sqlalchemy import orm
 
-from .. import DBSESSION, set_logging
+from ..interfaces import DBSESSION
+from dcicutils.log_utils import set_logging
 from ..app import configure_engine
 from .indexer import (
     INDEXER,
@@ -155,11 +156,21 @@ class MPIndexer(Indexer):
     def __init__(self, registry):
         super(MPIndexer, self).__init__(registry)
         self.chunksize = int(registry.settings.get('indexer.chunk_size', 1024))
-        # use 2 fewer processes than cpu count, with a minimum of 1
-        num_cpu = cpu_count()
-        self.processes = num_cpu - 2 if num_cpu - 2 > 1 else 1
+        self.processes = self.suggested_number_of_processes(registry)
         self.initargs = (registry[APP_FACTORY], registry.settings,)
 
+    @staticmethod
+    def suggested_number_of_processes(registry):
+        """
+        Called by the initializer. Will check the application registry for the 'ENCODED_INDEXER' option,
+        in which case we will 1.5x the number of indexing processes.
+        """
+        num_cpu = cpu_count()
+        cpus_to_use = num_cpu
+        if registry.settings.get('index_server', 'false').upper() == 'TRUE':  # XXX: option should be imported
+            # done somewhat arbitrarily, should be benchmarked -Will 04/30/2020
+            cpus_to_use = round((num_cpu - 2) * 1.5) + 1
+        return max(cpus_to_use, 1)
 
     def init_pool(self):
         """
@@ -181,7 +192,6 @@ class MPIndexer(Indexer):
             maxtasksperchild=1,  # see rationale in function documentation above.
             context=get_context('spawn'),
         )
-
 
     def update_objects(self, request, counter):
         """

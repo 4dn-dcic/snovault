@@ -12,28 +12,21 @@ import datetime
 import json
 import logging
 import structlog
-import sys
 import time
-# import transaction as transaction_proxy
 
 from collections import OrderedDict
-from elasticsearch import RequestError
 from elasticsearch.exceptions import (
-    ConflictError,
-    ConnectionError,
-    NotFoundError,
     TransportError,
     RequestError,
     ConnectionTimeout
 )
-from elasticsearch.helpers import bulk
-from elasticsearch_dsl import Index, Search
-from elasticsearch_dsl.connections import connections
+from elasticsearch_dsl import Search
 from functools import reduce
 from itertools import chain
 from pyramid.paster import get_app
 from timeit import default_timer as timer
-from .. import COLLECTIONS, TYPES, set_logging
+from ..interfaces import COLLECTIONS, TYPES
+from dcicutils.log_utils import set_logging
 from ..commands.es_index_data import run as run_index_data
 from ..schema_utils import combine_schemas
 from ..util import add_default_embeds, find_collection_subtypes
@@ -118,13 +111,8 @@ def schema_mapping(field, schema, top_level=False, from_array=False):
             if mapping is not None:
                 if field == '*' or k == field:
                     properties[k] = mapping
-        if top_level:
-            # only include include_in_all: True in top level
-            return {
-                'include_in_all': True,
-                'properties': properties,
-            }
-        elif from_array and Settings.MAPPINGS_USE_NESTED:  # only do this if we said so
+
+        if from_array and Settings.MAPPINGS_USE_NESTED:  # only do this if we said so
             return {
                 'type': 'nested',
                 'properties': properties
@@ -192,8 +180,9 @@ def schema_mapping(field, schema, top_level=False, from_array=False):
         if 'linkTo' in schema:
             return None
 
-        return {
+        sub_mapping = {
             'type': 'text',
+            'copy_to': ['full_text'],
             'fields': {
                 'raw': {
                     'type': 'keyword',
@@ -206,6 +195,8 @@ def schema_mapping(field, schema, top_level=False, from_array=False):
                 }
             }
         }
+
+        return sub_mapping
 
     if type_ == 'number':
         return {
@@ -252,6 +243,9 @@ def index_settings():
             'number_of_replicas': NUM_REPLICAS,
             'max_result_window': SEARCH_MAX,
             'mapping': {
+                'nested_fields': {
+                    'limit': 100
+                },
                 'total_fields': {
                     'limit': 5000
                 },
@@ -362,11 +356,6 @@ def es_mapping(mapping, agg_items_mapping):
     and aggregated item mapping as parameters, since those vary by item type
     """
     return {
-        '_all': {
-            'enabled': True,
-            'analyzer': 'snovault_index_analyzer',
-            'search_analyzer': 'snovault_search_analyzer'
-        },
         'dynamic_templates': [
             {
                 'template_disallow_object': {
@@ -410,43 +399,42 @@ def es_mapping(mapping, agg_items_mapping):
             },
         ],
         'properties': {
+            'full_text': {  # in ES >5 this can be manually created like so
+                'type': 'text',
+                'analyzer': 'snovault_index_analyzer',  # TODO: a custom analyzer here would be awesome
+                'search_analyzer': 'snovault_search_analyzer'
+            },
             'uuid': {
                 'type': 'keyword',
-                'ignore_above': KW_IGNORE_ABOVE,
-                'include_in_all': False
+                'ignore_above': KW_IGNORE_ABOVE
             },
             'sid': {
                 'type': 'keyword',
-                'ignore_above': KW_IGNORE_ABOVE,
-                'include_in_all': False
+                'ignore_above': KW_IGNORE_ABOVE
             },
             'max_sid': {
                 'type': 'keyword',
-                'ignore_above': KW_IGNORE_ABOVE,
-                'include_in_all': False
+                'ignore_above': KW_IGNORE_ABOVE
             },
             'item_type': {
                 'type': 'keyword',
+                'copy_to': ['full_text'],
                 'ignore_above': KW_IGNORE_ABOVE
             },
             'embedded': mapping,
             'object': {
                 'type': 'object',
-                'enabled': False,
-                'include_in_all': False,
+                'enabled': False
             },
             'properties': {
                 'type': 'object',
-                'enabled': False,
-                'include_in_all': False,
+                'enabled': False
             },
             'propsheets': {
                 'type': 'object',
-                'enabled': False,
-                'include_in_all': False,
+                'enabled': False
             },
             'principals_allowed': {
-                'include_in_all': False,
                 'properties': {
                     'view': {
                         'type': 'keyword',
@@ -469,8 +457,7 @@ def es_mapping(mapping, agg_items_mapping):
                         'type': 'keyword',
                         'ignore_above': KW_IGNORE_ABOVE
                     }
-                },
-                'include_in_all': False
+                }
             },
             'linked_uuids_object': {
                 'properties': {
@@ -482,8 +469,7 @@ def es_mapping(mapping, agg_items_mapping):
                         'type': 'keyword',
                         'ignore_above': KW_IGNORE_ABOVE
                     }
-                },
-                'include_in_all': False
+                }
             },
             'rev_link_names': {
                 'properties': {
@@ -495,34 +481,27 @@ def es_mapping(mapping, agg_items_mapping):
                         'type': 'keyword',
                         'ignore_above': KW_IGNORE_ABOVE
                     }
-                },
-                'include_in_all': False
+                }
             },
             'rev_linked_to_me': {
                 'type': 'keyword',
-                'ignore_above': KW_IGNORE_ABOVE,
-                'include_in_all': False
+                'ignore_above': KW_IGNORE_ABOVE
             },
             'validation_errors': {
-                'properties': validation_error_mapping(),
-                'include_in_all': False
+                'properties': validation_error_mapping()
             },
             'unique_keys': {
-                'type': 'object',
-                'include_in_all': False
+                'type': 'object'
             },
             'links': {
-                'type': 'object',
-                'include_in_all': False
+                'type': 'object'
             },
             'paths': {
                 'type': 'keyword',
-                'ignore_above': KW_IGNORE_ABOVE,
-                'include_in_all': False
+                'ignore_above': KW_IGNORE_ABOVE
             },
             'indexing_stats': {
-                'type': 'object',
-                'include_in_all': False
+                'type': 'object'
             }
         }
     }
@@ -544,7 +523,7 @@ def aggregated_items_mapping(types, item_type):
     """
     type_info = types[item_type]
     aggregated_items = type_info.aggregated_items
-    mapping = {'include_in_all': False, 'type': 'object'}
+    mapping = {'type': 'object'}
     if not aggregated_items:
         return mapping
     del mapping['type']
@@ -627,7 +606,7 @@ def type_mapping(types, item_type, embed=True):
     type_info = types[item_type]
     schema = type_info.schema
     # use top_level parameter here for schema_mapping
-    mapping = schema_mapping('*', schema, True)
+    mapping = schema_mapping('*', schema, from_array=False)
     if not embed:
         return mapping
 
@@ -645,6 +624,7 @@ def type_mapping(types, item_type, embed=True):
                 # drill into the schemas. if no the embed is not found, break
                 subschema = curr_s.get('properties', {}).get(curr_e, None)
                 curr_s = merge_schemas(subschema, types)
+
             if not curr_s:
                 break
             curr_m = update_mapping_by_embed(curr_m, curr_e, curr_s)
@@ -659,6 +639,14 @@ def type_mapping(types, item_type, embed=True):
                                schema['properties'][curr_e]['type'] == 'array')
             if map_with_nested:
                 curr_m['type'] = "nested"
+
+    # Copy text fields to 'full_text' so we can still do _all searches
+    # TODO: At some point we should filter based on field_name, maybe we add a PHI tag
+    #       to relevant fields so that they are not mapped into full_text, for example.
+    properties = schema['properties']
+    for _, sub_mapping in properties.items():
+        if sub_mapping['type'] == 'text':
+            sub_mapping['copy_to'] = ['full_text']
     return mapping
 
 

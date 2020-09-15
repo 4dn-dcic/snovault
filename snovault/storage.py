@@ -111,12 +111,18 @@ bakery = baked.bakery()
 baked_query_resource = bakery(lambda session: session.query(Resource))
 baked_query_unique_key = bakery(
     lambda session: session.query(Key).options(
-        orm.joinedload_all(
-            Key.resource,
-            Resource.data,
-            CurrentPropertySheet.propsheet,
-            innerjoin=True,
-        ),
+        # This formerly called orm.joinedload_all, but that function has been deprecated since sqlalchemy 0.9.
+        # The advice in the documentation was to just use orm.joinedload in apparently the same way. -kmp 11-May-2020
+        # Ref: https://docs.sqlalchemy.org/en/13/orm/loading_relationships.html#sqlalchemy.orm.joinedload_all
+        # OK, well, I had misread the doc, which agrees with the release notes for sqlalchemy 0.9 (when the change
+        # was made), both say to use a chain. No advice is given about the keyword arguments (innerjoin=True),
+        # but I assume they must be distributed to each such call. It's possible the right result was happening
+        # anyway, but that it took more queries to get that result when not chained properly.
+        # -kmp 14-May-2020
+        # Ref: https://docs.sqlalchemy.org/en/13/changelog/migration_09.html
+        orm.joinedload(Key.resource, innerjoin=True)
+           .joinedload(Resource.data, innerjoin=True)
+           .joinedload(CurrentPropertySheet.propsheet, innerjoin=True)
     ).filter(Key.name == bindparam('name'), Key.value == bindparam('value'))
 )
 # Baked queries can be used with expanding params (lists)
@@ -217,6 +223,7 @@ class PickStorage(object):
         and also remove the given item from Elasticsearch
         """
         log.warning('PURGE: purging %s' % rid)
+        proceed = True
         # requires ES for searching item links
         if self.read is not None:
             # model and max_sid are used later, in second `if self.read` block
@@ -232,10 +239,13 @@ class PickStorage(object):
                 )
 
             # delete item from ES and mirrored ES, and queue reindexing
-            self.read.purge_uuid(rid, item_type, max_sid)
+            proceed = self.read.purge_uuid(rid, item_type, max_sid)
 
         # delete the item from DB
-        self.write.purge_uuid(rid)
+        if proceed:
+            self.write.purge_uuid(rid)
+        else:
+            raise HTTPInternalServerError('Deletion of rid %s unsuccessful in Elasticsearch, aborting deletion' % rid)
 
     def get_rev_links(self, model, rel, *item_types):
         """

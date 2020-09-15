@@ -22,8 +22,7 @@ import time
 import webtest
 
 from pyramid import paster
-from urllib.parse import parse_qsl
-from .. import set_logging
+from dcicutils.log_utils import set_logging
 from .interfaces import ELASTIC_SEARCH, INDEXER_QUEUE
 
 
@@ -31,7 +30,6 @@ log = structlog.getLogger(__name__)
 
 EPILOG = __doc__
 DEFAULT_INTERVAL = 3  # 3 second default
-PY2 = sys.version_info[0] == 2
 
 # We need this because of MVCC visibility.
 # See slide 9 at http://momjian.us/main/writings/pgsql/mvcc.pdf
@@ -90,18 +88,6 @@ def run(testapp, interval=DEFAULT_INTERVAL, dry_run=False, path='/index', update
 
 
 class ErrorHandlingThread(threading.Thread):
-    if PY2:
-        @property
-        def _kwargs(self):
-            return self._Thread__kwargs
-
-        @property
-        def _args(self):
-            return self._Thread__args
-
-        @property
-        def _target(self):
-            return self._Thread__target
 
     def run(self):
         # interval = self._kwargs.get('interval', DEFAULT_INTERVAL)

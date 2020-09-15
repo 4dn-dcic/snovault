@@ -13,7 +13,9 @@ from pyramid.settings import asbool
 from pyramid_localroles import LocalRolesAuthorizationPolicy
 from sqlalchemy import engine_from_config, event, orm
 from webob.cookies import JSONSerializer
-from . import DBSESSION
+
+from .interfaces import DBSESSION
+
 from .elasticsearch import APP_FACTORY
 from .json_renderer import json_renderer
 from .storage import Base

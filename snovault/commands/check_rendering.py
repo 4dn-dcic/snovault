@@ -11,6 +11,7 @@ For the development.ini you must supply the paster app name:
 
 """
 
+import argparse
 import json
 import logging
 import webtest
@@ -76,7 +77,6 @@ def internal_app(configfile, app_name=None, username='TEST', accept='text/html')
 
 
 def main():
-    import argparse
     parser = argparse.ArgumentParser(
         description="Check rendering of items", epilog=EPILOG,
         formatter_class=argparse.RawDescriptionHelpFormatter,

@@ -1,22 +1,43 @@
 import pytest
+import re
 import transaction as transaction_management
 import uuid
 
-from .. import DBSESSION, STORAGE
-from ..storage import PickStorage, RDBStorage, Resource
+from dcicutils.qa_utils import notice_pytest_fixtures
+from pyramid.threadlocal import manager
+from sqlalchemy import func
+from sqlalchemy.orm.exc import FlushError
+from ..interfaces import DBSESSION, STORAGE
 from ..storage import (
     Blob,
     CurrentPropertySheet,
     Key,
     Link,
+    PickStorage,
     PropertySheet,
+    RDBStorage,
+    register_storage,
     Resource,
+    S3BlobStorage,
 )
 from .serverfixtures import session
 from .toolfixtures import registry, storage
 
 
+notice_pytest_fixtures(session, registry, storage)
+
+
 pytestmark = pytest.mark.storage
+
+
+POSTGRES_MAJOR_VERSION_EXPECTED = 11
+
+def test_postgres_version(session):
+
+    (version_info,) = session.query(func.version()).one()
+    print("version_info=", version_info)
+    assert isinstance(version_info, str)
+    assert re.match("PostgreSQL %s([.][0-9]+)? " % POSTGRES_MAJOR_VERSION_EXPECTED, version_info)
 
 
 def test_storage_creation(session):
@@ -106,12 +127,6 @@ def test_get_by_json(session):
 
 
 def test_purge_uuid(session, storage):
-    from ..storage import (
-        Resource,
-        Key,
-        PropertySheet,
-        CurrentPropertySheet,
-    )
     name = 'testdata'
     props1 = {'foo': 'bar'}
     resource = Resource('test_item', {name: props1})
@@ -143,12 +158,6 @@ def test_purge_uuid(session, storage):
 
 
 def test_delete_compound(session, storage):
-    from ..storage import (
-        CurrentPropertySheet,
-        Resource,
-        PropertySheet,
-        Key,
-    )
     name = 'testdata'
     props1 = {'foo': 'bar'}
     resource = Resource('test_item', {name: props1})
@@ -184,11 +193,6 @@ def test_delete_compound(session, storage):
 
 
 def test_keys(session):
-    from sqlalchemy.orm.exc import FlushError
-    from ..storage import (
-        Resource,
-        Key,
-    )
     name = 'testdata'
     props1 = {'foo': 'bar'}
     resource = Resource('test_item', {name: props1})
@@ -218,11 +222,6 @@ def test_keys(session):
 
 
 def test_get_sids_by_uuids(session, storage):
-    from ..storage import (
-        CurrentPropertySheet,
-        Resource,
-        PropertySheet,
-    )
     props1 = {'foo': 'bar'}
     resource = Resource('test_item', {'': props1})
     session.add(resource)
@@ -233,7 +232,6 @@ def test_get_sids_by_uuids(session, storage):
 
 
 def test_S3BlobStorage():
-    from ..storage import S3BlobStorage
     blob_bucket = 'encoded-4dn-blobs'
     storage = S3BlobStorage(blob_bucket)
     assert storage.bucket == blob_bucket
@@ -253,7 +251,6 @@ def test_S3BlobStorage():
 
 
 def test_S3BlobStorage_get_blob_url_for_non_s3_file():
-    from ..storage import S3BlobStorage
     blob_bucket = 'encoded-4dn-blobs'
     storage = S3BlobStorage(blob_bucket)
     assert storage.bucket == blob_bucket
@@ -263,7 +260,6 @@ def test_S3BlobStorage_get_blob_url_for_non_s3_file():
 
 
 def test_pick_storage(registry, dummy_request):
-    from pyramid.threadlocal import manager
     # use a dummy value for ElasticSearchStorage
     storage = PickStorage(RDBStorage(registry[DBSESSION]), 'dummy_es', registry)
     assert isinstance(storage.write, RDBStorage)
@@ -283,7 +279,6 @@ def test_pick_storage(registry, dummy_request):
 
 
 def test_register_storage(registry):
-    from ..storage import register_storage
     # test storage.register_storage, used to configure registry[STORAGE]
     storage = PickStorage('dummy_db', 'dummy_es', registry)
     # store previous storage and use a dummy one for testing

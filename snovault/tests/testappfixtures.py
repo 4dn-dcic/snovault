@@ -2,8 +2,8 @@ import os
 import pytest
 import webtest
 
-from .. import DBSESSION, main
-
+from ..interfaces import DBSESSION
+from .. import main  # Function main actually defined in __init__.py (should maybe be defined elsewhere)
 
 _app_settings = {
     'collection_datastore': 'database',

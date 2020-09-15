@@ -1,9 +1,10 @@
+import copy
 from pyramid.security import (
-    ALL_PERMISSIONS,
+    # ALL_PERMISSIONS,
     Allow,
-    Authenticated,
+    # Authenticated,
     Deny,
-    DENY_ALL,
+    # DENY_ALL,
     Everyone,
     principals_allowed_by_permission,
 )
@@ -11,18 +12,17 @@ from pyramid.traversal import find_root, traverse
 from pyramid.view import view_config
 from sqlalchemy import inspect
 from transaction.interfaces import TransientError
-from .. import (
+from ..resources import (
     AbstractCollection as BaseAbstractCollection,
     Collection as BaseCollection,
     Item as BaseItem,
-    calculated_property,
-    collection,
-    abstract_collection,
-    load_schema,
 )
+from ..calculated import calculated_property
+from ..config import collection, abstract_collection
+from ..schema_utils import load_schema
 from ..attachment import ItemWithAttachment
 from ..interfaces import CONNECTION
-from .root import TestRoot
+# from .root import TestRoot
 
 
 def includeme(config):
@@ -30,6 +30,13 @@ def includeme(config):
 
 
 # Item acls
+
+def append_acls(acls1: list, acls2: list) -> list:
+    # PyCharm gets overly aggressive about type-checking lists of tuples when they are added,
+    # fearing every detail of every internal element has to match. This asserts that only list-ness
+    # is being relied upon.
+    return acls1 + acls2
+
 
 ONLY_ADMIN_VIEW = [
     (Allow, 'group.admin', ['view', 'edit']),
@@ -39,32 +46,43 @@ ONLY_ADMIN_VIEW = [
     (Allow, Everyone, ['view', 'edit']),
 ]
 
-ALLOW_EVERYONE_VIEW = [
-    (Allow, Everyone, ['view', 'list']),
-] + ONLY_ADMIN_VIEW
+ALLOW_EVERYONE_VIEW = append_acls(
+    [
+        (Allow, Everyone, ['view', 'list']),
+    ],
+    ONLY_ADMIN_VIEW)
 
+ALLOW_VIEWING_GROUP_VIEW = append_acls(
+    [
+        (Allow, 'role.viewing_group_member', 'view'),
+    ],
+    ONLY_ADMIN_VIEW)
 
-ALLOW_VIEWING_GROUP_VIEW = [
-    (Allow, 'role.viewing_group_member', 'view'),
-] + ONLY_ADMIN_VIEW
+ALLOW_LAB_SUBMITTER_EDIT = append_acls(
+    [
+        (Allow, 'role.viewing_group_member', 'view'),
+        (Allow, 'role.lab_submitter', 'edit'),
+    ],
+    ONLY_ADMIN_VIEW)
 
-ALLOW_LAB_SUBMITTER_EDIT = [
-    (Allow, 'role.viewing_group_member', 'view'),
-    (Allow, 'role.lab_submitter', 'edit'),
-] + ONLY_ADMIN_VIEW
+ALLOW_CURRENT_AND_SUBMITTER_EDIT = append_acls(
+    [
+        (Allow, Everyone, 'view'),
+        (Allow, 'role.lab_submitter', 'edit'),
+    ],
+    ONLY_ADMIN_VIEW)
 
-ALLOW_CURRENT_AND_SUBMITTER_EDIT = [
-    (Allow, Everyone, 'view'),
-    (Allow, 'role.lab_submitter', 'edit'),
-] + ONLY_ADMIN_VIEW
+ALLOW_CURRENT = append_acls(
+    [
+        (Allow, Everyone, 'view'),
+    ],
+    ONLY_ADMIN_VIEW)
 
-ALLOW_CURRENT = [
-    (Allow, Everyone, 'view'),
-] + ONLY_ADMIN_VIEW
-
-DELETED = [
-    (Deny, Everyone, 'visible_for_edit')
-] + ONLY_ADMIN_VIEW
+DELETED = append_acls(
+    [
+        (Deny, Everyone, 'visible_for_edit'),
+    ],
+    ONLY_ADMIN_VIEW)
 
 
 # Collection acls
@@ -90,6 +108,7 @@ def allowed(context, request):
         'principals_allowed_by_permission': principals_allowed_by_permission(context, permission),
     }
 
+
 def paths_filtered_by_status(request, paths, exclude=('deleted', 'replaced'), include=None):
     """
     This function has been deprecated in Fourfront, but is still used by
@@ -111,7 +130,7 @@ def paths_filtered_by_status(request, paths, exclude=('deleted', 'replaced'), in
 
 class AbstractCollection(BaseAbstractCollection):
     def get(self, name, default=None):
-        resource = super(BaseAbstractCollection, self).get(name, None)
+        resource = super(AbstractCollection, self).get(name, None)
         if resource is not None:
             return resource
         if ':' in name:
@@ -125,7 +144,7 @@ class AbstractCollection(BaseAbstractCollection):
 
 class Collection(BaseCollection):
     def __init__(self, *args, **kw):
-        super(BaseCollection, self).__init__(*args, **kw)
+        super(Collection, self).__init__(*args, **kw)
         if hasattr(self, '__acl__'):
             return
         # XXX collections should be setup after all types are registered.
@@ -184,7 +203,8 @@ class Item(BaseItem):
         properties = self.upgrade_properties().copy()
         status = properties.get('status')
         if status is None:
-            return [(Allow, Everyone, ['list', 'add', 'view', 'edit', 'add_unvalidated', 'index', 'storage', 'import_items', 'search'])]
+            return [(Allow, Everyone, ['list', 'add', 'view', 'edit', 'add_unvalidated', 'index',
+                                       'storage', 'import_items', 'search'])]
         return self.STATUS_ACL.get(status, ALLOW_LAB_SUBMITTER_EDIT)
 
     def __ac_local_roles__(self):
@@ -194,6 +214,9 @@ class Item(BaseItem):
             lab_submitters = 'submits_for.%s' % properties['lab']
             roles[lab_submitters] = 'role.lab_submitter'
         if 'award' in properties:
+            # TODO: This will fail. There is no function _award_viewing_group anywhere in snovault.
+            #       Maybe we should create a hook that Fourfront but not CGAP can set that knows about awards.
+            #       Probably 'lab' above has the same issues. -kmp 4-Jul-2020
             viewing_group = _award_viewing_group(properties['award'], find_root(self))
             if viewing_group is not None:
                 viewing_group_members = 'viewing_group.%s' % viewing_group
@@ -216,7 +239,8 @@ class Item(BaseItem):
     },)
     def display_title(self):
         """create a display_title field."""
-        display_title = ""
+        # Unused
+        # display_title = ""
         look_for = [
             "title",
             "name",
@@ -230,10 +254,12 @@ class Item(BaseItem):
                 return display_title
         # if none of the existing terms are available, use @type + date_created
         try:
+            # TODO: PyCharm thinks self.__class__.__name__ will return 'property' not 'string'.
+            #       That's probably a bug in PyCharm I should report. -kmp 4-Jul-2020
             type_date = self.__class__.__name__ + " from " + self.properties.get("date_created", None)[:10]
             return type_date
         # last resort, use uuid
-        except:
+        except Exception:
             return self.properties.get('uuid', None)
 
 
@@ -323,6 +349,68 @@ class EmbeddingTest(Item):
     embedded_list = [
         'attachment.*'
     ]
+
+# Formerly b58bc82f-249e-418f-bbcd-8a80af2e58d3
+NESTED_OBJECT_LINK_TARGET_GUID_1 = 'f738e192-85f4-4886-bdc4-e099a2e2102a'
+NESTED_OBJECT_LINK_TARGET_GUID_2 = 'c48dfba9-ad62-4b32-ad29-a4b6ca47e5d4'
+
+# Formerly 100a0bb8-2974-446b-a5de-6937aa313be4
+NESTED_EMBEDDING_CONTAINER_GUID = "6d3e9e27-cf87-4103-aa36-9f481c9d9a66"
+
+NESTED_OBJECT_LINK_TARGET_GUIDS = [  # These IDs are defined in test_views.py so this is a low-tech revlink
+    NESTED_OBJECT_LINK_TARGET_GUID_1,
+    NESTED_OBJECT_LINK_TARGET_GUID_2,
+]
+
+
+@collection(
+    name='nested-embedding-container',
+    unique_key='accession',
+    properties={
+        'title': 'NestedEmbeddingContainer',
+        'description': 'Test of ...'
+    })
+class NestedEmbeddingContainer(Item):
+    item_type = 'nested_embedding_container'
+    schema = load_schema('snovault:test_schemas/NestedEmbeddingContainer.json')
+    name_key = 'accession'
+
+    # use TestingDownload to test
+    embedded_list = [
+        'link_to_nested_object.associates.x',
+        'link_to_nested_object.associates.y',
+        'link_to_nested_objects.associates.x',
+        'link_to_nested_objects.associates.y',
+        'nested_calculated_property.associates.x',
+        'nested_calculated_property.associates.y',
+    ]
+
+    @calculated_property(schema={
+            "title": "Nested Calculated property",
+            "description": "something calculated",
+            "type": "array",
+            "items": {
+                "title": "Nested Calculated Property",
+                "type": ["string", "object"],
+                "linkTo": "NestedObjectLinkTarget"
+            }
+        })
+    def nested_calculated_property(self):
+        return copy.copy(NESTED_OBJECT_LINK_TARGET_GUIDS)
+
+
+@collection(
+    name='nested-object-link-target',
+    unique_key='accession',
+    properties={
+        'title': 'NestedObjectLinkTarget',
+        'description': '...'
+    })
+class NestedObjectLinkTarget(Item):
+    item_type = 'nested_object_link_target'
+    schema = load_schema('snovault:test_schemas/NestedObjectLinkTarget.json')
+    name_key = 'accession'
+
 
 @collection(
     'testing-downloads',
@@ -471,3 +559,102 @@ class TestingLinkTargetElasticSearch(Item):
     })
     def reverse_es(self, request):
         return self.rev_link_atids(request, "reverse_es")
+
+
+@collection('testing-calculated-properties',
+            unique_key='testing_calculated_properties:name')
+class TestingCalculatedProperties(Item):
+    """ An item type that has calculated properties on it meant for testing. """
+    item_type = 'testing_calculated_properties'
+    name_key = 'name'
+    schema = load_schema('snovault:test_schemas/TestingCalculatedProperties.json')
+
+    @calculated_property(schema={
+        "title": "combination",
+        "type": "object"
+    })
+    def combination(self, name, foo, bar):
+        return {
+            'name': name,
+            'foo': foo,
+            'bar': bar
+        }
+
+    @calculated_property(schema={  # THIS is the schema that will be "seen"
+        "title": "nested",
+        "type": "object",
+        "sub-embedded": True,  # REQUIRED TO INDICATE
+        "properties": {
+            "key": {
+                "type": "string"
+            },
+            "value": {
+                "type": "string"
+            },
+            "keyvalue": {
+                "type": "string"
+            }
+        }
+    })
+    def nested(self, nested):  # nested is the calculated property path that will update and the input
+        """ Implements sub-embedded-object calculated properties.
+
+            When merged into properties looks like this:
+            {
+                'nested' : {
+                    'keyvalue': val
+                }
+            }
+        """
+        # return a dictionary with all sub-embedded key, value pairs on this sub-embedded path
+        return {'keyvalue': nested['key'] + nested['value']}
+
+    @calculated_property(schema={  # IN ORDER TO GET CORRECT MAPPINGS, YOU MUST SPECIFY THE ENTIRE SCHEMA
+        "title": "nested2",
+        "type": "array",
+        "sub-embedded": True,
+        "items": {
+            "type": "object",
+            "properties": {
+                "key": {
+                    "type": "string"
+                },
+                "value": {
+                    "type": "string"
+                },
+                "keyvalue": {
+                    "type": "string"
+                }
+            }
+        }
+    })
+    def nested2(self, nested2):
+        """ Implements sub-embedded object calculated property on array (of objects) type field
+
+            When merged into properties looks like this:
+            {
+                'nested2': [
+                    {
+                        keyvalue: val
+                    },
+
+                    {
+                        keyvalue: val
+                    }
+                ]
+            }
+        """
+        # return an ARRAY of dictionaries
+        result = []
+        for entry in nested2:
+            result.append({
+                'keyvalue': entry['key'] + entry['value']
+            })
+        return result
+
+
+@collection('testing-mixins', unique_key='testing_mixins:name')
+class TestingMixins(Item):
+    item_type = 'testing_mixins'
+    name_key = 'name'
+    schema = load_schema('snovault:test_schemas/TestingMixins.json')
