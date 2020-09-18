@@ -343,7 +343,7 @@ def build_index_record(mapping, in_type):
     Generate an index record, which is the entire mapping + settings for the
     given index (in_type)
     """
-    # mapping['dynamic'] = False  # uncomment to disable dynamic mappings
+    mapping['dynamic'] = 'false'  # uncomment to disable dynamic mappings
     return {
         'mappings': {in_type: mapping},
         'settings': index_settings()

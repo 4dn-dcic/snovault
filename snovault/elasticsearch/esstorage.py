@@ -12,6 +12,7 @@ from .interfaces import (
 from .indexer_utils import get_namespaced_index, namespace_index_from_health, find_uuids_for_indexing
 from .create_mapping import SEARCH_MAX
 from ..storage import register_storage
+from ..util import CachedField
 from dcicutils import es_utils, ff_utils
 import structlog
 
@@ -92,6 +93,10 @@ class ElasticSearchStorage(object):
         self.index = get_namespaced_index(registry, '*')
         self.mirror = self.registry.settings.get('mirror_health', None) is not None
         self.mirror_client = None
+        # XXX: cache elastic search mappings here subject to a TTL
+        # Use this field in search so you don't have to get mappings on every search
+        self.mappings = CachedField('mappings',
+                                    lambda: self.es.indices.get_mapping(index=self.index))
 
     def _one(self, search):
         # execute search and return a model if there is one hit
