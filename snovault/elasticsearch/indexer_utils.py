@@ -1,7 +1,11 @@
+import structlog
 from elasticsearch.helpers import scan
-from ..interfaces import COLLECTIONS
+from ..interfaces import COLLECTIONS, TYPES
 from .interfaces import ELASTIC_SEARCH
 from ..util import DEFAULT_EMBEDS
+
+
+log = structlog.getLogger(__name__)
 
 
 def get_namespaced_index(config, index):
@@ -107,6 +111,53 @@ def extract_type_embedded_list(registry, invalidated_item_type):
     return registry['types'][invalidated_item_type].embedded_list
 
 
+def extract_base_types(registry, item_type):
+    """ Helper function, useful for mocking """
+    return registry[TYPES][item_type].base_types
+
+
+def determine_parent_types(registry, item_type):
+    """ Determines the parent types of the given item_type """
+    base_types = []
+    try:
+        base_types = extract_base_types(registry, item_type)
+        if base_types == ['Item']:  # trivially true of all items
+            return []
+    except KeyError:  # indicative of an error if not testing
+        log.info('Tried to determine parent type of invalid type: %s' % item_type)
+    return [b for b in base_types if b != 'Item']
+
+
+def build_diff_metadata(registry, diff):
+    """ Helper function for below that builds metadata from diff needed to filter
+        invalidation scope.
+
+    :param registry: application registry, used to retrieve type information
+    :param diff: a diff of the change (from SQS), see build_diff_from_request
+    :returns: 3-tuple skip bool (to invalidate everything),
+              dictionaries of diff intermediary and child -> parent type mappings
+    """
+    # build representation of diffs
+    # item type -> modified fields mapping
+    diffs, child_to_parent_type = {}, {}
+    skip = False  # if a modified field is a default embed, EVERYTHING has to be invalidated
+    for _d in diff:
+        modified_item_type, modified_field = _d.split('.', 1)
+        if ('.' + modified_field) in DEFAULT_EMBEDS + ['.status']:  # XXX: 'status' is an unnamed default embed?
+            skip = True
+            break
+        if modified_item_type not in diffs:
+            diffs[modified_item_type] = [modified_field]
+        else:
+            diffs[modified_item_type].append(modified_field)
+
+        modified_item_parent_types = determine_parent_types(registry, modified_item_type)
+        if modified_item_parent_types:
+            child_to_parent_type[modified_item_type] = modified_item_parent_types
+
+    return skip, diffs, child_to_parent_type
+
+
 def filter_invalidation_scope(registry, diff, invalidated_with_type, secondary_uuids):
     """ Function that given a diff in the following format:
             ItemType.base_field.terminal_field --> {ItemType: base_field.terminal_field} intermediary
@@ -119,19 +170,7 @@ def filter_invalidation_scope(registry, diff, invalidated_with_type, secondary_u
     :param invalidated_with_type: list of 2-tuple (uuid, item_type)
     :param secondary_uuids: primary set of uuids to be invalidated
     """
-    # build representation of diffs
-    # item type -> modified fields mapping
-    diffs = {}
-    skip = False  # if a modified field is a default embed, EVERYTHING has to be invalidated
-    for _d in diff:
-        modified_item_type, modified_field = _d.split('.', 1)
-        if ('.' + modified_field) in DEFAULT_EMBEDS + ['.status']:  # XXX: 'status' is an unnamed default embed?
-            skip = True
-            break
-        elif modified_item_type not in diffs:
-            diffs[modified_item_type] = [modified_field]
-        else:
-            diffs[modified_item_type].append(modified_field)
+    skip, diffs, child_to_parent_type = build_diff_metadata(registry, diff)
 
     # go through all invalidated uuids, looking at the embedded list of the item type
     item_type_is_invalidated = {}
@@ -164,11 +203,21 @@ def filter_invalidation_scope(registry, diff, invalidated_with_type, secondary_u
                                 "embed: %s, base_field: %s, base_field_props: %s" % (embed, base_field,
                                                                                      base_field_props))
 
+            # Collect diffs from all possible item_types
+            all_possible_diffs = []
+            types_to_check = [base_field_item_type]
+            parent_types = child_to_parent_type.get(base_field_item_type, None)
+            if parent_types is not None:
+                types_to_check += parent_types
+            for _type in types_to_check:
+                possible_diffs = diffs.get(_type, [])
+                all_possible_diffs += possible_diffs
+
             # XXX VERY IMPORTANT: for this to work correctly, the fields used in calculated properties MUST
             # be embedded! In addition, if you embed * on a linkTo, modifications to that linkTo will ALWAYS
             # invalidate the item_type
             if base_field in properties and \
-                    (any(field.endswith(terminal_field) for field in diffs.get(base_field_item_type, [])) or
+                    (any(field.endswith(terminal_field) for field in all_possible_diffs) or
                      terminal_field.endswith('*')):
                 item_type_is_invalidated[invalidated_item_type] = True
                 break

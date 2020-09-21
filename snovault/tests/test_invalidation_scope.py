@@ -19,25 +19,24 @@ ITEM_F = 'Item_F'
 
 
 @contextmanager
-def mock_schema_and_embedded_list(schema, embedded_list):
-    """ Quick wrapper for a common operation in this testing """
+def invalidation_scope_mocks(schema, embedded_list, base_types=None):
+    """ Quick wrapper for a common operation in this testing - will patch base_types as well if specified """
     with mock.patch('snovault.elasticsearch.indexer_utils.extract_type_properties',
                     return_value=schema):
         with mock.patch('snovault.elasticsearch.indexer_utils.extract_type_embedded_list',
                         return_value=embedded_list):
-            yield
+            if base_types is not None:
+                with mock.patch('snovault.elasticsearch.indexer_utils.extract_base_types',
+                                return_value=base_types):
+                    yield
+            else:
+                yield
 
 
 @pytest.fixture
 def test_link_source_schema():
     """ Intended schema structure. Meant to test multiple different modification scenarios
             Item_A (uuid1):
-                * link_one: linkTo C
-                * link_two: linkTo D
-                * link_three: linkTo E
-                * link_four: array of linkTo F
-
-            Item_B (uuid2):
                 * link_one: linkTo C
                 * link_two: linkTo D
                 * link_three: linkTo E
@@ -63,6 +62,26 @@ def test_link_source_schema():
                 'linkTo': ITEM_F
             }
         }
+    }
+
+
+@pytest.fixture
+def test_parent_type_schema():
+    """ Intended schema structure to test schemas that linkTo base types
+            Item_B (uuid2):
+                * link_one: linkTo C where C is a parent class of D
+                * link_two: linkTo E where E is a parent class of F
+
+    """
+    return {
+        'link_one': {
+            'type': 'string',
+            'linkTo': ITEM_C
+        },
+        'link_two': {
+            'type': 'string',
+            'linkTo': ITEM_E
+        },
     }
 
 
@@ -134,7 +153,7 @@ class TestInvalidationScope:
             (UUID1, item_type)
         ]
         secondary = {UUID1}
-        with mock_schema_and_embedded_list(test_link_source_schema, embedded_field):
+        with invalidation_scope_mocks(test_link_source_schema, embedded_field):
             filter_invalidation_scope(registry, diff, invalidated, secondary)
             if embedded_field[0] == 'link_one.name':
                 assert len(secondary) == 1
@@ -158,7 +177,7 @@ class TestInvalidationScope:
             (UUID1, item_type)
         ]
         secondary = {UUID1}
-        with mock_schema_and_embedded_list(test_link_source_schema, embedded_list):
+        with invalidation_scope_mocks(test_link_source_schema, embedded_list):
             self.run_test_and_reset_secondary(registry, diff, invalidated, secondary, 0)
 
     @pytest.mark.parametrize('item_type,embedded_list', [
@@ -177,11 +196,12 @@ class TestInvalidationScope:
             (UUID1, item_type)
         ]
         secondary = {UUID1}
-        with mock_schema_and_embedded_list(test_link_source_schema, embedded_list):
+        with invalidation_scope_mocks(test_link_source_schema, embedded_list):
             self.run_test_and_reset_secondary(registry, diff, invalidated, secondary, 1)
 
     @pytest.mark.parametrize('diff,embedded_list',
                              [([ITEM_C + '.name', 'Item_X.value'], ['link_one.value']),
+                              # ([ITEM_C + '.valuevalue'], ['link_one.value']), XXX: test case that doesn't work
                               ([ITEM_D + '.value', ITEM_E + '.key'], ['link_two.name', 'link_three.value']),
                               ([ITEM_C + '.key', ITEM_D + '.key', ITEM_E + '.key'], ['link_one.value', 'link_two.name']),
                               ([ITEM_E + '.key.name'], ['link_three.key.value'])])
@@ -194,7 +214,7 @@ class TestInvalidationScope:
             (UUID1, ITEM_A)  # item type doesn't matter here
         ]
         secondary = {UUID1}
-        with mock_schema_and_embedded_list(test_link_source_schema, embedded_list):
+        with invalidation_scope_mocks(test_link_source_schema, embedded_list):
             self.run_test_and_reset_secondary(registry, diff, invalidated, secondary, 0)
 
     @pytest.mark.parametrize('diff,embedded_list',
@@ -217,5 +237,18 @@ class TestInvalidationScope:
             (UUID1, ITEM_A)  # item type doesn't matter here
         ]
         secondary = {UUID1}
-        with mock_schema_and_embedded_list(test_link_source_schema, embedded_list):
+        with invalidation_scope_mocks(test_link_source_schema, embedded_list):
+            self.run_test_and_reset_secondary(registry, diff, invalidated, secondary, 1)
+
+    @pytest.mark.parametrize('diff,embedded_list,base_types', [
+        ([ITEM_C + '.value'], ['link_one.value'], [ITEM_D])
+    ])
+    def test_invalidation_scope_base_types(self, testapp, diff, embedded_list, base_types, test_parent_type_schema):
+        """ Runs some tests that involve base type resolution """
+        registry = testapp.app.registry
+        invalidated = [
+            (UUID1, ITEM_A)
+        ]
+        secondary = {UUID1}
+        with invalidation_scope_mocks(test_parent_type_schema, embedded_list, base_types=base_types):
             self.run_test_and_reset_secondary(registry, diff, invalidated, secondary, 1)
