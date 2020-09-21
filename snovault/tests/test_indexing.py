@@ -42,6 +42,7 @@ from ..elasticsearch.create_mapping import (
 from ..elasticsearch.indexer import check_sid, SidException
 from ..elasticsearch.indexer_queue import QueueManager
 from ..elasticsearch.interfaces import ELASTIC_SEARCH, INDEXER_QUEUE, INDEXER_QUEUE_MIRROR
+from dcicutils.misc_utils import Retry
 from .pyramidfixtures import dummy_request
 from .testappfixtures import _app_settings
 from .testing_views import TestingLinkSourceSno
@@ -352,7 +353,7 @@ def test_queue_indexing_after_post_patch(app, testapp):
     indexer_queue.delete_messages(received)
 
 
-#@pytest.mark.flaky
+@pytest.mark.flaky
 def test_dlq_to_primary(app, anontestapp, indexer_testapp):
     """
     Tests the dlq_to_primary route
@@ -427,7 +428,7 @@ def test_indexing_simple(app, testapp, indexer_testapp):
     uuid = res.json['@graph'][0]['uuid']
     res = indexer_testapp.post_json('/index', {'record': True})
     assert res.json['indexing_count'] == 1
-    res = testapp.get('/search/?type=%s' % TEST_TYPE).follow()
+    res = Retry.retrying(testapp.get, retries_allowed=2)('/search/?type=%s' % TEST_TYPE).follow()
     uuids = [indv_res['uuid'] for indv_res in res.json['@graph']]
     count = 0
     while uuid not in uuids and count < 20:

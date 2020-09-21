@@ -651,3 +651,10 @@ class TestingCalculatedProperties(Item):
                 'keyvalue': entry['key'] + entry['value']
             })
         return result
+
+
+@collection('testing-mixins', unique_key='testing_mixins:name')
+class TestingMixins(Item):
+    item_type = 'testing_mixins'
+    name_key = 'name'
+    schema = load_schema('snovault:test_schemas/TestingMixins.json')

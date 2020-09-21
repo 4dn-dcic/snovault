@@ -1,6 +1,7 @@
 dist: trusty
 language: python
-sudo: true
+sudo:
+  true
 cache:
   pip: true
   directories:
@@ -44,7 +45,7 @@ script:
   curl -X POST -d "branches=master" -d "token=$DOCS_TOKEN" https://readthedocs.org/api/v2/webhook/snovault/99596/
   fi
 - echo $TRAVIS_JOB_ID
-- poetry run wipe-test-indices $TRAVIS_JOB_ID search-fourfront-testing-hjozudm7pq5wwlssx2pjlsyz7y.us-east-1.es.amazonaws.com:80
+- poetry run wipe-test-indices $TRAVIS_JOB_ID search-fourfront-testing-6-8-kncqa2za2r43563rkcmsvgn2fq.us-east-1.es.amazonaws.com:443 
 after_script:
 - if [ "$TRAVIS_PYTHON_VERSION" == "3.6" ]; then coveralls; fi
 deploy:

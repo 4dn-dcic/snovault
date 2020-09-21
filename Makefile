@@ -28,7 +28,7 @@ test:
 	pytest -vv --timeout=200
 
 travis-test:
-	pytest -vv --timeout=200 --aws-auth --cov --es search-fourfront-testing-hjozudm7pq5wwlssx2pjlsyz7y.us-east-1.es.amazonaws.com:80
+	pytest -vv --timeout=200 --aws-auth --cov --es search-fourfront-testing-6-8-kncqa2za2r43563rkcmsvgn2fq.us-east-1.es.amazonaws.com:443 
 
 update:
 	poetry update
