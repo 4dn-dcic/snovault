@@ -115,7 +115,9 @@ def app(app_settings, request):
     DBSession.bind.pool.dispose()
 
 
-@pytest.yield_fixture(autouse=True)
+# XXX C4-312: refactor tests so this can be module scope.
+# Having to have to drop DB tables and re-run create_mapping for every test is slow.
+@pytest.yield_fixture(scope='function', autouse=True)
 def setup_and_teardown(app):
     """
     Run create mapping and purge queue before tests and clear out the

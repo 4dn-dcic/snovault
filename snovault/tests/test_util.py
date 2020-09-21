@@ -2,6 +2,7 @@ import pytest
 import copy
 import random
 from ..util import dictionary_lookup, DictionaryKeyError, merge_calculated_into_properties, CachedField
+from .test_indexing import es_based_target
 
 
 def test_dictionary_lookup():
