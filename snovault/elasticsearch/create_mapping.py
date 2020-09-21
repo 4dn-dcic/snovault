@@ -358,17 +358,6 @@ def es_mapping(mapping, agg_items_mapping):
     """
     return {
         'dynamic_templates': [
-            # uncomment to disallow even more dynamic mappings
-            # {
-            #     'template_disallow_object': {
-            #         'match_mapping_type': 'object',
-            #         'path_match': '*',
-            #         'mapping': {
-            #             'type': 'text',
-            #             'null_value': 'Dynamic mapping of type=object disabled. Please explicitly map this field.'
-            #         }
-            #     }
-            # },
             {
                 'template_principals_allowed': {
                     'path_match': "principals_allowed.*",
