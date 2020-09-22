@@ -1,6 +1,8 @@
 import pytest
 import copy
-from ..util import dictionary_lookup, DictionaryKeyError, merge_calculated_into_properties
+import random
+from ..util import dictionary_lookup, DictionaryKeyError, merge_calculated_into_properties, CachedField
+from .test_indexing import es_based_target
 
 
 def test_dictionary_lookup():
@@ -165,3 +167,21 @@ def test_merge_calculated_into_properties_array(complex_properties, calculated_l
     for entry in props_copy['nested']:
         for field in ['key', 'value', 'keyvalue']:
             assert field in entry
+
+
+class TestCachedField:
+
+    DEFAULT_TIMEOUT = 600
+
+    @pytest.mark.flaky  # use of random.choice could generate collisions but extremely unlikely
+    def test_cached_field_basic(self):
+        def simple_update_function():
+            return random.choice(range(10000))
+        field = CachedField('simple1', update_function=simple_update_function)
+        assert field.value is not None
+        current = field.get()
+        assert current == field.value
+        assert field.get_updated() != current
+        assert field.timeout == self.DEFAULT_TIMEOUT
+        field.set_timeout(30)
+        assert field.timeout == 30

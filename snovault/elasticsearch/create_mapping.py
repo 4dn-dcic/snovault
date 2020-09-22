@@ -342,8 +342,11 @@ def build_index_record(mapping, in_type):
     """
     Generate an index record, which is the entire mapping + settings for the
     given index (in_type)
+
+    NOTE: you could disable dynamic mappings globally here, but doing so will break ES
+    Item because it relies on the dynamic mappings used for unique keys.
     """
-    # mapping['dynamic'] = False  # uncomment to disable dynamic mappings
+    #mapping['dynamic'] = 'false'  # disable dynamic mappings GLOBALLY, ES demands use of 'false' here
     return {
         'mappings': {in_type: mapping},
         'settings': index_settings()
@@ -354,21 +357,13 @@ def es_mapping(mapping, agg_items_mapping):
     """
     Entire Elasticsearch mapping for one item type, including dynamic templates
     and all properties made in the @@index-data view. Takes the item mapping
-    and aggregated item mapping as parameters, since those vary by item type
+    and aggregated item mapping as parameters, since those vary by item type.
+
+    Dynamic mappings are disabled within the embedded mapping here
     """
+    mapping['dynamic'] = 'false'  # disable dynamic mappings WITHIN embedded, ES demands use of 'false' here
     return {
         'dynamic_templates': [
-            # uncomment to disallow even more dynamic mappings
-            # {
-            #     'template_disallow_object': {
-            #         'match_mapping_type': 'object',
-            #         'path_match': '*',
-            #         'mapping': {
-            #             'type': 'text',
-            #             'null_value': 'Dynamic mapping of type=object disabled. Please explicitly map this field.'
-            #         }
-            #     }
-            # },
             {
                 'template_principals_allowed': {
                     'path_match': "principals_allowed.*",
@@ -502,8 +497,36 @@ def es_mapping(mapping, agg_items_mapping):
                 'type': 'keyword',
                 'ignore_above': KW_IGNORE_ABOVE
             },
-            'indexing_stats': {
-                'type': 'object'
+            'indexing_stats': {  # explicitly map instead of relying on dynamic mappings
+                'properties': {
+                    'aggregated_items': {
+                        'type': 'float'
+                    },
+                    'embedded_view': {
+                        'type': 'float'
+                    },
+                    'object_view': {
+                        'type': 'float'
+                    },
+                    'paths': {
+                        'type': 'float'
+                    },
+                    'rev_links': {
+                        'type': 'float'
+                    },
+                    'total_indexing_view': {
+                        'type': 'float'
+                    },
+                    'unique_keys': {
+                        'type': 'float'
+                    },
+                    'upgrade_properties': {
+                        'type': 'float'
+                    },
+                    'validation': {
+                        'type': 'float'
+                    }
+                }
             }
         }
     }
