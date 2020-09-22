@@ -171,8 +171,9 @@ def test_merge_calculated_into_properties_array(complex_properties, calculated_l
 
 class TestCachedField:
 
-    DEFAULT_TIMEOUT = 60
+    DEFAULT_TIMEOUT = 600
 
+    @pytest.mark.flaky  # use of random.choice could generate collisions but extremely unlikely
     def test_cached_field_basic(self):
         def simple_update_function():
             return random.choice(range(10000))
@@ -180,7 +181,7 @@ class TestCachedField:
         assert field.value is not None
         current = field.get()
         assert current == field.value
-        assert field.get_now() != current
+        assert field.get_updated() != current
         assert field.timeout == self.DEFAULT_TIMEOUT
         field.set_timeout(30)
         assert field.timeout == 30

@@ -905,22 +905,22 @@ def merge_calculated_into_properties(properties: dict, calculated: dict):
 
 
 class CachedField:
-    def __init__(self, name, update_function, timeout=60):
+    def __init__(self, name, update_function, timeout=600):
         """ Provides a named field that is cached for a certain period of time. The value is computed
             on calls to __init__, after which the get() method should be used.
 
         :param name: name of property
         :param update_function: lambda to be invoked to update the value
-        :param timeout: TTL of this field, in minutes
+        :param timeout: TTL of this field, in seconds
         """
         self.name = name
         self._update_function = update_function
         self.timeout = timeout
         self.value = update_function()
-        self.time_of_next_update = datetime.utcnow() + timedelta(minutes=timeout)
+        self.time_of_next_update = datetime.utcnow() + timedelta(seconds=timeout)
 
     def _update_timestamp(self):
-        self.next_update = datetime.utcnow() + timedelta(minutes=self.timeout)
+        self.time_of_next_update = datetime.utcnow() + timedelta(seconds=self.timeout)
 
     def _update_value(self):
         self.value = self._update_function()
@@ -933,11 +933,11 @@ class CachedField:
             self._update_value()
         return self.value
 
-    def get_now(self, push_ttl=False):
+    def get_updated(self, push_ttl=False):
         """ Intended to force an update to the value and potentially push back the timeout from now. """
         self.value = self._update_function()
         if push_ttl:
-            self.time_of_next_update = datetime.utcnow() + timedelta(minutes=self.timeout)
+            self.time_of_next_update = datetime.utcnow() + timedelta(seconds=self.timeout)
         return self.value
 
     def set_timeout(self, new_timeout):
