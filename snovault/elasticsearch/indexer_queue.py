@@ -13,7 +13,7 @@ from collections import OrderedDict
 import boto3
 import structlog
 from dcicutils.env_utils import blue_green_mirror_env
-from dcicutils.misc_utils import ignored
+from dcicutils.misc_utils import ignored, RateManager, LockoutManager
 from pyramid.view import view_config
 
 from .indexer_utils import get_uuids_for_types
@@ -191,21 +191,7 @@ class QueueManager(object):
        from either the primary or secondary queues.
     """
 
-    # The belief was that this may be making things slow in production, and the chance of collisions there is low,
-    # so for now we were going to enable this only during testing when the odds of collision are dramatically higher.
-    # HOWEVER, now I have a new theory that this wasn't the problem at all, so the first pass at this will be to try
-    # leaving this set True and see if just moving the sleep to a better place is enough to avoid setting this False.
-    # If that doesn't work, we've also tested that a setting oF False here would work and that will be our backup plan.
-    # -kmp 2-Jun-2020
-    PURGE_QUEUE_SLEEP_FOR_SAFETY = True
-
-    PURGE_QUEUE_TIMESTAMP0 = datetime.datetime(datetime.MINYEAR, 1, 1)  # maybe useful for testing
-    # Amazon says we shouldn't do anything for this amount of time after a purge request.
-    PURGE_QUEUE_LOCKOUT_TIME_ACCORDING_TO_AMAZON = 60
-    # Amount of safety margin we reserve to make sure our computations match Amazon's.
-    PURGE_QUEUE_SAFETY_MARGIN = 1
-    # This is the effective lockout time
-    PURGE_QUEUE_EFFECTIVE_LOCKOUT_TIME = PURGE_QUEUE_LOCKOUT_TIME_ACCORDING_TO_AMAZON + PURGE_QUEUE_SAFETY_MARGIN
+    USE_RATE_MANAGER = False
 
     def __init__(self, registry, mirror_env=None, override_url=None):
         """
@@ -217,7 +203,13 @@ class QueueManager(object):
         self.receive_batch_size = 10
         self.delete_batch_size = 10
         self.replace_batch_size = 10
-        self.purge_queue_timestamp = self.PURGE_QUEUE_TIMESTAMP0
+        # Amazon says we shouldn't do anything for 60 seconds after a purge request.
+        # Since we can't be sure they're counting from the same place as we are, we add 1 second margin for error.
+        if self.USE_RATE_MANAGER:
+            self.collision_manager = RateManager(action="purge_queue", interval_seconds=60, safety_seconds=1,
+                                                 allowed_attempts=1, log=log)
+        else:
+            self.collision_manager = LockoutManager(lockout_seconds=60, safety_seconds=1, action="purge_queue", log=log)
         self.env_name = mirror_env if mirror_env else registry.settings.get('env.name')
         self.override_url = override_url
         # local development
@@ -435,24 +427,7 @@ class QueueManager(object):
         return queue_urls
 
     def _wait_until_purge_queue_allowed(self):
-        now = datetime.datetime.now()
-        # Note that this quantity is always positive because now is always bigger than the timestamp.
-        seconds_since_last_purge = (now - self.purge_queue_timestamp).total_seconds()
-        # Note again that because seconds_since_last_attempt is positive, the wait seconds will
-        # never exceed self.PURGE_QUEUE_EFFECTIVE_LOCKOUT_TIME, so
-        #   0 <= wait_seconds <= self.self.PURGE_QUEUE_EFFECTIVE_LOCKOUT_TIME
-        wait_seconds = max(0.0, self.PURGE_QUEUE_EFFECTIVE_LOCKOUT_TIME - seconds_since_last_purge)
-        if wait_seconds > 0.0:
-            shared_message = ("Last purge_queue attempt was at %s (%s seconds ago)."
-                              % (self.purge_queue_timestamp, seconds_since_last_purge))
-            if self.PURGE_QUEUE_SLEEP_FOR_SAFETY:
-                action_message = "Waiting %s seconds before attempting another." % wait_seconds
-                log.warning("%s %s" % (shared_message, action_message))
-                time.sleep(wait_seconds)
-            else:
-                action_message = "Continuing anyway because QueueManager.PURGE_QUEUE_SLEEP_FOR_SAFETY is False."
-                log.warning("%s %s" % (shared_message, action_message))
-        self.purge_queue_timestamp = datetime.datetime.now()
+        self.collision_manager.wait_if_needed()
 
     def purge_queue(self):
         """

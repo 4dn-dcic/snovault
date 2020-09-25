@@ -2,6 +2,7 @@ import sys
 import logging
 from dcicutils.es_utils import create_es_client
 
+
 logger = logging.getLogger(__name__)
 
 
@@ -25,6 +26,6 @@ def main():
     except Exception as exc:
         logger.error('Failed to delete indices with exception: %s\n' % str(exc))
         exit(1)
-        
+
 if __name__ == '__main__':
     main()

@@ -1,7 +1,9 @@
+import contextlib
 import functools
 import json
 import sys
 from copy import deepcopy
+from datetime import datetime, timedelta
 
 import structlog
 from past.builtins import basestring
@@ -9,6 +11,7 @@ from pyramid.httpexceptions import HTTPForbidden
 from pyramid.threadlocal import manager as threadlocal_manager
 
 from .interfaces import CONNECTION, STORAGE, TYPES
+from .settings import Settings
 
 log = structlog.getLogger(__name__)
 
@@ -16,6 +19,17 @@ log = structlog.getLogger(__name__)
 ###################
 # Misc. utilities #
 ###################
+
+
+@contextlib.contextmanager
+def mappings_use_nested(value=True):
+    """ Context manager that sets the MAPPINGS_USE_NESTED setting with the given value, default True """
+    old_setting = Settings.MAPPINGS_USE_NESTED
+    try:
+        Settings.MAPPINGS_USE_NESTED = value
+        yield
+    finally:
+        Settings.MAPPINGS_USE_NESTED = old_setting
 
 
 class DictionaryKeyError(KeyError):
@@ -847,3 +861,92 @@ def validate_es_content(context, request, es_res, view='embedded'):
             use_es_result = False
             break
     return use_es_result
+
+
+class CalculatedOverrideOfBasePropertiesNotPermitted(ValueError):
+    """ Helper exception for below method """
+    def __init__(self, calculated_props, base_props):
+        self.calculated_props = calculated_props
+        self.base_props = base_props
+        super().__init__('Calculated properties are not permitted to override'
+                         ' base properties of a sub-embedded object:'
+                         '\n calculated: %s'
+                         '\n base props: %s' % (calculated_props, base_props))
+
+
+def merge_calculated_into_properties(properties: dict, calculated: dict):
+    """ Performs a depth 2 dictionary merge into properties.
+
+    :param properties: base item properties
+    :param calculated: calculated properties
+    """
+    for key, value in calculated.items():
+        if key not in properties:
+            properties[key] = value
+        else:
+            calculated_sub_values = calculated[key]
+            properties_sub_values = properties[key]
+            if isinstance(calculated_sub_values, dict) and isinstance(properties_sub_values, dict):
+                for k, v in calculated_sub_values.items():
+                    if k in properties_sub_values:
+                        raise CalculatedOverrideOfBasePropertiesNotPermitted(calculated_sub_values,
+                                                                             properties_sub_values)
+                    properties_sub_values[k] = v
+            elif isinstance(calculated_sub_values, list) and isinstance(properties_sub_values, list):
+                for calculated_entry, props_entry in zip(calculated_sub_values, properties_sub_values):
+                    for k, v in calculated_entry.items():
+                        if k in props_entry:
+                            raise CalculatedOverrideOfBasePropertiesNotPermitted(calculated_sub_values,
+                                                                                 properties_sub_values)
+                        props_entry[k] = v
+            else:
+                raise ValueError('Got unexpected types for calculated/properties sub-values: '
+                                 'calculated: %s \n properties: %s' % (calculated_sub_values, properties_sub_values))
+
+
+class CachedField:
+    def __init__(self, name, update_function, timeout=600):
+        """ Provides a named field that is cached for a certain period of time. The value is computed
+            on calls to __init__, after which the get() method should be used.
+
+        :param name: name of property
+        :param update_function: lambda to be invoked to update the value
+        :param timeout: TTL of this field, in seconds
+        """
+        self.name = name
+        self._update_function = update_function
+        self.timeout = timeout
+        self.value = update_function()
+        self.time_of_next_update = datetime.utcnow() + timedelta(seconds=timeout)
+
+    def _update_timestamp(self):
+        self.time_of_next_update = datetime.utcnow() + timedelta(seconds=self.timeout)
+
+    def _update_value(self):
+        self.value = self._update_function()
+        self._update_timestamp()
+
+    def get(self):
+        """ Intended for normal use - to get the value subject to the given TTL on creation. """
+        now = datetime.utcnow()
+        if now > self.time_of_next_update:
+            self._update_value()
+        return self.value
+
+    def get_updated(self, push_ttl=False):
+        """ Intended to force an update to the value and potentially push back the timeout from now. """
+        self.value = self._update_function()
+        if push_ttl:
+            self.time_of_next_update = datetime.utcnow() + timedelta(seconds=self.timeout)
+        return self.value
+
+    def set_timeout(self, new_timeout):
+        """ Sets a new value for timeout and restarts the timeout counter."""
+        self.timeout = new_timeout
+        self._update_timestamp()
+
+    def __repr__(self):
+        return 'CachedField %s with update function %s on timeout %s' % (
+            self.name, self._update_function, self.timeout
+        )
+
