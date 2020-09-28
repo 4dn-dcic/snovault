@@ -1,0 +1,27 @@
+{
+  "title": "Testing Disable Nested",
+  "description": "Test object that has an array of object field that passes the DISABLE_NESTED parameter.",
+  "type": "object",
+  "required": ["name"],
+  "properties": {
+    "name": {
+      "type": "string",
+      "uniqueKey": true
+    },
+    "options": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "disable_nested": true,
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "value": {
+            "type": "number"
+          }
+        }
+      }
+    }
+  }
+}
