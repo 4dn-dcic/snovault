@@ -658,3 +658,58 @@ class TestingMixins(Item):
     item_type = 'testing_mixins'
     name_key = 'name'
     schema = load_schema('snovault:test_schemas/TestingMixins.json')
+
+
+@collection('testing-disable-nested', unique_key='testing_disable_nested:name')
+class TestingDisableNested(Item):
+    """ Type intended to test disabling nested mappings. """
+    item_type = 'testing_mixins'
+    name_key = 'name'
+    schema = load_schema('snovault:test_schemas/TestingDisableNested.json')
+
+    @calculated_property(schema={
+        "title": "disabled_array_of_objects_in_calc_prop",
+        "description": "Tests mapping calculated properties with disable_nested works correctly",
+        "type": "array",
+        "items": {
+            "type": "object",
+            "disable_nested": True,
+            "properties": {
+                "string_field": {
+                    "type": "string"
+                },
+                "numerical_field": {
+                    "type": "integer"
+                }
+            }
+        }
+    })
+    def disabled_array_of_objects_in_calc_prop(self):
+        """ This one will not get mapped with nested """
+        return [{
+            'string_field': 'hello',
+            'numerical_field': 0
+        }]
+
+    @calculated_property(schema={
+        "title": "array_of_objects_in_calc_prop",
+        "description": "Tests mapping calculated properties with disable_nested works correctly",
+        "type": "array",
+        "items": {
+            "type": "object",
+            "properties": {
+                "string_field": {
+                    "type": "string"
+                },
+                "numerical_field": {
+                    "type": "integer"
+                }
+            }
+        }
+    })
+    def array_of_objects_in_calc_prop(self):
+        """ This one will get mapped with nested since it was not explicitly disabled """
+        return [{
+            'string_field': 'world',
+            'numerical_field': 100
+        }]
