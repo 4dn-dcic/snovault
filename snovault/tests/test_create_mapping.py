@@ -60,6 +60,19 @@ def test_type_mapping_nested(registry):
         assert mapping['properties']['reverse_es']['type'] == 'nested'  # should occur here
 
 
+def test_type_mapping_nested_with_disabled_parameter(registry):
+    """ Tests that mapping a type with an object field with nested disabled correctly maps
+        without nested.
+    """
+    with mappings_use_nested(True):
+        mapping = type_mapping(registry[TYPES], 'TestingDisableNested')
+        assert mapping
+        assert 'properties' in mapping
+        assert 'type' not in mapping['properties']['options']  # would only be specified if nested desired
+        assert 'type' not in mapping['properties']['disabled_array_of_objects_in_calc_prop']
+        assert mapping['properties']['array_of_objects_in_calc_prop']['type'] == 'nested'  # not disabled on this field
+
+
 def test_merge_schemas(registry):
     """ Tests merging schemas with EmbeddingTest """
     test_schema = registry[TYPES][unit_test_type].schema

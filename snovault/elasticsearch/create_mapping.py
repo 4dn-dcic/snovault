@@ -49,6 +49,8 @@ KW_IGNORE_ABOVE = 512
 # used to customize ngram filter behavior
 MIN_NGRAM = 2
 MAX_NGRAM = 10
+# used to disable nested mapping on array of object fields
+DISABLE_NESTED = 'disable_nested'
 
 
 def determine_if_is_date_field(field, schema):
@@ -112,7 +114,8 @@ def schema_mapping(field, schema, top_level=False, from_array=False):
                 if field == '*' or k == field:
                     properties[k] = mapping
 
-        if from_array and Settings.MAPPINGS_USE_NESTED:  # only do this if we said so
+        # only do this if we said so, allow it to be explicitly disabled as well
+        if from_array and Settings.MAPPINGS_USE_NESTED and not schema.get(DISABLE_NESTED, False):
             return {
                 'type': 'nested',
                 'properties': properties
@@ -661,9 +664,10 @@ def type_mapping(types, item_type, embed=True):
                                curr_e != 'update_items' and
                                curr_e in schema['properties'] and
                                curr_e in mapping['properties'] and
-                               schema['properties'][curr_e]['type'] == 'array')
+                               schema['properties'][curr_e]['type'] == 'array' and
+                               not curr_s.get(DISABLE_NESTED, False))  # can be explicitly disabled
             if map_with_nested:
-                curr_m['type'] = "nested"
+                curr_m['type'] = 'nested'
 
     # Copy text fields to 'full_text' so we can still do _all searches
     # TODO: At some point we should filter based on field_name, maybe we add a PHI tag
