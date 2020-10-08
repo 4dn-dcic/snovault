@@ -662,7 +662,7 @@ class TestingMixins(Item):
 
 @collection('testing-nested-enabled', unique_key='testing_nested_enabled:name')
 class TestingNestedEnabled(Item):
-    """ Type intended to test disabling nested mappings. """
+    """ Type intended to test enabling nested mappings per-field. """
     item_type = 'testing_nested_enabled'
     name_key = 'name'
     schema = load_schema('snovault:test_schemas/TestingNestedEnabled.json')
