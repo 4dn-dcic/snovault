@@ -57,7 +57,7 @@ def test_type_mapping_nested(registry):
         mapping = type_mapping(registry[TYPES], 'TestingLinkTargetElasticSearch')
         assert mapping
         assert 'properties' in mapping
-        assert mapping['properties']['reverse_es']['type'] == 'nested'  # should occur here
+        assert mapping['properties']['reverse_es'].get('type', 'object') == 'object'  # not enabled
 
 
 def test_type_mapping_nested_with_disabled_parameter(registry):
@@ -65,12 +65,13 @@ def test_type_mapping_nested_with_disabled_parameter(registry):
         without nested.
     """
     with mappings_use_nested(True):
-        mapping = type_mapping(registry[TYPES], 'TestingDisableNested')
+        mapping = type_mapping(registry[TYPES], 'TestingNestedEnabled')
         assert mapping
         assert 'properties' in mapping
-        assert 'type' not in mapping['properties']['options']  # would only be specified if nested desired
-        assert 'type' not in mapping['properties']['disabled_array_of_objects_in_calc_prop']
-        assert mapping['properties']['array_of_objects_in_calc_prop']['type'] == 'nested'  # not disabled on this field
+        assert 'type' not in mapping['properties']['object_options']  # not enabled
+        assert 'type' not in mapping['properties']['disabled_array_of_objects_in_calc_prop']  # not enabled
+        assert mapping['properties']['enabled_array_of_objects_in_calc_prop']['type'] == 'nested'  # enabled
+        assert mapping['properties']['nested_options']['type'] == 'nested'  # enabled
 
 
 def test_merge_schemas(registry):
