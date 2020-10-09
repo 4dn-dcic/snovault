@@ -2,7 +2,7 @@ import contextlib
 import functools
 import json
 import sys
-from copy import deepcopy
+from copy import copy
 from datetime import datetime, timedelta
 
 import structlog
@@ -649,7 +649,7 @@ def crawl_schemas_by_embeds(item_type, types, split_path, schema):
             return error_message, embeds_to_add
         elif element in schema_cursor:
             # save prev_schema_cursor in case where last split_path is a non-linkTo field
-            prev_schema_cursor = deepcopy(schema_cursor)
+            prev_schema_cursor = copy(schema_cursor)
             schema_cursor = schema_cursor[element]
             # drill into 'items' or 'properties'. always check 'items' before 'properties'
             # check if an array + drill into if so
