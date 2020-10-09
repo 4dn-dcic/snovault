@@ -50,7 +50,7 @@ KW_IGNORE_ABOVE = 512
 MIN_NGRAM = 2
 MAX_NGRAM = 10
 # used to disable nested mapping on array of object fields
-DISABLE_NESTED = 'disable_nested'
+NESTED_ENABLED = 'enable_nested'
 
 
 def determine_if_is_date_field(field, schema):
@@ -115,7 +115,7 @@ def schema_mapping(field, schema, top_level=False, from_array=False):
                     properties[k] = mapping
 
         # only do this if we said so, allow it to be explicitly disabled as well
-        if from_array and Settings.MAPPINGS_USE_NESTED and not schema.get(DISABLE_NESTED, False):
+        if from_array and Settings.MAPPINGS_USE_NESTED and schema.get(NESTED_ENABLED, False):
             return {
                 'type': 'nested',
                 'properties': properties
@@ -659,13 +659,13 @@ def type_mapping(types, item_type, embed=True):
 
             # If this is a list of linkTos and has properties to be embedded,
             # make it 'nested' for more aggregations.
-            map_with_nested = (Settings.MAPPINGS_USE_NESTED and  # must be explicitly enabled
+            map_with_nested = (Settings.MAPPINGS_USE_NESTED and  # nested must be globally enabled
                                curr_m.get('properties') and
                                curr_e != 'update_items' and
                                curr_e in schema['properties'] and
                                curr_e in mapping['properties'] and
                                schema['properties'][curr_e]['type'] == 'array' and
-                               not curr_s.get(DISABLE_NESTED, False))  # can be explicitly disabled
+                               curr_s.get(NESTED_ENABLED, False))  # nested must also be enabled on individual fields
             if map_with_nested:
                 curr_m['type'] = 'nested'
 

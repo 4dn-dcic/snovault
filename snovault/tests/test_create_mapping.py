@@ -51,26 +51,29 @@ def test_type_mapping(registry, item_type):
 
 def test_type_mapping_nested(registry):
     """
-    Tests that mapping a field with a list of dicts in it maps with type=nested if told to do so
+    Tests that mapping a field with a list of dicts in it maps with type=nested only if told to do so on
+    the schema. For this case it is not specified, so if object is expected.
     """
     with mappings_use_nested(True):
         mapping = type_mapping(registry[TYPES], 'TestingLinkTargetElasticSearch')
         assert mapping
         assert 'properties' in mapping
-        assert mapping['properties']['reverse_es']['type'] == 'nested'  # should occur here
+        # if type is defined on this field, it should beg object, NOT nested since it is not enabled on this field
+        assert mapping['properties']['reverse_es'].get('type', 'object') == 'object'
 
 
 def test_type_mapping_nested_with_disabled_parameter(registry):
-    """ Tests that mapping a type with an object field with nested disabled correctly maps
-        without nested.
+    """ Tests that mapping a type with an object field with nested enabled correctly maps
+        with nested.
     """
     with mappings_use_nested(True):
-        mapping = type_mapping(registry[TYPES], 'TestingDisableNested')
+        mapping = type_mapping(registry[TYPES], 'TestingNestedEnabled')
         assert mapping
         assert 'properties' in mapping
-        assert 'type' not in mapping['properties']['options']  # would only be specified if nested desired
-        assert 'type' not in mapping['properties']['disabled_array_of_objects_in_calc_prop']
-        assert mapping['properties']['array_of_objects_in_calc_prop']['type'] == 'nested'  # not disabled on this field
+        assert mapping['properties']['object_options'].get('type', 'object') != 'nested'  # neither enabled
+        assert mapping['properties']['disabled_array_of_objects_in_calc_prop'].get('type', 'object') != 'nested'
+        assert mapping['properties']['enabled_array_of_objects_in_calc_prop']['type'] == 'nested'  # enabled
+        assert mapping['properties']['nested_options']['type'] == 'nested'  # enabled
 
 
 def test_merge_schemas(registry):
