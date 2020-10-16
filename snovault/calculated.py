@@ -1,5 +1,6 @@
 from __future__ import absolute_import
 import venusian
+import asyncio
 from pyramid.decorator import reify
 from pyramid.traversal import find_root
 from types import MethodType
@@ -182,17 +183,64 @@ def calculated_property(**settings):
     return decorate
 
 
-def calculate_properties(context, request, ns=None, category='object'):
+def _calculate_property(future, namespace, name, prop):
+    """ A special method that calculates an individual property and a future, setting the futures
+        result to the value returned by the property.
+    """
+    value = prop(namespace)
+    if value is not None:
+        res = (name, value)
+    else:
+        res = None
+    future.set_result(res)
+
+
+def _check_if_future_is_done(result, future):
+    """ Helper method for below that checks if the future is done, setting its entry in result
+        if the returned value is not None
+    """
+    if future.done():
+        name, value = future.result()
+        if value is not None:
+            result[name] = value
+        return True
+    return False
+
+
+async def _calculated_properties_are_done(calc_prop_futures):
+    """ Iterate through the futures - checking if they are done.
+        Since there is little/no computation beyond the calc prop itself,
+        we proceed linearly through the futures on the list checking each one and waiting if one needs longer
+        (knowing that others are still proceeding)
+    """
+    calculated = {}
+    for _future in calc_prop_futures:
+        if not _check_if_future_is_done(calculated, _future):
+            await _future
+            assert _check_if_future_is_done(calculated, _future)  # must be done now
+    return calculated
+
+
+async def _call_all_calculated_properties(props, namespace):
+    """ Builds the event loop, creates futures for all calculated properties using
+        _calculate_property as a helper.
+    """
+    calc_prop_futures = []
+    calc_prop_event_loop = asyncio.get_event_loop()
+    for name, prop in props.items():
+        prop_future = calc_prop_event_loop.create_future()
+        calc_prop_event_loop.call_soon(_calculate_property, prop_future, namespace, name, prop)
+        calc_prop_futures.append(prop_future)
+    return await _calculated_properties_are_done(calc_prop_futures)
+
+
+async def calculate_properties(context, request, ns=None, category='object'):
+    """ This function computes calculated properties asynchronously by creating an array of futures """
     calculated_properties = request.registry[CALCULATED_PROPERTIES]
     props = calculated_properties.props_for(context, category)
     defined = {name: prop for name, prop in props.items() if prop.define}
     if isinstance(context, type):
         context = None
     namespace = ItemNamespace(context, request, defined, ns)
-    return {
-        name: value
-        for name, value in (
-            (name, prop(namespace))
-            for name, prop in props.items()
-        ) if value is not None
-    }
+
+    return await _call_all_calculated_properties(props, namespace)
