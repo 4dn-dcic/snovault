@@ -1,6 +1,6 @@
 from __future__ import absolute_import
 import venusian
-import asyncio
+from concurrent.futures import ThreadPoolExecutor
 from pyramid.decorator import reify
 from pyramid.traversal import find_root
 from types import MethodType
@@ -8,6 +8,9 @@ from .interfaces import (
     CALCULATED_PROPERTIES,
     CONNECTION,
 )
+
+
+CALC_PROP_THREAD_COUNT = 8
 
 
 def includeme(config):
@@ -183,64 +186,47 @@ def calculated_property(**settings):
     return decorate
 
 
-def _calculate_property(future, namespace, name, prop):
-    """ A special method that calculates an individual property and a future, setting the futures
-        result to the value returned by the property.
-    """
-    value = prop(namespace)
-    if value is not None:
-        res = (name, value)
-    else:
-        res = None
-    future.set_result(res)
+def _calculate_property(namespace, name, prop):
+    """ Helper that actually calculates a property """
+    name = name or None
+    value = prop(namespace) or None
+    return name, value
 
 
-def _check_if_future_is_done(result, future):
-    """ Helper method for below that checks if the future is done, setting its entry in result
-        if the returned value is not None
-    """
-    if future.done():
-        name, value = future.result()
-        if value is not None:
-            result[name] = value
-        return True
-    return False
-
-
-async def _calculated_properties_are_done(calc_prop_futures):
-    """ Iterate through the futures - checking if they are done.
-        Since there is little/no computation beyond the calc prop itself,
-        we proceed linearly through the futures on the list checking each one and waiting if one needs longer
-        (knowing that others are still proceeding)
+def _calculated_properties_are_done(calc_prop_futures):
+    """ Propagates future results as they become available.
+        Since there is little computation here we can block with _future.result() linearly.
     """
     calculated = {}
     for _future in calc_prop_futures:
-        if not _check_if_future_is_done(calculated, _future):
-            await _future
-            assert _check_if_future_is_done(calculated, _future)  # must be done now
+        name, value = _future.result()
+        if value is not None:
+            calculated[name] = value
     return calculated
 
 
-async def _call_all_calculated_properties(props, namespace):
-    """ Builds the event loop, creates futures for all calculated properties using
-        _calculate_property as a helper.
+def _build_all_calculated_properties(threadpool, props, namespace):
+    """ Given a reference to the threadpool, submit all calc props to be computed by the threadpool
+        and pass the futures to _calculated_properties_are_done, which will return the new properties
+        when they have all finished executing.
     """
     calc_prop_futures = []
-    calc_prop_event_loop = asyncio.get_event_loop()
     for name, prop in props.items():
-        prop_future = calc_prop_event_loop.create_future()
-        calc_prop_event_loop.call_soon(_calculate_property, prop_future, namespace, name, prop)
-        calc_prop_futures.append(prop_future)
-    return await _calculated_properties_are_done(calc_prop_futures)
+        future = threadpool.submit(_calculate_property, namespace, name, prop)
+        calc_prop_futures.append(future)
+    return _calculated_properties_are_done(calc_prop_futures)
 
 
-async def calculate_properties(context, request, ns=None, category='object'):
-    """ This function computes calculated properties asynchronously by creating an array of futures """
+def calculate_properties(context, request, ns=None, category='object'):
+    """ This function computes calculated properties asynchronously by creating a ThreadPool
+        and scheduling the _build_all_calculated_properties function.
+    """
     calculated_properties = request.registry[CALCULATED_PROPERTIES]
     props = calculated_properties.props_for(context, category)
     defined = {name: prop for name, prop in props.items() if prop.define}
     if isinstance(context, type):
         context = None
     namespace = ItemNamespace(context, request, defined, ns)
-
-    return await _call_all_calculated_properties(props, namespace)
+    with ThreadPoolExecutor(max_workers=CALC_PROP_THREAD_COUNT) as executor:
+        calc_props_future = executor.submit(_build_all_calculated_properties, executor, props, namespace)
+        return calc_props_future.result()
