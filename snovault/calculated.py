@@ -6,8 +6,12 @@ from pyramid.traversal import find_root
 from types import MethodType
 from .interfaces import (
     CALCULATED_PROPERTIES,
-    CONNECTION,
+    CONNECTION
 )
+import structlog
+
+
+log = structlog.getLogger(__name__)
 
 
 CALC_PROP_THREAD_COUNT = 8
@@ -186,37 +190,6 @@ def calculated_property(**settings):
     return decorate
 
 
-def _calculate_property(namespace, name, prop):
-    """ Helper that actually calculates a property """
-    name = name or None
-    value = prop(namespace) or None
-    return name, value
-
-
-def _calculated_properties_are_done(calc_prop_futures):
-    """ Propagates future results as they become available.
-        Since there is little computation here we can block with _future.result() linearly.
-    """
-    calculated = {}
-    for _future in calc_prop_futures:
-        name, value = _future.result()
-        if value is not None:
-            calculated[name] = value
-    return calculated
-
-
-def _build_all_calculated_properties(threadpool, props, namespace):
-    """ Given a reference to the threadpool, submit all calc props to be computed by the threadpool
-        and pass the futures to _calculated_properties_are_done, which will return the new properties
-        when they have all finished executing.
-    """
-    calc_prop_futures = []
-    for name, prop in props.items():
-        future = threadpool.submit(_calculate_property, namespace, name, prop)
-        calc_prop_futures.append(future)
-    return _calculated_properties_are_done(calc_prop_futures)
-
-
 def calculate_properties(context, request, ns=None, category='object'):
     """ This function computes calculated properties asynchronously by creating a ThreadPool
         and scheduling the _build_all_calculated_properties function.
@@ -226,7 +199,14 @@ def calculate_properties(context, request, ns=None, category='object'):
     defined = {name: prop for name, prop in props.items() if prop.define}
     if isinstance(context, type):
         context = None
-    namespace = ItemNamespace(context, request, defined, ns)
+    namespace = ItemNamespace(context, request, defined, ns)  # maybe pass
+
     with ThreadPoolExecutor(max_workers=CALC_PROP_THREAD_COUNT) as executor:
-        calc_props_future = executor.submit(_build_all_calculated_properties, executor, props, namespace)
-        return calc_props_future.result()
+        calculated = {}
+
+        def compute(tuple):
+            name, prop = tuple[0], tuple[1]
+            calculated[name] = prop(namespace)
+
+        executor.map(compute, [(name, prop) for name, prop in props.items()])
+    return calculated
