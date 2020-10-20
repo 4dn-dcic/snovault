@@ -1,6 +1,6 @@
 from __future__ import absolute_import
 import venusian
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, wait
 from pyramid.decorator import reify
 from pyramid.traversal import find_root
 from types import MethodType
@@ -207,7 +207,9 @@ def calculate_properties(context, request, ns=None, category='object'):
 
         def compute(tuple):
             name, prop = tuple[0], tuple[1]
-            calculated[name] = prop(namespace)
+            val = prop(namespace)
+            if val is not None:
+                calculated[name] = val
 
-        executor.map(compute, [(name, prop) for name, prop in props.items()])
+        wait(executor.map(compute, [(name, prop) for name, prop in props.items()]))
     return calculated
