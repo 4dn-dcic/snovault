@@ -192,7 +192,7 @@ def calculated_property(**settings):
 
 def calculate_properties(context, request, ns=None, category='object'):
     """ This function computes calculated properties asynchronously by creating a ThreadPool
-        and scheduling the _build_all_calculated_properties function.
+        and mapping a compute function for all calculated properties collected.
     """
     calculated_properties = request.registry[CALCULATED_PROPERTIES]
     props = calculated_properties.props_for(context, category)
@@ -201,6 +201,7 @@ def calculate_properties(context, request, ns=None, category='object'):
         context = None
     namespace = ItemNamespace(context, request, defined, ns)  # maybe pass
 
+    # create threadpool, map compute
     with ThreadPoolExecutor(max_workers=CALC_PROP_THREAD_COUNT) as executor:
         calculated = {}
 
