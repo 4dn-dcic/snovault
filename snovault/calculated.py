@@ -1,14 +1,13 @@
 from __future__ import absolute_import
 import venusian
-from zope.sqlalchemy import register
 from concurrent.futures import ThreadPoolExecutor
 from pyramid.decorator import reify
 from pyramid.traversal import find_root
+from pyramid.scripting import prepare
 from types import MethodType
 from .interfaces import (
     CALCULATED_PROPERTIES,
     CONNECTION,
-    DBSESSION
 )
 import structlog
 
@@ -204,17 +203,34 @@ def calculate_properties(context, request, ns=None, category='object'):
     namespace = ItemNamespace(context, request, defined, ns)  # maybe pass
 
     # create threadpool, map compute
-    # maybe get global DBSESSION from registry?
-    # _DBSESSION = request.registry[DBSESSION]
     with ThreadPoolExecutor(max_workers=CALC_PROP_THREAD_COUNT) as executor:
         calculated = {}
 
-        def compute(tuple):
-            name, prop = tuple[0], tuple[1]
-            # register(_DBSESSION) maybe register here?
+        # helper function for compuitng the properties and collecting under the above object
+        def compute(tuple, _prepare=True):
+            def _compute():
+                name, prop = tuple[0], tuple[1]
+                print('BEFORE: name: %s, prop: %s' % (name, prop))
+                val = prop(namespace)
+                print('AFTER: name: %s, prop val: %s' % (name, val))
+                if val is not None:
+                    calculated[name] = val
+            if _prepare:
+                with prepare(request=request):
+                    _compute()
+            else:
+                _compute()
+
+        future = executor.map(compute, [(name, prop) for name, prop in props.items() if 'rev' not in name])
+        # below should also work but does not
+        # import functools
+        # map(functools.partial(compute, _prepare=False), [(name, prop) for name, prop in props.items() if 'rev' in name])
+        # this is needed instead
+        for name, prop in [(name, prop) for name, prop in props.items() if 'rev' in name]:
+            #if 'rev' in name:
             val = prop(namespace)
             if val is not None:
                 calculated[name] = val
+        list(future)  # noqa force the wait
 
-        list(executor.map(compute, [(name, prop) for name, prop in props.items()]))
     return calculated
