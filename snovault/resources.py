@@ -327,7 +327,7 @@ class Item(Resource):
     @property
     def db_model(self):
         """
-        Always returns the resource model fom write storage, which is needed
+        Always returns the resource model from write storage, which is needed
         for operations like getting current sid/max_sid, rev_links, and
         updating. Leverage `model.used_datastore` to determine source
         """

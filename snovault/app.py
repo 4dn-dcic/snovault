@@ -37,7 +37,7 @@ def changelogs(config):
 
 def configure_engine(settings):
     """ Configures the SQLAlchemy engine used by the application """
-    # TODO: upgrade sqlalchemy to 1.4
+    # TODO: upgrade sqlalchemy to 1.4 (for async features)
     engine_url = settings['sqlalchemy.url']
     engine_opts = {}
     if engine_url.startswith('postgresql'):
