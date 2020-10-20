@@ -50,6 +50,9 @@ def after_cursor_execute(
     if request is None:
         return
 
+    if not hasattr(request, '_stats'):  # does not get added in some cases now, not clear why. - Will 10/20/2020
+        return
+
     stats = request._stats
     stats['db_count'] = stats.get('db_count', 0) + 1
     duration = end - context._query_start_time

@@ -1,12 +1,14 @@
 from __future__ import absolute_import
 import venusian
-from concurrent.futures import ThreadPoolExecutor, wait
+from zope.sqlalchemy import register
+from concurrent.futures import ThreadPoolExecutor
 from pyramid.decorator import reify
 from pyramid.traversal import find_root
 from types import MethodType
 from .interfaces import (
     CALCULATED_PROPERTIES,
-    CONNECTION
+    CONNECTION,
+    DBSESSION
 )
 import structlog
 
@@ -202,14 +204,17 @@ def calculate_properties(context, request, ns=None, category='object'):
     namespace = ItemNamespace(context, request, defined, ns)  # maybe pass
 
     # create threadpool, map compute
+    # maybe get global DBSESSION from registry?
+    # _DBSESSION = request.registry[DBSESSION]
     with ThreadPoolExecutor(max_workers=CALC_PROP_THREAD_COUNT) as executor:
         calculated = {}
 
         def compute(tuple):
             name, prop = tuple[0], tuple[1]
+            # register(_DBSESSION) maybe register here?
             val = prop(namespace)
             if val is not None:
                 calculated[name] = val
 
-        wait(executor.map(compute, [(name, prop) for name, prop in props.items()]))
+        list(executor.map(compute, [(name, prop) for name, prop in props.items()]))
     return calculated
