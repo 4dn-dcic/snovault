@@ -2,7 +2,8 @@ import contextlib
 import functools
 import json
 import sys
-from copy import deepcopy
+from copy import copy
+from datetime import datetime, timedelta
 
 import structlog
 from past.builtins import basestring
@@ -647,7 +648,7 @@ def crawl_schemas_by_embeds(item_type, types, split_path, schema):
             return error_message, embeds_to_add
         elif element in schema_cursor:
             # save prev_schema_cursor in case where last split_path is a non-linkTo field
-            prev_schema_cursor = deepcopy(schema_cursor)
+            prev_schema_cursor = copy(schema_cursor)
             schema_cursor = schema_cursor[element]
             # drill into 'items' or 'properties'. always check 'items' before 'properties'
             # check if an array + drill into if so
@@ -900,3 +901,51 @@ def merge_calculated_into_properties(properties: dict, calculated: dict):
             else:
                 raise ValueError('Got unexpected types for calculated/properties sub-values: '
                                  'calculated: %s \n properties: %s' % (calculated_sub_values, properties_sub_values))
+
+
+class CachedField:
+    def __init__(self, name, update_function, timeout=600):
+        """ Provides a named field that is cached for a certain period of time. The value is computed
+            on calls to __init__, after which the get() method should be used.
+
+        :param name: name of property
+        :param update_function: lambda to be invoked to update the value
+        :param timeout: TTL of this field, in seconds
+        """
+        self.name = name
+        self._update_function = update_function
+        self.timeout = timeout
+        self.value = update_function()
+        self.time_of_next_update = datetime.utcnow() + timedelta(seconds=timeout)
+
+    def _update_timestamp(self):
+        self.time_of_next_update = datetime.utcnow() + timedelta(seconds=self.timeout)
+
+    def _update_value(self):
+        self.value = self._update_function()
+        self._update_timestamp()
+
+    def get(self):
+        """ Intended for normal use - to get the value subject to the given TTL on creation. """
+        now = datetime.utcnow()
+        if now > self.time_of_next_update:
+            self._update_value()
+        return self.value
+
+    def get_updated(self, push_ttl=False):
+        """ Intended to force an update to the value and potentially push back the timeout from now. """
+        self.value = self._update_function()
+        if push_ttl:
+            self.time_of_next_update = datetime.utcnow() + timedelta(seconds=self.timeout)
+        return self.value
+
+    def set_timeout(self, new_timeout):
+        """ Sets a new value for timeout and restarts the timeout counter."""
+        self.timeout = new_timeout
+        self._update_timestamp()
+
+    def __repr__(self):
+        return 'CachedField %s with update function %s on timeout %s' % (
+            self.name, self._update_function, self.timeout
+        )
+

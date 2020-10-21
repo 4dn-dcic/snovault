@@ -1,0 +1,41 @@
+{
+  "title": "Testing Nested Enabled",
+  "description": "Test object that has an array of object field that passes the enable_nested parameter.",
+  "type": "object",
+  "required": ["name"],
+  "properties": {
+    "name": {
+      "type": "string",
+      "uniqueKey": true
+    },
+    "nested_options": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "enable_nested": true,
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "value": {
+            "type": "number"
+          }
+        }
+      }
+    },
+    "object_options": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "obj_key": {
+            "type": "string"
+          },
+          "obj_value": {
+            "type": "number"
+          }
+        }
+      }
+    }
+  }
+}

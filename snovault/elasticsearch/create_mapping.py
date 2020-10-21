@@ -49,6 +49,8 @@ KW_IGNORE_ABOVE = 512
 # used to customize ngram filter behavior
 MIN_NGRAM = 2
 MAX_NGRAM = 10
+# used to disable nested mapping on array of object fields
+NESTED_ENABLED = 'enable_nested'
 
 
 def determine_if_is_date_field(field, schema):
@@ -112,7 +114,8 @@ def schema_mapping(field, schema, top_level=False, from_array=False):
                 if field == '*' or k == field:
                     properties[k] = mapping
 
-        if from_array and Settings.MAPPINGS_USE_NESTED:  # only do this if we said so
+        # only do this if we said so, allow it to be explicitly disabled as well
+        if from_array and Settings.MAPPINGS_USE_NESTED and schema.get(NESTED_ENABLED, False):
             return {
                 'type': 'nested',
                 'properties': properties
@@ -342,8 +345,11 @@ def build_index_record(mapping, in_type):
     """
     Generate an index record, which is the entire mapping + settings for the
     given index (in_type)
+
+    NOTE: you could disable dynamic mappings globally here, but doing so will break ES
+    Item because it relies on the dynamic mappings used for unique keys.
     """
-    # mapping['dynamic'] = False  # uncomment to disable dynamic mappings
+    #mapping['dynamic'] = 'false'  # disable dynamic mappings GLOBALLY, ES demands use of 'false' here
     return {
         'mappings': {in_type: mapping},
         'settings': index_settings()
@@ -354,21 +360,13 @@ def es_mapping(mapping, agg_items_mapping):
     """
     Entire Elasticsearch mapping for one item type, including dynamic templates
     and all properties made in the @@index-data view. Takes the item mapping
-    and aggregated item mapping as parameters, since those vary by item type
+    and aggregated item mapping as parameters, since those vary by item type.
+
+    Dynamic mappings are disabled within the embedded mapping here
     """
+    mapping['dynamic'] = 'false'  # disable dynamic mappings WITHIN embedded, ES demands use of 'false' here
     return {
         'dynamic_templates': [
-            # uncomment to disallow even more dynamic mappings
-            # {
-            #     'template_disallow_object': {
-            #         'match_mapping_type': 'object',
-            #         'path_match': '*',
-            #         'mapping': {
-            #             'type': 'text',
-            #             'null_value': 'Dynamic mapping of type=object disabled. Please explicitly map this field.'
-            #         }
-            #     }
-            # },
             {
                 'template_principals_allowed': {
                     'path_match': "principals_allowed.*",
@@ -510,8 +508,36 @@ def es_mapping(mapping, agg_items_mapping):
                 'type': 'keyword',
                 'ignore_above': KW_IGNORE_ABOVE
             },
-            'indexing_stats': {
-                'type': 'object'
+            'indexing_stats': {  # explicitly map instead of relying on dynamic mappings
+                'properties': {
+                    'aggregated_items': {
+                        'type': 'float'
+                    },
+                    'embedded_view': {
+                        'type': 'float'
+                    },
+                    'object_view': {
+                        'type': 'float'
+                    },
+                    'paths': {
+                        'type': 'float'
+                    },
+                    'rev_links': {
+                        'type': 'float'
+                    },
+                    'total_indexing_view': {
+                        'type': 'float'
+                    },
+                    'unique_keys': {
+                        'type': 'float'
+                    },
+                    'upgrade_properties': {
+                        'type': 'float'
+                    },
+                    'validation': {
+                        'type': 'float'
+                    }
+                }
             }
         }
     }
@@ -641,14 +667,15 @@ def type_mapping(types, item_type, embed=True):
 
             # If this is a list of linkTos and has properties to be embedded,
             # make it 'nested' for more aggregations.
-            map_with_nested = (Settings.MAPPINGS_USE_NESTED and  # must be explicitly enabled
+            map_with_nested = (Settings.MAPPINGS_USE_NESTED and  # nested must be globally enabled
                                curr_m.get('properties') and
                                curr_e != 'update_items' and
                                curr_e in schema['properties'] and
                                curr_e in mapping['properties'] and
-                               schema['properties'][curr_e]['type'] == 'array')
+                               schema['properties'][curr_e]['type'] == 'array' and
+                               curr_s.get(NESTED_ENABLED, False))  # nested must also be enabled on individual fields
             if map_with_nested:
-                curr_m['type'] = "nested"
+                curr_m['type'] = 'nested'
 
     # Copy text fields to 'full_text' so we can still do _all searches
     # TODO: At some point we should filter based on field_name, maybe we add a PHI tag
