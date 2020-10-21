@@ -222,11 +222,16 @@ def calculate_properties(context, request, ns=None, category='object'):
             else:
                 _compute()
 
+        prop_items = props.items()
+        for name, prop in prop_items:
+            # Setting all the properties first should avoid threading collisions.
+            # This initial value will be clobbered before return.
+            calculated[name] = "CALCULATION RESULT MISSING"
         # Start computation of all but reverse links in background
-        future = executor.map(compute, [(name, prop) for name, prop in props.items() if 'rev' not in name])
+        future = executor.map(compute, [(name, prop) for name, prop in prop_items if 'rev' not in name])
         # Start computation of reverse links in foreground where we have the transaction context
         # implementation-A
-        map(functools.partial(compute, _prepare=False), [(name, prop) for name, prop in props.items() if 'rev' in name])
+        map(functools.partial(compute, _prepare=False), [(name, prop) for name, prop in prop_items if 'rev' in name])
         # implementation-B
         # for name, prop in [(name, prop) for name, prop in props.items() if 'rev' in name]:
         #     val = prop(namespace)
