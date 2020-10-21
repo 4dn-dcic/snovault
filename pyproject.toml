@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "dcicsnovault"
-version = "4.0.7"
+version = "4.0.8"
 description = "Storage support for 4DN Data Portals."
 authors = ["4DN-DCIC Team <support@4dnucleome.org>"]
 license = "MIT"
