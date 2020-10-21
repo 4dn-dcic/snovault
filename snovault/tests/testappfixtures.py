@@ -34,9 +34,15 @@ _app_settings = {
 }
 
 
+@pytest.fixture(scope="session")
+def basic_app_settings():
+    return _app_settings.copy()
+
+
 @pytest.fixture(scope='session')
-def app_settings(request, wsgi_server_host_port, conn, DBSession):
-    settings = _app_settings.copy()
+def app_settings(request, wsgi_server_host_port, conn, DBSession, basic_app_settings):
+    settings = basic_app_settings
+    assert DBSESSION not in settings
     settings[DBSESSION] = DBSession
     return settings
 
