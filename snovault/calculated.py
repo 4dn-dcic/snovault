@@ -1,5 +1,6 @@
 from __future__ import absolute_import
 import venusian
+import functools
 from concurrent.futures import ThreadPoolExecutor
 from pyramid.decorator import reify
 from pyramid.traversal import find_root
@@ -210,9 +211,9 @@ def calculate_properties(context, request, ns=None, category='object'):
         def compute(tuple, _prepare=True):
             def _compute():
                 name, prop = tuple[0], tuple[1]
-                print('BEFORE: name: %s, prop: %s' % (name, prop))
+                # print('BEFORE: name: %s, prop: %s' % (name, prop))
                 val = prop(namespace)
-                print('AFTER: name: %s, prop val: %s' % (name, val))
+                # print('AFTER: name: %s, prop val: %s' % (name, val))
                 if val is not None:
                     calculated[name] = val
             if _prepare:
@@ -221,16 +222,17 @@ def calculate_properties(context, request, ns=None, category='object'):
             else:
                 _compute()
 
+        # Start computation of all but reverse links in background
         future = executor.map(compute, [(name, prop) for name, prop in props.items() if 'rev' not in name])
-        # below should also work but does not
-        # import functools
-        # map(functools.partial(compute, _prepare=False), [(name, prop) for name, prop in props.items() if 'rev' in name])
-        # this is needed instead
-        for name, prop in [(name, prop) for name, prop in props.items() if 'rev' in name]:
-            #if 'rev' in name:
-            val = prop(namespace)
-            if val is not None:
-                calculated[name] = val
+        # Start computation of reverse links in foreground where we have the transaction context
+        # implementation-A
+        map(functools.partial(compute, _prepare=False), [(name, prop) for name, prop in props.items() if 'rev' in name])
+        # implementation-B
+        # for name, prop in [(name, prop) for name, prop in props.items() if 'rev' in name]:
+        #     val = prop(namespace)
+        #     if val is not None:
+        #         calculated[name] = val
+        # end of A-B
         list(future)  # noqa force the wait
 
     return calculated
