@@ -1,3 +1,4 @@
+import copy
 from pyramid.security import (
     # ALL_PERMISSIONS,
     Allow,
@@ -349,6 +350,18 @@ class EmbeddingTest(Item):
         'attachment.*'
     ]
 
+# Formerly b58bc82f-249e-418f-bbcd-8a80af2e58d3
+NESTED_OBJECT_LINK_TARGET_GUID_1 = 'f738e192-85f4-4886-bdc4-e099a2e2102a'
+NESTED_OBJECT_LINK_TARGET_GUID_2 = 'c48dfba9-ad62-4b32-ad29-a4b6ca47e5d4'
+
+# Formerly 100a0bb8-2974-446b-a5de-6937aa313be4
+NESTED_EMBEDDING_CONTAINER_GUID = "6d3e9e27-cf87-4103-aa36-9f481c9d9a66"
+
+NESTED_OBJECT_LINK_TARGET_GUIDS = [  # These IDs are defined in test_views.py so this is a low-tech revlink
+    NESTED_OBJECT_LINK_TARGET_GUID_1,
+    NESTED_OBJECT_LINK_TARGET_GUID_2,
+]
+
 
 @collection(
     name='nested-embedding-container',
@@ -368,7 +381,22 @@ class NestedEmbeddingContainer(Item):
         'link_to_nested_object.associates.y',
         'link_to_nested_objects.associates.x',
         'link_to_nested_objects.associates.y',
+        'nested_calculated_property.associates.x',
+        'nested_calculated_property.associates.y',
     ]
+
+    @calculated_property(schema={
+            "title": "Nested Calculated property",
+            "description": "something calculated",
+            "type": "array",
+            "items": {
+                "title": "Nested Calculated Property",
+                "type": ["string", "object"],
+                "linkTo": "NestedObjectLinkTarget"
+            }
+        })
+    def nested_calculated_property(self):
+        return copy.copy(NESTED_OBJECT_LINK_TARGET_GUIDS)
 
 
 @collection(
@@ -531,3 +559,157 @@ class TestingLinkTargetElasticSearch(Item):
     })
     def reverse_es(self, request):
         return self.rev_link_atids(request, "reverse_es")
+
+
+@collection('testing-calculated-properties',
+            unique_key='testing_calculated_properties:name')
+class TestingCalculatedProperties(Item):
+    """ An item type that has calculated properties on it meant for testing. """
+    item_type = 'testing_calculated_properties'
+    name_key = 'name'
+    schema = load_schema('snovault:test_schemas/TestingCalculatedProperties.json')
+
+    @calculated_property(schema={
+        "title": "combination",
+        "type": "object"
+    })
+    def combination(self, name, foo, bar):
+        return {
+            'name': name,
+            'foo': foo,
+            'bar': bar
+        }
+
+    @calculated_property(schema={  # THIS is the schema that will be "seen"
+        "title": "nested",
+        "type": "object",
+        "sub-embedded": True,  # REQUIRED TO INDICATE
+        "properties": {
+            "key": {
+                "type": "string"
+            },
+            "value": {
+                "type": "string"
+            },
+            "keyvalue": {
+                "type": "string"
+            }
+        }
+    })
+    def nested(self, nested):  # nested is the calculated property path that will update and the input
+        """ Implements sub-embedded-object calculated properties.
+
+            When merged into properties looks like this:
+            {
+                'nested' : {
+                    'keyvalue': val
+                }
+            }
+        """
+        # return a dictionary with all sub-embedded key, value pairs on this sub-embedded path
+        return {'keyvalue': nested['key'] + nested['value']}
+
+    @calculated_property(schema={  # IN ORDER TO GET CORRECT MAPPINGS, YOU MUST SPECIFY THE ENTIRE SCHEMA
+        "title": "nested2",
+        "type": "array",
+        "sub-embedded": True,
+        "items": {
+            "type": "object",
+            "properties": {
+                "key": {
+                    "type": "string"
+                },
+                "value": {
+                    "type": "string"
+                },
+                "keyvalue": {
+                    "type": "string"
+                }
+            }
+        }
+    })
+    def nested2(self, nested2):
+        """ Implements sub-embedded object calculated property on array (of objects) type field
+
+            When merged into properties looks like this:
+            {
+                'nested2': [
+                    {
+                        keyvalue: val
+                    },
+
+                    {
+                        keyvalue: val
+                    }
+                ]
+            }
+        """
+        # return an ARRAY of dictionaries
+        result = []
+        for entry in nested2:
+            result.append({
+                'keyvalue': entry['key'] + entry['value']
+            })
+        return result
+
+
+@collection('testing-mixins', unique_key='testing_mixins:name')
+class TestingMixins(Item):
+    item_type = 'testing_mixins'
+    name_key = 'name'
+    schema = load_schema('snovault:test_schemas/TestingMixins.json')
+
+
+@collection('testing-nested-enabled', unique_key='testing_nested_enabled:name')
+class TestingNestedEnabled(Item):
+    """ Type intended to test enabling nested mappings per-field. """
+    item_type = 'testing_nested_enabled'
+    name_key = 'name'
+    schema = load_schema('snovault:test_schemas/TestingNestedEnabled.json')
+
+    @calculated_property(schema={
+        "title": "enabled_array_of_objects_in_calc_prop",
+        "description": "Tests mapping calculated properties with enable_nested works correctly",
+        "type": "array",
+        "items": {
+            "type": "object",
+            "enable_nested": True,
+            "properties": {
+                "string_field": {
+                    "type": "string"
+                },
+                "numerical_field": {
+                    "type": "integer"
+                }
+            }
+        }
+    })
+    def enabled_array_of_objects_in_calc_prop(self):
+        """ This one will get mapped with nested """
+        return [{
+            'string_field': 'hello',
+            'numerical_field': 0
+        }]
+
+    @calculated_property(schema={
+        "title": "array_of_objects_in_calc_prop",
+        "description": "Tests mapping calculated properties with disable_nested works correctly",
+        "type": "array",
+        "items": {
+            "type": "object",
+            "properties": {
+                "string_field": {
+                    "type": "string"
+                },
+                "numerical_field": {
+                    "type": "integer"
+                }
+            }
+        }
+    })
+    def disabled_array_of_objects_in_calc_prop(self):
+        """ This one will not get mapped with nested since it was not explicitly enabled """
+        return [{
+            'string_field': 'world',
+            'numerical_field': 100
+        }]

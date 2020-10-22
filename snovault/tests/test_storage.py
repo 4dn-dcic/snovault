@@ -3,7 +3,6 @@ import re
 import transaction as transaction_management
 import uuid
 
-from dcicutils.qa_utils import notice_pytest_fixtures
 from pyramid.threadlocal import manager
 from sqlalchemy import func
 from sqlalchemy.orm.exc import FlushError
@@ -20,11 +19,6 @@ from ..storage import (
     Resource,
     S3BlobStorage,
 )
-from .serverfixtures import session
-from .toolfixtures import registry, storage
-
-
-notice_pytest_fixtures(session, registry, storage)
 
 
 pytestmark = pytest.mark.storage

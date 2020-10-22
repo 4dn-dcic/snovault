@@ -1,0 +1,47 @@
+{
+  "title": "Testing Calculated Properties",
+  "description": "Test object that has calculated properties to test",
+  "type": "object",
+  "required": ["name", "foo", "bar", "nested", "nested2"],
+  "properties": {
+    "schema_version": {
+      "type": "object",
+      "default": "1"
+    },
+    "name": {
+      "type": "string",
+      "uniqueKey": true
+    },
+    "foo": {
+      "type": "string"
+    },
+    "bar": {
+      "type": "string"
+    },
+    "nested": {
+      "type": "object",
+      "properties": {
+        "key": {
+          "type": "string"
+        },
+        "value": {
+          "type": "string"
+        }
+      }
+    },
+    "nested2" : {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "value": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}
