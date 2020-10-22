@@ -233,7 +233,7 @@ description = "Utility package for interacting with the 4DN Data Portal and othe
 name = "dcicutils"
 optional = false
 python-versions = ">=3.4,<3.8"
-version = "1.0.0b1"
+version = "1.3.0"
 
 [package.dependencies]
 aws-requests-auth = ">=0.4.2,<1"
@@ -1447,7 +1447,6 @@ version = "0.12.0"
 [[package]]
 category = "main"
 description = "Backport of pathlib-compatible object wrapper for zip files"
-marker = "python_version < \"3.8\""
 name = "zipp"
 optional = false
 python-versions = ">=3.6"
@@ -1506,7 +1505,8 @@ transaction = ">=1.6.0"
 test = ["zope.testing"]
 
 [metadata]
-content-hash = "f914aea2fe2cc1a0742844dd155a1e97037635918e792dcf9d5b663278570e88"
+content-hash = "c8955cc597a968d8b0ef88069ee0859d1514e995621b5cd574f1012ff4714df3"
+lock-version = "1.0"
 python-versions = ">=3.6,<3.7"
 
 [metadata.files]
@@ -1662,8 +1662,8 @@ cryptography = [
     {file = "cryptography-3.1.tar.gz", hash = "sha256:26409a473cc6278e4c90f782cd5968ebad04d3911ed1c402fc86908c17633e08"},
 ]
 dcicutils = [
-    {file = "dcicutils-1.0.0b1-py3-none-any.whl", hash = "sha256:bb86f19e5e6ff114b4690a5317d6c7c1919085324f81021840588b3d9c58b965"},
-    {file = "dcicutils-1.0.0b1.tar.gz", hash = "sha256:94f2e5550f40e523cec61c5b5a82605fdd5104b2881d5acd6193af6351a946aa"},
+    {file = "dcicutils-1.3.0-py3-none-any.whl", hash = "sha256:d6942710eb50f29f5e3afe7989142f717a0899e3f6c8e1e052ec288e270a7b19"},
+    {file = "dcicutils-1.3.0.tar.gz", hash = "sha256:107455d1d7f23de09a85a1148001b3c2b2fdcfa585a43a36855d94b2a1dd4ce1"},
 ]
 docker = [
     {file = "docker-4.3.1-py2.py3-none-any.whl", hash = "sha256:13966471e8bc23b36bfb3a6fb4ab75043a5ef1dac86516274777576bed3b9828"},
@@ -1954,7 +1954,6 @@ pycryptodome = [
     {file = "pycryptodome-3.9.8-cp38-cp38-win_amd64.whl", hash = "sha256:55eb61aca2c883db770999f50d091ff7c14016f2769ad7bca3d9b75d1d7c1b68"},
     {file = "pycryptodome-3.9.8-cp39-cp39-manylinux1_i686.whl", hash = "sha256:39ef9fb52d6ec7728fce1f1693cb99d60ce302aeebd59bcedea70ca3203fda60"},
     {file = "pycryptodome-3.9.8-cp39-cp39-manylinux1_x86_64.whl", hash = "sha256:de6e1cd75677423ff64712c337521e62e3a7a4fc84caabbd93207752e831a85a"},
-    {file = "pycryptodome-3.9.8.tar.gz", hash = "sha256:0e24171cf01021bc5dc17d6a9d4f33a048f09d62cc3f62541e95ef104588bda4"},
 ]
 pyflakes = [
     {file = "pyflakes-2.2.0-py2.py3-none-any.whl", hash = "sha256:0d94e0e05a19e57a99444b6ddcf9a6eb2e5c68d3ca1e98e90707af8152c90a92"},
