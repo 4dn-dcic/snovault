@@ -61,6 +61,7 @@ def dictionary_lookup(dictionary, key):
 _skip_fields = ['@type', 'principals_allowed']  # globally accessible if need be in the future
 
 
+# TODO: This is a priority candidate for unit testing. -kmp 27-Jul-2020
 def filter_embedded(embedded, effective_principals):
     """
     Filter the embedded items by principals_allowed, replacing them with
