@@ -189,6 +189,7 @@ class PickStorage(object):
         """
         Get write/read model by given unique key with value (name)
         """
+        import pdb; pdb.set_trace()
         storage = self.storage(datastore)
         model = storage.get_by_unique_key(unique_key, name)
         # unless forcing ES datastore, check write storage if not found in read
@@ -319,7 +320,6 @@ class PickStorage(object):
         return self.write.find_uuids_linked_to_item(uuid)
 
 
-
 class RDBStorage(object):
     """
     Storage class used to interface with the relational database.
@@ -363,11 +363,12 @@ class RDBStorage(object):
     def find_uuids_linked_to_item(self, rid):
         """
         This method is meant to only work with ES, so return empty list for
-        DB implementation. See ElasticSearchStorage.find_uuids_linked_to_item
+        DB implementation. See ElasticSearchStorage.find_uuids_linked_to_item.
         """
         return []
 
-    def get_by_unique_key(self, unique_key, name, default=None):
+    def get_by_unique_key(self, unique_key, name, default=None, item_type=None):
+        """ Postgres implementation of get_by_unique_key - Item type arg is not used here """
         session = self.DBSession()
         try:
             key = baked_query_unique_key(session).params(name=unique_key, value=name).one()
@@ -377,6 +378,7 @@ class RDBStorage(object):
             return key.resource
 
     def get_by_json(self, key, value, item_type, default=None):
+        """ Postgres implementation of get_by_json (used for lookup keys) """
         session = self.DBSession()
         try:
             # baked query seem to not work with json

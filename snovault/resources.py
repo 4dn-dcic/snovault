@@ -205,8 +205,10 @@ class AbstractCollection(Resource, Mapping):
                 return default
             return resource
         if self.unique_key is not None:
+            item_type_snake_case = self.unique_key.split(':')[0]  # 'testing_link_target_sno:name' for example
             resource = self.connection.get_by_unique_key(self.unique_key, name,
-                                                         datastore=self.properties_datastore)
+                                                         datastore=self.properties_datastore,
+                                                         item_type=item_type_snake_case)
             if resource is not None:
                 if not self._allow_contained(resource):
                     return default
