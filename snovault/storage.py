@@ -35,6 +35,7 @@ from .interfaces import (
     DBSESSION,
     STORAGE,
 )
+from dcicutils.misc_utils import ignored
 from pyramid.threadlocal import get_current_request
 import boto3
 import uuid
@@ -197,7 +198,7 @@ class PickStorage(object):
         # if not specifically specifying datastore=elasticsearch, always fall back to DB
         if not datastore == 'elasticsearch':
             if model is None:
-                return self.write.get_by_unique_key(unique_key, name)  # no need to pass item_type here since its write
+                return self.write.get_by_unique_key(unique_key, name)  # no need to pass item_type since it's write
         return model
 
     def get_by_json(self, key, value, item_type, default=None, datastore=None):
@@ -357,6 +358,8 @@ class RDBStorage(object):
         Returns:
             default
         """
+        ignored(rid)
+        ignored(item_type)
         return default
 
     def find_uuids_linked_to_item(self, rid):
@@ -364,10 +367,12 @@ class RDBStorage(object):
         This method is meant to only work with ES, so return empty list for
         DB implementation. See ElasticSearchStorage.find_uuids_linked_to_item.
         """
+        ignored(rid)
         return []
 
     def get_by_unique_key(self, unique_key, name, default=None, item_type=None):
         """ Postgres implementation of get_by_unique_key - Item type arg is not used here """
+        ignored(item_type)
         session = self.DBSession()
         try:
             key = baked_query_unique_key(session).params(name=unique_key, value=name).one()
