@@ -189,7 +189,6 @@ class PickStorage(object):
         """
         Get write/read model by given unique key with value (name)
         """
-        import pdb; pdb.set_trace()
         storage = self.storage(datastore)
         model = storage.get_by_unique_key(unique_key, name)
         # unless forcing ES datastore, check write storage if not found in read
