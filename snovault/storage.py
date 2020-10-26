@@ -372,7 +372,7 @@ class RDBStorage(object):
 
     def get_by_unique_key(self, unique_key, name, default=None, item_type=None):
         """ Postgres implementation of get_by_unique_key - Item type arg is not used here """
-        ignored(item_type)
+        ignored(item_type)  # TODO: unique keys are globally unique - could modify baked_query_unique_key to change this
         session = self.DBSession()
         try:
             key = baked_query_unique_key(session).params(name=unique_key, value=name).one()
