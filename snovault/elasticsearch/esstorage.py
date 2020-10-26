@@ -183,20 +183,24 @@ class ElasticSearchStorage(object):
         """
         # find the term with the specific type
         term = 'embedded.' + key + '.raw'
-        search = Search(using=self.es, index=self.index)
+        index = get_namespaced_index(self.registry, item_type)
+        search = Search(using=self.es, index=index)
         search = search.filter('term', **{term: value})
         search = search.filter('type', value=item_type)
         return self._one(search)
 
-    def get_by_unique_key(self, unique_key, name):
+    def get_by_unique_key(self, unique_key, name, item_type=None):
         """
         Perform a search against unique keys with given unique_key (field) and
         name (value).
         Returns CachedModel if found, otherwise None
         """
         term = 'unique_keys.' + unique_key
+        index = self.index
+        if item_type:
+            index = get_namespaced_index(self.registry, item_type)
         # had to use ** kw notation because of variable in field name
-        search = Search(using=self.es, index=self.index)
+        search = Search(using=self.es, index=index)
         search = search.filter('term', **{term: name})
         search = search.extra(version=True)
         return self._one(search)
