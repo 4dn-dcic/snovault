@@ -205,7 +205,7 @@ class AbstractCollection(Resource, Mapping):
                 return default
             return resource
         if self.unique_key is not None:
-            item_type_snake_case = self.type_info.item_type
+            item_type_snake_case = getattr(self.type_info, 'item_type', None)
             resource = self.connection.get_by_unique_key(self.unique_key, name,
                                                          datastore=self.properties_datastore,
                                                          item_type=item_type_snake_case)
