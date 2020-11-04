@@ -1,6 +1,7 @@
 from __future__ import unicode_literals
 
 import sys
+
 from contextlib import contextmanager
 from timeit import default_timer as timer
 
@@ -182,6 +183,7 @@ def item_index_data(context, request):
         try:
             request.invoke_subrequest(validate_req)
         except ValidationFailure:
+            # TODO: This should probably be logged. -kmp 22-Oct-2020
             pass
 
     document = {

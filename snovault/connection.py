@@ -66,7 +66,6 @@ class Connection(object):
         model.used_for(item)
         return item
 
-
     def get_by_uuid(self, uuid, default=None, datastore=None):
         """
         Gets model from storage and returns Item. Uses item cache.
@@ -102,7 +101,7 @@ class Connection(object):
         self.item_cache[uuid] = item
         return item
 
-    def get_by_unique_key(self, unique_key, name, default=None, datastore=None):
+    def get_by_unique_key(self, unique_key, name, default=None, datastore=None, item_type=None):
         """
         Gets model from storage and returns Item.
         Uses unique_key_cache and item_cache.
@@ -114,7 +113,8 @@ class Connection(object):
         if cached is not None:
             return self.get_by_uuid(cached, datastore=datastore)
 
-        model = self.storage.get_by_unique_key(unique_key, name, datastore)
+        # pass item type info in case we are going to ES
+        model = self.storage.get_by_unique_key(unique_key, name, datastore, item_type=item_type)
         if model is None:
             return default
 

@@ -35,6 +35,7 @@ from .interfaces import (
     DBSESSION,
     STORAGE,
 )
+from dcicutils.misc_utils import ignored
 from pyramid.threadlocal import get_current_request
 import boto3
 import uuid
@@ -185,19 +186,19 @@ class PickStorage(object):
                 return self.write.get_by_uuid(uuid)
         return model
 
-    def get_by_unique_key(self, unique_key, name, datastore=None):
+    def get_by_unique_key(self, unique_key, name, datastore=None, item_type=None):
         """
         Get write/read model by given unique key with value (name)
         """
         storage = self.storage(datastore)
-        model = storage.get_by_unique_key(unique_key, name)
+        model = storage.get_by_unique_key(unique_key, name, item_type=item_type)
         # unless forcing ES datastore, check write storage if not found in read
         # if datastore == 'database' and storage is self.read:
         # Old is above - See C4-30
         # if not specifically specifying datastore=elasticsearch, always fall back to DB
         if not datastore == 'elasticsearch':
             if model is None:
-                return self.write.get_by_unique_key(unique_key, name)
+                return self.write.get_by_unique_key(unique_key, name)  # no need to pass item_type since it's write
         return model
 
     def get_by_json(self, key, value, item_type, default=None, datastore=None):
@@ -319,7 +320,6 @@ class PickStorage(object):
         return self.write.find_uuids_linked_to_item(uuid)
 
 
-
 class RDBStorage(object):
     """
     Storage class used to interface with the relational database.
@@ -358,16 +358,21 @@ class RDBStorage(object):
         Returns:
             default
         """
+        ignored(rid)
+        ignored(item_type)
         return default
 
     def find_uuids_linked_to_item(self, rid):
         """
         This method is meant to only work with ES, so return empty list for
-        DB implementation. See ElasticSearchStorage.find_uuids_linked_to_item
+        DB implementation. See ElasticSearchStorage.find_uuids_linked_to_item.
         """
+        ignored(rid)
         return []
 
-    def get_by_unique_key(self, unique_key, name, default=None):
+    def get_by_unique_key(self, unique_key, name, default=None, item_type=None):
+        """ Postgres implementation of get_by_unique_key - Item type arg is not used here """
+        ignored(item_type)  # TODO: unique keys are globally unique - could modify baked_query_unique_key to change this
         session = self.DBSession()
         try:
             key = baked_query_unique_key(session).params(name=unique_key, value=name).one()
@@ -377,6 +382,7 @@ class RDBStorage(object):
             return key.resource
 
     def get_by_json(self, key, value, item_type, default=None):
+        """ Postgres implementation of get_by_json (used for lookup keys) """
         session = self.DBSession()
         try:
             # baked query seem to not work with json
