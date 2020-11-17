@@ -59,11 +59,7 @@ loremipsum = "1.0.5"
 MarkupSafe = ">=0.23,<1"
 netaddr = ">=0.7.18,<1"
 passlib = "^1.6.5"
-# NOTE: A version of Pillow higher than 3.1.1 might be causing a problem for CGAP/Fourfront,
-#       but Snovault isn't bothered. Pillow 3.4.2 is known to work in Snovault, for example.
-#       We pin it here to 3.1.1 rather than ^3.1.1 just so we're testing the version the
-#       deployed appliations are going to use (at least for now). -kmp 11-Jul-2020
-Pillow = "^6.2.2"
+Pillow = "^6.2.2"  # later version known to work - Will 11/17/20
 psutil = "^5.6.6"
 # psycopg2 = "2.8.4"
 psycopg2 = "^2.7.3"
