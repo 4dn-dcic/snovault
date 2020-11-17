@@ -43,13 +43,10 @@ from ..elasticsearch.indexer import check_sid, SidException
 from ..elasticsearch.indexer_queue import QueueManager
 from ..elasticsearch.interfaces import ELASTIC_SEARCH, INDEXER_QUEUE, INDEXER_QUEUE_MIRROR
 from dcicutils.misc_utils import Retry
-from .pyramidfixtures import dummy_request
-from .testappfixtures import _app_settings
 from .testing_views import TestingLinkSourceSno
-from .toolfixtures import registry, root, elasticsearch
 
 
-notice_pytest_fixtures(dummy_request, TestingLinkSourceSno, registry, root, elasticsearch)
+notice_pytest_fixtures(TestingLinkSourceSno)
 
 
 pytestmark = [pytest.mark.indexing]
@@ -75,8 +72,8 @@ INDEXER_NAMESPACE_FOR_TESTING = generate_indexer_namespace_for_testing()
 
 
 @pytest.fixture(scope='session')
-def app_settings(wsgi_server_host_port, elasticsearch_server, postgresql_server, aws_auth):
-    settings = _app_settings.copy()
+def app_settings(basic_app_settings, wsgi_server_host_port, elasticsearch_server, postgresql_server, aws_auth):
+    settings = basic_app_settings
     settings['create_tables'] = True
     settings['elasticsearch.server'] = elasticsearch_server
     settings['sqlalchemy.url'] = postgresql_server

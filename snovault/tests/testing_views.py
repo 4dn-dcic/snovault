@@ -660,20 +660,20 @@ class TestingMixins(Item):
     schema = load_schema('snovault:test_schemas/TestingMixins.json')
 
 
-@collection('testing-disable-nested', unique_key='testing_disable_nested:name')
-class TestingDisableNested(Item):
-    """ Type intended to test disabling nested mappings. """
-    item_type = 'testing_disable_nested'
+@collection('testing-nested-enabled', unique_key='testing_nested_enabled:name')
+class TestingNestedEnabled(Item):
+    """ Type intended to test enabling nested mappings per-field. """
+    item_type = 'testing_nested_enabled'
     name_key = 'name'
-    schema = load_schema('snovault:test_schemas/TestingDisableNested.json')
+    schema = load_schema('snovault:test_schemas/TestingNestedEnabled.json')
 
     @calculated_property(schema={
-        "title": "disabled_array_of_objects_in_calc_prop",
-        "description": "Tests mapping calculated properties with disable_nested works correctly",
+        "title": "enabled_array_of_objects_in_calc_prop",
+        "description": "Tests mapping calculated properties with enable_nested works correctly",
         "type": "array",
         "items": {
             "type": "object",
-            "disable_nested": True,
+            "enable_nested": True,
             "properties": {
                 "string_field": {
                     "type": "string"
@@ -684,8 +684,8 @@ class TestingDisableNested(Item):
             }
         }
     })
-    def disabled_array_of_objects_in_calc_prop(self):
-        """ This one will not get mapped with nested """
+    def enabled_array_of_objects_in_calc_prop(self):
+        """ This one will get mapped with nested """
         return [{
             'string_field': 'hello',
             'numerical_field': 0
@@ -707,8 +707,8 @@ class TestingDisableNested(Item):
             }
         }
     })
-    def array_of_objects_in_calc_prop(self):
-        """ This one will get mapped with nested since it was not explicitly disabled """
+    def disabled_array_of_objects_in_calc_prop(self):
+        """ This one will not get mapped with nested since it was not explicitly enabled """
         return [{
             'string_field': 'world',
             'numerical_field': 100

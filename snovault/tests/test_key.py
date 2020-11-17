@@ -3,11 +3,6 @@ import pytest
 from dcicutils.qa_utils import notice_pytest_fixtures
 from pyramid.config import Configurator
 from ..interfaces import DBSESSION
-from .serverfixtures import DBSession
-from .testappfixtures import testapp
-
-
-notice_pytest_fixtures(DBSession, testapp)
 
 
 # Test for storage.keys

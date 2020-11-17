@@ -2,7 +2,7 @@ import contextlib
 import functools
 import json
 import sys
-from copy import deepcopy
+from copy import copy
 from datetime import datetime, timedelta
 
 import structlog
@@ -61,6 +61,7 @@ def dictionary_lookup(dictionary, key):
 _skip_fields = ['@type', 'principals_allowed']  # globally accessible if need be in the future
 
 
+# TODO: This is a priority candidate for unit testing. -kmp 27-Jul-2020
 def filter_embedded(embedded, effective_principals):
     """
     Filter the embedded items by principals_allowed, replacing them with
@@ -501,20 +502,20 @@ def build_embedded_model(fields_to_embed):
      'biosource': {'fields_to_use': ['name']},
      'fields_to_use': ['*']}
     """
-    embedded_model = {'fields_to_use':['*']}
+    FIELDS_TO_USE = 'fields_to_use'
+    embedded_model = {FIELDS_TO_USE: ['*']}
     for field in fields_to_embed:
         split_field = field.split('.')
-        field_pointer = embedded_model
+        max_idx = len(split_field) - 1
+        cursor = embedded_model
         for idx, subfield in enumerate(split_field):
-            if idx == len(split_field) - 1:  # terminal field
-                if 'fields_to_use' in field_pointer:
-                    field_pointer['fields_to_use'].append(subfield)
-                else:
-                    field_pointer['fields_to_use'] = [subfield]
-                continue
-            elif subfield not in field_pointer:
-                field_pointer[subfield] = {}
-            field_pointer = field_pointer[subfield]
+            if idx == max_idx:  # terminal field
+                cursor[FIELDS_TO_USE] = fields_to_use = cursor.get(FIELDS_TO_USE, [])
+                fields_to_use.append(subfield)
+            else:
+                if subfield not in cursor:
+                    cursor[subfield] = {}
+                cursor = cursor[subfield]
     return embedded_model
 
 
@@ -649,7 +650,7 @@ def crawl_schemas_by_embeds(item_type, types, split_path, schema):
             return error_message, embeds_to_add
         elif element in schema_cursor:
             # save prev_schema_cursor in case where last split_path is a non-linkTo field
-            prev_schema_cursor = deepcopy(schema_cursor)
+            prev_schema_cursor = copy(schema_cursor)
             schema_cursor = schema_cursor[element]
             # drill into 'items' or 'properties'. always check 'items' before 'properties'
             # check if an array + drill into if so
