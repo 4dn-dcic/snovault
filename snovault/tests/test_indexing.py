@@ -477,7 +477,7 @@ def test_indexing_logging(app, testapp, indexer_testapp, capfd):
     # assert exists
 
     # Can't get log msgs when MPIndexer is running, so skip in this case
-    if app.registry.settings['mpindexer'] == True:
+    if app.registry.settings['mpindexer']:
         return
 
     # index an item and make sure logging to stdout occurs
@@ -820,7 +820,7 @@ def test_indexing_invalid_sid_linked_items(app, testapp, indexer_testapp):
     """
     # invalid sid causes infinite loop in MPIndexer, so skip this test if enabled
     # res_vals[2] is continuously True with invalid sid, see MPIndexer L228
-    if app.registry.settings['mpindexer'] == True:
+    if app.registry.settings['mpindexer']:
         return
     indexer_queue = app.registry[INDEXER_QUEUE]
     es = app.registry[ELASTIC_SEARCH]
@@ -984,7 +984,7 @@ def test_confirm_mapping(app, testapp, indexer_testapp):
     index_record = build_index_record(mapping, TEST_TYPE)
     tries_taken = confirm_mapping(es, namespaced_index, TEST_TYPE, index_record)
     # 3 tries means it failed to correct, 0 means it was unneeded
-    assert tries_taken > 0 and tries_taken < 3
+    assert 0 < tries_taken < 3
     # test against a live mapping to ensure handling of dynamic mapping works
     run(app, collections=[TEST_TYPE], skip_indexing=True)
     # compare_against_existing_mapping is used under the hood in confirm_mapping
@@ -1181,7 +1181,7 @@ def test_indexing_esstorage(app, testapp, indexer_testapp):
     assert 'total_indexing_view' in es_res_direct['_source']['indexing_stats']
     # db get_by_uuid direct returns None by design
     db_res_direct = app.registry[STORAGE].write.get_by_uuid_direct(test_uuid, TEST_TYPE)
-    assert db_res_direct == None
+    assert db_res_direct is None
     # delete the test item (should throw no exceptions)
     esstorage.purge_uuid(test_uuid, namespaced_test_type)
 

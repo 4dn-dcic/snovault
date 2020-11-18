@@ -77,7 +77,8 @@ class ItemWithAttachment(Item):
 
         return mime_type, charset, data
 
-    def mimetypes_are_equal(self, m1, m2):
+    @staticmethod
+    def mimetypes_are_equal(m1, m2):
         """ Checks that mime_type m1 and m2 are equal """
         major1 = m1.split('/')[0]
         major2 = m2.split('/')[0]
