@@ -50,10 +50,10 @@ description = "Universal Command Line Environment for AWS."
 name = "awscli"
 optional = false
 python-versions = "*"
-version = "1.18.179"
+version = "1.18.183"
 
 [package.dependencies]
-botocore = "1.19.19"
+botocore = "1.19.23"
 docutils = ">=0.10,<0.16"
 s3transfer = ">=0.3.0,<0.4.0"
 
@@ -108,10 +108,10 @@ description = "The AWS SDK for Python"
 name = "boto3"
 optional = false
 python-versions = "*"
-version = "1.16.19"
+version = "1.16.23"
 
 [package.dependencies]
-botocore = ">=1.19.19,<1.20.0"
+botocore = ">=1.19.23,<1.20.0"
 jmespath = ">=0.7.1,<1.0.0"
 s3transfer = ">=0.3.0,<0.4.0"
 
@@ -121,7 +121,7 @@ description = "Low-level, data-driven core of boto 3."
 name = "botocore"
 optional = false
 python-versions = "*"
-version = "1.19.19"
+version = "1.19.23"
 
 [package.dependencies]
 jmespath = ">=0.7.1,<1.0.0"
@@ -199,7 +199,7 @@ description = "Show coverage stats online via coveralls.io"
 name = "coveralls"
 optional = false
 python-versions = ">= 3.5"
-version = "2.1.2"
+version = "2.2.0"
 
 [package.dependencies]
 coverage = ">=4.1,<6.0"
@@ -255,7 +255,7 @@ description = "A Python library for the Docker Engine API."
 name = "docker"
 optional = false
 python-versions = ">=2.7, !=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*, !=3.4.*"
-version = "4.3.1"
+version = "4.4.0"
 
 [package.dependencies]
 pywin32 = "227"
@@ -436,8 +436,8 @@ category = "dev"
 description = "Read metadata from Python packages"
 name = "importlib-metadata"
 optional = false
-python-versions = "!=3.0.*,!=3.1.*,!=3.2.*,!=3.3.*,!=3.4.*,>=2.7"
-version = "2.0.0"
+python-versions = ">=3.6"
+version = "3.0.0"
 
 [package.dependencies]
 zipp = ">=0.5"
@@ -813,7 +813,7 @@ description = "The Pyramid Web Framework, a Pylons project"
 name = "pyramid"
 optional = false
 python-versions = ">=2.7,!=3.0.*,!=3.1.*,!=3.2.*,!=3.3.*"
-version = "1.10.4"
+version = "1.10.5"
 
 [package.dependencies]
 hupper = ">=1.5"
@@ -847,7 +847,7 @@ description = "pyramid_multiauth"
 name = "pyramid-multiauth"
 optional = false
 python-versions = "*"
-version = "0.9.0"
+version = "0.8.0"
 
 [package.dependencies]
 pyramid = "*"
@@ -858,7 +858,7 @@ description = "An execution policy for Pyramid that supports retrying requests a
 name = "pyramid-retry"
 optional = false
 python-versions = "*"
-version = "1.0"
+version = "2.1.1"
 
 [package.dependencies]
 pyramid = ">=1.9"
@@ -1514,7 +1514,7 @@ transaction = ">=1.6.0"
 test = ["zope.testing"]
 
 [metadata]
-content-hash = "d1ba0b3d8968f1324b47e75554e06e1e4fa352b3042decf7d5456e4b25bce0b9"
+content-hash = "208b4d17524b44ee9611803c587a1ef7826c8d1a30ac84c4b80ee9946cd03671"
 python-versions = ">=3.6,<3.7"
 
 [metadata.files]
@@ -1535,8 +1535,8 @@ aws-xray-sdk = [
     {file = "aws_xray_sdk-0.95-py2.py3-none-any.whl", hash = "sha256:72791618feb22eaff2e628462b0d58f398ce8c1bacfa989b7679817ab1fad60c"},
 ]
 awscli = [
-    {file = "awscli-1.18.179-py2.py3-none-any.whl", hash = "sha256:0b5a86f32a0684a61d67969ede0eb31450958d0fe66d1c803b926f20ac8fc0c9"},
-    {file = "awscli-1.18.179.tar.gz", hash = "sha256:fc982feb8fd13b5983d36b3c3be4aa37ce32ddddbd6a23a5dcde84cd299d7d63"},
+    {file = "awscli-1.18.183-py2.py3-none-any.whl", hash = "sha256:42d100eb1e5c2097a72bacd80dac6a006b4d1487f393a9cffe5661a4f36c548e"},
+    {file = "awscli-1.18.183.tar.gz", hash = "sha256:459f6591de7dd2ca77018684abb723f5a798378c083c962d463be43168ab3758"},
 ]
 "backports.statistics" = [
     {file = "backports.statistics-0.1.0-py2.py3-none-any.whl", hash = "sha256:2732e003151620762ba3ea25b881b5ca0debe2fcbf41b32b6eaff5842a8b99d7"},
@@ -1552,12 +1552,12 @@ boto = [
     {file = "boto-2.49.0.tar.gz", hash = "sha256:ea0d3b40a2d852767be77ca343b58a9e3a4b00d9db440efb8da74b4e58025e5a"},
 ]
 boto3 = [
-    {file = "boto3-1.16.19-py2.py3-none-any.whl", hash = "sha256:56e4776527dfd86477edf79cfaba87ad53ecac13b7537d08ca211f7dfb10a19d"},
-    {file = "boto3-1.16.19.tar.gz", hash = "sha256:70d4b15b71b8ae489fb2a265d33030657f373c28e63763d9018008501b0ef507"},
+    {file = "boto3-1.16.23-py2.py3-none-any.whl", hash = "sha256:22a6f11383965d7ece9e391722b2989780960c62997b1aa464ffa1f886e1cfa8"},
+    {file = "boto3-1.16.23.tar.gz", hash = "sha256:6e6bd178f930309c2ec79643436aae5cf6f26d51e35aa5e58162675a04785e62"},
 ]
 botocore = [
-    {file = "botocore-1.19.19-py2.py3-none-any.whl", hash = "sha256:3b31275fc6788bcae1088a3da01dc5bea14493a17bc3964868f968acf7e9122e"},
-    {file = "botocore-1.19.19.tar.gz", hash = "sha256:8c06e3a4d6472e46cd2d31976df3e7fb1cd158f96d7f4c38116abf3e818692a1"},
+    {file = "botocore-1.19.23-py2.py3-none-any.whl", hash = "sha256:d73a223bf88d067c3ae0a9a3199abe56e99c94267da77d7fed4c39f572f522c0"},
+    {file = "botocore-1.19.23.tar.gz", hash = "sha256:9f9efca44b2ab2d9c133ceeafa377e4b3d260310109284123ebfffc15e28481e"},
 ]
 certifi = [
     {file = "certifi-2020.11.8-py2.py3-none-any.whl", hash = "sha256:1f422849db327d534e3d0c5f02a263458c3955ec0aae4ff09b95f195c59f4edd"},
@@ -1650,8 +1650,8 @@ coverage = [
     {file = "coverage-5.3.tar.gz", hash = "sha256:280baa8ec489c4f542f8940f9c4c2181f0306a8ee1a54eceba071a449fb870a0"},
 ]
 coveralls = [
-    {file = "coveralls-2.1.2-py2.py3-none-any.whl", hash = "sha256:b3b60c17b03a0dee61952a91aed6f131e0b2ac8bd5da909389c53137811409e1"},
-    {file = "coveralls-2.1.2.tar.gz", hash = "sha256:4430b862baabb3cf090d36d84d331966615e4288d8a8c5957e0fd456d0dd8bd6"},
+    {file = "coveralls-2.2.0-py2.py3-none-any.whl", hash = "sha256:2301a19500b06649d2ec4f2858f9c69638d7699a4c63027c5d53daba666147cc"},
+    {file = "coveralls-2.2.0.tar.gz", hash = "sha256:b990ba1f7bc4288e63340be0433698c1efe8217f78c689d254c2540af3d38617"},
 ]
 cryptography = [
     {file = "cryptography-3.2.1-cp27-cp27m-macosx_10_10_x86_64.whl", hash = "sha256:6dc59630ecce8c1f558277ceb212c751d6730bd12c80ea96b4ac65637c4f55e7"},
@@ -1682,8 +1682,8 @@ dcicutils = [
     {file = "dcicutils-1.5.0.tar.gz", hash = "sha256:5543e3b5c1fc3bce5018fc7043df6ec13a54e03f226fa09500ec4abb3e267ad7"},
 ]
 docker = [
-    {file = "docker-4.3.1-py2.py3-none-any.whl", hash = "sha256:13966471e8bc23b36bfb3a6fb4ab75043a5ef1dac86516274777576bed3b9828"},
-    {file = "docker-4.3.1.tar.gz", hash = "sha256:bad94b8dd001a8a4af19ce4becc17f41b09f228173ffe6a4e0355389eef142f2"},
+    {file = "docker-4.4.0-py2.py3-none-any.whl", hash = "sha256:317e95a48c32de8c1aac92a48066a5b73e218ed096e03758bcdd799a7130a1a1"},
+    {file = "docker-4.4.0.tar.gz", hash = "sha256:cffc771d4ea1389fc66bc95cb72d304aa41d1a1563482a9a000fba3a84ed5071"},
 ]
 docopt = [
     {file = "docopt-0.6.2.tar.gz", hash = "sha256:49b3a825280bd66b3aa83585ef59c4a8c82f2c8a522dbe754a8bc8d08c85c491"},
@@ -1745,8 +1745,8 @@ idna = [
     {file = "idna-2.10.tar.gz", hash = "sha256:b307872f855b18632ce0c21c5e45be78c0ea7ae4c15c828c20788b26921eb3f6"},
 ]
 importlib-metadata = [
-    {file = "importlib_metadata-2.0.0-py2.py3-none-any.whl", hash = "sha256:cefa1a2f919b866c5beb7c9f7b0ebb4061f30a8a9bf16d609b000e2dfaceb9c3"},
-    {file = "importlib_metadata-2.0.0.tar.gz", hash = "sha256:77a540690e24b0305878c37ffd421785a6f7e53c8b5720d211b211de8d0e95da"},
+    {file = "importlib_metadata-3.0.0-py2.py3-none-any.whl", hash = "sha256:fc3b3f9697703d3833d2803162d60cbe8b9f57b5da5e6496ac81e3cb82bd8d9c"},
+    {file = "importlib_metadata-3.0.0.tar.gz", hash = "sha256:d582eb5c35b2f16c78e365e0f89e369f36af38fdaad0146208aa973c693ba247"},
 ]
 importlib-resources = [
     {file = "importlib_resources-3.3.0-py2.py3-none-any.whl", hash = "sha256:a3d34a8464ce1d5d7c92b0ea4e921e696d86f2aa212e684451cb1482c8d84ed5"},
@@ -1968,19 +1968,19 @@ pyparsing = [
     {file = "pyparsing-2.4.7.tar.gz", hash = "sha256:c203ec8783bf771a155b207279b9bccb8dea02d8f0c9e5f8ead507bc3246ecc1"},
 ]
 pyramid = [
-    {file = "pyramid-1.10.4-py2.py3-none-any.whl", hash = "sha256:51bf64647345237c00d2fe558935e0e4938c156e29f17e203457fd8e1d757dc7"},
-    {file = "pyramid-1.10.4.tar.gz", hash = "sha256:d80ccb8cfa550139b50801591d4ca8a5575334adb493c402fce2312f55d07d66"},
+    {file = "pyramid-1.10.5-py2.py3-none-any.whl", hash = "sha256:4d7f557b19932b4f719b6e1a81c96aebd49b990124e10175ea2b866e976e6a66"},
+    {file = "pyramid-1.10.5.tar.gz", hash = "sha256:fe1bd1140e6b79fe07f0053981d49be2dc66656cc8b481dd7ffcaa872fc25467"},
 ]
 pyramid-localroles = [
     {file = "pyramid_localroles-0.1.zip", hash = "sha256:4d297d06677d54471cbca9f2744e9224528204cf83045a2a19b6f84707d0ef1b"},
 ]
 pyramid-multiauth = [
-    {file = "pyramid_multiauth-0.9.0-py2.py3-none-any.whl", hash = "sha256:6cad38c3613db10b45fe7dd5f4b81e43d7ed12c623cbceee7626d4d0dd8a0f52"},
-    {file = "pyramid_multiauth-0.9.0.tar.gz", hash = "sha256:3eda2a01de867ce8e68e8f0f410a7b51be68891e34dc31808992fdf1bcc4f952"},
+    {file = "pyramid_multiauth-0.8.0-py2.py3-none-any.whl", hash = "sha256:a460e43223e8fbdaa580ef9319fb2f1299bf6cea9c9496e68169c3a6e07ed523"},
+    {file = "pyramid_multiauth-0.8.0.tar.gz", hash = "sha256:535770d3807421c11f891c786cec45407eee71432eaa4d628fa4e6a9b04802d3"},
 ]
 pyramid-retry = [
-    {file = "pyramid_retry-1.0-py2.py3-none-any.whl", hash = "sha256:7053f2345b2676f9b9031605a6764169963dad2f73e26873ce9331f86c78db46"},
-    {file = "pyramid_retry-1.0.tar.gz", hash = "sha256:7ad3b813df3c5c903bb1e2c4075266b52295ce32e614ba8c15c656c07c503923"},
+    {file = "pyramid_retry-2.1.1-py2.py3-none-any.whl", hash = "sha256:b5129a60eb9d7409234ea52839006426d2ae887b4a1f0530c75ec336cabf2476"},
+    {file = "pyramid_retry-2.1.1.tar.gz", hash = "sha256:baa8276ae68babad09e5f2f94efc4f7421f3b8fb526151df522052f8cd3ec0c9"},
 ]
 pyramid-tm = [
     {file = "pyramid_tm-2.4-py2.py3-none-any.whl", hash = "sha256:4a4e212cd239f06c496d074f5d294e88478b94059541448bc151d505f653be59"},
