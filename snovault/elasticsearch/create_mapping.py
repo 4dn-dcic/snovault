@@ -592,7 +592,7 @@ def aggregated_items_mapping(types, item_type):
             }
         }
         # if no agg fields are provided, default to uuid
-        if agg_fields == []:
+        if not agg_fields:
             agg_fields = ['uuid']
         aggs_mapping[agg_item]['properties']['item']['properties'] = agg_fields_mapping = {}
         for agg_field in agg_fields:
@@ -1119,7 +1119,7 @@ def run(app, collections=None, dry_run=False, check_first=False, skip_indexing=F
     # keep track of uuids to be indexed after mapping is done.
     # Set of uuids for each item type; keyed by item type. Order for python < 3.6
     uuids_to_index = OrderedDict()
-    total_reindex = (collections == None and not dry_run and not check_first
+    total_reindex = (collections is None and not dry_run and not check_first
                      and not index_diff and not print_count_only)
 
     if not collections:
