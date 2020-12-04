@@ -27,6 +27,9 @@ jobs:
       postgres:
         image: postgres:11
 
+        ports:
+          5432:5440
+
     # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
@@ -43,8 +46,6 @@ jobs:
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           S3_ENCRYPT_KEY: ${{ secrets.S3_ENCRYPT_KEY }}
           TRAVIS_JOB_ID: temporary_test_prefix # XXX: replace me
-          POSTGRES_HOST: localhost
-          POSTGRES_PORT: 5440
         run: |
           make travis-test
 
