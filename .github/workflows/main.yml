@@ -28,7 +28,7 @@ jobs:
         image: postgres:11
 
         ports:
-          5432:5440
+          - 5432:5440
 
     # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
