@@ -36,9 +36,11 @@ jobs:
       - uses: actions/checkout@v2
       - uses: actions/setup-python@v2
 
-      - name: Install Postgres
+      - name: Install/Check Postgres
         run: |
-          sudo apt-get install postgresql-client
+          sudo apt install -yq postgresql-client-11 
+          postgres --version
+          initdb --version
 
       - name: Install Deps
         run: |
