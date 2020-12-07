@@ -36,14 +36,23 @@ jobs:
       - uses: actions/checkout@v2
       - uses: actions/setup-python@v2
 
+      - name: Install Postgres
+        run: |
+          sudo apt-get install postgresql-client
+
       - name: Install Deps
         run: |
           make build
 
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+      
       - name: QA
         env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           S3_ENCRYPT_KEY: ${{ secrets.S3_ENCRYPT_KEY }}
           TRAVIS_JOB_ID: temporary_test_prefix # XXX: replace me
         run: |
@@ -53,8 +62,6 @@ jobs:
       - name: Cleanup
         if: ${{ always() }}
         env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           S3_ENCRYPT_KEY: ${{ secrets.S3_ENCRYPT_KEY }}
           TRAVIS_JOB_ID: temporary_test_prefix # XXX: replace me
         run: |
