@@ -6,7 +6,7 @@ configure:  # does any pre-requisite installs
 	pip install poetry
 
 moto-setup:
-	pip install "moto[server]==1.3.7"
+	poetry run python -m pip install "moto[server]==1.3.7"
 
 macpoetry-install:
 	scripts/macpoetry-install
