@@ -50,10 +50,7 @@ jobs:
           S3_ENCRYPT_KEY: ${{ secrets.S3_ENCRYPT_KEY }}
           TRAVIS_JOB_ID: ${{ github.run_number }}
         run: |
-          moto_server sqs -p3000 &
-          pkill -f moto_server || echo "Not running"
           make travis-test
-
 
       - name: Cleanup
         if: ${{ always() }}
