@@ -50,7 +50,7 @@ jobs:
           S3_ENCRYPT_KEY: ${{ secrets.S3_ENCRYPT_KEY }}
           TRAVIS_JOB_ID: temporary_test_prefix # XXX: replace me
         run: |
-          pkill -f moto_server
+          pkill -f moto_server || echo "Not running"
           make travis-test
 
 
