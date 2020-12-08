@@ -44,11 +44,11 @@ jobs:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: us-east-1
-      
+
       - name: QA
         env:
           S3_ENCRYPT_KEY: ${{ secrets.S3_ENCRYPT_KEY }}
-          TRAVIS_JOB_ID: temporary_test_prefix # XXX: replace me
+          TRAVIS_JOB_ID: ${{ github.run_number }}
         run: |
           moto_server sqs -p3000 &
           pkill -f moto_server || echo "Not running"
@@ -59,7 +59,7 @@ jobs:
         if: ${{ always() }}
         env:
           S3_ENCRYPT_KEY: ${{ secrets.S3_ENCRYPT_KEY }}
-          TRAVIS_JOB_ID: temporary_test_prefix # XXX: replace me
+          TRAVIS_JOB_ID: ${{ github.run_number }}
         run: |
           poetry run wipe-test-indices $TRAVIS_JOB_ID search-fourfront-testing-6-8-kncqa2za2r43563rkcmsvgn2fq.us-east-1.es.amazonaws.com:443
 
