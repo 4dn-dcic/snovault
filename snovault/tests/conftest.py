@@ -24,6 +24,7 @@ def _check_server_is_up(output):
     while tries > 0:
         output.seek(0)  # should be first thing to be output.
         out = output.read()
+        print(out.decode('utf-8'))
         if 'Running' in out.decode('utf-8'):
             return True
         tries -= 1
