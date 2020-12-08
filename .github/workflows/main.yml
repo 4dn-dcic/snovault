@@ -39,8 +39,9 @@ jobs:
       - name: Install/Check Postgres
         run: |
           sudo apt install -yq --no-install-suggests --no-install-recommends postgresql-common postgresql-11 postgresql-client-11
-          postgres --version
-          initdb --version
+          ls -lah /usr/lib/postgresql
+          ls -lah /usr/lib/postgresql/11/bin/
+          sudo initdb --version
 
       - name: Install Deps
         run: |
