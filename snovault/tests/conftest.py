@@ -24,7 +24,6 @@ def _check_server_is_up(output):
     while tries > 0:
         output.seek(0)  # should be first thing to be output.
         out = output.read()
-        print(out.decode('utf-8'))
         if 'Running' in out.decode('utf-8'):
             return True
         tries -= 1
@@ -48,7 +47,8 @@ def start_moto_server_sqs():
             server = subprocess.Popen(server_args, stdout=server_output, stderr=server_output)
             assert _check_server_is_up(server_output)
         except AssertionError:
-            raise AssertionError(str(server_output))
+            out = server_output.seek(0)
+            raise AssertionError(out.read())
         except Exception as e:
             raise Exception('Encountered an exception bringing up the server: %s' % str(e))
 
