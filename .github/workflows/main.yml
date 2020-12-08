@@ -42,11 +42,11 @@ jobs:
           ls -lah /usr/lib/postgresql
           ls -lah /usr/lib/postgresql/11/bin/
           echo "/usr/lib/postgresql/11/bin" >> $GITHUB_PATH
+          sudo ln -s /usr/lib/postgresql/11/bin/initdb /usr/local/bin/initdb
 
       - name: Try initdb
         run: |
           echo $GITHUB_PATH
-          ln -s /usr/lib/postgresql/11/bin/initdb /usr/local/bin/initdb
           sudo /usr/lib/postgresql/11/bin/initdb --version
           sudo initdb --version
 
