@@ -42,6 +42,7 @@ jobs:
           ls -lah /usr/lib/postgresql
           ls -lah /usr/lib/postgresql/11/bin/
           echo "/usr/lib/postgresql/11/bin" >> $GITHUB_PATH
+          sudo /usr/lib/postgresql/11/bin/initdb --version
           sudo initdb --version
 
       - name: Install Deps
