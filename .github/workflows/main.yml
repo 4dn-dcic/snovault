@@ -32,10 +32,10 @@ jobs:
         env:
           PATH: "/usr/lib/postgresql/11/bin:$PATH" 
         run: |
-          sudo apt install -yq --no-install-suggests --no-install-recommends postgresql-common postgresql-11 postgresql-client-11
+          apt install -yq --no-install-suggests --no-install-recommends postgresql-common postgresql-11 postgresql-client-11
           ls -lah /usr/lib/postgresql
           ls -lah /usr/lib/postgresql/11/bin/
-          sudo initdb --version
+          initdb --version
 
       - name: Install Deps
         run: |
