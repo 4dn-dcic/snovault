@@ -43,7 +43,7 @@ def start_moto_server_sqs():
     try:
         try:
             os.environ['SQS_URL'] = 'http://localhost:3000'  # must exists globally because of MPIndexer
-            server_args = ['moto_server', 'sqs', '-p3000']
+            server_args = ['poetry', 'run', 'moto_server', 'sqs', '-p3000']
             server = subprocess.Popen(server_args, stdout=server_output, stderr=server_output)
             assert _check_server_is_up(server_output)
         except AssertionError:
