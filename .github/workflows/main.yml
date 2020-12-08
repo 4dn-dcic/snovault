@@ -28,25 +28,14 @@ jobs:
       - uses: actions/checkout@v2
       - uses: actions/setup-python@v2
 
-      - name: Install/Check Postgres
+      - name: Install/Link Postgres
         run: |
           sudo apt install -yq --no-install-suggests --no-install-recommends postgresql-common postgresql-11 postgresql-client-11
           sudo ln -s /usr/lib/postgresql/11/bin/initdb /usr/local/bin/initdb
 
-      - name: Try initdb
-        run: |
-          echo $GITHUB_PATH
-          sudo /usr/lib/postgresql/11/bin/initdb --version
-          sudo initdb --version
-
-
       - name: Install Deps
         run: |
           make build
-
-      - name: Check moto
-        run: |
-          moto_server -v
 
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v1
