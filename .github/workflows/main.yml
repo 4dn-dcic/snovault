@@ -1,4 +1,4 @@
-# This is a basic workflow to help you get started with Actions
+# Build for dcicsnovault
 
 name: CI
 
@@ -27,6 +27,8 @@ jobs:
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
       - uses: actions/checkout@v2
       - uses: actions/setup-python@v2
+        with:
+          - python-version: '3.6'
 
       - name: Install/Link Postgres
         run: |
@@ -59,4 +61,3 @@ jobs:
           TRAVIS_JOB_ID: ${{ github.run_number }}
         run: |
           poetry run wipe-test-indices $TRAVIS_JOB_ID search-fourfront-testing-6-8-kncqa2za2r43563rkcmsvgn2fq.us-east-1.es.amazonaws.com:443
-
