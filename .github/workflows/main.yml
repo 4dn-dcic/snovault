@@ -22,14 +22,6 @@ jobs:
     # The type of runner that the job will run on
     runs-on: ubuntu-18.04
 
-    # run postgres in a Docker container
-    services:
-      postgres:
-        image: postgres:11
-
-        ports:
-          - 5432:5440
-
     # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
@@ -37,6 +29,8 @@ jobs:
       - uses: actions/setup-python@v2
 
       - name: Install/Check Postgres
+        env:
+          PATH: "/usr/lib/postgresql/11/bin:$PATH" 
         run: |
           sudo apt install -yq --no-install-suggests --no-install-recommends postgresql-common postgresql-11 postgresql-client-11
           ls -lah /usr/lib/postgresql
