@@ -47,7 +47,7 @@ def start_moto_server_sqs():
             server = subprocess.Popen(server_args, stdout=server_output, stderr=server_output)
             assert _check_server_is_up(server_output)
         except AssertionError:
-            raise AssertionError('Could not get moto server up')
+            raise AssertionError(str(server_output))
         except Exception as e:
             raise Exception('Encountered an exception bringing up the server: %s' % str(e))
 
