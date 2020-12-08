@@ -45,6 +45,8 @@ jobs:
 
       - name: Try initdb
         run: |
+          echo $GITHUB_PATH
+          ln -s /usr/lib/postgresql/11/bin/initdb /usr/local/bin/initdb
           sudo /usr/lib/postgresql/11/bin/initdb --version
           sudo initdb --version
 
