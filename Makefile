@@ -6,7 +6,7 @@ configure:  # does any pre-requisite installs
 	pip install poetry
 
 moto-setup:
-	pip install "moto[server]==1.3.7"
+	poetry run python -m pip install "moto[server]==1.3.7"
 
 macpoetry-install:
 	scripts/macpoetry-install
@@ -28,7 +28,7 @@ test:
 	pytest -vv --timeout=200
 
 travis-test:
-	pytest -vv --timeout=200 --aws-auth --cov --es search-fourfront-testing-6-8-kncqa2za2r43563rkcmsvgn2fq.us-east-1.es.amazonaws.com:443 
+	poetry run pytest -vvv --timeout=200 --aws-auth --es search-fourfront-testing-6-8-kncqa2za2r43563rkcmsvgn2fq.us-east-1.es.amazonaws.com:443
 
 update:
 	poetry update
