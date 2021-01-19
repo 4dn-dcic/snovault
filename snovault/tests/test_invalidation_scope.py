@@ -85,6 +85,42 @@ def test_parent_type_schema():
     }
 
 
+@pytest.fixture
+def test_parent_type_object_schema():
+    """ Intended schema structure to test schemas that have an object or array of object field
+        that contains a linkTo.
+    """
+    return {
+        'single_object': {
+            'type': 'object',
+            'properties': {
+                'alias': {
+                    'type': 'string'
+                },
+                'link_one': {
+                    'type': 'string',
+                    'linkTo': ITEM_C
+                }
+            }
+        },
+        'many_objects': {
+            'type': 'array',
+            'items': {
+                'type': 'object',
+                'properties': {
+                    'alias': {
+                        'type': 'string'
+                    },
+                    'link_two': {
+                        'type': 'string',
+                        'linkTo': ITEM_E
+                    }
+                }
+            }
+        }
+    }
+
+
 class TestInvalidationScope:
 
     # actual snovault types, used in basic test
@@ -160,6 +196,34 @@ class TestInvalidationScope:
             else:
                 assert len(secondary) == 0
 
+    @pytest.mark.parametrize('diff,embedded_list,expected',
+                             [([ITEM_C + '.value'], ['single_object.link_one.value'], 1),  # value matches
+                              ([ITEM_C + '.name'], ['single_object.link_one.value'], 0),  # name does not match embed
+                              ([ITEM_E + '.name'], ['many_objects.link_two.name'], 1),  # name matches
+                              ([ITEM_E + '.name'], ['many_objects.link_two.*'], 1),  # * matches
+                              ([ITEM_C + '.*'], ['many_objects.link_two.*'], 0),  # * does not match embed
+                              ([ITEM_E + '.value'], ['many_objects.link_two.name'], 0),  # value does not match embed
+                              ([ITEM_E + '.value'], ['single_object.link_one.value'], 0),  # diff does not match field
+                              ([ITEM_C + '.name'], ['single_object.link_one.*'], 1),  # * matches
+                              ([ITEM_C + '.name'], ['many_objects.link_two.*'], 0),  # * does not match embed
+                              ([ITEM_C + '.name', ITEM_C + '.value', ITEM_C + '.classification'],
+                               ['single_object.link_one.classification'], 1),  # larger diff
+                              ([ITEM_C + '.name', ITEM_C + '.value', ITEM_C + '.classification'],
+                               ['many_objects.link_two.classification'], 0),  # larger diff w/o embed
+                              ([ITEM_E + '.name', ITEM_E + '.value', ITEM_E + '.classification'],
+                               ['many_objects.link_two.classification'], 1),
+
+                              ])
+    def test_invalidation_scope_object(self, testapp, test_parent_type_object_schema, diff, embedded_list, expected):
+        """ Tests that modifying an item that is an object-like linkTo remains in the invalidation scope. """
+        registry = testapp.app.registry
+        invalidated = [
+            (UUID1, 'dummy_type')  # this type doesn't matter
+        ]
+        secondary = {UUID1}
+        with invalidation_scope_mocks(test_parent_type_object_schema, embedded_list):
+            self.run_test_and_reset_secondary(registry, diff, invalidated, secondary, expected)
+
     @pytest.mark.parametrize('item_type,embedded_list',
                              [(ITEM_A, ['link_one.name', 'link_two.key', 'link_three.value']),
                               (ITEM_B, ['link_one.key', 'link_two.value', 'link_three.name'])])
@@ -220,7 +284,6 @@ class TestInvalidationScope:
     @pytest.mark.parametrize('diff,embedded_list',
                              [([ITEM_C + '.value'], ['link_one.value']),
                               ([ITEM_C + '.value'], ['link_one.*']),
-                              ([ITEM_C + '.name'], ['link_one.value', 'link_two.*']),
                               ([ITEM_F + '.name'], ['link_four.name']),
                               ([ITEM_F + '.name'], ['link_four.*']),
                               ([ITEM_D + '.key', ITEM_F + '.value'], ['link_two.value', 'link_four.*']),
