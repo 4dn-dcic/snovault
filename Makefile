@@ -3,7 +3,7 @@ clean:
 
 configure:  # does any pre-requisite installs
 	pip install --upgrade pip
-	pip install poetry
+	pip install poetry==1.0.10  # pinned to avoid build problems we cannot fix in pyproject.toml
 
 moto-setup:
 	poetry run python -m pip install "moto[server]==1.3.7"
