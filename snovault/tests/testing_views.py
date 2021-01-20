@@ -715,26 +715,39 @@ class TestingNestedEnabled(Item):
         }]
 
 
+@collection(name='testing-individual-sno', unique_key='testing_individual_sno:full_name')
+class TestingIndividualSno(Item):
+    """ Individual integrated testing type - a biosample is produced by an individual. """
+    item_type = 'testing_individual_sno'
+    name_key = 'full_name'
+    schema = load_schema('snovault:test_schemas/TestingIndividualSno.json')
+
+
 @collection(name='testing-biosample-sno', unique_key='testing_biosample_sno:identifier')
 class TestingBiosampleSno(Item):
-    """ Biosample integrated testing type. leaf type."""
+    """ Biosample integrated testing type. """
     item_type = 'testing_biosample_sno'
     name_key = 'identifier'
     schema = load_schema('snovault:test_schemas/TestingBiosampleSno.json')
+    embedded_list = [
+        'contributor.*'
+    ]
 
 
 @collection(name='testing-biosource-sno', unique_key='testing_biosource_sno:identifier')
 class TestingBiosourceSno(Item):
     """ Biosource integrated testing type.
 
-        This item contains an array of linkTo Biosamples.
+        This item contains an array of linkTo Biosamples. Links to a contributor of the samples as well.
     """
     item_type = 'testing_biosource_sno'
     name_key = 'identifier'
     schema = load_schema('snovault:test_schemas/TestingBiosourceSno.json')
     embedded_list = [  # selective embed at this item
         'samples.identifier',
-        'samples.quality'
+        'samples.quality',
+        'sample_objects.associated_sample.alias',  # if a sample is included here, embed its alias
+        'contributor.last_name'
     ]
 
 

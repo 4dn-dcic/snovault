@@ -18,6 +18,25 @@
          "type": "string",
          "linkTo": "TestingBiosampleSno"
        }
+    },
+    "sample_objects": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "notes": {
+            "type": "string"
+          },
+          "associated_sample": {
+            "type": "string",
+            "linkTo": "TestingBiosampleSno"
+          }
+        }
+      }
+    },
+    "contributor": {
+      "type": "string",
+      "linkTo": "TestingIndividualSno"
     }
   }
 }

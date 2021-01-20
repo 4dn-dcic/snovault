@@ -20,6 +20,10 @@
     },
     "alias": {
       "type": "string"
+    },
+    "contributor": {
+      "type": "string",
+      "linkTo": "TestingIndividualSno"
     }
   }
 }

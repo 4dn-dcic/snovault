@@ -315,25 +315,44 @@ class TestInvalidationScopeUnit:
 
 
 @pytest.fixture
+def invalidation_scope_individual_data():
+    return [
+        {
+            'full_name': 'Jane Doe',
+            'uid': 'abc123',
+            'specimen': 'blood'
+        },
+        {
+            'full_name': 'Unknown Contributor',
+            'uid': 'UNK1',
+            'specimen': 'skin'
+        },
+    ]
+
+
+@pytest.fixture
 def invalidation_scope_biosample_data():
     return [
         {
             'identifier': 'SNOID123',
             'quality': 100,
             'ranking': 1,
-            'alias': '123'
+            'alias': '123',
+            'contributor': 'Unknown Contributor'
         },
         {
             'identifier': 'SNOID456',
             'quality': 98,
             'ranking': 2,
-            'alias': '456'
+            'alias': '456',
+            'contributor': 'Jane Doe'
         },
         {
             'identifier': 'SNOID789',
             'quality': 95,
             'ranking': 3,
-            'alias': '789'
+            'alias': '789',
+            'contributor': 'Jane Doe'
         }
     ]
 
@@ -347,7 +366,14 @@ def invalidation_scope_biosource_data():
         },
         {
             'identifier': 'SNOIDDEF',
-            'samples': ['SNOID456', 'SNOID789']
+            'samples': ['SNOID456', 'SNOID789'],
+            'sample_objects': [
+                {
+                    'notes': 'A note about SNOID456',
+                    'associated_sample': 'SNOID456'
+                }
+            ],
+            'contributor': 'Jane Doe'
         }
     ]
 
@@ -362,9 +388,11 @@ def invalidation_scope_biogroup_data():
 
 @pytest.fixture
 def invalidation_scope_workbook(testapp, invalidation_scope_biosample_data, invalidation_scope_biosource_data,
-                                invalidation_scope_biogroup_data):
-    """ Posts 3 biosamples, 2 biosources and 1 biogroup for integrated testing. """
+                                invalidation_scope_biogroup_data, invalidation_scope_individual_data):
+    """ Posts 2 individuals, 3 biosamples, 2 biosources and 1 biogroup for integrated testing. """
     groups, sources, samples = [], [], []
+    for indiv in invalidation_scope_individual_data:
+        testapp.post_json('/TestingIndividualSno', indiv, status=201)
     for biosample in invalidation_scope_biosample_data:
         res = testapp.post_json('/TestingBiosampleSno', biosample, status=201).json['@graph'][0]
         samples.append(res)
@@ -415,8 +443,8 @@ class TestingInvalidationScopeIntegrated:
         assert len(secondary) == 1  # ranking is not a direct embed for biosource, so only biogroup is invalidated
 
     def test_invalidation_scope_integrated_wholly_invisible_modification(self, testapp, invalidation_scope_workbook):
-        """ Integrated test that simulates patching the ranking field on biosample. This field is not a
-            direct embed on biosource, so those items should not be invalidated - only biogroup.
+        """ Integrated test that simulates patching the identifier field on biosource. This field is not a
+            direct embed on biogroup, so nothing is invalidated.
         """
         groups, sources, samples = invalidation_scope_workbook
         diff = ['TestingBiosourceSno.identifier']
@@ -424,3 +452,26 @@ class TestingInvalidationScopeIntegrated:
         secondary = {obj['@id'] for obj in groups}
         filter_invalidation_scope(testapp.app.registry, diff, invalidated, secondary)
         assert len(secondary) == 0  # identifier is not embedded in biogroup, so this edit is invisible
+
+    def test_invalidation_scope_integrated_depth3_modification_matches(self, testapp, invalidation_scope_workbook):
+        """ Integrated test that simulates patches the alias on biosource. This field is a direct embed on biosource
+            under 'sample_objects.associated_sample.alias' - thus only biosources should be invalidated - but since
+            we cannot differentiate this edit by field, all 3 are invalidated.
+        """
+        groups, sources, samples = invalidation_scope_workbook
+        diff = ['TestingBiosampleSno.alias']
+        invalidated = [(obj['@id'], obj['@type'][0]) for obj in sources + groups]
+        secondary = {obj['@id'] for obj in sources + groups}
+        filter_invalidation_scope(testapp.app.registry, diff, invalidated, secondary)
+        assert len(secondary) == 3
+
+    def test_invalidation_scope_integrated_depth4_modification(self, testapp, invalidation_scope_workbook):
+        """ Integrated test that simulates patches the specimen on individual. Since only biosample embeds this
+            via *, so biosources should be pruned.
+        """
+        groups, sources, samples = invalidation_scope_workbook
+        diff = ['TestingIndividualSno.specimen']
+        invalidated = [(obj['@id'], obj['@type'][0]) for obj in sources + samples]
+        secondary = {obj['@id'] for obj in sources + samples}
+        filter_invalidation_scope(testapp.app.registry, diff, invalidated, secondary)
+        assert len(secondary) == 3
