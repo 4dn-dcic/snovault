@@ -5,7 +5,6 @@ elasticsearch running as subprocesses.
 Does not include data dependent tests
 """
 
-import datetime as datetime_module
 import json
 import os
 import pytest
@@ -27,7 +26,7 @@ from zope.sqlalchemy import mark_changed
 from ..interfaces import TYPES, DBSESSION, STORAGE
 from .. import util  # The filename util.py, not something in __init__.py
 from .. import main  # Function main actually defined in __init__.py (should maybe be defined elsewhere)
-from ..elasticsearch import create_mapping, indexer_utils, indexer_queue
+from ..elasticsearch import create_mapping, indexer_utils
 from ..elasticsearch.create_mapping import (
     build_index_record,
     check_and_reindex_existing,
@@ -42,6 +41,7 @@ from ..elasticsearch.create_mapping import (
 from ..elasticsearch.indexer import check_sid, SidException
 from ..elasticsearch.indexer_queue import QueueManager
 from ..elasticsearch.interfaces import ELASTIC_SEARCH, INDEXER_QUEUE, INDEXER_QUEUE_MIRROR
+from ..util import INDEXER_NAMESPACE_FOR_TESTING
 from dcicutils.misc_utils import Retry
 from .testing_views import TestingLinkSourceSno
 
@@ -57,18 +57,6 @@ TEST_TYPE = 'testing_post_put_patch_sno'  # use one collection for testing
 
 # we just need single shard for these tests
 create_mapping.NUM_SHARDS = 1
-
-
-def generate_indexer_namespace_for_testing():
-    travis_job_id = os.environ.get('TRAVIS_JOB_ID')
-    if travis_job_id:
-        return travis_job_id
-    else:
-        # We've experimentally determined that it works pretty well to just use the timestamp.
-        return "sno-test-%s" % int(datetime_module.datetime.now().timestamp() * 1000000)
-
-
-INDEXER_NAMESPACE_FOR_TESTING = generate_indexer_namespace_for_testing()
 
 
 @pytest.fixture(scope='session')
@@ -102,7 +90,7 @@ else:
 
 @pytest.yield_fixture(scope='module', params=INDEXER_APP_PARAMS)  # must happen AFTER scope='session' moto setup
 def app(app_settings, request):
-    if request.param: # run tests both with and without mpindexer
+    if request.param:  # run tests both with and without mpindexer
         app_settings['mpindexer'] = True
     app = main({}, **app_settings)
     yield app
@@ -192,12 +180,12 @@ def test_indexer_namespacing(app, testapp, indexer_testapp):
     assert idx in es.indices.get(index=idx)
     if jid:
         assert jid in idx
-    app.registry.settings['indexer.namespace'] = '' # unset namespace, check raw is given
+    app.registry.settings['indexer.namespace'] = ''  # unset namespace, check raw is given
     raw_idx = indexer_utils.get_namespaced_index(app, TEST_TYPE)
     star_idx = indexer_utils.get_namespaced_index(app.registry, '*')  # registry should work as well
     assert raw_idx == TEST_TYPE
     assert star_idx == '*'
-    app.registry.settings['indexer.namespace'] = jid # reset jid
+    app.registry.settings['indexer.namespace'] = jid  # reset jid
 
 
 @pytest.mark.es
@@ -260,8 +248,7 @@ def test_indexer_queue(app):
     tries_left = 5
     while tries_left > 0:
         msg_count = indexer_queue.number_of_messages()
-        if (msg_count['primary_waiting'] == 0 and
-            msg_count['primary_inflight'] == 0):
+        if msg_count['primary_waiting'] == 0 and msg_count['primary_inflight'] == 0:
             break
         tries_left -= 1
         time.sleep(3)
@@ -287,8 +274,7 @@ def test_queue_indexing_telemetry_id(app, testapp):
     tries_left = 5
     while tries_left > 0:
         msg_count = indexer_queue.number_of_messages()
-        if (msg_count['primary_waiting'] == 1 and
-            msg_count['secondary_waiting'] == 2):
+        if msg_count['primary_waiting'] == 1 and msg_count['secondary_waiting'] == 2:
             break
         tries_left -= 1
         time.sleep(3)
@@ -309,8 +295,7 @@ def test_queue_indexing_telemetry_id(app, testapp):
     tries_left = 5
     while tries_left > 0:
         msg_count = indexer_queue.number_of_messages()
-        if (msg_count['primary_waiting'] == 0 and
-            msg_count['secondary_waiting'] == 0):
+        if msg_count['primary_waiting'] == 0 and msg_count['secondary_waiting'] == 0:
             break
         tries_left -= 1
         time.sleep(3)
@@ -583,10 +568,10 @@ def test_sync_and_queue_indexing(app, testapp, indexer_testapp):
     res = testapp.post_json(TEST_COLL, {'required': ''})
     # synchronously index
     create_mapping.run(app, collections=[TEST_TYPE], sync_index=True)
-    #time.sleep(6)
+    # time.sleep(6)
     namespaced_index = indexer_utils.get_namespaced_index(app, TEST_TYPE)
     doc_count = tries = 0
-    while(tries < 6):
+    while tries < 6:
         doc_count = es.count(index=namespaced_index, doc_type=TEST_TYPE).get('count')
         if doc_count != 0:
             break
@@ -596,7 +581,7 @@ def test_sync_and_queue_indexing(app, testapp, indexer_testapp):
     # post second item to database but do not index (don't load into es)
     # queued on post - total of two items queued
     res = testapp.post_json(TEST_COLL, {'required': ''})
-    #time.sleep(2)
+    # time.sleep(2)
     doc_count = es.count(index=namespaced_index, doc_type=TEST_TYPE).get('count')
     # doc_count has not yet updated
     assert doc_count == 1
@@ -631,7 +616,7 @@ def test_queue_indexing_with_linked(app, testapp, indexer_testapp, dummy_request
     )
     ppp_res = testapp.post_json(TEST_COLL, {'required': ''})
     ppp_uuid = ppp_res.json['@graph'][0]['uuid']
-    target  = {'name': 'one', 'uuid': '775795d3-4410-4114-836b-8eeecf1d0c2f'}
+    target = {'name': 'one', 'uuid': '775795d3-4410-4114-836b-8eeecf1d0c2f'}
     source = {
         'name': 'A',
         'target': '775795d3-4410-4114-836b-8eeecf1d0c2f',
@@ -769,7 +754,7 @@ def test_queue_indexing_with_linked(app, testapp, indexer_testapp, dummy_request
     # make sure everything has updated on ES
     check_es_source = es.get(index=namespaced_link_source, doc_type='testing_link_source_sno',
                              id=source['uuid'], ignore=[404])
-    assert check_es_source['found'] == False
+    assert check_es_source['found'] is False
     # source uuid removed from the target uuid
     check_es_target = es.get(index=namespaced_link_target, doc_type='testing_link_target_sno',
                              id=target['uuid'])
@@ -1073,7 +1058,7 @@ def test_es_purge_uuid(app, testapp, indexer_testapp, session):
 
     time.sleep(5)  # Allow time for ES API to send network request to ES server to perform delete.
     check_post_from_es_2 = es.get(index=namespaced_index, doc_type=TEST_TYPE, id=test_uuid, ignore=[404])
-    assert check_post_from_es_2['found'] == False
+    assert check_post_from_es_2['found'] is False
 
 
 @pytest.mark.flaky
@@ -1322,9 +1307,9 @@ def test_aggregated_items(app, testapp, indexer_testapp):
         '/testing-link-aggregates-sno/' + aggregated['uuid'],
         {'targets': [
             {'test_description': 'target one revised',
-            'target': '775795d3-4410-4114-836b-8eeecf1d0c2f'},
+             'target': '775795d3-4410-4114-836b-8eeecf1d0c2f'},
             {'test_description': 'target one revised',
-            'target': '775795d3-4410-4114-836b-8eeecf1d0c2f'},
+             'target': '775795d3-4410-4114-836b-8eeecf1d0c2f'},
             {'test_description': 'target one revised2',
              'target': '775795d3-4410-4114-836b-8eeecf1d0c2f'}
         ]}
