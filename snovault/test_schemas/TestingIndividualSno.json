@@ -17,6 +17,9 @@
     },
     "specimen": {
       "type": "string"
+    },
+    "uuid": {
+      "type": "string"
     }
   }
 

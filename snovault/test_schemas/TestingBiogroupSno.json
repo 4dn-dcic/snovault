@@ -15,6 +15,9 @@
     "sources": {
       "type": "string",
       "linkTo": "TestingBiosourceSno"
+    },
+    "uuid": {
+       "type": "string"
     }
   }
 }

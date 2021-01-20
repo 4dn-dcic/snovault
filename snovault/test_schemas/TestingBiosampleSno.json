@@ -24,6 +24,9 @@
     "contributor": {
       "type": "string",
       "linkTo": "TestingIndividualSno"
+    },
+    "uuid": {
+      "type": "string"
     }
   }
 }
