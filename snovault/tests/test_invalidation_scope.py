@@ -364,15 +364,63 @@ def invalidation_scope_biogroup_data():
 def invalidation_scope_workbook(testapp, invalidation_scope_biosample_data, invalidation_scope_biosource_data,
                                 invalidation_scope_biogroup_data):
     """ Posts 3 biosamples, 2 biosources and 1 biogroup for integrated testing. """
+    groups, sources, samples = [], [], []
     for biosample in invalidation_scope_biosample_data:
-        testapp.post_json('/TestingBiosampleSno', biosample, status=201)
+        res = testapp.post_json('/TestingBiosampleSno', biosample, status=201).json['@graph'][0]
+        samples.append(res)
     for biosource in invalidation_scope_biosource_data:
-        testapp.post_json('/TestingBiosourceSno', biosource, status=201)
+        res = testapp.post_json('/TestingBiosourceSno', biosource, status=201).json['@graph'][0]
+        sources.append(res)
     for biogroup in invalidation_scope_biogroup_data:
-        testapp.post_json('/TestingBiogroupSno', biogroup, status=201)
+        res = testapp.post_json('/TestingBiogroupSno', biogroup, status=201).json['@graph'][0]
+        groups.append(res)
+    return groups, sources, samples
 
 
 class TestingInvalidationScopeIntegrated:
 
-    def test_invalidation_scope_simple_modification(self, testapp, invalidation_scope_workbook):
-        pass
+    def test_invalidation_scope_integrated_simple_modification(self, testapp, invalidation_scope_workbook):
+        """ Integrated test that simulated patching the identifier field on biosample. Because identifier
+            is an embed for biosource (direct) and also an embed for biogroup (*), all 3 items should be
+            invalidated.
+        """
+        groups, sources, samples = invalidation_scope_workbook
+        diff = ['TestingBiosampleSno.identifier']
+        invalidated = [(obj['@id'], obj['@type'][0]) for obj in sources + groups]
+        secondary = {obj['@id'] for obj in sources + groups}
+        filter_invalidation_scope(testapp.app.registry, diff, invalidated, secondary)
+        assert len(secondary) == 3  # identifier is a direct embed so all 3 items should be invalidated
+
+    def test_invalidation_scope_integrated_many_modifications(self, testapp, invalidation_scope_workbook):
+        """ Integrated test that simulated patching the identifier field on biosample. Because identifier
+            is an embed for biosource (direct) and also an embed for biogroup (*), all 3 items should be
+            invalidated.
+        """
+        groups, sources, samples = invalidation_scope_workbook
+        diff = ['TestingBiosampleSno.alias', 'TestingBiosampleSno.ranking', 'TestingBiosampleSno.quality']
+        invalidated = [(obj['@id'], obj['@type'][0]) for obj in sources + groups]
+        secondary = {obj['@id'] for obj in sources + groups}
+        filter_invalidation_scope(testapp.app.registry, diff, invalidated, secondary)
+        assert len(secondary) == 3  # quality + * will pick up all
+
+    def test_invalidation_scope_integrated_partly_invisible_modification(self, testapp, invalidation_scope_workbook):
+        """ Integrated test that simulates patching the ranking field on biosample. This field is not a
+            direct embed on biosource, so those items should not be invalidated - only biogroup.
+        """
+        groups, sources, samples = invalidation_scope_workbook
+        diff = ['TestingBiosampleSno.ranking']
+        invalidated = [(obj['@id'], obj['@type'][0]) for obj in sources + groups]
+        secondary = {obj['@id'] for obj in sources + groups}
+        filter_invalidation_scope(testapp.app.registry, diff, invalidated, secondary)
+        assert len(secondary) == 1  # ranking is not a direct embed for biosource, so only biogroup is invalidated
+
+    def test_invalidation_scope_integrated_wholly_invisible_modification(self, testapp, invalidation_scope_workbook):
+        """ Integrated test that simulates patching the ranking field on biosample. This field is not a
+            direct embed on biosource, so those items should not be invalidated - only biogroup.
+        """
+        groups, sources, samples = invalidation_scope_workbook
+        diff = ['TestingBiosourceSno.identifier']
+        invalidated = [(obj['@id'], obj['@type'][0]) for obj in groups]
+        secondary = {obj['@id'] for obj in groups}
+        filter_invalidation_scope(testapp.app.registry, diff, invalidated, secondary)
+        assert len(secondary) == 0  # identifier is not embedded in biogroup, so this edit is invisible

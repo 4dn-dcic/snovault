@@ -195,6 +195,12 @@ def filter_invalidation_scope(registry, diff, invalidated_with_type, secondary_u
             base_field, terminal_field = '.'.join(split_embed[0:-1]), split_embed[-1]
             base_field_schema = crawl_schema(registry['types'], base_field, properties)
             base_field_item_type = base_field_schema.get('linkTo', None)
+            if base_field_item_type is None:
+                if 'items' in base_field_schema:
+                    if 'properties' in base_field_schema:
+                        raise Exception('should not happen')
+                    else:
+                        base_field_item_type = base_field_schema['items']['linkTo']
 
             # resolve the item type of the base field by looking at the linkTo field first
             # base_field_props = properties.get(base_field, {})
