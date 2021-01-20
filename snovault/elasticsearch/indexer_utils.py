@@ -198,11 +198,11 @@ def filter_invalidation_scope(registry, diff, invalidated_with_type, secondary_u
             if base_field_item_type is None:
                 if 'items' in base_field_schema:
                     if 'properties' in base_field_schema:
-                        raise Exception('should not happen')
+                        raise Exception('should not happen')  # XXX: remove/clarify once verified
                     else:
                         base_field_item_type = base_field_schema['items']['linkTo']
                 else:
-                    raise Exception('should not happen')
+                    raise Exception('should not happen')  # XXX: remove/clarify once verified
 
             # resolve the item type of the base field by looking at the linkTo field first
             # base_field_props = properties.get(base_field, {})
