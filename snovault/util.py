@@ -961,13 +961,13 @@ class CachedField:
         )
 
 
-def generate_indexer_namespace_for_testing():
+def generate_indexer_namespace_for_testing(prefix='sno'):
     travis_job_id = os.environ.get('TRAVIS_JOB_ID')
     if travis_job_id:
         return travis_job_id
     else:
         # We've experimentally determined that it works pretty well to just use the timestamp.
-        return "sno-test-%s" % int(datetime_module.datetime.now().timestamp() * 1000000)
+        return "%s-test-%s" % (prefix, int(datetime_module.datetime.now().timestamp() * 1000000))
 
 
 INDEXER_NAMESPACE_FOR_TESTING = generate_indexer_namespace_for_testing()
