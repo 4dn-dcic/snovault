@@ -52,7 +52,7 @@ def test_link_source_schema():
             'linkTo': ITEM_D
         },
         'link_three': {
-            'type': 'string',
+            'type': 'object',
             'linkTo': ITEM_E
         },
         'link_four': {
@@ -121,7 +121,7 @@ def test_parent_type_object_schema():
     }
 
 
-class TestInvalidationScope:
+class TestInvalidationScopeUnit:
 
     # actual snovault types, used in basic test
     TESTING_LINK_TARGET_SNO = 'TestingLinkTargetElasticSearch'
@@ -265,10 +265,8 @@ class TestInvalidationScope:
 
     @pytest.mark.parametrize('diff,embedded_list',
                              [([ITEM_C + '.name', 'Item_X.value'], ['link_one.value']),
-                              # ([ITEM_C + '.valuevalue'], ['link_one.value']), XXX: test case that doesn't work
                               ([ITEM_D + '.value', ITEM_E + '.key'], ['link_two.name', 'link_three.value']),
-                              ([ITEM_C + '.key', ITEM_D + '.key', ITEM_E + '.key'], ['link_one.value', 'link_two.name']),
-                              ([ITEM_E + '.key.name'], ['link_three.key.value'])])
+                              ([ITEM_C + '.key', ITEM_D + '.key', ITEM_E + '.key'], ['link_one.value', 'link_two.name'])])
     def test_invalidation_scope_negative_diffs(self, testapp, test_link_source_schema, diff, embedded_list):
         """ Tests a few possible edit + embedding_list combinations that should NOT result
             in re-indexing (so the added item_type is removed from the invalidation scope).
@@ -284,13 +282,7 @@ class TestInvalidationScope:
     @pytest.mark.parametrize('diff,embedded_list',
                              [([ITEM_C + '.value'], ['link_one.value']),
                               ([ITEM_C + '.value'], ['link_one.*']),
-                              ([ITEM_F + '.name'], ['link_four.name']),
-                              ([ITEM_F + '.name'], ['link_four.*']),
-                              ([ITEM_D + '.key', ITEM_F + '.value'], ['link_two.value', 'link_four.*']),
-                              ([ITEM_D + '.key', ITEM_F + '.value'], ['link_two.key', 'link_four.key']),
-                              ([ITEM_E + '.key.name'], ['link_three.*']),
-                              ([ITEM_E + '.key.name'], ['link_three.key.*']),
-                              ([ITEM_E + '.key.name'], ['link_three.key.name'])])
+                              ([ITEM_D + '.key', ITEM_F + '.value'], ['link_two.key', 'link_four.key'])])
     def test_invalidation_scope_positive_diffs(self, testapp, test_link_source_schema, diff, embedded_list):
         """ Tests a few possible edit + embedding_list combinations that should result in
             invalidation.
@@ -315,3 +307,72 @@ class TestInvalidationScope:
         secondary = {UUID1}
         with invalidation_scope_mocks(test_parent_type_schema, embedded_list, base_types=base_types):
             self.run_test_and_reset_secondary(registry, diff, invalidated, secondary, 1)
+
+
+###########################################################
+# Tests based on actual views defined in testing_views.py #
+###########################################################
+
+
+@pytest.fixture
+def invalidation_scope_biosample_data():
+    return [
+        {
+            'identifier': 'SNOID123',
+            'quality': 100,
+            'ranking': 1,
+            'alias': '123'
+        },
+        {
+            'identifier': 'SNOID456',
+            'quality': 98,
+            'ranking': 2,
+            'alias': '456'
+        },
+        {
+            'identifier': 'SNOID789',
+            'quality': 95,
+            'ranking': 3,
+            'alias': '789'
+        }
+    ]
+
+
+@pytest.fixture
+def invalidation_scope_biosource_data():
+    return [
+        {
+            'identifier': 'SNOIDABC',
+            'samples': ['SNOID123', 'SNOID456', 'SNOID789']
+        },
+        {
+            'identifier': 'SNOIDDEF',
+            'samples': ['SNOID456', 'SNOID789']
+        }
+    ]
+
+
+@pytest.fixture
+def invalidation_scope_biogroup_data():
+    return [{
+        'name': 'test-group',
+        'sources': 'SNOIDDEF'
+    }]
+
+
+@pytest.fixture
+def invalidation_scope_workbook(testapp, invalidation_scope_biosample_data, invalidation_scope_biosource_data,
+                                invalidation_scope_biogroup_data):
+    """ Posts 3 biosamples, 2 biosources and 1 biogroup for integrated testing. """
+    for biosample in invalidation_scope_biosample_data:
+        testapp.post_json('/TestingBiosampleSno', biosample, status=201)
+    for biosource in invalidation_scope_biosource_data:
+        testapp.post_json('/TestingBiosourceSno', biosource, status=201)
+    for biogroup in invalidation_scope_biogroup_data:
+        testapp.post_json('/TestingBiogroupSno', biogroup, status=201)
+
+
+class TestingInvalidationScopeIntegrated:
+
+    def test_invalidation_scope_simple_modification(self, testapp, invalidation_scope_workbook):
+        pass

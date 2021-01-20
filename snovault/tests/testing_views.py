@@ -713,3 +713,40 @@ class TestingNestedEnabled(Item):
             'string_field': 'world',
             'numerical_field': 100
         }]
+
+
+@collection(name='testing-biosample-sno', unique_key='testing_biosample_sno:identifier')
+class TestingBiosampleSno(Item):
+    """ Biosample integrated testing type. leaf type."""
+    item_type = 'testing_biosample_sno'
+    name_key = 'identifier'
+    schema = load_schema('snovault:test_schemas/TestingBiosampleSno.json')
+
+
+@collection(name='testing-biosource-sno', unique_key='testing_biosource_sno:identifier')
+class TestingBiosourceSno(Item):
+    """ Biosource integrated testing type.
+
+        This item contains an array of linkTo Biosamples.
+    """
+    item_type = 'testing_biosource_sno'
+    name_key = 'identifier'
+    schema = load_schema('snovault:test_schemas/TestingBiosourceSno.json')
+    embedded_list = [  # selective embed at this item
+        'samples.identifier',
+        'samples.quality'
+    ]
+
+
+@collection(name='testing-biogroup-sno', unique_key='testing_biogroup_sno:name')
+class TestingBiogroupSno(Item):
+    """ Biogroup integrated testing type.
+
+        Biogroup consists of an array of Biosource objects that consist of an array of Biosample objects.
+    """
+    item_type = 'testing_biogroup_sno'
+    name_key = 'name'
+    schema = load_schema('snovault:test_schemas/TestingBiogroupSno.json')
+    embedded_list = [
+        'sources.samples.*'  # embed everything at top level
+    ]

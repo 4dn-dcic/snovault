@@ -2,7 +2,7 @@ import structlog
 from elasticsearch.helpers import scan
 from ..interfaces import COLLECTIONS, TYPES
 from .interfaces import ELASTIC_SEARCH
-from ..util import DEFAULT_EMBEDS
+from ..util import DEFAULT_EMBEDS, crawl_schema
 
 
 log = structlog.getLogger(__name__)
@@ -191,31 +191,34 @@ def filter_invalidation_scope(registry, diff, invalidated_with_type, secondary_u
         properties = extract_type_properties(registry, invalidated_item_type)
         embedded_list = extract_type_embedded_list(registry, invalidated_item_type)
         for embed in embedded_list:
-            base_field, terminal_field = embed.split('.', 1)
+            split_embed = embed.split('.')
+            base_field, terminal_field = '.'.join(split_embed[0:-1]), split_embed[-1]
+            base_field_schema = crawl_schema(registry['types'], base_field, properties)
+            base_field_item_type = base_field_schema.get('linkTo', None)
 
             # resolve the item type of the base field by looking at the linkTo field first
-            base_field_props = properties.get(base_field, {})
-            base_field_item_type = None  # should never propagate
-            if 'linkTo' in base_field_props:  # direct linkTo
-                base_field_item_type = base_field_props['linkTo']
-            elif 'linkTo' in base_field_props.get('items', {}):  # array of linkTos
-                base_field_item_type = base_field_props['items']['linkTo']
-            elif base_field_props.get('type') == 'object':  # object field with linkTo
-                for prop_name, prop_details in base_field_props.get('properties').items():
-                    link_obj = prop_details.get('linkTo', None)
-                    if link_obj is not None:
-                        base_field_item_type = link_obj
-            elif base_field_props.get('type') == 'array':  # array of objects
-                array_of_obj_props = base_field_props.get('items').get('properties', {})
-                for prop_name, prop_details in array_of_obj_props.items():
-                    link_obj = prop_details.get('linkTo', None)
-                    if link_obj is not None:
-                        base_field_item_type = link_obj
-            else:
-                raise Exception("Encountered embed that is not a linkTo, array of linkTo's, array of object linkTo's "
-                                "or object field containing a linkTo \n"
-                                "embed: %s, base_field: %s, base_field_props: %s" % (embed, base_field,
-                                                                                     base_field_props))
+            # base_field_props = properties.get(base_field, {})
+            # base_field_item_type = None  # should never propagate
+            # if 'linkTo' in base_field_props:  # direct linkTo
+            #     base_field_item_type = base_field_props['linkTo']
+            # elif 'linkTo' in base_field_props.get('items', {}):  # array of linkTos
+            #     base_field_item_type = base_field_props['items']['linkTo']
+            # elif base_field_props.get('type') == 'object':  # object field with linkTo
+            #     for prop_name, prop_details in base_field_props.get('properties').items():
+            #         link_obj = prop_details.get('linkTo', None)
+            #         if link_obj is not None:
+            #             base_field_item_type = link_obj
+            # elif base_field_props.get('type') == 'array':  # array of objects
+            #     array_of_obj_props = base_field_props.get('items').get('properties', {})
+            #     for prop_name, prop_details in array_of_obj_props.items():
+            #         link_obj = prop_details.get('linkTo', None)
+            #         if link_obj is not None:
+            #             base_field_item_type = link_obj
+            # else:
+            #     raise Exception("Encountered embed that is not a linkTo, array of linkTo's, array of object linkTo's "
+            #                     "or object field containing a linkTo \n"
+            #                     "embed: %s, base_field: %s, base_field_props: %s" % (embed, base_field,
+            #                                                                          base_field_props))
 
             # Collect diffs from all possible item_types
             all_possible_diffs = []
@@ -233,9 +236,8 @@ def filter_invalidation_scope(registry, diff, invalidated_with_type, secondary_u
             # XXX VERY IMPORTANT: for this to work correctly, the fields used in calculated properties MUST
             # be embedded! In addition, if you embed * on a linkTo, modifications to that linkTo will ALWAYS
             # invalidate the item_type
-            if base_field in properties and \
-                    (any(terminal_field.endswith(field) for field in all_possible_diffs) or
-                     terminal_field.endswith('*')):
+            if (any(terminal_field.endswith(field) for field in all_possible_diffs) or
+                    terminal_field.endswith('*')):
                 item_type_is_invalidated[invalidated_item_type] = True
                 break
 
