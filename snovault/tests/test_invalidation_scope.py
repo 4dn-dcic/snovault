@@ -407,6 +407,12 @@ def invalidation_scope_workbook(testapp, invalidation_scope_biosample_data, inva
 
 class TestingInvalidationScopeIntegrated:
 
+    @staticmethod
+    def runtest(testapp, diff, invalidated, secondary, expected):
+        __test__ = False
+        filter_invalidation_scope(testapp.app.registry, diff, invalidated, secondary)
+        assert len(secondary) == expected
+
     def test_invalidation_scope_integrated_simple_modification(self, testapp, invalidation_scope_workbook):
         """ Integrated test that simulated patching the identifier field on biosample. Because identifier
             is an embed for biosource (direct) and also an embed for biogroup (*), all 3 items should be
@@ -416,8 +422,7 @@ class TestingInvalidationScopeIntegrated:
         diff = ['TestingBiosampleSno.identifier']
         invalidated = [(obj['@id'], obj['@type'][0]) for obj in sources + groups]
         secondary = {obj['@id'] for obj in sources + groups}
-        filter_invalidation_scope(testapp.app.registry, diff, invalidated, secondary)
-        assert len(secondary) == 3  # identifier is a direct embed so all 3 items should be invalidated
+        self.runtest(testapp, diff, invalidated, secondary, 3)
 
     def test_invalidation_scope_integrated_many_modifications(self, testapp, invalidation_scope_workbook):
         """ Integrated test that simulated patching the identifier field on biosample. Because identifier
@@ -428,8 +433,7 @@ class TestingInvalidationScopeIntegrated:
         diff = ['TestingBiosampleSno.alias', 'TestingBiosampleSno.ranking', 'TestingBiosampleSno.quality']
         invalidated = [(obj['@id'], obj['@type'][0]) for obj in sources + groups]
         secondary = {obj['@id'] for obj in sources + groups}
-        filter_invalidation_scope(testapp.app.registry, diff, invalidated, secondary)
-        assert len(secondary) == 3  # quality + * will pick up all
+        self.runtest(testapp, diff, invalidated, secondary, 3)  # quality + * will pick up all
 
     def test_invalidation_scope_integrated_partly_invisible_modification(self, testapp, invalidation_scope_workbook):
         """ Integrated test that simulates patching the ranking field on biosample. This field is not a
@@ -439,8 +443,7 @@ class TestingInvalidationScopeIntegrated:
         diff = ['TestingBiosampleSno.ranking']
         invalidated = [(obj['@id'], obj['@type'][0]) for obj in sources + groups]
         secondary = {obj['@id'] for obj in sources + groups}
-        filter_invalidation_scope(testapp.app.registry, diff, invalidated, secondary)
-        assert len(secondary) == 1  # ranking is not a direct embed for biosource, so only biogroup is invalidated
+        self.runtest(testapp, diff, invalidated, secondary, 1)
 
     def test_invalidation_scope_integrated_wholly_invisible_modification(self, testapp, invalidation_scope_workbook):
         """ Integrated test that simulates patching the identifier field on biosource. This field is not a
@@ -450,8 +453,7 @@ class TestingInvalidationScopeIntegrated:
         diff = ['TestingBiosourceSno.identifier']
         invalidated = [(obj['@id'], obj['@type'][0]) for obj in groups]
         secondary = {obj['@id'] for obj in groups}
-        filter_invalidation_scope(testapp.app.registry, diff, invalidated, secondary)
-        assert len(secondary) == 0  # identifier is not embedded in biogroup, so this edit is invisible
+        self.runtest(testapp, diff, invalidated, secondary, 0)
 
     def test_invalidation_scope_integrated_depth3_modification_matches(self, testapp, invalidation_scope_workbook):
         """ Integrated test that simulates patches the alias on biosource. This field is a direct embed on biosource
@@ -462,10 +464,9 @@ class TestingInvalidationScopeIntegrated:
         diff = ['TestingBiosampleSno.alias']
         invalidated = [(obj['@id'], obj['@type'][0]) for obj in sources + groups]
         secondary = {obj['@id'] for obj in sources + groups}
-        filter_invalidation_scope(testapp.app.registry, diff, invalidated, secondary)
-        assert len(secondary) == 3
+        self.runtest(testapp, diff, invalidated, secondary, 3)
 
-    def test_invalidation_scope_integrated_depth4_modification(self, testapp, invalidation_scope_workbook):
+    def test_invalidation_scope_integrated_depth4_modification_partial(self, testapp, invalidation_scope_workbook):
         """ Integrated test that simulates patches the specimen on individual. Since only biosample embeds this
             via *, so biosources should be pruned.
         """
@@ -473,5 +474,20 @@ class TestingInvalidationScopeIntegrated:
         diff = ['TestingIndividualSno.specimen']
         invalidated = [(obj['@id'], obj['@type'][0]) for obj in sources + samples]
         secondary = {obj['@id'] for obj in sources + samples}
-        filter_invalidation_scope(testapp.app.registry, diff, invalidated, secondary)
-        assert len(secondary) == 3
+        self.runtest(testapp, diff, invalidated, secondary, 3)
+
+    def test_invalidation_scope_integrated_depth4_modification_full(self, testapp, invalidation_scope_workbook):
+        """ Integrated test that simulates patches the full_name on individual. """
+        groups, sources, samples = invalidation_scope_workbook
+        diff = ['TestingIndividualSno.full_name']
+        invalidated = [(obj['@id'], obj['@type'][0]) for obj in sources + samples]
+        secondary = {obj['@id'] for obj in sources + samples}
+        self.runtest(testapp, diff, invalidated, secondary, 2)
+
+    def test_invalidation_scope_integrated_depth4_modification_invisible(self, testapp, invalidation_scope_workbook):
+        """ Integrated test that simulates patches the uid on individual. No links care about this field. """
+        groups, sources, samples = invalidation_scope_workbook
+        diff = ['TestingIndividualSno.uid']
+        invalidated = [(obj['@id'], obj['@type'][0]) for obj in sources + samples]
+        secondary = {obj['@id'] for obj in sources + samples}
+        self.runtest(testapp, diff, invalidated, secondary, 0)

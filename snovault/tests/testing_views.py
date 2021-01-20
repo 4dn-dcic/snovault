@@ -722,6 +722,13 @@ class TestingIndividualSno(Item):
     name_key = 'full_name'
     schema = load_schema('snovault:test_schemas/TestingIndividualSno.json')
 
+    @calculated_property(schema={
+        "title": "Last Name",
+        "type": "string",
+    })
+    def last_name(self, full_name):
+        return full_name.split()[1]
+
 
 @collection(name='testing-biosample-sno', unique_key='testing_biosample_sno:identifier')
 class TestingBiosampleSno(Item):
@@ -730,7 +737,7 @@ class TestingBiosampleSno(Item):
     name_key = 'identifier'
     schema = load_schema('snovault:test_schemas/TestingBiosampleSno.json')
     embedded_list = [
-        'contributor.*'
+        'contributor.specimen'
     ]
 
 
@@ -747,7 +754,8 @@ class TestingBiosourceSno(Item):
         'samples.identifier',
         'samples.quality',
         'sample_objects.associated_sample.alias',  # if a sample is included here, embed its alias
-        'contributor.last_name'
+        'contributor.full_name',
+        'contributor.last_name'  # calc prop, dependent on above embed
     ]
 
 
