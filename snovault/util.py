@@ -1,12 +1,13 @@
 import contextlib
+import datetime as datetime_module
 import functools
 import json
+import os
 import sys
 from copy import copy
 from datetime import datetime, timedelta
 
 import structlog
-from past.builtins import basestring
 from pyramid.httpexceptions import HTTPForbidden
 from pyramid.threadlocal import manager as threadlocal_manager
 
@@ -53,7 +54,7 @@ def dictionary_lookup(dictionary, key):
     if not isinstance(dictionary, dict) or (key not in dictionary):
         log.error('Got dictionary KeyError with %s and %s' % (dictionary, key))
         return None
-        #raise DictionaryKeyError(dictionary=dictionary, key=key)  this causes MPIndexer exception - will 3/10/2020
+        # raise DictionaryKeyError(dictionary=dictionary, key=key)  this causes MPIndexer exception - will 3/10/2020
     else:
         return dictionary[key]
 
@@ -115,7 +116,7 @@ def log_function_call(log_ref, func_name, extra=None):
 
 
 def select_distinct_values(request, value_path, *from_paths):
-    if isinstance(value_path, basestring):
+    if isinstance(value_path, str):
         value_path = value_path.split('.')
 
     values = from_paths
@@ -137,13 +138,13 @@ def get_root_request():
 
 
 def ensurelist(value):
-    if isinstance(value, basestring):
+    if isinstance(value, str):
         return [value]
     return value
 
 
 def uuid_to_path(request, obj, path):
-    if isinstance(path, basestring):
+    if isinstance(path, str):
         path = path.split('.')
     if not path:
         return
@@ -170,7 +171,7 @@ def uuid_to_path(request, obj, path):
 
 
 def simple_path_ids(obj, path):
-    if isinstance(path, basestring):
+    if isinstance(path, str):
         path = path.split('.')
     if not path:
         yield obj
@@ -191,7 +192,7 @@ def expand_path(request, obj, path):
     """
     Used with ?expand=... view. See resource_views.item_view_expand
     """
-    if isinstance(path, basestring):
+    if isinstance(path, str):
         path = path.split('.')
     if not path:
         return
@@ -235,7 +236,7 @@ def find_collection_subtypes(registry, item_type, types_covered=None):
         # this works for item name (MyItem) and item type (my_name)
         registry_type = registry[TYPES][item_type]
     except KeyError:
-        return [] # no types found
+        return []  # no types found
     # add the item_type of this collection if applicable
     if hasattr(registry_type, 'item_type'):
         if registry_type.name not in types_covered:
@@ -280,13 +281,15 @@ def crawl_schema(types, field_path, schema_cursor, split_path=None):
     curr_field = split_path[0]
     schema_cursor = schema_cursor.get(curr_field)
     if not schema_cursor:
-        raise Exception('Could not find schema field for: %s. Field not found. Failed at: %s' % (field_path, curr_field))
+        raise Exception('Could not find schema field for: %s. Field not found. Failed at: %s'
+                        % (field_path, curr_field))
 
     # schema_cursor should always be a dictionary
     if not isinstance(schema_cursor, dict):
-        raise Exception('Could not find schema field for: %s. Non-dictionary schema. Failed at: %s' % (field_path, curr_field))
+        raise Exception('Could not find schema field for: %s. Non-dictionary schema. Failed at: %s'
+                        % (field_path, curr_field))
 
-    ## base case. We have found the desired schema
+    # base case. We have found the desired schema
     if len(split_path) == 1:
         return schema_cursor
 
@@ -303,7 +306,8 @@ def crawl_schema(types, field_path, schema_cursor, split_path=None):
         try:
             linkTo_type = types.all[linkTo]
         except KeyError:
-            raise Exception('Could not find schema field for: %s. Invalid linkTo. Failed at: %s' % (field_path, curr_field))
+            raise Exception('Could not find schema field for: %s. Invalid linkTo. Failed at: %s'
+                            % (field_path, curr_field))
         linkTo_schema = linkTo_type.schema
         schema_cursor = linkTo_schema['properties'] if 'properties' in linkTo_schema else linkTo_schema
 
@@ -456,7 +460,7 @@ def expand_val_for_embedded_model(request, obj_val, downstream_model, field_name
             new_agg = {'parent': parent_path, 'embedded_path': agg_emb_path, 'item': obj_embedded}
             agg_items[field_name]['items'].append(new_agg)
         return obj_embedded
-    elif isinstance(obj_val, basestring):
+    elif isinstance(obj_val, str):
         # get the @@object view of obj to embed
         # TODO: per-field invalidation by adding uuids to request._linked_uuids
         # ONLY if the field is used in downstream_model (i.e. in embedded_list)
@@ -518,7 +522,7 @@ def build_embedded_model(fields_to_embed):
     return embedded_model
 
 
-def add_default_embeds(item_type, types, embeds, schema={}):
+def add_default_embeds(item_type, types, embeds, schema=None):
     """
     Perform default processing on the embedded_list of an item_type.
     Three part process that automatically builds a list of embed paths using
@@ -526,6 +530,8 @@ def add_default_embeds(item_type, types, embeds, schema={}):
     and then finally adding the default embeds to all the linkTo paths generated.
     Used in fourfront/../types/base.py AND snovault create mapping
     """
+    if schema is None:
+        schema = {}
     # remove duplicate embeds
     embeds = list(set(list(embeds)))
     embeds.sort()
@@ -559,7 +565,7 @@ def expand_embedded_list(item_type, types, embeds, schema, processed_embeds):
             # be cases of fields that are not valid for default embeds
             # but are still themselves valid fields
             processed_embeds.remove(embed_path)
-            print(error_message, file = sys.stderr)
+            print(error_message, file=sys.stderr)
         else:
             embeds_to_add.extend(path_embeds_to_add)
     return embeds_to_add, processed_embeds
@@ -632,7 +638,8 @@ def crawl_schemas_by_embeds(item_type, types, split_path, schema):
     error_message = None
     linkTo_path = '.'.join(split_path)
     if len(split_path) == 1:
-        error_message = '{} has a bad embed: {} is a top-level field. Did you mean: "{}.*"?.'.format(item_type, split_path[0], split_path[0])
+        error_message = ('{} has a bad embed: {} is a top-level field. Did you mean: "{}.*"?.'
+                         .format(item_type, split_path[0], split_path[0]))
     for idx in range(len(split_path)):
         element = split_path[idx]
         # schema_cursor should always be a dictionary if we have more split_fields
@@ -670,7 +677,8 @@ def crawl_schemas_by_embeds(item_type, types, split_path, schema):
                 linkTo_schema = linkTo_type.schema
                 schema_cursor = linkTo_schema['properties'] if 'properties' in linkTo_schema else linkTo_schema
                 if '@id' not in schema_cursor or 'display_title' not in schema_cursor:
-                    error_message = '{} has a bad embed: {} object does not have @id/display_title.'.format(item_type, linkTo_path)
+                    error_message = ('{} has a bad embed: {} object does not have @id/display_title.'
+                                     .format(item_type, linkTo_path))
                     return error_message, embeds_to_add
                 # we found a terminal linkTo embed
                 if idx == len(split_path) - 1:
@@ -690,7 +698,8 @@ def crawl_schemas_by_embeds(item_type, types, split_path, schema):
                         embeds_to_add.append(linkTo_path)
                     return error_message, embeds_to_add
         else:
-            error_message = '{} has a bad embed: {} is not contained within the parent schema. See {}.'.format(item_type, element, linkTo_path)
+            error_message = ('{} has a bad embed: {} is not contained within the parent schema. See {}.'
+                             .format(item_type, element, linkTo_path))
             return error_message, embeds_to_add
     # really shouldn't hit this return, but leave as a back up
     return error_message, embeds_to_add
@@ -734,7 +743,8 @@ def process_aggregated_items(request):
                 found_value = recursively_process_field(pointer, split_field)
                 # terminal dicts will create issues with the mapping. Print a warning and skip
                 if isinstance(found_value, dict):
-                    log.error('ERROR. Found dictionary terminal value for field %s when aggregating %s items. Context is: %s'
+                    log.error('ERROR. Found dictionary terminal value for field %s when aggregating %s items.'
+                              ' Context is: %s'
                               % (field, agg_on, str(request.context.uuid)))
                     continue
                 proc_pointer = proc_item
@@ -950,3 +960,14 @@ class CachedField:
             self.name, self._update_function, self.timeout
         )
 
+
+def generate_indexer_namespace_for_testing(prefix='sno'):
+    travis_job_id = os.environ.get('TRAVIS_JOB_ID')
+    if travis_job_id:
+        return travis_job_id
+    else:
+        # We've experimentally determined that it works pretty well to just use the timestamp.
+        return "%s-test-%s" % (prefix, int(datetime_module.datetime.now().timestamp() * 1000000))
+
+
+INDEXER_NAMESPACE_FOR_TESTING = generate_indexer_namespace_for_testing()
