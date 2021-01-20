@@ -484,10 +484,16 @@ class TestingInvalidationScopeIntegrated:
         secondary = {obj['@id'] for obj in sources + samples}
         self.runtest(testapp, diff, invalidated, secondary, 2)
 
-    def test_invalidation_scope_integrated_depth4_modification_invisible(self, testapp, invalidation_scope_workbook):
-        """ Integrated test that simulates patches the uid on individual. No links care about this field. """
+    @pytest.mark.parametrize('diff,expected',
+                             [(['TestingIndividualSno.uid'], 1),  # only biogroup is in scope
+                              (['TestingIndividualSno.full_name'], 3),  # biosource + biogroup
+                              (['TestingIndividualSno.specimen'], 4),  # biosamples + biogroup
+                              (['TestingIndividualSno.uid', 'TestingIndividualSno.specimen',
+                                'TestingIndividualSno.full_name'], 6),  # all care
+                              ])
+    def test_invalidation_scope_integrated_all(self, testapp, invalidation_scope_workbook, diff, expected):
+        """ Integrated test that simulates many diffs checking that the right # of items were invalidated. """
         groups, sources, samples = invalidation_scope_workbook
-        diff = ['TestingIndividualSno.uid']
-        invalidated = [(obj['@id'], obj['@type'][0]) for obj in sources + samples]
-        secondary = {obj['@id'] for obj in sources + samples}
-        self.runtest(testapp, diff, invalidated, secondary, 0)
+        invalidated = [(obj['@id'], obj['@type'][0]) for obj in groups + sources + samples]
+        secondary = {obj['@id'] for obj in groups + sources + samples}
+        self.runtest(testapp, diff, invalidated, secondary, expected)

@@ -769,5 +769,6 @@ class TestingBiogroupSno(Item):
     name_key = 'name'
     schema = load_schema('snovault:test_schemas/TestingBiogroupSno.json')
     embedded_list = [
-        'sources.samples.*'  # embed everything at top level
+        'sources.samples.*',  # embed everything at top level
+        'sources.contributor.*'
     ]
