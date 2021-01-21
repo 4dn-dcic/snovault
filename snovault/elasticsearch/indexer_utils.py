@@ -199,14 +199,33 @@ def filter_invalidation_scope(registry, diff, invalidated_with_type, secondary_u
             base_field, terminal_field = '.'.join(split_embed[0:-1]), split_embed[-1]
             base_field_schema = crawl_schema(registry['types'], base_field, properties)
             base_field_item_type = base_field_schema.get('linkTo', None)
-            if base_field_item_type is None:  # resolve array
-                if 'items' in base_field_schema:
-                    if 'properties' in base_field_schema:  # should be drilled down above
-                        raise Exception('should not happen')  # XXX: remove/clarify once verified
+
+            # recursive helper function that will drill down as much as necessary
+            def locate_link_to(schema_cursor):
+                if 'items' in schema_cursor:  # array
+                    if 'properties' in schema_cursor['items']:
+                        for field_name, details in schema_cursor['items']['properties'].items():
+                            if base_field.endswith(field_name):
+                                if 'linkTo' in details:
+                                    return details['linkTo']
+                                else:
+                                    return locate_link_to(details)
                     else:
-                        base_field_item_type = base_field_schema['items']['linkTo']
-                else:  # should be drilled down above
-                    raise Exception('should not happen')  # XXX: remove/clarify once verified
+                        return schema_cursor['items']['linkTo']
+                elif 'properties' in schema_cursor:  # object
+                    for field_name, details in schema_cursor['properties'].items():
+                        if base_field.endswith(field_name):
+                            if 'linkTo' in details:
+                                return details['linkTo']
+                            else:
+                                return locate_link_to(details)
+                else:
+                    log.error(schema_cursor)
+                    raise Exception('Unexpected')
+
+            # if we are not a top level linkTo, drill down
+            if base_field_item_type is None:
+                base_field_item_type = locate_link_to(base_field_schema)
 
             # Collect diffs from all possible item_types
             all_possible_diffs = diffs.get(base_field_item_type, [])
@@ -220,7 +239,7 @@ def filter_invalidation_scope(registry, diff, invalidated_with_type, secondary_u
             # XXX VERY IMPORTANT: for this to work correctly, the fields used in calculated properties MUST
             # be embedded! In addition, if you embed * on a linkTo, modifications to that linkTo will ALWAYS
             # invalidate the item_type
-            if (any(terminal_field.endswith(field) for field in all_possible_diffs) or
+            if (any(terminal_field == field for field in all_possible_diffs) or
                     terminal_field.endswith('*')):
                 item_type_is_invalidated[invalidated_item_type] = True
                 break
@@ -230,3 +249,11 @@ def filter_invalidation_scope(registry, diff, invalidated_with_type, secondary_u
         if invalidated_item_type not in item_type_is_invalidated:
             secondary_uuids.discard(invalidated_uuid)
             item_type_is_invalidated[invalidated_item_type] = False
+
+    # XXX: Enable to get debugging information on invalidation scope
+    # def _sort(tp):
+    #     return tp[0]
+    # log.error('Diff: %s Invalidated: %s Cleared: %s' % (diffs, sorted(list((k, v) for k, v in item_type_is_invalidated.items()
+    #                                                                        if v is True), key=_sort),
+    #                                                            sorted(list((k, v) for k, v in item_type_is_invalidated.items()
+    #                                                                        if v is False), key=_sort)))

@@ -48,8 +48,11 @@ def build_diff_from_request(context, request):
         item_type = context.type_info.name
         body = json.loads(request.body)
         dm = DiffManager(label=item_type)
+    except json.decoder.JSONDecodeError:
+        log.info('Request body is not valid JSON!')  # can happen from indirect patch, such as with access key
+        return None
     except Exception as e:
-        log.error('Error encountered building diff from request: %s' % e)
+        log.error('Unknown error encountered building diff from request: %s' % e)
         return None
     return dm.patch_diffs(body)
 
