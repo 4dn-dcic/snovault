@@ -78,16 +78,19 @@ def elasticsearch_host_port():
     return webtest.http.get_free_port()
 
 
+@pytest.fixture(scope='session')
+def elasticsearch_server_dir(tmpdir_factory):
+    return str(tmpdir_factory.mktemp('elasticsearch', numbered=True))
+
+
 @pytest.mark.fixture_cost(10)
 @pytest.yield_fixture(scope='session')
-def elasticsearch_server(tmpdir_factory, elasticsearch_host_port, remote_es):
-    notice_pytest_fixtures(tmpdir_factory, elasticsearch_host_port, remote_es)
+def elasticsearch_server(elasticsearch_server_dir, elasticsearch_host_port, remote_es):
+    notice_pytest_fixtures(elasticsearch_host_port, remote_es)
     if not remote_es:
         # spawn a new one
         host, port = elasticsearch_host_port
-        tmpdir = tmpdir_factory.mktemp('elasticsearch', numbered=True)
-        tmpdir = str(tmpdir)
-        process = elasticsearch_server_process(str(tmpdir), host=host, port=port)
+        process = elasticsearch_server_process(elasticsearch_server_dir, host=host, port=port)
 
         yield 'http://%s:%d' % (host, port)
 
