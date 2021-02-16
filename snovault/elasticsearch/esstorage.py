@@ -386,7 +386,7 @@ class ElasticSearchStorage(object):
         uuids_linking_to_item, _ = find_uuids_for_indexing(self.registry, set([rid]))
         # remove the item itself from the list
         uuids_linking_to_item = uuids_linking_to_item - set([rid])
-        if len(uuids_linking_to_item) > 0:
+        if 0 < len(uuids_linking_to_item) < 1000:  # more than 1000 can trigger 504
             # Return list of { '@id', 'display_title', 'uuid' } in 'comment'
             # property of HTTPException response to assist with any manual unlinking.
             for linking_uuid in uuids_linking_to_item:
