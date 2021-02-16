@@ -40,6 +40,9 @@
     },
     "uuid": {
       "type": "string"
+    },
+    "counter":{
+      "type": "string"
     }
   }
 }

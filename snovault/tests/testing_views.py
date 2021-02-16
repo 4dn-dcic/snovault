@@ -162,6 +162,7 @@ class Item(BaseItem):
     item_type = 'item'
     AbstractCollection = AbstractCollection
     Collection = Collection
+    default_diff = []
     STATUS_ACL = {
         # standard_status
         'released': ALLOW_CURRENT,
@@ -757,6 +758,17 @@ class TestingBiosourceSno(Item):
         'contributor.full_name',
         'contributor.last_name'  # calc prop, dependent on above embed
     ]
+    default_diff = [  # the counter is updated
+        'counter'
+    ]
+
+    def _update(self, properties, sheets=None):
+        """ Updates the counter in addition """
+        if 'counter' in properties:
+            properties['counter'] += 1
+        else:
+            properties['counter'] = 1
+        super(TestingBiosourceSno, self)._update(properties, sheets)
 
 
 @collection(name='testing-biogroup-sno', unique_key='testing_biogroup_sno:name')
@@ -769,6 +781,7 @@ class TestingBiogroupSno(Item):
     name_key = 'name'
     schema = load_schema('snovault:test_schemas/TestingBiogroupSno.json')
     embedded_list = [
+        'sources.counter',  # get the counter
         'sources.samples.*',  # embed everything at top level
         'sources.contributor.*'
     ]

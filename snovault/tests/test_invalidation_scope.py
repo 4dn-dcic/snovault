@@ -19,18 +19,47 @@ ITEM_F = 'Item_F'
 
 
 @contextmanager
-def invalidation_scope_mocks(schema, embedded_list, base_types=None):
-    """ Quick wrapper for a common operation in this testing - will patch base_types as well if specified """
+def type_properties_mock(schema):
     with mock.patch('snovault.elasticsearch.indexer_utils.extract_type_properties',
                     return_value=schema):
-        with mock.patch('snovault.elasticsearch.indexer_utils.extract_type_embedded_list',
-                        return_value=embedded_list):
-            if base_types is not None:
-                with mock.patch('snovault.elasticsearch.indexer_utils.extract_base_types',
-                                return_value=base_types):
+        yield
+
+
+@contextmanager
+def type_embedded_list_mock(embedded_list):
+    with mock.patch('snovault.elasticsearch.indexer_utils.extract_type_embedded_list',
+                    return_value=embedded_list):
+        yield
+
+
+@contextmanager
+def type_default_diff_mock(use_default_diff):
+    if use_default_diff:
+        yield
+    else:
+        with mock.patch('snovault.elasticsearch.indexer_utils.extract_type_default_diff',
+                        return_value=[]):
+            yield
+
+
+@contextmanager
+def type_base_types_mock(base_types):
+    if base_types is not None:
+        with mock.patch('snovault.elasticsearch.indexer_utils.extract_base_types',
+                        return_value=base_types):
+            yield
+    else:
+        yield
+
+
+@contextmanager
+def invalidation_scope_mocks(schema, embedded_list, base_types=None, use_default_diff=False):
+    """ Quick wrapper for a common operation in this testing - will patch base_types as well if specified """
+    with type_properties_mock(schema):
+        with type_embedded_list_mock(embedded_list):
+            with type_default_diff_mock(use_default_diff):
+                with type_base_types_mock(base_types):
                     yield
-            else:
-                yield
 
 
 @pytest.fixture
@@ -453,7 +482,7 @@ class TestingInvalidationScopeIntegrated:
         diff = ['TestingBiosourceSno.identifier']
         invalidated = [(obj['@id'], obj['@type'][0]) for obj in groups]
         secondary = {obj['@id'] for obj in groups}
-        self.runtest(testapp, diff, invalidated, secondary, 0)
+        self.runtest(testapp, diff, invalidated, secondary, 1)  # answer is 1 because of default_diff
 
     def test_invalidation_scope_integrated_depth3_modification_matches(self, testapp, invalidation_scope_workbook):
         """ Integrated test that simulates patches the alias on biosource. This field is a direct embed on biosource
@@ -497,3 +526,12 @@ class TestingInvalidationScopeIntegrated:
         invalidated = [(obj['@id'], obj['@type'][0]) for obj in groups + sources + samples]
         secondary = {obj['@id'] for obj in groups + sources + samples}
         self.runtest(testapp, diff, invalidated, secondary, expected)
+
+    def test_invalidation_scope_default_diff(self, testapp, invalidation_scope_workbook):
+        """ Integrated test verifies that default_diff is added correctly
+            ie: diff should not trigger invalidation, but default_diff will
+        """
+        groups, sources, samples = invalidation_scope_workbook
+        invalidated = [(obj['@id'], obj['@type'][0]) for obj in groups + sources + samples]
+        secondary = {obj['@id'] for obj in groups + sources + samples}
+        self.runtest(testapp, ['TestingBiosourceSno.identifier'], invalidated, secondary, 1)

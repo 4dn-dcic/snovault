@@ -111,6 +111,11 @@ def extract_type_embedded_list(registry, invalidated_item_type):
     return registry['types'][invalidated_item_type].embedded_list
 
 
+def extract_type_default_diff(registry, invalidated_item_type):
+    """ Helper function that extracts the default diff for this item, if one exists. """
+    return getattr(registry['types'][invalidated_item_type], 'default_diff', [])
+
+
 def extract_base_types(registry, item_type):
     """ Helper function, useful for mocking """
     return registry[TYPES][item_type].base_types
@@ -151,6 +156,10 @@ def build_diff_metadata(registry, diff):
         else:
             diffs[modified_item_type].append(modified_field)
 
+        default_diff = extract_type_default_diff(registry, modified_item_type)
+        if default_diff:
+            diffs[modified_item_type].extend(default_diff)
+
         modified_item_parent_types = determine_parent_types(registry, modified_item_type)
         if modified_item_parent_types:
             child_to_parent_type[modified_item_type] = modified_item_parent_types
@@ -171,7 +180,6 @@ def filter_invalidation_scope(registry, diff, invalidated_with_type, secondary_u
     :param secondary_uuids: primary set of uuids to be invalidated
     """
     skip, diffs, child_to_parent_type = build_diff_metadata(registry, diff)
-
     # go through all invalidated uuids, looking at the embedded list of the item type
     item_type_is_invalidated = {}
     for invalidated_uuid, invalidated_item_type in invalidated_with_type:

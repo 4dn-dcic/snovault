@@ -263,6 +263,7 @@ class Item(Resource):
     rev = {}
     aggregated_items = {}
     embedded_list = []
+    default_diff = []
     filtered_rev_statuses = ()
     schema = None
     AbstractCollection = AbstractCollection
