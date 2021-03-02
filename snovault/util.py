@@ -320,7 +320,8 @@ def crawl_schema(types, field_path, schema_cursor, split_path=None):
 
 
 # Terminal fields that are added to the embedded list for every embedded item
-DEFAULT_EMBEDS = ['.@id', '.@type', '.display_title', '.uuid', '.principals_allowed.*']
+# Status must now be a default embed, since it can effect principals_allowed
+DEFAULT_EMBEDS = ['.@id', '.@type', '.display_title', '.uuid', '.status', '.principals_allowed.*']
 
 
 def secure_embed(request, item_path, addition='@@object'):
