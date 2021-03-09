@@ -12,14 +12,35 @@ from ..util import (
 
 def test_generate_indexer_namespace_for_testing():
 
-    with override_environ(TRAVIS_JOB_ID="17"):
+    with override_environ(TRAVIS_JOB_ID="17", TEST_JOB_ID=None):
         ns = generate_indexer_namespace_for_testing()
         assert ns == "sno-test-17-"
 
         ns = generate_indexer_namespace_for_testing('foo')
         assert ns == "foo-test-17-"
 
-    with override_environ(TRAVIS_JOB_ID=None):
+    with override_environ(TRAVIS_JOB_ID=None, TEST_JOB_ID="17"):
+        ns = generate_indexer_namespace_for_testing()
+        assert ns == "sno-test-17-"
+
+        ns = generate_indexer_namespace_for_testing('foo')
+        assert ns == "foo-test-17-"
+
+    with override_environ(TRAVIS_JOB_ID="17", TEST_JOB_ID="18"):
+        ns = generate_indexer_namespace_for_testing()
+        assert ns == "sno-test-18-"
+
+        ns = generate_indexer_namespace_for_testing('foo')
+        assert ns == "foo-test-18-"
+
+    with override_environ(TEST_JOB_ID="snow-test-19"):
+        ns = generate_indexer_namespace_for_testing()
+        assert ns == "snow-test-19"
+
+        ns = generate_indexer_namespace_for_testing('foo')
+        assert ns == "snow-test-19"
+
+    with override_environ(TRAVIS_JOB_ID=None, TEST_JOB_ID=None):
         ns = generate_indexer_namespace_for_testing('foo')
         assert re.match("foo-test-[0-9]+-", ns)
 
