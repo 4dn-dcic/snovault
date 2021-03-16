@@ -29,6 +29,7 @@ def includeme(config):
     config.include('.cached_views')
     config.include('.esstorage')
     config.include('.indexer_queue')
+    config.include('.indexer_utils')  # has invalidation_scope route
     config.include('.indexer')
     if asbool(settings.get('mpindexer')):
         config.include('.mpindexer')

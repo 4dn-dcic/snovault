@@ -1,11 +1,18 @@
 import structlog
 from elasticsearch.helpers import scan
+from pyramid.view import view_config
+from pyramid.exceptions import HTTPBadRequest
 from ..interfaces import COLLECTIONS, TYPES
 from .interfaces import ELASTIC_SEARCH
-from ..util import DEFAULT_EMBEDS, crawl_schema
+from ..util import DEFAULT_EMBEDS, crawl_schema, debug_log
 
 
 log = structlog.getLogger(__name__)
+
+
+def includeme(config):
+    config.add_route('compute_invalidation_scope', '/compute_invalidation_scope')
+    config.scan(__name__)
 
 
 def get_namespaced_index(config, index):
@@ -167,7 +174,7 @@ def build_diff_metadata(registry, diff):
     return skip, diffs, child_to_parent_type
 
 
-def filter_invalidation_scope(registry, diff, invalidated_with_type, secondary_uuids):
+def filter_invalidation_scope(registry, diff, invalidated_with_type, secondary_uuids, verbose=False):
     """ Function that given a diff in the following format:
             ItemType.base_field.terminal_field --> {ItemType: base_field.terminal_field} intermediary
         And a list of invalidated uuids with their type information as a 2-tuple:
@@ -178,6 +185,7 @@ def filter_invalidation_scope(registry, diff, invalidated_with_type, secondary_u
     :param diff: a diff of the change (from SQS), see build_diff_from_request
     :param invalidated_with_type: list of 2-tuple (uuid, item_type)
     :param secondary_uuids: primary set of uuids to be invalidated
+    :param verbose: specifies if we would like to return debugging info
     """
     skip, diffs, child_to_parent_type = build_diff_metadata(registry, diff)
     # go through all invalidated uuids, looking at the embedded list of the item type
@@ -265,3 +273,33 @@ def filter_invalidation_scope(registry, diff, invalidated_with_type, secondary_u
     #                                                                        if v is True), key=_sort),
     #                                                            sorted(list((k, v) for k, v in item_type_is_invalidated.items()
     #                                                                        if v is False), key=_sort)))
+    if verbose:  # noQA this function is intended to be considered 'void' but will return info if asked - Will
+        return item_type_is_invalidated
+
+
+@view_config(route_name='compute_invalidation_scope', request_method='POST', permission='index')
+@debug_log
+def compute_invalidation_scope(context, request):
+    """ Computes invalidation scope for a given source item type against a target item type. """
+    source_type = request.json.get('source_type', None)
+    target_type = request.json.get('target_type', None)
+    if not source_type or not target_type:
+        raise HTTPBadRequest('Missing required parameters: source_type, target_type')
+    source_type_schema = request.registry[TYPES][source_type].schema
+    result = {
+        'Invalidated': [],
+        'Cleared': []
+    }
+
+    # Walk schema, simulating an edit
+    for property, _ in source_type_schema['properties'].items():
+        dummy_diff = ['.'.join([source_type, property])]
+        invalidated_with_type = [('dummy', target_type)]
+        _, inv = filter_invalidation_scope(request.registry, dummy_diff, invalidated_with_type, set(),
+                                           verbose=True).items()
+        if inv:
+            result['Invalidated'].append(property)
+        else:
+            result['Cleared'].append(property)
+
+    return result

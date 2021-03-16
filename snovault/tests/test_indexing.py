@@ -1630,6 +1630,18 @@ def test_elasticsearch_item_embedded_agg(app, testapp, indexer_testapp, es_based
     assert target_uuid in [x['uuid'] for x in res.json['uuids_linking_to']]
 
 
+class TestInvalidationScopeView:
+    """ Requires ES Testapp, so in this file. """
+
+    def test_invalidation_scope_view_basic(self, indexer_testapp):
+        req = {
+            'source_type': 'TestingBiosampleSno',
+            'target_type': 'TestingBiosourceSno'
+        }
+        scope = indexer_testapp.post_json('/compute_invalidation_scope', req)
+        #import pdb; pdb.set_trace()
+
+
 def test_assert_transactions_table_is_gone(app):
     """
     A bit of a strange location for this test, but we need the app and
