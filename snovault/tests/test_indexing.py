@@ -1640,6 +1640,7 @@ class TestInvalidationScopeView:
         }
         scope = indexer_testapp.post_json('/compute_invalidation_scope', req)
         #import pdb; pdb.set_trace()
+        # TODO test me
 
 
 def test_assert_transactions_table_is_gone(app):

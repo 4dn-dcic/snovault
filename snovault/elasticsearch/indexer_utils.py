@@ -287,19 +287,21 @@ def compute_invalidation_scope(context, request):
         raise HTTPBadRequest('Missing required parameters: source_type, target_type')
     source_type_schema = request.registry[TYPES][source_type].schema
     result = {
+        'Source Type': source_type,
+        'Target Type': target_type,
         'Invalidated': [],
         'Cleared': []
     }
 
     # Walk schema, simulating an edit
-    for property, _ in source_type_schema['properties'].items():
-        dummy_diff = ['.'.join([source_type, property])]
+    for prop, _ in source_type_schema['properties'].items():
+        dummy_diff = ['.'.join([source_type, prop])]
         invalidated_with_type = [('dummy', target_type)]
-        _, inv = filter_invalidation_scope(request.registry, dummy_diff, invalidated_with_type, set(),
-                                           verbose=True).items()
-        if inv:
-            result['Invalidated'].append(property)
+        invalidated_metadata = filter_invalidation_scope(request.registry, dummy_diff, invalidated_with_type, set(),
+                                                         verbose=True)
+        if invalidated_metadata.get(target_type, False):
+            result['Invalidated'].append(prop)
         else:
-            result['Cleared'].append(property)
+            result['Cleared'].append(prop)
 
     return result
