@@ -1631,16 +1631,30 @@ def test_elasticsearch_item_embedded_agg(app, testapp, indexer_testapp, es_based
 
 
 class TestInvalidationScopeView:
-    """ Requires ES Testapp, so in this file. """
+    """ Integrated testing of invalidation scope - requires ES component, so in this file. """
 
     def test_invalidation_scope_view_basic(self, indexer_testapp):
         req = {
             'source_type': 'TestingBiosampleSno',
             'target_type': 'TestingBiosourceSno'
         }
-        scope = indexer_testapp.post_json('/compute_invalidation_scope', req)
-        #import pdb; pdb.set_trace()
-        # TODO test me
+        scope = indexer_testapp.post_json('/compute_invalidation_scope', req).json
+        invalidated = ['alias', 'identifier', 'quality']
+        assert sorted(scope['Invalidated']) == invalidated
+
+    @pytest.mark.parametrize('source_type, target_type, invalidated', [
+        ('TestingBiosourceSno', 'TestingBiogroupSno', [
+            'schema_version', 'identifier', 'samples', 'sample_objects', 'contributor',
+            'counter', 'uuid'  # everything invalidates due to default_diff embed
+        ]),  # TODO add more
+    ])
+    def test_invalidation_scope_view_parametrized(self, indexer_testapp, source_type, target_type, invalidated):
+        req = {
+            'source_type': source_type,
+            'target_type': target_type
+        }
+        scope = indexer_testapp.post_json('/compute_invalidation_scope', req).json
+        assert sorted(scope['Invalidated']) == sorted(invalidated)
 
 
 def test_assert_transactions_table_is_gone(app):

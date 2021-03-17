@@ -155,7 +155,7 @@ def build_diff_metadata(registry, diff):
     skip = False  # if a modified field is a default embed, EVERYTHING has to be invalidated
     for _d in diff:
         modified_item_type, modified_field = _d.split('.', 1)
-        if ('.' + modified_field) in DEFAULT_EMBEDS + ['.status']:  # XXX: 'status' is an unnamed default embed?
+        if ('.' + modified_field) in DEFAULT_EMBEDS:
             skip = True
             break
         if modified_item_type not in diffs:
@@ -192,7 +192,14 @@ def filter_invalidation_scope(registry, diff, invalidated_with_type, secondary_u
     item_type_is_invalidated = {}
     for invalidated_uuid, invalidated_item_type in invalidated_with_type:
         if skip is True:  # if we detected a change to a default embed, invalidate everything
-            break
+
+            # if in debug mode, populate invalidation metadata at the expense of performance
+            if verbose:
+                if invalidated_item_type not in item_type_is_invalidated:
+                    item_type_is_invalidated[invalidated_item_type] = True
+                continue
+            else:  # in production, exit immediately if we see this, as this works by side-effect
+                break
 
         # remove this uuid if its item type has been seen before and found to
         # not be invalidated
@@ -280,7 +287,15 @@ def filter_invalidation_scope(registry, diff, invalidated_with_type, secondary_u
 @view_config(route_name='compute_invalidation_scope', request_method='POST', permission='index')
 @debug_log
 def compute_invalidation_scope(context, request):
-    """ Computes invalidation scope for a given source item type against a target item type. """
+    """ Computes invalidation scope for a given source item type against a target item type.
+        Arguments:
+            source_type: item type whose edits we'd like to investigate
+            target_type: "impacted" type ie: assume this type was invalidated
+        Response:
+            source/target type are given back
+            Invalidated: list of fields on source_type that, if modified, trigger invalidation of target_type
+            Cleared: list of fields on source_type that, if modified, do not trigger invalidation of target_type
+    """
     source_type = request.json.get('source_type', None)
     target_type = request.json.get('target_type', None)
     if not source_type or not target_type:
@@ -293,8 +308,10 @@ def compute_invalidation_scope(context, request):
         'Cleared': []
     }
 
-    # Walk schema, simulating an edit
-    for prop, _ in source_type_schema['properties'].items():
+    # Walk schema, simulating an edit and computing invalidation scope per field, recording result
+    for prop, meta in source_type_schema['properties'].items():
+        if 'calculatedProperty' in meta:
+            continue  # we cannot patch calc props, so behavior here is irrelevant
         dummy_diff = ['.'.join([source_type, prop])]
         invalidated_with_type = [('dummy', target_type)]
         invalidated_metadata = filter_invalidation_scope(request.registry, dummy_diff, invalidated_with_type, set(),
