@@ -963,12 +963,19 @@ class CachedField:
 
 
 def generate_indexer_namespace_for_testing(prefix='sno'):
-    travis_job_id = os.environ.get('TRAVIS_JOB_ID')
-    if travis_job_id:
-        return travis_job_id
+    test_job_id = os.environ.get('TEST_JOB_ID') or os.environ.get('TRAVIS_JOB_ID')
+    if test_job_id:
+        if '-test-' in test_job_id:
+            # We need to manage some set of ids unchanged at the command line,
+            # so if the caller has segmented things, trust it to have added a repo prefix
+            # and just return it unaltered. -kmp 9-Mar-2021
+            return test_job_id
+        # Nowadays, this might be a GitHub run id, which isn't globally unique.
+        # Each repo is monotonic but at different pace and they can collide. Repo prefix is essential.
+        return "%s-test-%s-" % (prefix, test_job_id)
     else:
         # We've experimentally determined that it works pretty well to just use the timestamp.
-        return "%s-test-%s" % (prefix, int(datetime_module.datetime.now().timestamp() * 1000000))
+        return "%s-test-%s-" % (prefix, int(datetime_module.datetime.now().timestamp() * 1000000))
 
 
 INDEXER_NAMESPACE_FOR_TESTING = generate_indexer_namespace_for_testing()
