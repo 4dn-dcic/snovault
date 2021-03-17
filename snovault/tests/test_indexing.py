@@ -22,6 +22,7 @@ from elasticsearch.exceptions import NotFoundError
 from pyramid.traversal import traverse
 from sqlalchemy import MetaData
 from unittest import mock
+from webtest.app import AppError
 from zope.sqlalchemy import mark_changed
 from ..interfaces import TYPES, DBSESSION, STORAGE
 from .. import util  # The filename util.py, not something in __init__.py
@@ -1654,9 +1655,9 @@ class TestInvalidationScopeViewSno:
 
     @pytest.mark.parametrize('source_type, target_type, invalidated', [
         ('TestingBiosourceSno', 'TestingBiogroupSno', [
-            'schema_version', 'identifier', 'samples', 'sample_objects', 'contributor',
-            'counter', 'uuid'  # everything invalidates due to default_diff embed
-        ]),
+            'schema_version', 'identifier', 'samples', 'sample_objects.notes',
+            'sample_objects.associated_sample', 'contributor', 'uuid', 'counter'
+        ]),  # everything invalidates due to default_diff embed
         ('TestingIndividualSno', 'TestingBiosampleSno', [
             'specimen', 'uuid'
         ]),
@@ -1670,7 +1671,7 @@ class TestInvalidationScopeViewSno:
             'status', 'uuid'
         ]),
         ('TestingLinkTargetSno', 'TestingLinkAggregateSno', [
-            'status', 'uuid'  # XXX: Aggregated items do not invalidate?
+            'status', 'uuid'  # XXX: Aggregated items do not invalidate - they must be explicitly embedded
         ])
     ])
     def test_invalidation_scope_view_parametrized(self, indexer_testapp, source_type, target_type, invalidated):
@@ -1678,6 +1679,33 @@ class TestInvalidationScopeViewSno:
         req = self.MockedRequest(indexer_testapp.app.registry, source_type, target_type)
         scope = compute_invalidation_scope(None, req)
         assert sorted(scope['Invalidated']) == sorted(invalidated)
+
+    @pytest.mark.parametrize('req', [
+        {
+            'source_type': None,
+            'target_type': 'TestingBiosourceSno'
+        },
+        {
+            'source_type': 'TestingBiosourceSno',
+            'target_type': None
+        },
+        {
+            'source_type': 'Blah',
+            'target_type': 'TestingBiosourceSno'
+        },
+        {
+            'source_type': 'TestingBiosourceSno',
+            'target_type': 'Blah'
+        },
+        {
+            'source_type': 'Item',  # abstract type
+            'target_type': 'TestingBiosourceSno'
+        }
+    ])
+    def test_invalidation_scope_view_error(self, indexer_testapp, req):
+        """ Test failure cases """
+        with pytest.raises(AppError):
+            indexer_testapp.post_json('/compute_invalidation_scope', req)
 
 
 def test_assert_transactions_table_is_gone(app):

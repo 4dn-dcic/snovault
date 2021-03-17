@@ -5,6 +5,7 @@ from pyramid.exceptions import HTTPBadRequest
 from ..interfaces import COLLECTIONS, TYPES
 from .interfaces import ELASTIC_SEARCH
 from ..util import DEFAULT_EMBEDS, crawl_schema, debug_log
+from ..typeinfo import AbstractTypeInfo
 
 
 log = structlog.getLogger(__name__)
@@ -284,6 +285,44 @@ def filter_invalidation_scope(registry, diff, invalidated_with_type, secondary_u
         return item_type_is_invalidated
 
 
+def _compute_invalidation_scope_base(request, result, source_type, target_type, simulated_prop):
+    """ Helper for below route - implements the base case of the API
+        Builds a dummy diff from on the simulated prop and determines whether the edit results
+        in invalidation of the target type.
+    """
+
+    dummy_diff = ['.'.join([source_type, simulated_prop])]
+    invalidated_with_type = [('dummy', target_type)]
+    invalidated_metadata = filter_invalidation_scope(request.registry, dummy_diff, invalidated_with_type, set(),
+                                                     verbose=True)
+    if invalidated_metadata.get(target_type, False):
+        result['Invalidated'].append(simulated_prop)
+    else:
+        result['Cleared'].append(simulated_prop)
+
+
+def _compute_invalidation_scope_recursive(request, result, meta, source_type, target_type, simulated_prop):
+    """ Helper for below route - implements the recursive step of the API.
+        Traverses the properties computing invalidation scope for all possible patch paths.
+    """
+    if 'calculatedProperty' in meta:  # we cannot patch calc props, so behavior here is irrelevant
+        return
+    elif meta['type'] == 'object':
+        for sub_prop, sub_meta in meta['properties'].items():
+            _compute_invalidation_scope_recursive(request, result, sub_meta, source_type, target_type,
+                                                  '.'.join([simulated_prop, sub_prop]))
+    elif meta['type'] == 'array':
+        sub_type = meta['items']['type']
+        if sub_type == 'object':
+            for sub_prop, sub_meta in meta['items']['properties'].items():
+                _compute_invalidation_scope_recursive(request, result, sub_meta, source_type, target_type,
+                                                      '.'.join([simulated_prop, sub_prop]))
+        else:
+            _compute_invalidation_scope_base(request, result, source_type, target_type, simulated_prop)
+    else:
+        _compute_invalidation_scope_base(request, result, source_type, target_type, simulated_prop)
+
+
 @view_config(route_name='compute_invalidation_scope', request_method='POST', permission='index')
 @debug_log
 def compute_invalidation_scope(context, request):
@@ -298,8 +337,19 @@ def compute_invalidation_scope(context, request):
     """
     source_type = request.json.get('source_type', None)
     target_type = request.json.get('target_type', None)
+    # None-check
     if not source_type or not target_type:
         raise HTTPBadRequest('Missing required parameters: source_type, target_type')
+    # Invalid Type
+    if source_type not in request.registry[TYPES] or target_type not in request.registry[TYPES]:
+        raise HTTPBadRequest('Invalid source/target type: %s/%s' % (source_type, target_type))
+    # Abstract type
+    # Note 'type' is desired here because concrete types have literal type TypeInfo
+    # vs. abstract types have literal type AbstractTypeInfo
+    # isinstance() will return True (wrong) since TypeInfo inherits from AbstractTypeInfo
+    if type(request.registry[TYPES][source_type]) == AbstractTypeInfo or \
+            type(request.registry[TYPES][target_type]) == AbstractTypeInfo:
+        raise HTTPBadRequest('One or more of your types is abstract! %s/%s' % (source_type, target_type))
     source_type_schema = request.registry[TYPES][source_type].schema
     result = {
         'Source Type': source_type,
@@ -310,15 +360,6 @@ def compute_invalidation_scope(context, request):
 
     # Walk schema, simulating an edit and computing invalidation scope per field, recording result
     for prop, meta in source_type_schema['properties'].items():
-        if 'calculatedProperty' in meta:
-            continue  # we cannot patch calc props, so behavior here is irrelevant
-        dummy_diff = ['.'.join([source_type, prop])]
-        invalidated_with_type = [('dummy', target_type)]
-        invalidated_metadata = filter_invalidation_scope(request.registry, dummy_diff, invalidated_with_type, set(),
-                                                         verbose=True)
-        if invalidated_metadata.get(target_type, False):
-            result['Invalidated'].append(prop)
-        else:
-            result['Cleared'].append(prop)
+        _compute_invalidation_scope_recursive(request, result, meta, source_type, target_type, prop)
 
     return result
