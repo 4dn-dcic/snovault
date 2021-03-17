@@ -40,6 +40,7 @@ from ..elasticsearch.create_mapping import (
 )
 from ..elasticsearch.indexer import check_sid, SidException
 from ..elasticsearch.indexer_queue import QueueManager
+from ..elasticsearch.indexer_utils import compute_invalidation_scope
 from ..elasticsearch.interfaces import ELASTIC_SEARCH, INDEXER_QUEUE, INDEXER_QUEUE_MIRROR
 from ..util import INDEXER_NAMESPACE_FOR_TESTING
 from dcicutils.misc_utils import Retry
@@ -1630,30 +1631,52 @@ def test_elasticsearch_item_embedded_agg(app, testapp, indexer_testapp, es_based
     assert target_uuid in [x['uuid'] for x in res.json['uuids_linking_to']]
 
 
-class TestInvalidationScopeView:
+class TestInvalidationScopeViewSno:
     """ Integrated testing of invalidation scope - requires ES component, so in this file. """
 
+    class MockedRequest:
+        def __init__(self, registry, source_type, target_type):
+            self.registry = registry
+            self.json = {
+                'source_type': source_type,
+                'target_type': target_type
+            }
+
     def test_invalidation_scope_view_basic(self, indexer_testapp):
+        """ Use route here, call function in other tests. """
         req = {
             'source_type': 'TestingBiosampleSno',
             'target_type': 'TestingBiosourceSno'
         }
         scope = indexer_testapp.post_json('/compute_invalidation_scope', req).json
-        invalidated = ['alias', 'identifier', 'quality']
+        invalidated = ['alias', 'identifier', 'quality', 'uuid']
         assert sorted(scope['Invalidated']) == invalidated
 
     @pytest.mark.parametrize('source_type, target_type, invalidated', [
         ('TestingBiosourceSno', 'TestingBiogroupSno', [
             'schema_version', 'identifier', 'samples', 'sample_objects', 'contributor',
             'counter', 'uuid'  # everything invalidates due to default_diff embed
-        ]),  # TODO add more
+        ]),
+        ('TestingIndividualSno', 'TestingBiosampleSno', [
+            'specimen', 'uuid'
+        ]),
+        ('TestingLinkTargetElasticSearch', 'TestingLinkSourceSno', [
+            'status', 'uuid'
+        ]),
+        ('TestingLinkSourceSno', 'TestingLinkTargetElasticSearch', [
+            'name', 'status', 'uuid'  # The target_type has a revlink - these are accounted for separately
+        ]),
+        ('TestingLinkAggregateSno', 'TestingLinkTargetSno', [
+            'status', 'uuid'
+        ]),
+        ('TestingLinkTargetSno', 'TestingLinkAggregateSno', [
+            'status', 'uuid'  # XXX: Aggregated items do not invalidate?
+        ])
     ])
     def test_invalidation_scope_view_parametrized(self, indexer_testapp, source_type, target_type, invalidated):
-        req = {
-            'source_type': source_type,
-            'target_type': target_type
-        }
-        scope = indexer_testapp.post_json('/compute_invalidation_scope', req).json
+        """ Just call the route function - test some basic interactions. """
+        req = self.MockedRequest(indexer_testapp.app.registry, source_type, target_type)
+        scope = compute_invalidation_scope(None, req)
         assert sorted(scope['Invalidated']) == sorted(invalidated)
 
 
