@@ -3,6 +3,9 @@
     "description": "Dummy Schema for testing an embeddable item",
     "type": "object",
     "required": ["title", "description"],
+    "mixinProperties": [
+        { "$ref": "mixins.json#/status" }
+    ],
     "properties": {
         "schema_version": {
             "type": "object",

@@ -3,6 +3,9 @@
   "description": "Individual integrated testing type. Linked to by biosample and biosource",
   "type": "object",
   "required": ["full_name"],
+  "mixinProperties": [
+    { "$ref": "mixins.json#/status" }
+  ],
   "properties": {
     "schema_version": {
       "type": "string",

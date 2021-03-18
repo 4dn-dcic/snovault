@@ -1659,7 +1659,7 @@ class TestInvalidationScopeViewSno:
             'sample_objects.associated_sample', 'contributor', 'uuid', 'counter'
         ]),  # everything invalidates due to default_diff embed
         ('TestingIndividualSno', 'TestingBiosampleSno', [
-            'specimen', 'uuid'
+            'specimen', 'status', 'uuid'
         ]),
         ('TestingLinkTargetElasticSearch', 'TestingLinkSourceSno', [
             'status', 'uuid'
