@@ -21,7 +21,7 @@ from .indexer_utils import get_namespaced_index, find_uuids_for_indexing, filter
 from .interfaces import (
     ELASTIC_SEARCH,
     INDEXER,
-    INDEXER_QUEUE
+    INDEXER_QUEUE, INVALIDATION_SCOPE_ENABLED
 )
 from ..embed import MissingIndexItemException
 from ..util import debug_log, dictionary_lookup
@@ -211,7 +211,8 @@ class Indexer(object):
         secondary_uuids = associated_uuids - source_uuids
 
         # we are updating from an edit and have a corresponding diff
-        if diff is not None:
+        invalidation_scope_enabled = self.registry.settings.get(INVALIDATION_SCOPE_ENABLED, False)
+        if diff is not None and invalidation_scope_enabled:
             filter_invalidation_scope(self.registry, diff, invalidated_with_type, secondary_uuids)
 
         # update this with rev_links found from @@indexing-view (includes new rev_links)

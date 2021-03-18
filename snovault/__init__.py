@@ -35,6 +35,7 @@ from dcicutils.ff_utils import get_health_page
 
 # Moved from definition internals
 from .elasticsearch import APP_FACTORY
+from .elasticsearch.interfaces import INVALIDATION_SCOPE_ENABLED
 from pyramid_localroles import LocalRolesAuthorizationPolicy
 
 
@@ -88,12 +89,10 @@ def main(global_config, **local_config):
     settings['snovault.jsonld.terms_prefix'] = 'snovault'
 
     config = Configurator(settings=settings)
-#   from .elasticsearch import APP_FACTORY
     config.registry[APP_FACTORY] = main  # used by mp_indexer
     config.include(app_version)
 
     config.include('pyramid_multiauth')  # must be before calling set_authorization_policy
-#   from pyramid_localroles import LocalRolesAuthorizationPolicy
     # Override default authz policy set by pyramid_multiauth
     config.set_authorization_policy(LocalRolesAuthorizationPolicy())
     config.include(session)
@@ -111,6 +110,9 @@ def main(global_config, **local_config):
         config.include('snovault.tests.root')
         if settings.get('elasticsearch.server'):
             config.include('snovault.tests.search')
+
+        # in addition, enable invalidation scope for testing - but NOT by default
+        settings[INVALIDATION_SCOPE_ENABLED] = True
 
     if 'elasticsearch.server' in config.registry.settings:
         config.include('snovault.elasticsearch')
