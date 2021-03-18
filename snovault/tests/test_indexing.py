@@ -1650,13 +1650,13 @@ class TestInvalidationScopeViewSno:
             'target_type': 'TestingBiosourceSno'
         }
         scope = indexer_testapp.post_json('/compute_invalidation_scope', req).json
-        invalidated = ['alias', 'identifier', 'quality', 'uuid']
+        invalidated = ['alias', 'identifier', 'quality', 'status', 'uuid']
         assert sorted(scope['Invalidated']) == invalidated
 
     @pytest.mark.parametrize('source_type, target_type, invalidated', [
         ('TestingBiosourceSno', 'TestingBiogroupSno', [
             'schema_version', 'identifier', 'samples', 'sample_objects.notes',
-            'sample_objects.associated_sample', 'contributor', 'uuid', 'counter'
+            'sample_objects.associated_sample', 'contributor', 'uuid', 'counter', 'status'
         ]),  # everything invalidates due to default_diff embed
         ('TestingIndividualSno', 'TestingBiosampleSno', [
             'specimen', 'status', 'uuid'
