@@ -3,6 +3,9 @@
   "description": "Biosample integrated testing type.",
   "type": "object",
   "required": ["identifier"],
+  "mixinProperties": [
+        { "$ref": "mixins.json#/status" }
+  ],
   "properties": {
     "schema_version": {
       "type": "string",

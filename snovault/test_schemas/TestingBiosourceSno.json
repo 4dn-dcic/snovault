@@ -3,6 +3,9 @@
   "description": "Biosource integrated testing type. This item contains an array of linkTo Biosamples.",
   "type": "object",
   "required": ["identifier"],
+  "mixinProperties": [
+        { "$ref": "mixins.json#/status" }
+  ],
   "properties": {
     "schema_version": {
       "type": "string",
