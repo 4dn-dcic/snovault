@@ -107,7 +107,9 @@ def update_item(context, request, properties, sheets=None):
     context.update(item_properties, sheets)
     # set up hook for queueing indexing
     diff = build_diff_from_request(context, request)
-    to_queue = {'uuid': str(context.uuid), 'sid': context.sid, 'diff': diff}
+    to_queue = {'uuid': str(context.uuid), 'sid': context.sid}
+    if diff is not None:
+        to_queue['diff'] = diff
     telemetry_id = request.params.get('telemetry_id', None)
     if telemetry_id:
         to_queue['telemetry_id'] = telemetry_id

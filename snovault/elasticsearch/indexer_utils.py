@@ -76,9 +76,9 @@ def find_uuids_for_indexing(registry, updated, find_index=None):
         find_index = get_namespaced_index(registry, '*')
     results = scan(es, index=find_index, query=scan_query, size=10000)
     invalidated_with_type = {(res['_id'], to_camel_case(res['_type'])) for res in results}
-    invalidated = {uuid for uuid, type in invalidated_with_type}
+    invalidated = {uuid for uuid, _type in invalidated_with_type}
 
-    return updated | invalidated, invalidated_with_type
+    return (updated | invalidated), invalidated_with_type
 
 
 def get_uuids_for_types(registry, types=[]):
