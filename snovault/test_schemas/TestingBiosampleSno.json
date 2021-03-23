@@ -1,0 +1,35 @@
+{
+  "title": "Testing Biosample Sno",
+  "description": "Biosample integrated testing type.",
+  "type": "object",
+  "required": ["identifier"],
+  "mixinProperties": [
+        { "$ref": "mixins.json#/status" }
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "default": "1"
+    },
+    "identifier": {
+      "type": "string",
+      "uniqueKey": true
+    },
+    "quality": {
+      "type": "number"
+    },
+    "ranking": {
+      "type": "integer"
+    },
+    "alias": {
+      "type": "string"
+    },
+    "contributor": {
+      "type": "string",
+      "linkTo": "TestingIndividualSno"
+    },
+    "uuid": {
+      "type": "string"
+    }
+  }
+}

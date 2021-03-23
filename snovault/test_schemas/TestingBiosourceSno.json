@@ -1,0 +1,51 @@
+{
+  "title": "Testing Biosource Sno",
+  "description": "Biosource integrated testing type. This item contains an array of linkTo Biosamples.",
+  "type": "object",
+  "required": ["identifier"],
+  "mixinProperties": [
+        { "$ref": "mixins.json#/status" }
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "default": "1"
+    },
+    "identifier": {
+      "type": "string",
+      "uniqueKey": true
+    },
+    "samples": {
+       "type": "array",
+       "items": {
+         "type": "string",
+         "linkTo": "TestingBiosampleSno"
+       }
+    },
+    "sample_objects": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "notes": {
+            "type": "string"
+          },
+          "associated_sample": {
+            "type": "string",
+            "linkTo": "TestingBiosampleSno"
+          }
+        }
+      }
+    },
+    "contributor": {
+      "type": "string",
+      "linkTo": "TestingIndividualSno"
+    },
+    "uuid": {
+      "type": "string"
+    },
+    "counter":{
+      "type": "string"
+    }
+  }
+}

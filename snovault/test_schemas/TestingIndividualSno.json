@@ -1,0 +1,28 @@
+{
+  "title": "Testing Individual Sno",
+  "description": "Individual integrated testing type. Linked to by biosample and biosource",
+  "type": "object",
+  "required": ["full_name"],
+  "mixinProperties": [
+    { "$ref": "mixins.json#/status" }
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "default": "1"
+    },
+    "full_name": {
+      "type": "string",
+      "uniqueKey": true
+    },
+    "uid": {
+      "type": "string"
+    },
+    "specimen": {
+      "type": "string"
+    },
+    "uuid": {
+      "type": "string"
+    }
+  }
+}

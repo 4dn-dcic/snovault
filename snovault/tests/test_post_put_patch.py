@@ -269,7 +269,7 @@ def test_name_key_validation(link_targets, testapp):
     res = testapp.post_json('/testing-link-sources-sno/', source_data, status=422)
     assert res.json['description'] == 'Failed validation'
     res_error = res.json['errors'][0]
-    res_error['name'] == "Item: path characters"
+    assert res_error['name'] == 'Item: path characters'
     assert "Forbidden character(s) {'*'}" in res_error['description']
 
 

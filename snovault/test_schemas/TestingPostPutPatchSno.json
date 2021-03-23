@@ -2,6 +2,9 @@
     "required": ["required"],
     "type": "object",
     "additionalProperties": false,
+    "mixinProperties": [
+        { "$ref": "mixins.json#/status" }
+    ],
     "properties": {
         "schema_version": {
             "type": "string",

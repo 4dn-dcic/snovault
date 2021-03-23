@@ -6,6 +6,7 @@ ELASTIC_SEARCH = 'elasticsearch'
 INDEXER = 'indexer'
 INDEXER_QUEUE = 'indexer_queue'
 INDEXER_QUEUE_MIRROR = 'indexer_queue_mirror'
+INVALIDATION_SCOPE_ENABLED = 'invalidation_scope.enabled'
 
 
 class ICachedItem(Interface):

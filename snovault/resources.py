@@ -263,6 +263,7 @@ class Item(Resource):
     rev = {}
     aggregated_items = {}
     embedded_list = []
+    default_diff = []
     filtered_rev_statuses = ()
     schema = None
     AbstractCollection = AbstractCollection
@@ -433,7 +434,11 @@ class Item(Resource):
         """
         Key function that transforms uuids into resource paths in properties.
         It is also responsible for calling upgraders using the __json__ method
-        Lastly, adds this items' uuid to request._linked_uuids when indexing
+
+        VERY IMPORTANT NOTE:
+            Lastly, adds this items' uuid to request._linked_uuids when indexing
+            This is now a tuple of uuid, item_type so when retrieving links from ES
+            for all links we know both the uuid AND the type.
         """
         # *** context.__json__ CALLS THE UPGRADER (upgrade_properties) ***
         # This works from the schema rather than the links table
@@ -446,7 +451,7 @@ class Item(Resource):
         # if indexing, add the uuid of this object to request._linked_uuids
         # and add the sid to _sid_cache if not already present
         if request._indexing_view is True:
-            request._linked_uuids.add(str(self.uuid))
+            request._linked_uuids.add((str(self.uuid), self.type_info.name))  # _linked_uuids holds 2 tuple
             if str(self.uuid) not in request._sid_cache:
                 request._sid_cache[str(self.uuid)] = self.sid
         return properties

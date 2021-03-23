@@ -101,6 +101,7 @@ class TypeInfo(AbstractTypeInfo):
         self.base_types = factory.base_types
         self.aggregated_items = factory.aggregated_items
         self.embedded_list = factory.embedded_list
+        self.default_diff = factory.default_diff
         self.is_abstract = abstract
 
     @reify

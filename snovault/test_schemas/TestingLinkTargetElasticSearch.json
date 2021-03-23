@@ -1,5 +1,8 @@
 {
     "type": "object",
+    "mixinProperties": [
+        { "$ref": "mixins.json#/status" }
+    ],
     "properties": {
         "name": {
             "type": "string",
