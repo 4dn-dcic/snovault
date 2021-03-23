@@ -134,8 +134,6 @@ def determine_parent_types(registry, item_type):
     base_types = []
     try:
         base_types = extract_base_types(registry, item_type)
-        if base_types == ['Item']:  # trivially true of all items
-            return []
     except KeyError:  # indicative of an error if not testing
         log.info('Tried to determine parent type of invalid type: %s' % item_type)
     return [b for b in base_types if b != 'Item']
