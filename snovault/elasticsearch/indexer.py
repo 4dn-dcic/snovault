@@ -149,7 +149,7 @@ def index(context, request):
                         item['error_message'] = "Error occured during indexing, check the logs"
 
         # this will make documents in all lucene buffers available to search
-        # NOTE: this is also now disabled - see comment on 'refresh' about
+        # NOTE: this is also now disabled - see comment on 'refresh' above
         # es.indices.refresh(index=namespace_star)
         # resets the refresh_interval to the default value (must reset if disabled earlier)
         # es.indices.put_settings(index='_all', body={'index' : {'refresh_interval': '1s'}})
