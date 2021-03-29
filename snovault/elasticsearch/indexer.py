@@ -75,8 +75,9 @@ def index(context, request):
     dry_run = request.json.get('dry_run', False)  # if True, do not actually index
     es = request.registry[ELASTIC_SEARCH]
     indexer = request.registry[INDEXER]
-    namespace_star = get_namespaced_index(request, '*')
+    # namespace_star = get_namespaced_index(request, '*')  # unused for now
     namespaced_index = get_namespaced_index(request, 'indexing')
+    indexing_record = {}
 
     if not dry_run:
         index_start_time = datetime.datetime.now()
@@ -101,7 +102,10 @@ def index(context, request):
         indexing_counter = [0]
         # actually index
         # try to ensure ES is reasonably up to date
-        es.indices.refresh(index=namespace_star)
+        # NOTE: this is now disabled, as we are using default refresh interval = 1s,
+        # which should be good enough. This is also an expensive operation and can be
+        # extremely slow when there are a lot of indices. - Will 03/29/21
+        # es.indices.refresh(index=namespace_star)
 
         # NOTE: the refresh interval is left as default because it doesn't seem
         # to help performance much.
@@ -133,7 +137,7 @@ def index(context, request):
             try:
                 es.index(index=namespaced_index, doc_type='indexing', body=indexing_record, id=index_start_str)
                 es.index(index=namespaced_index, doc_type='indexing', body=indexing_record, id='latest_indexing')
-            except:
+            except Exception:
                 indexing_record['indexing_status'] = 'errored'
                 error_messages = copy.deepcopy(indexing_record['errors'])
                 del indexing_record['errors']
@@ -145,7 +149,8 @@ def index(context, request):
                         item['error_message'] = "Error occured during indexing, check the logs"
 
         # this will make documents in all lucene buffers available to search
-        es.indices.refresh(index=namespace_star)
+        # NOTE: this is also now disabled - see comment on 'refresh' about
+        # es.indices.refresh(index=namespace_star)
         # resets the refresh_interval to the default value (must reset if disabled earlier)
         # es.indices.put_settings(index='_all', body={'index' : {'refresh_interval': '1s'}})
     return indexing_record
