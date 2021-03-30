@@ -2,6 +2,7 @@ import copy
 import datetime
 import json
 import time
+import os
 from timeit import default_timer as timer
 
 import structlog
@@ -28,6 +29,8 @@ from ..util import debug_log, dictionary_lookup
 
 
 log = structlog.getLogger(__name__)
+# Environment value settings possible: 'never', 'before', 'after', or 'before,after'.
+ES_REFRESH_DURING_INDEXING = os.environ.get('ES_REFRESH_DURING_INDEXING', 'never')
 
 
 def includeme(config):
@@ -75,7 +78,7 @@ def index(context, request):
     dry_run = request.json.get('dry_run', False)  # if True, do not actually index
     es = request.registry[ELASTIC_SEARCH]
     indexer = request.registry[INDEXER]
-    # namespace_star = get_namespaced_index(request, '*')  # unused for now
+    namespace_star = get_namespaced_index(request, '*')  # unused for now
     namespaced_index = get_namespaced_index(request, 'indexing')
     indexing_record = {}
 
@@ -105,7 +108,8 @@ def index(context, request):
         # NOTE: this is now disabled, as we are using default refresh interval = 1s,
         # which should be good enough. This is also an expensive operation and can be
         # extremely slow when there are a lot of indices. - Will 03/29/21
-        # es.indices.refresh(index=namespace_star)
+        if 'before' in ES_REFRESH_DURING_INDEXING:  # default is 'never'
+            es.indices.refresh(index=namespace_star)
 
         # NOTE: the refresh interval is left as default because it doesn't seem
         # to help performance much.
@@ -150,7 +154,8 @@ def index(context, request):
 
         # this will make documents in all lucene buffers available to search
         # NOTE: this is also now disabled - see comment on 'refresh' above
-        # es.indices.refresh(index=namespace_star)
+        if 'after' in ES_REFRESH_DURING_INDEXING:  # default is 'never'
+            es.indices.refresh(index=namespace_star)
         # resets the refresh_interval to the default value (must reset if disabled earlier)
         # es.indices.put_settings(index='_all', body={'index' : {'refresh_interval': '1s'}})
     return indexing_record
