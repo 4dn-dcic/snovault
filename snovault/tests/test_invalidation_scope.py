@@ -2,7 +2,7 @@ import pytest
 import mock
 import copy
 from contextlib import contextmanager
-from ..elasticsearch.indexer_utils import filter_invalidation_scope
+from ..elasticsearch.indexer_utils import filter_invalidation_scope, determine_child_types
 
 
 # Mocked uuids
@@ -336,6 +336,19 @@ class TestInvalidationScopeUnit:
         secondary = {UUID1}
         with invalidation_scope_mocks(test_parent_type_schema, embedded_list, base_types=base_types):
             self.run_test_and_reset_secondary(registry, diff, invalidated, secondary, 1)
+
+    def test_invalidation_scope_get_child_types(self, testapp):
+        """ Tests that we can resolve child types correctly. """
+        item_child_types = determine_child_types(testapp.app.registry, 'Item')
+        assert item_child_types == ['AbstractItemTestSecondSubItem', 'AbstractItemTestSubItem',  # all types defined
+                                    'EmbeddingTest', 'NestedEmbeddingContainer', 'NestedObjectLinkTarget',
+                                    'TestingBiogroupSno', 'TestingBiosampleSno', 'TestingBiosourceSno',
+                                    'TestingCalculatedProperties', 'TestingDependencies', 'TestingDownload',
+                                    'TestingIndividualSno', 'TestingLinkAggregateSno', 'TestingLinkSourceSno',
+                                    'TestingLinkTargetElasticSearch', 'TestingLinkTargetSno', 'TestingMixins',
+                                    'TestingNestedEnabled', 'TestingPostPutPatchSno', 'TestingServerDefault']
+        abstract_item_type_child_types = determine_child_types(testapp.app.registry, 'AbstractItemTest')
+        assert abstract_item_type_child_types == ['AbstractItemTestSecondSubItem', 'AbstractItemTestSubItem']
 
 
 ###########################################################

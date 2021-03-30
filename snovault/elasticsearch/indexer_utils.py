@@ -139,18 +139,30 @@ def determine_parent_types(registry, item_type):
     return [b for b in base_types if b != 'Item']
 
 
+def determine_child_types(registry, parent_type):
+    """ Determines the child types of the given parent type (to a depth of one). """
+    child_types = []
+    for potential_child_type, details in registry[TYPES].by_item_type.items():
+        if parent_type in getattr(details, 'base_types', []):
+            child_types.append(details.name)
+    return child_types
+
+
 def build_diff_metadata(registry, diff):
     """ Helper function for below that builds metadata from diff needed to filter
         invalidation scope.
 
     :param registry: application registry, used to retrieve type information
     :param diff: a diff of the change (from SQS), see build_diff_from_request
-    :returns: 3-tuple skip bool (to invalidate everything),
-              dictionaries of diff intermediary and child -> parent type mappings
+    :returns: 4-tuple:
+                * skip bool (to invalidate everything),
+                * diff intermediary
+                * child -> parent type mappings (if they exist, in case we are modifying a leaf type)
+                * parent -> child type mappings (if they exist, in case our link target is an abstract type)
     """
     # build representation of diffs
     # item type -> modified fields mapping
-    diffs, child_to_parent_type = {}, {}
+    diffs, child_to_parent_type, parent_to_child_types = {}, {}, {}
     skip = False  # if a modified field is a default embed, EVERYTHING has to be invalidated
     for _d in diff:
         modified_item_type, modified_field = _d.split('.', 1)
@@ -170,7 +182,11 @@ def build_diff_metadata(registry, diff):
         if modified_item_parent_types:
             child_to_parent_type[modified_item_type] = modified_item_parent_types
 
-    return skip, diffs, child_to_parent_type
+        modified_item_child_types = determine_child_types(registry, modified_item_type)
+        if modified_item_child_types:
+            parent_to_child_types[modified_item_type] = modified_item_child_types
+
+    return skip, diffs, child_to_parent_type, parent_to_child_types
 
 
 def filter_invalidation_scope(registry, diff, invalidated_with_type, secondary_uuids, verbose=False):
@@ -186,7 +202,7 @@ def filter_invalidation_scope(registry, diff, invalidated_with_type, secondary_u
     :param secondary_uuids: primary set of uuids to be invalidated
     :param verbose: specifies if we would like to return debugging info
     """
-    skip, diffs, child_to_parent_type = build_diff_metadata(registry, diff)
+    skip, diffs, child_to_parent_type, parent_to_child_types = build_diff_metadata(registry, diff)
     # go through all invalidated uuids, looking at the embedded list of the item type
     item_type_is_invalidated = {}
     for invalidated_uuid, invalidated_item_type in invalidated_with_type:
@@ -251,9 +267,16 @@ def filter_invalidation_scope(registry, diff, invalidated_with_type, secondary_u
 
             # Collect diffs from all possible item_types
             all_possible_diffs = diffs.get(base_field_item_type, [])
+
+            # A linkTo target could be a child type (in that we need to look at parent type diffs as well)
             parent_types = child_to_parent_type.get(base_field_item_type, None)
             if parent_types is not None:
                 all_possible_diffs += [diffs.get(parent) for parent in parent_types]
+
+            # It could also be parent type (in that we must look at all potential child types)
+            child_types = parent_to_child_types.get(base_field_item_type, None)
+            if child_types is not None:
+                all_possible_diffs += [diffs.get(child) for child in child_types]
 
             if not all_possible_diffs:  # no diffs match this embed
                 continue
