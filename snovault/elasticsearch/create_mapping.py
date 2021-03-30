@@ -51,6 +51,8 @@ MIN_NGRAM = 2
 MAX_NGRAM = 10
 # used to disable nested mapping on array of object fields
 NESTED_ENABLED = 'enable_nested'
+# global index.refresh_interval - currently the default of 1s
+REFRESH_INTERVAL = '1s'
 
 
 def determine_if_is_date_field(field, schema):
@@ -245,6 +247,7 @@ def index_settings():
             'number_of_shards': NUM_SHARDS,
             'number_of_replicas': NUM_REPLICAS,
             'max_result_window': SEARCH_MAX,
+            'refresh_interval': REFRESH_INTERVAL,  # although we are using the default, let's be explicit about it
             'mapping': {
                 'nested_fields': {
                     'limit': 100
