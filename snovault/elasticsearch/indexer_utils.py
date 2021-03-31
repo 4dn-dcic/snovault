@@ -1,5 +1,4 @@
 import structlog
-import itertools
 from elasticsearch.helpers import scan
 from pyramid.view import view_config
 from pyramid.exceptions import HTTPBadRequest
@@ -339,6 +338,8 @@ def _compute_invalidation_scope_recursive(request, result, meta, source_type, ta
     elif meta['type'] == 'array':
         sub_type = meta['items']['type']
         if sub_type == 'object':
+            if 'properties' not in meta['items']:
+                return  # sometimes can occur (see workflow.json in fourfront) - nothing we can do
             for sub_prop, sub_meta in meta['items']['properties'].items():
                 _compute_invalidation_scope_recursive(request, result, sub_meta, source_type, target_type,
                                                       '.'.join([simulated_prop, sub_prop]))
