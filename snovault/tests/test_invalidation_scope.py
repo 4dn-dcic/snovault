@@ -53,13 +53,25 @@ def type_base_types_mock(base_types):
 
 
 @contextmanager
-def invalidation_scope_mocks(schema, embedded_list, base_types=None, use_default_diff=False):
-    """ Quick wrapper for a common operation in this testing - will patch base_types as well if specified """
+def type_child_types_mock(child_types):
+    if child_types is not None:
+        with mock.patch('snovault.elasticsearch.indexer_utils.determine_child_types',
+                        return_value=child_types):
+            yield
+    else:
+        yield
+
+
+@contextmanager
+def invalidation_scope_mocks(schema, embedded_list, base_types=None, child_types=None, use_default_diff=False):
+    """ Quick wrapper for a common operation in this testing (mocking the appropriate things to test this
+        without a data model) """
     with type_properties_mock(schema):
         with type_embedded_list_mock(embedded_list):
             with type_default_diff_mock(use_default_diff):
                 with type_base_types_mock(base_types):
-                    yield
+                    with type_child_types_mock(child_types):
+                        yield
 
 
 @pytest.fixture
@@ -324,17 +336,19 @@ class TestInvalidationScopeUnit:
         with invalidation_scope_mocks(test_link_source_schema, embedded_list):
             self.run_test_and_reset_secondary(registry, diff, invalidated, secondary, 1)
 
-    @pytest.mark.parametrize('diff,embedded_list,base_types', [
-        ([ITEM_C + '.value'], ['link_one.value'], [ITEM_D])
+    @pytest.mark.parametrize('diff,embedded_list,base_types,child_types', [
+        ([ITEM_D + '.value'], ['link_one.value'], [ITEM_C], [ITEM_D])
     ])
-    def test_invalidation_scope_base_types(self, testapp, diff, embedded_list, base_types, test_parent_type_schema):
+    def test_invalidation_scope_base_types(self, testapp, diff, embedded_list, base_types, child_types,
+                                           test_parent_type_schema):
         """ Runs some tests that involve base type resolution """
         registry = testapp.app.registry
         invalidated = [
             (UUID1, ITEM_A)
         ]
         secondary = {UUID1}
-        with invalidation_scope_mocks(test_parent_type_schema, embedded_list, base_types=base_types):
+        with invalidation_scope_mocks(test_parent_type_schema, embedded_list, base_types=base_types,
+                                      child_types=child_types):
             self.run_test_and_reset_secondary(registry, diff, invalidated, secondary, 1)
 
     def test_invalidation_scope_get_child_types(self, testapp):

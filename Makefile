@@ -39,6 +39,11 @@ publish:
 publish-for-ga:
 	scripts/publish --noconfirm
 
+kill:
+    pkill -f postgres &
+    pkill -f elasticsearch &
+    pkill -f moto_server &
+
 help:
 	@make info
 

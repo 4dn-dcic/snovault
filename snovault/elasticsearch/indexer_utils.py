@@ -1,4 +1,5 @@
 import structlog
+import itertools
 from elasticsearch.helpers import scan
 from pyramid.view import view_config
 from pyramid.exceptions import HTTPBadRequest
@@ -154,15 +155,14 @@ def build_diff_metadata(registry, diff):
 
     :param registry: application registry, used to retrieve type information
     :param diff: a diff of the change (from SQS), see build_diff_from_request
-    :returns: 4-tuple:
+    :returns: 3-tuple:
                 * skip bool (to invalidate everything),
                 * diff intermediary
                 * child -> parent type mappings (if they exist, in case we are modifying a leaf type)
-                * parent -> child type mappings (if they exist, in case our link target is an abstract type)
     """
     # build representation of diffs
     # item type -> modified fields mapping
-    diffs, child_to_parent_type, parent_to_child_types = {}, {}, {}
+    diffs, child_to_parent_type = {}, {}
     skip = False  # if a modified field is a default embed, EVERYTHING has to be invalidated
     for _d in diff:
         modified_item_type, modified_field = _d.split('.', 1)
@@ -182,11 +182,7 @@ def build_diff_metadata(registry, diff):
         if modified_item_parent_types:
             child_to_parent_type[modified_item_type] = modified_item_parent_types
 
-        modified_item_child_types = determine_child_types(registry, modified_item_type)
-        if modified_item_child_types:
-            parent_to_child_types[modified_item_type] = modified_item_child_types
-
-    return skip, diffs, child_to_parent_type, parent_to_child_types
+    return skip, diffs, child_to_parent_type
 
 
 def filter_invalidation_scope(registry, diff, invalidated_with_type, secondary_uuids, verbose=False):
@@ -202,7 +198,7 @@ def filter_invalidation_scope(registry, diff, invalidated_with_type, secondary_u
     :param secondary_uuids: primary set of uuids to be invalidated
     :param verbose: specifies if we would like to return debugging info
     """
-    skip, diffs, child_to_parent_type, parent_to_child_types = build_diff_metadata(registry, diff)
+    skip, diffs, child_to_parent_type = build_diff_metadata(registry, diff)
     # go through all invalidated uuids, looking at the embedded list of the item type
     item_type_is_invalidated = {}
     for invalidated_uuid, invalidated_item_type in invalidated_with_type:
@@ -269,19 +265,27 @@ def filter_invalidation_scope(registry, diff, invalidated_with_type, secondary_u
             all_possible_diffs = diffs.get(base_field_item_type, [])
 
             # A linkTo target could be a child type (in that we need to look at parent type diffs as well)
+            # NOTE: this situation doesn't actually occur in our system as of right now
+            # but theoretically could
             parent_types = child_to_parent_type.get(base_field_item_type, None)
             if parent_types is not None:
-                all_possible_diffs += [diffs.get(parent) for parent in parent_types]
+                for parent_type in parent_types:
+                    parent_diff = diffs.get(parent_type, None)
+                    if parent_diff:
+                        all_possible_diffs.extend(parent_diff)
 
             # It could also be parent type (in that we must look at all potential child types)
-            child_types = parent_to_child_types.get(base_field_item_type, None)
+            child_types = determine_child_types(registry, base_field_item_type)
             if child_types is not None:
-                all_possible_diffs += [diffs.get(child) for child in child_types]
+                for child_type in child_types:
+                    child_diff = diffs.get(child_type, None)
+                    if child_diff:
+                        all_possible_diffs.extend(child_diff)
 
             if not all_possible_diffs:  # no diffs match this embed
                 continue
 
-            # XXX VERY IMPORTANT: for this to work correctly, the fields used in calculated properties MUST
+            # VERY IMPORTANT: for this to work correctly, the fields used in calculated properties MUST
             # be embedded! In addition, if you embed * on a linkTo, modifications to that linkTo will ALWAYS
             # invalidate the item_type
             if (any(terminal_field == field for field in all_possible_diffs) or
