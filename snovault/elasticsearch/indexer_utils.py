@@ -332,6 +332,8 @@ def _compute_invalidation_scope_recursive(request, result, meta, source_type, ta
     if 'calculatedProperty' in meta:  # we cannot patch calc props, so behavior here is irrelevant
         return
     elif meta['type'] == 'object':
+        if 'properties' not in meta:
+            return  # sometimes can occur (see workflow.json in fourfront) - nothing we can do
         for sub_prop, sub_meta in meta['properties'].items():
             _compute_invalidation_scope_recursive(request, result, sub_meta, source_type, target_type,
                                                   '.'.join([simulated_prop, sub_prop]))
