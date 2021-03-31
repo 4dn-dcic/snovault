@@ -63,7 +63,7 @@ def type_child_types_mock(child_types):
 
 
 @contextmanager
-def invalidation_scope_mocks(schema, embedded_list, base_types=None, child_types=None, use_default_diff=False):
+def invalidation_scope_mocks(*, schema, embedded_list, base_types=None, child_types=None, use_default_diff=False):
     """ Quick wrapper for a common operation in this testing (mocking the appropriate things to test this
         without a data model) """
     with type_properties_mock(schema):
@@ -230,7 +230,7 @@ class TestInvalidationScopeUnit:
             (UUID1, item_type)
         ]
         secondary = {UUID1}
-        with invalidation_scope_mocks(test_link_source_schema, embedded_field):
+        with invalidation_scope_mocks(schema=test_link_source_schema, embedded_list=embedded_field):
             filter_invalidation_scope(registry, diff, invalidated, secondary)
             if embedded_field[0] == 'link_one.name':
                 assert len(secondary) == 1
@@ -262,7 +262,7 @@ class TestInvalidationScopeUnit:
             (UUID1, 'dummy_type')  # this type doesn't matter
         ]
         secondary = {UUID1}
-        with invalidation_scope_mocks(test_parent_type_object_schema, embedded_list):
+        with invalidation_scope_mocks(schema=test_parent_type_object_schema, embedded_list=embedded_list):
             self.run_test_and_reset_secondary(registry, diff, invalidated, secondary, expected)
 
     @pytest.mark.parametrize('item_type,embedded_list',
@@ -282,7 +282,7 @@ class TestInvalidationScopeUnit:
             (UUID1, item_type)
         ]
         secondary = {UUID1}
-        with invalidation_scope_mocks(test_link_source_schema, embedded_list):
+        with invalidation_scope_mocks(schema=test_link_source_schema, embedded_list=embedded_list):
             self.run_test_and_reset_secondary(registry, diff, invalidated, secondary, 0)
 
     @pytest.mark.parametrize('item_type,embedded_list', [
@@ -301,7 +301,7 @@ class TestInvalidationScopeUnit:
             (UUID1, item_type)
         ]
         secondary = {UUID1}
-        with invalidation_scope_mocks(test_link_source_schema, embedded_list):
+        with invalidation_scope_mocks(schema=test_link_source_schema, embedded_list=embedded_list):
             self.run_test_and_reset_secondary(registry, diff, invalidated, secondary, 1)
 
     @pytest.mark.parametrize('diff,embedded_list',
@@ -317,7 +317,7 @@ class TestInvalidationScopeUnit:
             (UUID1, ITEM_A)  # item type doesn't matter here
         ]
         secondary = {UUID1}
-        with invalidation_scope_mocks(test_link_source_schema, embedded_list):
+        with invalidation_scope_mocks(schema=test_link_source_schema, embedded_list=embedded_list):
             self.run_test_and_reset_secondary(registry, diff, invalidated, secondary, 0)
 
     @pytest.mark.parametrize('diff,embedded_list',
@@ -333,7 +333,7 @@ class TestInvalidationScopeUnit:
             (UUID1, ITEM_A)  # item type doesn't matter here
         ]
         secondary = {UUID1}
-        with invalidation_scope_mocks(test_link_source_schema, embedded_list):
+        with invalidation_scope_mocks(schema=test_link_source_schema, embedded_list=embedded_list):
             self.run_test_and_reset_secondary(registry, diff, invalidated, secondary, 1)
 
     @pytest.mark.parametrize('diff,embedded_list,base_types,child_types', [
@@ -347,8 +347,8 @@ class TestInvalidationScopeUnit:
             (UUID1, ITEM_A)
         ]
         secondary = {UUID1}
-        with invalidation_scope_mocks(test_parent_type_schema, embedded_list, base_types=base_types,
-                                      child_types=child_types):
+        with invalidation_scope_mocks(schema=test_parent_type_schema, embedded_list=embedded_list,
+                                      base_types=base_types, child_types=child_types):
             self.run_test_and_reset_secondary(registry, diff, invalidated, secondary, 1)
 
     def test_invalidation_scope_get_child_types(self, testapp):

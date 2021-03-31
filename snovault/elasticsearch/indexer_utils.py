@@ -268,18 +268,14 @@ def filter_invalidation_scope(registry, diff, invalidated_with_type, secondary_u
             # but theoretically could
             parent_types = child_to_parent_type.get(base_field_item_type, None)
             if parent_types is not None:
-                for parent_type in parent_types:
-                    parent_diff = diffs.get(parent_type, None)
-                    if parent_diff:
-                        all_possible_diffs.extend(parent_diff)
+                for parent_type in child_to_parent_type.get(base_field_item_type, []):
+                    all_possible_diffs.extend(diffs.get(parent_type, []))
 
             # It could also be parent type (in that we must look at all potential child types)
             child_types = determine_child_types(registry, base_field_item_type)
             if child_types is not None:
-                for child_type in child_types:
-                    child_diff = diffs.get(child_type, None)
-                    if child_diff:
-                        all_possible_diffs.extend(child_diff)
+                for child_type in determine_child_types(registry, base_field_item_type) or []:
+                    all_possible_diffs.extend(diffs.get(child_type, []))
 
             if not all_possible_diffs:  # no diffs match this embed
                 continue

@@ -42,7 +42,6 @@ publish-for-ga:
 kill:
 	pkill -f postgres &
 	pkill -f elasticsearch &
-	pkill -f moto_server &
 
 help:
 	@make info
