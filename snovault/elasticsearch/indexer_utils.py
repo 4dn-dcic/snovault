@@ -139,14 +139,25 @@ def determine_parent_types(registry, item_type):
     return [b for b in base_types if b != 'Item']
 
 
+def determine_child_types(registry, parent_type):
+    """ Determines the child types of the given parent type (to a depth of one). """
+    child_types = []
+    for potential_child_type, details in registry[TYPES].by_item_type.items():
+        if parent_type in getattr(details, 'base_types', []):
+            child_types.append(details.name)
+    return child_types
+
+
 def build_diff_metadata(registry, diff):
     """ Helper function for below that builds metadata from diff needed to filter
         invalidation scope.
 
     :param registry: application registry, used to retrieve type information
     :param diff: a diff of the change (from SQS), see build_diff_from_request
-    :returns: 3-tuple skip bool (to invalidate everything),
-              dictionaries of diff intermediary and child -> parent type mappings
+    :returns: 3-tuple:
+                * skip bool (to invalidate everything),
+                * diff intermediary
+                * child -> parent type mappings (if they exist, in case we are modifying a leaf type)
     """
     # build representation of diffs
     # item type -> modified fields mapping
@@ -251,14 +262,25 @@ def filter_invalidation_scope(registry, diff, invalidated_with_type, secondary_u
 
             # Collect diffs from all possible item_types
             all_possible_diffs = diffs.get(base_field_item_type, [])
+
+            # A linkTo target could be a child type (in that we need to look at parent type diffs as well)
+            # NOTE: this situation doesn't actually occur in our system as of right now
+            # but theoretically could
             parent_types = child_to_parent_type.get(base_field_item_type, None)
             if parent_types is not None:
-                all_possible_diffs += [diffs.get(parent) for parent in parent_types]
+                for parent_type in child_to_parent_type.get(base_field_item_type, []):
+                    all_possible_diffs.extend(diffs.get(parent_type, []))
+
+            # It could also be parent type (in that we must look at all potential child types)
+            child_types = determine_child_types(registry, base_field_item_type)
+            if child_types is not None:
+                for child_type in determine_child_types(registry, base_field_item_type) or []:
+                    all_possible_diffs.extend(diffs.get(child_type, []))
 
             if not all_possible_diffs:  # no diffs match this embed
                 continue
 
-            # XXX VERY IMPORTANT: for this to work correctly, the fields used in calculated properties MUST
+            # VERY IMPORTANT: for this to work correctly, the fields used in calculated properties MUST
             # be embedded! In addition, if you embed * on a linkTo, modifications to that linkTo will ALWAYS
             # invalidate the item_type
             if (any(terminal_field == field for field in all_possible_diffs) or
@@ -306,12 +328,16 @@ def _compute_invalidation_scope_recursive(request, result, meta, source_type, ta
     if 'calculatedProperty' in meta:  # we cannot patch calc props, so behavior here is irrelevant
         return
     elif meta['type'] == 'object':
+        if 'properties' not in meta:
+            return  # sometimes can occur (see workflow.json in fourfront) - nothing we can do
         for sub_prop, sub_meta in meta['properties'].items():
             _compute_invalidation_scope_recursive(request, result, sub_meta, source_type, target_type,
                                                   '.'.join([simulated_prop, sub_prop]))
     elif meta['type'] == 'array':
         sub_type = meta['items']['type']
         if sub_type == 'object':
+            if 'properties' not in meta['items']:
+                return  # sometimes can occur (see workflow.json in fourfront) - nothing we can do
             for sub_prop, sub_meta in meta['items']['properties'].items():
                 _compute_invalidation_scope_recursive(request, result, sub_meta, source_type, target_type,
                                                       '.'.join([simulated_prop, sub_prop]))
