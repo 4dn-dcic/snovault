@@ -5,7 +5,7 @@ from unittest import mock
 from ..standalone_dev import make_standalone_app, make_dev_vapp
 from .. import standalone_dev as standalone_dev_module
 
-pytestmark = [pytest.mark.unit]
+pytestmark = [pytest.mark.working, pytest.mark.unit]
 
 
 class MockWsgiApp():
