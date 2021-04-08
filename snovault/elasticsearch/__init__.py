@@ -10,9 +10,19 @@ from .interfaces import APP_FACTORY, ELASTIC_SEARCH
 
 
 def includeme(config):
+    """ Creates the es_client for use by the application
+        Important options from settings:
+            * elasticsearch.server - URL of the server
+            * elasticsearch.aws_auth - whether or not to use local AWS creds
+            * elasticsearch.request_timeout - ES request timeout, defaults to 10 seconds but is
+              upped to 20 in our settings if not otherwise specified.
+            * elasticsearch.request_auto_retry - allows us to disable request auto-retry
+    """
     settings = config.registry.settings
     address = settings['elasticsearch.server']
     use_aws_auth = settings.get('elasticsearch.aws_auth')
+    es_request_timeout = settings.get('elasticsearch.request_timeout', 20)  # only change is here
+    es_request_auto_retry = settings.get('elasticsearch.request_auto_retry', True)
     # make sure use_aws_auth is bool
     if not isinstance(use_aws_auth, bool):
         use_aws_auth = True if use_aws_auth == 'true' else False
@@ -20,7 +30,9 @@ def includeme(config):
     # this previously-used option was causing problems (?)
     # 'connection_class': TimedUrllib3HttpConnection
     es_options = {'serializer': PyramidJSONSerializer(json_renderer),
-                  'connection_class': TimedRequestsHttpConnection}
+                  'connection_class': TimedRequestsHttpConnection,
+                  'timeout': es_request_timeout,
+                  'retry_on_timeout': es_request_auto_retry}
 
     config.registry[ELASTIC_SEARCH] = create_es_client(address,
                                                        use_aws_auth=use_aws_auth,
