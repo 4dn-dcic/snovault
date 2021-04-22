@@ -99,6 +99,7 @@ def test_defaults_on_put(content, testapp):
 
 
 def test_patch(content, testapp):
+    """ Augmented to also test revision history """
     url = content['@id']
     res = testapp.get(url)
     assert res.json['simple1'] == 'simple1 default'
@@ -115,6 +116,9 @@ def test_patch(content, testapp):
     res = testapp.patch_json(url, {'simple2': 'supplied simple2'}, status=200)
     assert res.json['@graph'][0]['simple1'] == 'supplied simple1'
     assert res.json['@graph'][0]['simple2'] == 'supplied simple2'
+
+    revisions = testapp.get(url + '/@@revision-history').json['revisions']
+    assert len(revisions) == 4
 
 
 def test_patch_delete_fields(content, testapp):
@@ -225,12 +229,22 @@ def test_patch_new_schema_version(content, root, testapp, monkeypatch):
     assert res.json['@graph'][0]['new_property'] == 'new'
 
 
-def test_admin_put_protected_link(link_targets, testapp):
+def test_admin_put_protected_link_revision_history(link_targets, testapp):
+    """ Admin can update protected fields that are links.
+        Also tests that links show up in revision history.
+    """
     res = testapp.post_json(COLLECTION_URL, item_with_link[0], status=201)
     url = res.location
 
     testapp.put_json(url, item_with_link[0], status=200)
     testapp.put_json(url, item_with_link[1], status=200)
+    revisions = testapp.get(url + '/@@revision-history').json['revisions']
+    for target_uuid, revision in zip([
+        '775795d3-4410-4114-836b-8eeecf1d0c2f',  # initial post
+        '775795d3-4410-4114-836b-8eeecf1d0c2f',  # first PUT
+        'd6784f5e-48a1-4b40-9b11-c8aefb6e1377'  # second PUT (changes link target)
+    ], revisions):
+        assert revision['protected_link'] == target_uuid
 
 
 def test_put_object_not_touching_children(content_with_child, testapp):
@@ -282,6 +296,7 @@ def test_retry(testapp):
 
 
 def test_check_only(content, testapp):
+    """ Tests check_only doesn't actually touch DB. """
     url = content['@id']
     # PATCH
     res = testapp.patch_json(url + '?check_only=True',
@@ -316,6 +331,10 @@ def test_check_only(content, testapp):
     del_error = res.json['errors'][1]
     assert del_error['name'] == 'delete_fields'
     assert del_error['description'] == 'Error deleting fields'
+
+    # no additional revisions should show up in db
+    revisions = testapp.get(url + '/@@revision-history').json['revisions']
+    assert len(revisions) == 1
 
 
 def test_max_sid_view(content, testapp):

@@ -931,7 +931,4 @@ class User(Base):
 
     @classmethod
     def check_password(cls, email, password):
-        user = cls.get_by_username(email)
-        if not user:
-            return False
-        return crypt.check(user.password, password)
+        raise NotImplementedError('This should never happen as we do not manage passwords.')
