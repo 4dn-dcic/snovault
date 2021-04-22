@@ -319,6 +319,12 @@ class PickStorage(object):
 
         return self.write.find_uuids_linked_to_item(uuid)
 
+    def revision_history(self, uuid):
+        """
+        Gets the revision history for the given uuid from postgres.
+        """
+        return self.write.revision_history(rid=uuid)
+
 
 class RDBStorage(object):
     """
@@ -567,6 +573,14 @@ class RDBStorage(object):
             session.add(link)
 
         return to_add, to_remove
+
+    def revision_history(self, *, rid):
+        """ Computes revision history of rid by returning all propsheets. """
+        session = self.DBSession
+        revisions = []
+        for revision in session.query(PropertySheet).filter_by(rid=rid).order_by(PropertySheet.sid):
+            revisions.append(revision.properties)
+        return revisions
 
 
 class UUID(types.TypeDecorator):
