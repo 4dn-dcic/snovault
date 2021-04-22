@@ -337,6 +337,8 @@ def test_queue_indexing_after_post_patch(app, testapp):
     assert 'sid' in msg_body
     assert msg_body['sid'] > post_sid
     indexer_queue.delete_messages(received)
+    revisions = testapp.get('/' + post_uuid + '/@@revision-history').json['revisions']
+    assert len(revisions) > 1
 
 
 @pytest.mark.flaky
@@ -1053,7 +1055,11 @@ def test_es_purge_uuid(app, testapp, indexer_testapp, session):
     assert es_item['_source']['embedded']['simple2'] == test_body['simple2']
 
     # The actual delete
+    revisions = testapp.get('/' + test_uuid + '/@@revision-history').json['revisions']
+    assert len(revisions) > 1
     storage.purge_uuid(test_uuid, TEST_TYPE)
+    revisions = testapp.get('/' + test_uuid + '/@@revision-history').json['revisions']
+    assert len(revisions) == 0
 
     check_post_from_rdb_2 = storage.write.get_by_uuid(test_uuid)
 

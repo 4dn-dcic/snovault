@@ -579,6 +579,7 @@ class RDBStorage(object):
         session = self.DBSession
         revisions = []
         for revision in session.query(PropertySheet).filter_by(rid=rid).order_by(PropertySheet.sid):
+            revision.properties['sid'] = revision.sid
             revisions.append(revision.properties)
         return revisions
 
