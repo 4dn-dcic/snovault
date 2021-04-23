@@ -1056,7 +1056,7 @@ def test_es_purge_uuid(app, testapp, indexer_testapp, session):
 
     # The actual delete
     revisions = testapp.get('/' + test_uuid + '/@@revision-history').json['revisions']
-    assert len(revisions) > 1
+    assert len(revisions) == 1
     storage.purge_uuid(test_uuid, TEST_TYPE)
     revisions = testapp.get('/' + test_uuid + '/@@revision-history').json['revisions']
     assert len(revisions) == 0
