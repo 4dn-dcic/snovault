@@ -55,7 +55,7 @@ keepalive = "0.5"
 MarkupSafe = ">=0.23,<1"
 netaddr = ">=0.7.18,<1"
 passlib = "^1.6.5"
-Pillow = "^6.2.2"  # later version known to work - Will 11/17/20
+Pillow = ">=6.2.2,<9.0.0"  # later version known to work - Will 11/17/20
 psutil = "^5.6.6"
 # psycopg2 = "2.8.4"
 psycopg2 = "^2.7.3"
