@@ -230,7 +230,7 @@ def main():
 
     # Loading app will have configured from config file. Reconfigure here:
     # Use `es_server=app.registry.settings.get('elasticsearch.server')` when ES logging is working
-    set_logging(in_prod=app.registry.settings.get('production'), level=logging.INFO)
+    set_logging(in_prod=testapp.app.registry.settings.get('production'), level=logging.INFO)
     return run(testapp, args.poll_interval, args.dry_run, args.path)
 
 

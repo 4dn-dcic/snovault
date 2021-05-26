@@ -37,9 +37,6 @@ classifiers = [
 [tool.poetry.dependencies]
 python = ">=3.6,<3.7"
 aws_requests_auth = "^0.4.1"
-# Not sure this is strictly needed but it seems useful.
-# It might be a dev dependency, but with a server there's not much distinction. -kmp 20-Feb-2020
-awscli = "^1.15.42"
 # TODO: This is a backport of Python's statistics library for versions earlier than Python 3.4,
 #       so may no longer be needed. Something to investigate later. -kmp 20-Feb-2020
 "backports.statistics" = "0.1.0"
@@ -55,7 +52,6 @@ html5lib = "0.9999999"
 humanfriendly = "^1.44.5"
 jsonschema_serialize_fork = "2.1.1"
 keepalive = "0.5"
-loremipsum = "1.0.5"
 MarkupSafe = ">=0.23,<1"
 netaddr = ">=0.7.18,<1"
 passlib = "^1.6.5"
@@ -88,13 +84,11 @@ pytz = ">=2020.1"
 PyYAML = ">=5.1,<5.3"
 rdflib = "^4.2.2"
 rdflib-jsonld = ">=0.3.0,<1.0.0"
-rfc3987 = "^1.3.6"
 rutter = ">=0.2,<1"
 # setuptools = "^36.6.0"
 simplejson = "3.17.0"
 SPARQLWrapper = "^1.7.6"
 SQLAlchemy = "1.3.16"  # Pinned because >=1.3.17 is a problem
-strict-rfc3339 = ">=0.7,<1"
 # Our use of structlog is pretty vanilla, so we should be OK with changes across the 18-19 major version boundary.
 structlog = ">=18.1.0,<20"
 subprocess_middleware = ">=0.3,<1"
@@ -118,6 +112,7 @@ coveralls = ">=2.1.1"
 flake8 = "^3.7.8"
 flaky = "3.6.1"
 moto = "1.3.7"
+pip-licenses = "^3.3.1"
 # Experimental upgrade to PyTest 4.5. It may be possible to upgrade further, but I think this is an improvement.
 # -kmp 11-May-2020
 pytest = "4.5.0"
