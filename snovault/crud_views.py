@@ -369,6 +369,15 @@ def get_item_revision_history(request, uuid):
         operation is.
     """
     revisions = request.registry[STORAGE].revision_history(uuid=uuid)
+    # Resolve last_modified resource paths
+    # NOTE: last_modified is a server_default present in our applications that
+    # use snovault. This code is intended to resolve the userid of the last_modified
+    # resource path
+    for revision in revisions:
+        last_modified = revision.get('last_modified', {})
+        modified_by = last_modified.get('modified_by', None)
+        if modified_by:
+            revision['last_modified']['modified_by'] = request.resource_path(modified_by)
     return revisions
 
 

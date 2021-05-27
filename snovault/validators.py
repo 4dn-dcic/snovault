@@ -68,9 +68,13 @@ def delete_fields(request, data, schema):
             del to_validate[dfield]
     # permission validation, comparing data with deleted values to the previous
     # data. If validated, return that validated value
-    # Note: a deleted field with a default will replaced with that value;
-    #       if same value was already in data, allow regardless of permission
-    validated, errors = validate(schema, to_validate, current=data, validate_current=True)
+    # Note 1: a deleted field with a default will be replaced with that value;
+    #         if same value was already in data, allow regardless of permission
+    # Note 2: previously, validate_current was set to True here - it is unclear why that
+    #         was desired as it prevented you from using ?delete_fields for resolving
+    #         validation errors... although the preferred method is via upgrader, those
+    #         don't seem to function at this time. - Will 5/27/21
+    validated, errors = validate(schema, to_validate, current=data, validate_current=False)
     if errors:
         for error in errors:
             if isinstance(error, IgnoreUnchanged):
