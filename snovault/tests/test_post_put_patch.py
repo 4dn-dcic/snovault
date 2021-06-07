@@ -240,9 +240,9 @@ def test_admin_put_protected_link_revision_history(link_targets, testapp):
     testapp.put_json(url, item_with_link[1], status=200)
     revisions = testapp.get(url + '/@@revision-history').json['revisions']
     for target_uuid, revision in zip([
-        '775795d3-4410-4114-836b-8eeecf1d0c2f',  # initial post
-        '775795d3-4410-4114-836b-8eeecf1d0c2f',  # first PUT
-        'd6784f5e-48a1-4b40-9b11-c8aefb6e1377'  # second PUT (changes link target)
+        item_with_link[0]['protected_link'],  # initial post
+        item_with_link[0]['protected_link'],  # first PUT
+        item_with_link[1]['protected_link']  # second PUT (changes link target)
     ], revisions):
         assert revision['protected_link'] == target_uuid
 

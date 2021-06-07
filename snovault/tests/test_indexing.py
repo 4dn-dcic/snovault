@@ -338,7 +338,7 @@ def test_queue_indexing_after_post_patch(app, testapp):
     assert msg_body['sid'] > post_sid
     indexer_queue.delete_messages(received)
     revisions = testapp.get('/' + post_uuid + '/@@revision-history').json['revisions']
-    assert len(revisions) > 1
+    assert len(revisions) == 2
 
 
 @pytest.mark.flaky
