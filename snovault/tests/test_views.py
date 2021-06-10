@@ -247,7 +247,6 @@ def test_collection_post_bad(anontestapp):
     anontestapp.post_json('/embedding-tests', {}, headers={'Authorization': value}, status=401)
 
 
-@pytest.mark.slow
 def test_collection_limit(testapp):
     """ Post 3 EmbeddingTests, check that limit=all, limit=2 works """
     obj1 = {
@@ -269,6 +268,7 @@ def test_collection_limit(testapp):
     res_2 = testapp.get('/embedding-tests/?limit=2', status=200)
     assert len(res_all.json['@graph']) == 3
     assert len(res_2.json['@graph']) == 2
+
 
 def test_collection_put(testapp, execute_counter):
     """ Insert and udpate an item into a collection, verify it worked """
@@ -343,12 +343,6 @@ def test_index_data_workbook(testapp, indexer_testapp, item_type):
         indexer_testapp.get(item['@id'] + '@@index-data', status=200)
 
 
-@pytest.mark.xfail
-def test_abstract_collection(testapp, experiment):
-    testapp.get('/Dataset/{accession}'.format(**experiment))
-    testapp.get('/datasets/{accession}'.format(**experiment))
-
-
 def test_home(testapp):
     testapp.get('/', status=200)
 
@@ -389,3 +383,37 @@ def test_profiles_all(testapp, registry):
         assert ti.name in res.json
     for ti in registry[TYPES].by_abstract_type.values():
         assert ti.name in res.json
+
+
+def test_item_revision_history(testapp, registry):
+    """ Posts an item then patches it a few times, verifies that all revisions show up in
+        the revision history.
+    """
+    objv1 = {
+        'title': "Testing1",
+        'description': "This is testing object 1",
+    }
+    objv2 = {
+        'title': "Testing2",
+        'description': "This is testing object 2",
+    }
+    objv3 = {
+        'title': "Testing3",
+        'description': "This is testing object 3",
+    }
+    item_uuid = testapp.post_json('/embedding-tests', objv1, status=201).json['@graph'][0]['uuid']
+    testapp.patch_json('/' + item_uuid, objv2, status=200)
+    testapp.patch_json('/' + item_uuid, objv3, status=200)
+
+    # now get revision history
+    revisions = testapp.get('/' + item_uuid + '/@@revision-history').json['revisions']
+    assert len(revisions) == 3  # we made 3 edits
+
+    # lets make some more
+    testapp.patch_json('/' + item_uuid, objv2, status=200)
+    testapp.patch_json('/' + item_uuid, objv1, status=200)
+    revisions = testapp.get('/' + item_uuid + '/@@revision-history').json['revisions']
+    assert len(revisions) == 5  # now we made 5 edits
+    # they should be ordered by sid, recall the patch order above
+    for patched_metadata, revision in zip([objv1, objv2, objv3, objv2, objv1], revisions):
+        assert revision['title'] == patched_metadata['title']

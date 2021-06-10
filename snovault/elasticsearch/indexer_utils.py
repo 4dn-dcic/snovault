@@ -9,6 +9,7 @@ from ..typeinfo import AbstractTypeInfo
 
 
 log = structlog.getLogger(__name__)
+SCAN_PAGE_SIZE = 5000
 
 
 def includeme(config):
@@ -20,7 +21,7 @@ def get_namespaced_index(config, index):
     """ Grabs indexer.namespace from settings and namespace the given index """
     try:
         settings = config.registry.settings
-    except:  # accept either config or registry as first arg
+    except AttributeError:  # accept either config or registry as first arg
         settings = config.settings
     namespace = settings.get('indexer.namespace') or ''
     return namespace + index
@@ -74,7 +75,9 @@ def find_uuids_for_indexing(registry, updated, find_index=None):
     }
     if not find_index:
         find_index = get_namespaced_index(registry, '*')
-    results = scan(es, index=find_index, query=scan_query, size=10000)
+    # size param below == # of results per request, too large and can timeout, too small and will make too
+    # many requests - 5000 seems to be a reasonable number. - Will 6/7/21
+    results = scan(es, index=find_index, query=scan_query, size=SCAN_PAGE_SIZE)
     invalidated_with_type = {(res['_id'], to_camel_case(res['_type'])) for res in results}
     invalidated = {uuid for uuid, _type in invalidated_with_type}
 
@@ -101,7 +104,7 @@ def get_uuids_for_types(registry, types=[]):
     if not isinstance(types, list) or not all(isinstance(t, str) for t in types):  # type check for safety
         raise TypeError('Expected type=list (of strings) for argument "types"')
     collections = registry[COLLECTIONS]
-    # might as well sort collections alphatbetically, as this was done earlier
+    # might as well sort collections alphabetically, as this was done earlier
     for coll_name in sorted(collections.by_item_type):
         if types and coll_name not in types:
             continue

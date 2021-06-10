@@ -5,6 +5,7 @@ from uuid import (
 )
 
 import transaction
+from pyramid.exceptions import HTTPForbidden
 from pyramid.settings import asbool
 from pyramid.view import view_config
 from structlog import get_logger
@@ -315,7 +316,6 @@ def item_delete_full(context, request, render=None):
     }
 
 
-
 @view_config(context=Item, permission='view', request_method='GET',
              name='validation-errors')
 @debug_log
@@ -340,7 +340,7 @@ def item_view_validation_errors(context, request):
     source = context.model.source
     allowed = set(source['principals_allowed']['view'])  # use view permissions
     if allowed.isdisjoint(request.effective_principals):
-        raise HTTPForbidden()
+        raise HTTPForbidden
     return {
         '@id': source['object']['@id'],
         'validation_errors': source.get('validation_errors', [])
@@ -361,3 +361,41 @@ def validation_errors_property(context, request):
     """
     path = request.resource_path(context)
     return request.embed(path, '@@validation-errors')['validation_errors']
+
+
+def get_item_revision_history(request, uuid):
+    """ Computes the revision history of the given item from the DB.
+        The more edits an item has undergone, the more expensive this
+        operation is.
+    """
+    revisions = request.registry[STORAGE].revision_history(uuid=uuid)
+    # Resolve last_modified
+    # NOTE: last_modified is a server_default present in our applications that
+    # use snovault. This code is intended to resolve the user email of the last_modified
+    # resource path (if it exists).
+    user_cache = {}
+    for revision in revisions:
+        last_modified = revision.get('last_modified', {})
+        modified_by = last_modified.get('modified_by', None)
+        if modified_by:
+            user = user_cache.get(modified_by)
+            if not user:
+                user = request.embed(modified_by, frame='raw')
+                user_cache[modified_by] = user
+            revision['last_modified']['modified_by'] = user.get('email', 'No email specified!')
+    return revisions
+
+
+@view_config(context=Item, permission='edit', request_method='GET',
+             name='revision-history')
+@debug_log
+def item_view_revision_history(context, request):
+    """ View config for viewing an item's revision history.
+        For now, to view revision history the caller must have EDIT permissions.
+    """
+    uuid = str(context.uuid)
+    revisions = get_item_revision_history(request, uuid)
+    return {
+        'uuid': uuid,
+        'revisions': revisions
+    }

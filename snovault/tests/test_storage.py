@@ -121,6 +121,7 @@ def test_get_by_json(session):
 
 
 def test_purge_uuid(session, storage):
+    """ Tests full purge of metadata (including revision history). """
     name = 'testdata'
     props1 = {'foo': 'bar'}
     resource = Resource('test_item', {name: props1})
@@ -143,12 +144,14 @@ def test_purge_uuid(session, storage):
     assert current.sid == propsheet.sid
     assert current.rid == resource.rid
 
+    assert len(storage.revision_history(uuid=str(resource.rid))) > 0
     storage.purge_uuid(str(resource.rid))
     check_post = storage.get_by_uuid(str(resource.rid))
     assert not check_post
     assert session.query(Key).count() == 0
     assert session.query(PropertySheet).count() == 0
     assert session.query(CurrentPropertySheet).count() == 0
+    assert storage.revision_history(uuid=str(resource.rid)) == []
 
 
 def test_delete_compound(session, storage):
@@ -178,12 +181,14 @@ def test_delete_compound(session, storage):
     current = session.query(CurrentPropertySheet).one()
     assert current.sid
 
+    assert len(storage.revision_history(uuid=str(resource.rid))) > 0
     storage.purge_uuid(str(resource.rid))
     check_post = storage.get_by_uuid(str(resource.rid))
     assert not check_post
     assert session.query(Key).count() == 0
     assert session.query(PropertySheet).count() == 0
     assert session.query(CurrentPropertySheet).count() == 0
+    assert storage.revision_history(uuid=str(resource.rid)) == []
 
 
 def test_keys(session):

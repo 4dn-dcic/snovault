@@ -337,6 +337,8 @@ def test_queue_indexing_after_post_patch(app, testapp):
     assert 'sid' in msg_body
     assert msg_body['sid'] > post_sid
     indexer_queue.delete_messages(received)
+    revisions = testapp.get('/' + post_uuid + '/@@revision-history').json['revisions']
+    assert len(revisions) == 2
 
 
 @pytest.mark.flaky
@@ -1037,7 +1039,7 @@ def test_es_purge_uuid(app, testapp, indexer_testapp, session):
     indexer_queue.clear_queue()
     time.sleep(4)
 
-    ## Now ensure that we do have it in ES:
+    # Now ensure that we do have it in ES:
     try:
         namespaced_index = indexer_utils.get_namespaced_index(app, TEST_TYPE)
         es_item = es.get(index=namespaced_index, doc_type=TEST_TYPE, id=test_uuid)
@@ -1053,7 +1055,12 @@ def test_es_purge_uuid(app, testapp, indexer_testapp, session):
     assert es_item['_source']['embedded']['simple2'] == test_body['simple2']
 
     # The actual delete
+    revisions = testapp.get('/' + test_uuid + '/@@revision-history').json['revisions']
+    assert len(revisions) == 1
     storage.purge_uuid(test_uuid, TEST_TYPE)
+    # Riddle me this: above^ delete supposedly fails if the below is not commented out? - Will 04/23/21
+    # revisions = testapp.get('/' + test_uuid + '/@@revision-history').json['revisions']
+    # assert len(revisions) == 1  # es_items have no revision history
 
     check_post_from_rdb_2 = storage.write.get_by_uuid(test_uuid)
 
