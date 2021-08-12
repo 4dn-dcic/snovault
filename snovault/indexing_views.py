@@ -1,6 +1,7 @@
 from __future__ import unicode_literals
 
 import sys
+
 from contextlib import contextmanager
 from timeit import default_timer as timer
 
@@ -41,19 +42,21 @@ def indexing_timer(timer_dict, time_key):
     timer_dict[time_key] = timer() - start
 
 
-def join_linked_uuids_sids(request, uuids):
+def join_linked_uuids_sids(request, uuid_type_pairs):
     """
-    Simply iterate through the uuids and return an array of dicts containing
-    uuid and sid (from request._sid_cache)
+    Simply iterate through the uuid_type_pairs and return an array of dicts containing
+    uuid, sid (from request._sid_cache) and the item type.
 
     Args:
         request: current Request object
-        uuids: list of string uuids
+        uuid_type_pairs: list of 2-tuples (uuid, item_type)
 
     Returns:
-        A list of dicts containing uuid and up-to-date db sid
+        A list of dicts containing uuid, up-to-date db sid and item type
     """
-    return [{'uuid': uuid, 'sid': request._sid_cache[uuid]} for uuid in uuids]
+    return [{'uuid': uuid,
+             'sid': request._sid_cache[uuid],
+             'item_type': item_type} for uuid, item_type in uuid_type_pairs]
 
 
 def get_rev_linked_items(request, uuid):
@@ -158,6 +161,8 @@ def item_index_data(context, request):
     # all embeds (including subrequests) below will use the embed cache
     with indexing_timer(indexing_stats, 'embedded_view'):
         embedded_view = request.invoke_view(path, '@@embedded', index_uuid=uuid)
+
+    # this is built since the embedded view is built on "item_with_links", see resources.py
     linked_uuids_embedded = request._linked_uuids.copy()
 
     # find uuids traversed that rev link to this item
@@ -178,6 +183,7 @@ def item_index_data(context, request):
         try:
             request.invoke_subrequest(validate_req)
         except ValidationFailure:
+            # TODO: This should probably be logged. -kmp 22-Oct-2020
             pass
 
     document = {
@@ -241,7 +247,8 @@ def indexing_info(context, request):
         path = '/' + uuid + '/@@index-data'
         index_view = request.invoke_view(path, index_uuid=uuid, as_user='INDEXER')
         response['indexing_stats'] = index_view['indexing_stats']
-        es_assc_uuids = find_uuids_for_indexing(request.registry, set([uuid]))
+        # since there is no diff, we cannot compute invalidation scope here.
+        es_assc_uuids, _ = find_uuids_for_indexing(request.registry, set([uuid]))
         new_rev_link_uuids = get_rev_linked_items(request, uuid)
         # invalidated: items linking to this in es + newly rev linked items
         response['uuids_invalidated'] = list(es_assc_uuids | new_rev_link_uuids)

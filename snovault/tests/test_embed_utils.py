@@ -34,6 +34,7 @@ def test_build_default_embeds():
         'obj1.obj2.@type',
         'obj1.obj2.uuid',
         'obj1.obj2.principals_allowed.*',
+        'obj1.obj2.status',
         'obj1.*',
         'obj1.obj3.*'
     ]
@@ -75,7 +76,8 @@ def test_find_default_embeds_and_expand_emb_list(registry):
         'attachment.@type',
         'attachment.uuid',
         'attachment.@id',
-        'attachment.principals_allowed.*'
+        'attachment.principals_allowed.*',
+        'attachment.status'
     ]
     assert set(expected_built) == set(build_default_embeds(embs_to_add2, set()))
 

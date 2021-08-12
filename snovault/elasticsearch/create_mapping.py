@@ -50,7 +50,9 @@ KW_IGNORE_ABOVE = 512
 MIN_NGRAM = 2
 MAX_NGRAM = 10
 # used to disable nested mapping on array of object fields
-DISABLE_NESTED = 'disable_nested'
+NESTED_ENABLED = 'enable_nested'
+# global index.refresh_interval - currently the default of 1s
+REFRESH_INTERVAL = '1s'
 
 
 def determine_if_is_date_field(field, schema):
@@ -115,7 +117,7 @@ def schema_mapping(field, schema, top_level=False, from_array=False):
                     properties[k] = mapping
 
         # only do this if we said so, allow it to be explicitly disabled as well
-        if from_array and Settings.MAPPINGS_USE_NESTED and not schema.get(DISABLE_NESTED, False):
+        if from_array and Settings.MAPPINGS_USE_NESTED and schema.get(NESTED_ENABLED, False):
             return {
                 'type': 'nested',
                 'properties': properties
@@ -245,6 +247,7 @@ def index_settings():
             'number_of_shards': NUM_SHARDS,
             'number_of_replicas': NUM_REPLICAS,
             'max_result_window': SEARCH_MAX,
+            'refresh_interval': REFRESH_INTERVAL,  # although we are using the default, let's be explicit about it
             'mapping': {
                 'nested_fields': {
                     'limit': 100
@@ -456,6 +459,10 @@ def es_mapping(mapping, agg_items_mapping):
                     'sid': {
                         'type': 'keyword',
                         'ignore_above': KW_IGNORE_ABOVE
+                    },
+                    'item_type': {
+                        'type': 'keyword',
+                        'ignore_above': KW_IGNORE_ABOVE
                     }
                 }
             },
@@ -466,6 +473,10 @@ def es_mapping(mapping, agg_items_mapping):
                         'ignore_above': KW_IGNORE_ABOVE
                     },
                     'sid': {
+                        'type': 'keyword',
+                        'ignore_above': KW_IGNORE_ABOVE
+                    },
+                    'item_type': {
                         'type': 'keyword',
                         'ignore_above': KW_IGNORE_ABOVE
                     }
@@ -584,7 +595,7 @@ def aggregated_items_mapping(types, item_type):
             }
         }
         # if no agg fields are provided, default to uuid
-        if agg_fields == []:
+        if not agg_fields:
             agg_fields = ['uuid']
         aggs_mapping[agg_item]['properties']['item']['properties'] = agg_fields_mapping = {}
         for agg_field in agg_fields:
@@ -659,13 +670,13 @@ def type_mapping(types, item_type, embed=True):
 
             # If this is a list of linkTos and has properties to be embedded,
             # make it 'nested' for more aggregations.
-            map_with_nested = (Settings.MAPPINGS_USE_NESTED and  # must be explicitly enabled
+            map_with_nested = (Settings.MAPPINGS_USE_NESTED and  # nested must be globally enabled
                                curr_m.get('properties') and
                                curr_e != 'update_items' and
                                curr_e in schema['properties'] and
                                curr_e in mapping['properties'] and
                                schema['properties'][curr_e]['type'] == 'array' and
-                               not curr_s.get(DISABLE_NESTED, False))  # can be explicitly disabled
+                               curr_s.get(NESTED_ENABLED, False))  # nested must also be enabled on individual fields
             if map_with_nested:
                 curr_m['type'] = 'nested'
 
@@ -1111,7 +1122,7 @@ def run(app, collections=None, dry_run=False, check_first=False, skip_indexing=F
     # keep track of uuids to be indexed after mapping is done.
     # Set of uuids for each item type; keyed by item type. Order for python < 3.6
     uuids_to_index = OrderedDict()
-    total_reindex = (collections == None and not dry_run and not check_first
+    total_reindex = (collections is None and not dry_run and not check_first
                      and not index_diff and not print_count_only)
 
     if not collections:
@@ -1210,7 +1221,8 @@ def run(app, collections=None, dry_run=False, check_first=False, skip_indexing=F
                         to_subtract = set(chain.from_iterable(
                             [v for k, v in uuids_to_index.items() if k != i_type]
                         ))
-                        all_assc_uuids = find_uuids_for_indexing(registry, all_uuids_to_index, i_type)
+                        # NOTE: invalidation scope computation not possible here since there is no set of diffs
+                        all_assc_uuids, _ = find_uuids_for_indexing(registry, all_uuids_to_index, i_type)
                         uuids_to_index[i_type] = all_assc_uuids - to_subtract
                 log.error('___SYNC INDEXING WITH STRICT=FALSE MAY CAUSE REV_LINK INCONSISTENCY___')
             # sort by-type uuids into one list and index synchronously

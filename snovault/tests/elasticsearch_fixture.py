@@ -31,6 +31,7 @@ def server_process(datadir, host='localhost', port=9200, prefix='', echo=False):
         '-Ehttp.port=%d' % port,
         '-Epath.data=%s' % os.path.join(datadir, 'data'),
         '-Epath.logs=%s' % os.path.join(datadir, 'logs'),
+        '-Epath.repo=%s' % os.path.join(datadir, 'snapshots'),
     ]
     # elasticsearch for travis
     if os.environ.get('TRAVIS'):

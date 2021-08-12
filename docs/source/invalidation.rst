@@ -2,7 +2,7 @@ Dependecies/Invalidation
 ===========================
 
 Quick reference of important files (all under src/snovault/)
-----------------------------------
+------------------------------------------------------------
 
 * indexing_views.py - contains the function that builds the object model and other information that is actually indexed. This view is in charge of generating invalidation information
 * resource_views.py - contains functions for all commonly-used views, including those used in indexing_views
@@ -53,3 +53,13 @@ Purging items
 -------------
 
 There is another spot `find_uuids_for_indexing` is used, and that is to find all linked items when attempting to "purge" an item (fully remove from postgresql and Elasticsearch). Before removing an item, it is crucial to ensure that all links to that item have been removed, which is why this function is used.
+
+
+Invalidation Scope
+-------------------------
+
+Previously, `find_uuids_for_indexing` would take the uuids from _linked_uuids as is. Now, if given a diff (passed from SQS on edit) the uuids returned will be pruned to determine whether or not they actually need to be invalidated. The indexer does this by examining the diff received from SQS and the embedded list of all invalidated item types. If it detects the diff modified something that is embedded in the invalidated item type, all uuids of this type are invalidated. If not, those uuids are not queued for reindexing since the edit does not change the embedded view of the item. The followind diagram serves as a visual aid.
+
+Note that the above behavior is ONLY activate upon receiving a diff, which is computed only on item edits. Upon item creation/deletion the process remains the same, since there is no diff. It is also very important to note that any additional fields used in calculated properties are embedded as well. If not, then a field could be modified that would affect an embedded field but such edit would be invisible because we did not know the field was used.
+
+.. image:: img/invalidation_scope.png

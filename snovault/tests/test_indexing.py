@@ -5,7 +5,6 @@ elasticsearch running as subprocesses.
 Does not include data dependent tests
 """
 
-import datetime as datetime_module
 import json
 import os
 import pytest
@@ -23,11 +22,12 @@ from elasticsearch.exceptions import NotFoundError
 from pyramid.traversal import traverse
 from sqlalchemy import MetaData
 from unittest import mock
+from webtest.app import AppError
 from zope.sqlalchemy import mark_changed
 from ..interfaces import TYPES, DBSESSION, STORAGE
 from .. import util  # The filename util.py, not something in __init__.py
 from .. import main  # Function main actually defined in __init__.py (should maybe be defined elsewhere)
-from ..elasticsearch import create_mapping, indexer_utils, indexer_queue
+from ..elasticsearch import create_mapping, indexer_utils
 from ..elasticsearch.create_mapping import (
     build_index_record,
     check_and_reindex_existing,
@@ -41,15 +41,14 @@ from ..elasticsearch.create_mapping import (
 )
 from ..elasticsearch.indexer import check_sid, SidException
 from ..elasticsearch.indexer_queue import QueueManager
+from ..elasticsearch.indexer_utils import compute_invalidation_scope
 from ..elasticsearch.interfaces import ELASTIC_SEARCH, INDEXER_QUEUE, INDEXER_QUEUE_MIRROR
+from ..util import INDEXER_NAMESPACE_FOR_TESTING
 from dcicutils.misc_utils import Retry
-from .pyramidfixtures import dummy_request
-from .testappfixtures import _app_settings
 from .testing_views import TestingLinkSourceSno
-from .toolfixtures import registry, root, elasticsearch
 
 
-notice_pytest_fixtures(dummy_request, TestingLinkSourceSno, registry, root, elasticsearch)
+notice_pytest_fixtures(TestingLinkSourceSno)
 
 
 pytestmark = [pytest.mark.indexing]
@@ -62,21 +61,9 @@ TEST_TYPE = 'testing_post_put_patch_sno'  # use one collection for testing
 create_mapping.NUM_SHARDS = 1
 
 
-def generate_indexer_namespace_for_testing():
-    travis_job_id = os.environ.get('TRAVIS_JOB_ID')
-    if travis_job_id:
-        return travis_job_id
-    else:
-        # We've experimentally determined that it works pretty well to just use the timestamp.
-        return "sno-test-%s" % int(datetime_module.datetime.now().timestamp() * 1000000)
-
-
-INDEXER_NAMESPACE_FOR_TESTING = generate_indexer_namespace_for_testing()
-
-
 @pytest.fixture(scope='session')
-def app_settings(wsgi_server_host_port, elasticsearch_server, postgresql_server, aws_auth):
-    settings = _app_settings.copy()
+def app_settings(basic_app_settings, wsgi_server_host_port, elasticsearch_server, postgresql_server, aws_auth):
+    settings = basic_app_settings
     settings['create_tables'] = True
     settings['elasticsearch.server'] = elasticsearch_server
     settings['sqlalchemy.url'] = postgresql_server
@@ -105,7 +92,7 @@ else:
 
 @pytest.yield_fixture(scope='module', params=INDEXER_APP_PARAMS)  # must happen AFTER scope='session' moto setup
 def app(app_settings, request):
-    if request.param: # run tests both with and without mpindexer
+    if request.param:  # run tests both with and without mpindexer
         app_settings['mpindexer'] = True
     app = main({}, **app_settings)
     yield app
@@ -195,12 +182,12 @@ def test_indexer_namespacing(app, testapp, indexer_testapp):
     assert idx in es.indices.get(index=idx)
     if jid:
         assert jid in idx
-    app.registry.settings['indexer.namespace'] = '' # unset namespace, check raw is given
+    app.registry.settings['indexer.namespace'] = ''  # unset namespace, check raw is given
     raw_idx = indexer_utils.get_namespaced_index(app, TEST_TYPE)
     star_idx = indexer_utils.get_namespaced_index(app.registry, '*')  # registry should work as well
     assert raw_idx == TEST_TYPE
     assert star_idx == '*'
-    app.registry.settings['indexer.namespace'] = jid # reset jid
+    app.registry.settings['indexer.namespace'] = jid  # reset jid
 
 
 @pytest.mark.es
@@ -263,8 +250,7 @@ def test_indexer_queue(app):
     tries_left = 5
     while tries_left > 0:
         msg_count = indexer_queue.number_of_messages()
-        if (msg_count['primary_waiting'] == 0 and
-            msg_count['primary_inflight'] == 0):
+        if msg_count['primary_waiting'] == 0 and msg_count['primary_inflight'] == 0:
             break
         tries_left -= 1
         time.sleep(3)
@@ -290,8 +276,7 @@ def test_queue_indexing_telemetry_id(app, testapp):
     tries_left = 5
     while tries_left > 0:
         msg_count = indexer_queue.number_of_messages()
-        if (msg_count['primary_waiting'] == 1 and
-            msg_count['secondary_waiting'] == 2):
+        if msg_count['primary_waiting'] == 1 and msg_count['secondary_waiting'] == 2:
             break
         tries_left -= 1
         time.sleep(3)
@@ -312,8 +297,7 @@ def test_queue_indexing_telemetry_id(app, testapp):
     tries_left = 5
     while tries_left > 0:
         msg_count = indexer_queue.number_of_messages()
-        if (msg_count['primary_waiting'] == 0 and
-            msg_count['secondary_waiting'] == 0):
+        if msg_count['primary_waiting'] == 0 and msg_count['secondary_waiting'] == 0:
             break
         tries_left -= 1
         time.sleep(3)
@@ -345,6 +329,7 @@ def test_queue_indexing_after_post_patch(app, testapp):
     assert len(received) == 1
     msg_body = json.loads(received[0]['Body'])
     assert isinstance(msg_body, dict)
+    assert msg_body['diff'] == ['TestingPostPutPatchSno.required']
     assert msg_body['uuid'] == post_uuid
     assert msg_body['strict'] is False
     assert msg_body['method'] == 'PATCH'
@@ -352,6 +337,8 @@ def test_queue_indexing_after_post_patch(app, testapp):
     assert 'sid' in msg_body
     assert msg_body['sid'] > post_sid
     indexer_queue.delete_messages(received)
+    revisions = testapp.get('/' + post_uuid + '/@@revision-history').json['revisions']
+    assert len(revisions) == 2
 
 
 @pytest.mark.flaky
@@ -480,7 +467,7 @@ def test_indexing_logging(app, testapp, indexer_testapp, capfd):
     # assert exists
 
     # Can't get log msgs when MPIndexer is running, so skip in this case
-    if app.registry.settings['mpindexer'] == True:
+    if app.registry.settings['mpindexer']:
         return
 
     # index an item and make sure logging to stdout occurs
@@ -586,10 +573,10 @@ def test_sync_and_queue_indexing(app, testapp, indexer_testapp):
     res = testapp.post_json(TEST_COLL, {'required': ''})
     # synchronously index
     create_mapping.run(app, collections=[TEST_TYPE], sync_index=True)
-    #time.sleep(6)
+    # time.sleep(6)
     namespaced_index = indexer_utils.get_namespaced_index(app, TEST_TYPE)
     doc_count = tries = 0
-    while(tries < 6):
+    while tries < 6:
         doc_count = es.count(index=namespaced_index, doc_type=TEST_TYPE).get('count')
         if doc_count != 0:
             break
@@ -599,7 +586,7 @@ def test_sync_and_queue_indexing(app, testapp, indexer_testapp):
     # post second item to database but do not index (don't load into es)
     # queued on post - total of two items queued
     res = testapp.post_json(TEST_COLL, {'required': ''})
-    #time.sleep(2)
+    # time.sleep(2)
     doc_count = es.count(index=namespaced_index, doc_type=TEST_TYPE).get('count')
     # doc_count has not yet updated
     assert doc_count == 1
@@ -634,7 +621,7 @@ def test_queue_indexing_with_linked(app, testapp, indexer_testapp, dummy_request
     )
     ppp_res = testapp.post_json(TEST_COLL, {'required': ''})
     ppp_uuid = ppp_res.json['@graph'][0]['uuid']
-    target  = {'name': 'one', 'uuid': '775795d3-4410-4114-836b-8eeecf1d0c2f'}
+    target = {'name': 'one', 'uuid': '775795d3-4410-4114-836b-8eeecf1d0c2f'}
     source = {
         'name': 'A',
         'target': '775795d3-4410-4114-836b-8eeecf1d0c2f',
@@ -674,7 +661,7 @@ def test_queue_indexing_with_linked(app, testapp, indexer_testapp, dummy_request
         doc_count = es.count(index=namespaced_link_source, doc_type='testing_link_source_sno').get('count')
     assert doc_count == 1
     # patching json will not queue the embedded ppp
-    # the target will be indexed though, since it has a linkTo back to the source
+    # the target will be indexed though, since it has a *rev-link* back to the source
     patch_source_name = 'ABC'
     testapp.patch_json('/testing-link-sources-sno/' + source_uuid, {'name': patch_source_name})
     time.sleep(2)
@@ -703,16 +690,16 @@ def test_queue_indexing_with_linked(app, testapp, indexer_testapp, dummy_request
     assert es_target['_source']['embedded']['reverse'][0]['name'] == patch_source_name
 
     # test find_uuids_for_indexing
-    to_index = indexer_utils.find_uuids_for_indexing(app.registry, {target['uuid']})
+    to_index, _ = indexer_utils.find_uuids_for_indexing(app.registry, {target['uuid']})
     assert to_index == {target['uuid'], source['uuid']}
-    to_index = indexer_utils.find_uuids_for_indexing(app.registry, {ppp_uuid})
+    to_index, _ = indexer_utils.find_uuids_for_indexing(app.registry, {ppp_uuid})
     assert to_index == {ppp_uuid, source['uuid']}
     # this will return the target uuid, since it has an indexed rev link
-    to_index = indexer_utils.find_uuids_for_indexing(app.registry, {source['uuid']})
+    to_index, _ = indexer_utils.find_uuids_for_indexing(app.registry, {source['uuid']})
     assert to_index == {target['uuid'], source['uuid']}
     # now use a made-up uuid; only result should be itself
     fake_uuid = str(uuid.uuid4())
-    to_index = indexer_utils.find_uuids_for_indexing(app.registry, {fake_uuid})
+    to_index, _ = indexer_utils.find_uuids_for_indexing(app.registry, {fake_uuid})
     assert to_index == {fake_uuid}
 
     # test @@links functionality
@@ -772,7 +759,7 @@ def test_queue_indexing_with_linked(app, testapp, indexer_testapp, dummy_request
     # make sure everything has updated on ES
     check_es_source = es.get(index=namespaced_link_source, doc_type='testing_link_source_sno',
                              id=source['uuid'], ignore=[404])
-    assert check_es_source['found'] == False
+    assert check_es_source['found'] is False
     # source uuid removed from the target uuid
     check_es_target = es.get(index=namespaced_link_target, doc_type='testing_link_target_sno',
                              id=target['uuid'])
@@ -823,7 +810,7 @@ def test_indexing_invalid_sid_linked_items(app, testapp, indexer_testapp):
     """
     # invalid sid causes infinite loop in MPIndexer, so skip this test if enabled
     # res_vals[2] is continuously True with invalid sid, see MPIndexer L228
-    if app.registry.settings['mpindexer'] == True:
+    if app.registry.settings['mpindexer']:
         return
     indexer_queue = app.registry[INDEXER_QUEUE]
     es = app.registry[ELASTIC_SEARCH]
@@ -987,7 +974,7 @@ def test_confirm_mapping(app, testapp, indexer_testapp):
     index_record = build_index_record(mapping, TEST_TYPE)
     tries_taken = confirm_mapping(es, namespaced_index, TEST_TYPE, index_record)
     # 3 tries means it failed to correct, 0 means it was unneeded
-    assert tries_taken > 0 and tries_taken < 3
+    assert 0 < tries_taken < 3
     # test against a live mapping to ensure handling of dynamic mapping works
     run(app, collections=[TEST_TYPE], skip_indexing=True)
     # compare_against_existing_mapping is used under the hood in confirm_mapping
@@ -1052,7 +1039,7 @@ def test_es_purge_uuid(app, testapp, indexer_testapp, session):
     indexer_queue.clear_queue()
     time.sleep(4)
 
-    ## Now ensure that we do have it in ES:
+    # Now ensure that we do have it in ES:
     try:
         namespaced_index = indexer_utils.get_namespaced_index(app, TEST_TYPE)
         es_item = es.get(index=namespaced_index, doc_type=TEST_TYPE, id=test_uuid)
@@ -1068,7 +1055,12 @@ def test_es_purge_uuid(app, testapp, indexer_testapp, session):
     assert es_item['_source']['embedded']['simple2'] == test_body['simple2']
 
     # The actual delete
+    revisions = testapp.get('/' + test_uuid + '/@@revision-history').json['revisions']
+    assert len(revisions) == 1
     storage.purge_uuid(test_uuid, TEST_TYPE)
+    # Riddle me this: above^ delete supposedly fails if the below is not commented out? - Will 04/23/21
+    # revisions = testapp.get('/' + test_uuid + '/@@revision-history').json['revisions']
+    # assert len(revisions) == 1  # es_items have no revision history
 
     check_post_from_rdb_2 = storage.write.get_by_uuid(test_uuid)
 
@@ -1076,7 +1068,7 @@ def test_es_purge_uuid(app, testapp, indexer_testapp, session):
 
     time.sleep(5)  # Allow time for ES API to send network request to ES server to perform delete.
     check_post_from_es_2 = es.get(index=namespaced_index, doc_type=TEST_TYPE, id=test_uuid, ignore=[404])
-    assert check_post_from_es_2['found'] == False
+    assert check_post_from_es_2['found'] is False
 
 
 @pytest.mark.flaky
@@ -1119,7 +1111,7 @@ def test_create_mapping_check_first(app, testapp, indexer_testapp):
 
 def delay_rerun(*args):
     """ Rerun function for flaky """
-    time.sleep(30)
+    time.sleep(10)
     return True
 
 
@@ -1184,7 +1176,7 @@ def test_indexing_esstorage(app, testapp, indexer_testapp):
     assert 'total_indexing_view' in es_res_direct['_source']['indexing_stats']
     # db get_by_uuid direct returns None by design
     db_res_direct = app.registry[STORAGE].write.get_by_uuid_direct(test_uuid, TEST_TYPE)
-    assert db_res_direct == None
+    assert db_res_direct is None
     # delete the test item (should throw no exceptions)
     esstorage.purge_uuid(test_uuid, namespaced_test_type)
 
@@ -1325,9 +1317,9 @@ def test_aggregated_items(app, testapp, indexer_testapp):
         '/testing-link-aggregates-sno/' + aggregated['uuid'],
         {'targets': [
             {'test_description': 'target one revised',
-            'target': '775795d3-4410-4114-836b-8eeecf1d0c2f'},
+             'target': '775795d3-4410-4114-836b-8eeecf1d0c2f'},
             {'test_description': 'target one revised',
-            'target': '775795d3-4410-4114-836b-8eeecf1d0c2f'},
+             'target': '775795d3-4410-4114-836b-8eeecf1d0c2f'},
             {'test_description': 'target one revised2',
              'target': '775795d3-4410-4114-836b-8eeecf1d0c2f'}
         ]}
@@ -1405,7 +1397,9 @@ def test_indexing_info(app, testapp, indexer_testapp):
     assert 'indexing_stats' in src_idx_info3.json
     assert 'embedded_view' in src_idx_info3.json['indexing_stats']
     # target1 has now been updated and removed from invalidated uuids
-    assert set(src_idx_info3.json['uuids_invalidated']) == set([target2['uuid'], source['uuid']])
+    # XXX: This value is wrong because indexing-info does not compute
+    # invalidation scope
+    # assert set(src_idx_info3.json['uuids_invalidated']) == set([target2['uuid'], source['uuid']])
     # try the view without calculated embedded view
     src_idx_info4 = testapp.get('/indexing-info?uuid=%s&run=False' % source['uuid'])
     assert src_idx_info4.json['status'] == 'success'
@@ -1643,6 +1637,82 @@ def test_elasticsearch_item_embedded_agg(app, testapp, indexer_testapp, es_based
     # check @@links on the ppp page to ensure it contains ES item
     res = testapp.get(ppp_res.json['@graph'][0]['@id'] + '@@links')
     assert target_uuid in [x['uuid'] for x in res.json['uuids_linking_to']]
+
+
+class TestInvalidationScopeViewSno:
+    """ Integrated testing of invalidation scope - requires ES component, so in this file. """
+
+    class MockedRequest:
+        def __init__(self, registry, source_type, target_type):
+            self.registry = registry
+            self.json = {
+                'source_type': source_type,
+                'target_type': target_type
+            }
+
+    def test_invalidation_scope_view_basic(self, indexer_testapp):
+        """ Use route here, call function in other tests. """
+        req = {
+            'source_type': 'TestingBiosampleSno',
+            'target_type': 'TestingBiosourceSno'
+        }
+        scope = indexer_testapp.post_json('/compute_invalidation_scope', req).json
+        invalidated = ['alias', 'identifier', 'quality', 'status', 'uuid']
+        assert sorted(scope['Invalidated']) == invalidated
+
+    @pytest.mark.parametrize('source_type, target_type, invalidated', [
+        ('TestingBiosourceSno', 'TestingBiogroupSno', [
+            'schema_version', 'identifier', 'samples', 'sample_objects.notes',
+            'sample_objects.associated_sample', 'contributor', 'uuid', 'counter', 'status'
+        ]),  # everything invalidates due to default_diff embed
+        ('TestingIndividualSno', 'TestingBiosampleSno', [
+            'specimen', 'status', 'uuid'
+        ]),
+        ('TestingLinkTargetElasticSearch', 'TestingLinkSourceSno', [
+            'status', 'uuid'
+        ]),
+        ('TestingLinkSourceSno', 'TestingLinkTargetElasticSearch', [
+            'name', 'status', 'uuid'  # The target_type has a revlink - these are accounted for separately
+        ]),
+        ('TestingLinkAggregateSno', 'TestingLinkTargetSno', [
+            'status', 'uuid'
+        ]),
+        ('TestingLinkTargetSno', 'TestingLinkAggregateSno', [
+            'status', 'uuid'  # XXX: Aggregated items do not invalidate - they must be explicitly embedded
+        ])
+    ])
+    def test_invalidation_scope_view_parametrized(self, indexer_testapp, source_type, target_type, invalidated):
+        """ Just call the route function - test some basic interactions. """
+        req = self.MockedRequest(indexer_testapp.app.registry, source_type, target_type)
+        scope = compute_invalidation_scope(None, req)
+        assert sorted(scope['Invalidated']) == sorted(invalidated)
+
+    @pytest.mark.parametrize('req', [
+        {
+            'source_type': None,
+            'target_type': 'TestingBiosourceSno'
+        },
+        {
+            'source_type': 'TestingBiosourceSno',
+            'target_type': None
+        },
+        {
+            'source_type': 'Blah',
+            'target_type': 'TestingBiosourceSno'
+        },
+        {
+            'source_type': 'TestingBiosourceSno',
+            'target_type': 'Blah'
+        },
+        {
+            'source_type': 'Item',  # abstract type
+            'target_type': 'TestingBiosourceSno'
+        }
+    ])
+    def test_invalidation_scope_view_error(self, indexer_testapp, req):
+        """ Test failure cases """
+        with pytest.raises(AppError):
+            indexer_testapp.post_json('/compute_invalidation_scope', req)
 
 
 def test_assert_transactions_table_is_gone(app):

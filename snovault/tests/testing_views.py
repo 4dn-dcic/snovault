@@ -162,6 +162,7 @@ class Item(BaseItem):
     item_type = 'item'
     AbstractCollection = AbstractCollection
     Collection = Collection
+    default_diff = []
     STATUS_ACL = {
         # standard_status
         'released': ALLOW_CURRENT,
@@ -660,20 +661,20 @@ class TestingMixins(Item):
     schema = load_schema('snovault:test_schemas/TestingMixins.json')
 
 
-@collection('testing-disable-nested', unique_key='testing_disable_nested:name')
-class TestingDisableNested(Item):
-    """ Type intended to test disabling nested mappings. """
-    item_type = 'testing_disable_nested'
+@collection('testing-nested-enabled', unique_key='testing_nested_enabled:name')
+class TestingNestedEnabled(Item):
+    """ Type intended to test enabling nested mappings per-field. """
+    item_type = 'testing_nested_enabled'
     name_key = 'name'
-    schema = load_schema('snovault:test_schemas/TestingDisableNested.json')
+    schema = load_schema('snovault:test_schemas/TestingNestedEnabled.json')
 
     @calculated_property(schema={
-        "title": "disabled_array_of_objects_in_calc_prop",
-        "description": "Tests mapping calculated properties with disable_nested works correctly",
+        "title": "enabled_array_of_objects_in_calc_prop",
+        "description": "Tests mapping calculated properties with enable_nested works correctly",
         "type": "array",
         "items": {
             "type": "object",
-            "disable_nested": True,
+            "enable_nested": True,
             "properties": {
                 "string_field": {
                     "type": "string"
@@ -684,8 +685,8 @@ class TestingDisableNested(Item):
             }
         }
     })
-    def disabled_array_of_objects_in_calc_prop(self):
-        """ This one will not get mapped with nested """
+    def enabled_array_of_objects_in_calc_prop(self):
+        """ This one will get mapped with nested """
         return [{
             'string_field': 'hello',
             'numerical_field': 0
@@ -707,9 +708,80 @@ class TestingDisableNested(Item):
             }
         }
     })
-    def array_of_objects_in_calc_prop(self):
-        """ This one will get mapped with nested since it was not explicitly disabled """
+    def disabled_array_of_objects_in_calc_prop(self):
+        """ This one will not get mapped with nested since it was not explicitly enabled """
         return [{
             'string_field': 'world',
             'numerical_field': 100
         }]
+
+
+@collection(name='testing-individual-sno', unique_key='testing_individual_sno:full_name')
+class TestingIndividualSno(Item):
+    """ Individual integrated testing type - a biosample is produced by an individual. """
+    item_type = 'testing_individual_sno'
+    name_key = 'full_name'
+    schema = load_schema('snovault:test_schemas/TestingIndividualSno.json')
+
+    @calculated_property(schema={
+        "title": "Last Name",
+        "type": "string",
+    })
+    def last_name(self, full_name):
+        return full_name.split()[1]
+
+
+@collection(name='testing-biosample-sno', unique_key='testing_biosample_sno:identifier')
+class TestingBiosampleSno(Item):
+    """ Biosample integrated testing type. """
+    item_type = 'testing_biosample_sno'
+    name_key = 'identifier'
+    schema = load_schema('snovault:test_schemas/TestingBiosampleSno.json')
+    embedded_list = [
+        'contributor.specimen'
+    ]
+
+
+@collection(name='testing-biosource-sno', unique_key='testing_biosource_sno:identifier')
+class TestingBiosourceSno(Item):
+    """ Biosource integrated testing type.
+
+        This item contains an array of linkTo Biosamples. Links to a contributor of the samples as well.
+    """
+    item_type = 'testing_biosource_sno'
+    name_key = 'identifier'
+    schema = load_schema('snovault:test_schemas/TestingBiosourceSno.json')
+    embedded_list = [  # selective embed at this item
+        'samples.identifier',
+        'samples.quality',
+        'sample_objects.associated_sample.alias',  # if a sample is included here, embed its alias
+        'contributor.full_name',
+        'contributor.last_name'  # calc prop, dependent on above embed
+    ]
+    default_diff = [  # the counter is updated
+        'counter'
+    ]
+
+    def _update(self, properties, sheets=None):
+        """ Updates the counter in addition """
+        if 'counter' in properties:
+            properties['counter'] += 1
+        else:
+            properties['counter'] = 1
+        super(TestingBiosourceSno, self)._update(properties, sheets)
+
+
+@collection(name='testing-biogroup-sno', unique_key='testing_biogroup_sno:name')
+class TestingBiogroupSno(Item):
+    """ Biogroup integrated testing type.
+
+        Biogroup consists of an array of Biosource objects that consist of an array of Biosample objects.
+    """
+    item_type = 'testing_biogroup_sno'
+    name_key = 'name'
+    schema = load_schema('snovault:test_schemas/TestingBiogroupSno.json')
+    embedded_list = [
+        'sources.counter',  # get the counter
+        'sources.samples.*',  # embed everything at top level
+        'sources.contributor.*'
+    ]

@@ -183,20 +183,24 @@ class ElasticSearchStorage(object):
         """
         # find the term with the specific type
         term = 'embedded.' + key + '.raw'
-        search = Search(using=self.es, index=self.index)
+        index = get_namespaced_index(self.registry, item_type)
+        search = Search(using=self.es, index=index)
         search = search.filter('term', **{term: value})
         search = search.filter('type', value=item_type)
         return self._one(search)
 
-    def get_by_unique_key(self, unique_key, name):
+    def get_by_unique_key(self, unique_key, name, item_type=None):
         """
         Perform a search against unique keys with given unique_key (field) and
         name (value).
         Returns CachedModel if found, otherwise None
         """
         term = 'unique_keys.' + unique_key
+        index = self.index
+        if item_type:
+            index = get_namespaced_index(self.registry, item_type)
         # had to use ** kw notation because of variable in field name
-        search = Search(using=self.es, index=self.index)
+        search = Search(using=self.es, index=index)
         search = search.filter('term', **{term: name})
         search = search.extra(version=True)
         return self._one(search)
@@ -378,10 +382,11 @@ class ElasticSearchStorage(object):
         """
         linked_info = []
         # we only care about linkTos the item and not reverse links here
-        uuids_linking_to_item = find_uuids_for_indexing(self.registry, set([rid]))
+        # we also do not care about invalidation scope
+        uuids_linking_to_item, _ = find_uuids_for_indexing(self.registry, set([rid]))
         # remove the item itself from the list
         uuids_linking_to_item = uuids_linking_to_item - set([rid])
-        if len(uuids_linking_to_item) > 0:
+        if 0 < len(uuids_linking_to_item) < 1000:  # more than 1000 can trigger 504
             # Return list of { '@id', 'display_title', 'uuid' } in 'comment'
             # property of HTTPException response to assist with any manual unlinking.
             for linking_uuid in uuids_linking_to_item:

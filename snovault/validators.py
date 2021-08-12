@@ -68,8 +68,12 @@ def delete_fields(request, data, schema):
             del to_validate[dfield]
     # permission validation, comparing data with deleted values to the previous
     # data. If validated, return that validated value
-    # Note: a deleted field with a default will replaced with that value;
-    #       if same value was already in data, allow regardless of permission
+    # Note 1: a deleted field with a default will be replaced with that value;
+    #         if same value was already in data, allow regardless of permission
+    # Note 2: setting validate_current = False here creates a vulnerability in
+    # that non-admin users can use delete_fields to revert protected fields to
+    # their defaults - see PR 95 - Will June 29 2021
+    # TODO: validate edit permission on query fields, do not validate current
     validated, errors = validate(schema, to_validate, current=data, validate_current=True)
     if errors:
         for error in errors:

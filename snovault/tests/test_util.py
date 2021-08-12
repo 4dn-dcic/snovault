@@ -1,8 +1,48 @@
-import pytest
 import copy
+import pytest
 import random
-from ..util import dictionary_lookup, DictionaryKeyError, merge_calculated_into_properties, CachedField
-from .test_indexing import es_based_target
+import re
+
+from dcicutils.qa_utils import override_environ
+from ..util import (
+    dictionary_lookup, DictionaryKeyError, merge_calculated_into_properties, CachedField,
+    generate_indexer_namespace_for_testing,
+)
+
+
+def test_generate_indexer_namespace_for_testing():
+
+    with override_environ(TRAVIS_JOB_ID="17", TEST_JOB_ID=None):
+        ns = generate_indexer_namespace_for_testing()
+        assert ns == "sno-test-17-"
+
+        ns = generate_indexer_namespace_for_testing('foo')
+        assert ns == "foo-test-17-"
+
+    with override_environ(TRAVIS_JOB_ID=None, TEST_JOB_ID="17"):
+        ns = generate_indexer_namespace_for_testing()
+        assert ns == "sno-test-17-"
+
+        ns = generate_indexer_namespace_for_testing('foo')
+        assert ns == "foo-test-17-"
+
+    with override_environ(TRAVIS_JOB_ID="17", TEST_JOB_ID="18"):
+        ns = generate_indexer_namespace_for_testing()
+        assert ns == "sno-test-18-"
+
+        ns = generate_indexer_namespace_for_testing('foo')
+        assert ns == "foo-test-18-"
+
+    with override_environ(TEST_JOB_ID="snow-test-19"):
+        ns = generate_indexer_namespace_for_testing()
+        assert ns == "snow-test-19"
+
+        ns = generate_indexer_namespace_for_testing('foo')
+        assert ns == "snow-test-19"
+
+    with override_environ(TRAVIS_JOB_ID=None, TEST_JOB_ID=None):
+        ns = generate_indexer_namespace_for_testing('foo')
+        assert re.match("foo-test-[0-9]+-", ns)
 
 
 def test_dictionary_lookup():

@@ -977,7 +977,7 @@ def generate_filters_for_terms_agg_from_search_filters(query_field, search_filte
     facet_filters = deepcopy(search_filters['bool'])
 
     for filter_type in ['must', 'must_not']:
-        if search_filters['bool'][filter_type] == []:
+        if not search_filters['bool'][filter_type]:
             continue
         for active_filter in search_filters['bool'][filter_type]:  # active_filter => e.g. { 'terms' : { 'embedded.@type.raw': ['ExperimentSetReplicate'] } }
             if 'bool' in active_filter and 'should' in active_filter['bool']:

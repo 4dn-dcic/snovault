@@ -22,6 +22,10 @@ def basic_calculated_item():
             {
                 'key': 'apple',
                 'value': 'orange'
+            },
+            {
+                'key': 'blah',
+                'value': 'blah'
             }
         ]
     }
@@ -37,6 +41,10 @@ def test_calculated_build_object(testapp, basic_calculated_item):
     for k, v in zip(['key', 'value', 'keyvalue'], ['foo', 'bar', 'foobar']):
         assert nested[k] == v
     nested2 = res['nested2']
-    for k in ['key', 'value', 'keyvalue']:
-        for entry in nested2:
-            assert k in entry
+    for entry in nested2:
+        if entry['key'] == 'foo':
+            assert entry['keyvalue'] == 'foobar'
+        elif entry['key'] == 'apple':
+            assert entry['keyvalue'] == 'appleorange'
+        elif entry['key'] == 'blah':
+            assert entry['keyvalue'] == 'blahblah'
