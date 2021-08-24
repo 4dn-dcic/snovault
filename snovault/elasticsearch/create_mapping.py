@@ -842,12 +842,16 @@ def check_if_index_exists(es, in_type):
 
 def check_and_reindex_existing(app, es, in_type, uuids_to_index, index_diff=False, print_counts=False):
     """
-    lastly, check to make sure the item count for the existing
-    index matches the database document count. If not, queue the uuids_to_index
+    Lastly, check to make sure the item count for the existing index
+    matches the database document count and search for items in need of
+    upgrading. Queue any items in the database but not ES
+
+    If there's a 
     in the index for reindexing.
     If index_diff, store uuids for reindexing that are in DB but not ES
     """
     db_count, es_count, db_uuids, diff_uuids = get_db_es_counts_and_db_uuids(app, es, in_type, index_diff)
+    uuids_to_upgrade = get_items_to_upgrade(app, es, in_type)
     log.info("DB count is %s and ES count is %s for index: %s" %
                 (str(db_count), str(es_count), in_type), collection=in_type,
                  db_count=str(db_count), cat='collection_counts', es_count=str(es_count))
@@ -855,16 +859,26 @@ def check_and_reindex_existing(app, es, in_type, uuids_to_index, index_diff=Fals
         if index_diff and diff_uuids:
             log.info("The following UUIDs are found in the DB but not the ES index: %s\n%s"
                         % (in_type, diff_uuids), collection=in_type)
-        return
-    if es_count is None or es_count != db_count:
+    elif es_count is None or es_count != db_count:
         if index_diff:
-            log.info('MAPPING: queueing %s items found in DB but not ES in the index %s for reindexing'
+            diff_uuids.union(uuids_to_upgrade)
+            log.info('MAPPING: queueing %s items found in DB but not ES or in need of'
+                        ' upgrade in the index %s for reindexing' 
                         % (str(len(diff_uuids)), in_type), items_queued=str(len(diff_uuids)), collection=in_type)
             uuids_to_index[in_type] = diff_uuids
         else:
             log.info('MAPPING: queueing %s items found in the existing index %s for reindexing'
                         % (str(len(db_uuids)), in_type), items_queued=str(len(db_uuids)), collection=in_type)
             uuids_to_index[in_type] = db_uuids
+    elif uuids_to_upgrade:
+        log.info(
+            "MAPPING: queueing %s items found in existing index %s requiring an"
+            " upgrade for reindexing"
+            % (str(len(uuids_to_upgrade)), in_type), 
+            items_queued=str(len(uuids_to_upgrade)),
+            collection=in_type,
+        )
+        uuids_to_index[in_type] = uuids_to_upgrade
 
 
 def get_db_es_counts_and_db_uuids(app, es, in_type, index_diff=False):
@@ -895,6 +909,33 @@ def get_db_es_counts_and_db_uuids(app, es, in_type, index_diff=False):
     else:
         diff_uuids = set()
     return db_count, es_count, db_uuids, diff_uuids
+
+
+def get_items_to_upgrade(app, es, in_type):
+    """
+    Search existing items in Elasticsearch and identify any need of
+    upgrade as indicated by schema version number.
+
+    :param app:
+    :param es:
+    :param in_type:
+    :returns: set of uuids in need of upgrade
+    """
+    uuids_to_upgrade = set()
+    schema_props = app.registry[TYPES][in_type].schema.get("properties", {})
+    current_schema_version = schema_props.get("schema_version", {}).get("default")
+    if current_schema_version:
+        namespaced_index = get_namespaced_index(app, in_type)
+        if check_if_index_exists(es, namespaced_index):
+            search = Search(using=es, index=namespaced_index, doc_type=in_type)
+            search_source = search.source([])
+            es_embedded_items = [
+                es_item.embedded for es_item in search_source.scan()
+            ]
+            for embedded_item in es_embedded_items:
+                if embedded_item.schema_version != current_schema_version:
+                    uuids_to_upgrade.add(embedded_item.uuid)
+    return uuids_to_upgrade
 
 
 def find_and_replace_dynamic_mappings(new_mapping, found_mapping):
@@ -1087,7 +1128,7 @@ def run(app, collections=None, dry_run=False, check_first=False, skip_indexing=F
         If the document counts in the index and db do not match, delete index
         and queue all items in the index for reindexing.
     index_diff: if True, do NOT create/delete indices but identify any items
-        that exist in db but not in es and reindex those.
+        that exist in db but not in es or that need upgrading and reindex those.
         Takes precedence over check_first
     strict: if True, do not include associated items when considering what
         items to reindex. Only takes affect with index_diff or when specific

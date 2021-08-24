@@ -3,7 +3,12 @@ import pytest
 import mock
 
 from ..interfaces import TYPES
-from ..elasticsearch.create_mapping import merge_schemas, type_mapping, update_mapping_by_embed
+from ..elasticsearch.create_mapping import (
+    merge_schemas,
+    type_mapping,
+    update_mapping_by_embed,
+    get_items_to_upgrade,
+)
 from ..elasticsearch.interfaces import ELASTIC_SEARCH
 from .test_views import PARAMETERIZED_NAMES
 from ..settings import Settings
@@ -146,3 +151,48 @@ def test_create_mapping_correctly_maps_embeds(registry, item_type):
             else:
                 assert split_ in mapping_pointer['properties']
                 mapping_pointer = mapping_pointer['properties'][split_]
+
+
+@pytest.fixture
+def biosample(testapp):
+    url = "/testing-biosample-sno"
+    item = {
+        "identifier": "test_biosample",
+        "ranking": 5,
+    }
+    return testapp.post_json(url, item, status=201).json["@graph"][0]
+
+
+@pytest.fixture
+def mock_search(biosample):
+    """Mock for ES search which returns list of AttrDict objects."""
+    embedded_item = mock.Mock()
+    embedded_item.schema_version = biosample["schema_version"]
+    embedded_item.uuid = biosample["uuid"]
+    es_item = mock.Mock()
+    es_item.embedded = embedded_item
+    mocked_search = mock.Mock()
+    mocked_search.return_value.source.return_value.scan.return_value = [es_item] 
+    return mocked_search
+
+
+@mock.patch("snovault.elasticsearch.create_mapping.check_if_index_exists", return_value=True)
+def test_get_items_to_upgrade(mock_check_index, mock_search, testapp, biosample):
+    """
+    Test Elasticsearch items requiring an upgrade are identified for
+    indexing. 
+    """
+    app = testapp.app
+    es = None  # ES component mocked
+    item_type = "testing_biosample_sno"
+    biosample_uuid = biosample["uuid"]
+    with mock.patch("snovault.elasticsearch.create_mapping.Search", new=mock_search):
+        # Item posted with schema default version, so no upgrade needed
+        to_upgrade = get_items_to_upgrade(app, es, item_type)
+        assert not to_upgrade
+
+        # Update the schema version in the registry so item needs upgrade
+        registry_schema = app.registry[TYPES][item_type].schema
+        registry_schema["properties"]["schema_version"]["default"] = 2
+        to_upgrade = get_items_to_upgrade(app, es, item_type)
+        assert to_upgrade == {biosample_uuid}
