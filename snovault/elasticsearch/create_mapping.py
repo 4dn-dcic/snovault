@@ -844,11 +844,10 @@ def check_and_reindex_existing(app, es, in_type, uuids_to_index, index_diff=Fals
     """
     Lastly, check to make sure the item count for the existing index
     matches the database document count and search for items in need of
-    upgrading. Queue any items in the database but not ES
+    upgrading. If found, always queue the latter items for indexing.
 
-    If there's a 
-    in the index for reindexing.
-    If index_diff, store uuids for reindexing that are in DB but not ES
+    If index_diff, only index the items in the database but not in ES
+    as well as the items to upgrade.
     """
     db_count, es_count, db_uuids, diff_uuids = get_db_es_counts_and_db_uuids(app, es, in_type, index_diff)
     uuids_to_upgrade = get_items_to_upgrade(app, es, in_type)
