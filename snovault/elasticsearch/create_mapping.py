@@ -20,6 +20,7 @@ from elasticsearch.exceptions import (
     RequestError,
     ConnectionTimeout
 )
+from elasticsearch.helpers import scan
 from elasticsearch_dsl import Search
 from functools import reduce
 from itertools import chain
@@ -30,7 +31,12 @@ from dcicutils.log_utils import set_logging
 from ..commands.es_index_data import run as run_index_data
 from ..schema_utils import combine_schemas
 from ..util import add_default_embeds, find_collection_subtypes
-from .indexer_utils import get_namespaced_index, find_uuids_for_indexing, get_uuids_for_types
+from .indexer_utils import (
+    get_namespaced_index,
+    find_uuids_for_indexing,
+    get_uuids_for_types,
+    SCAN_PAGE_SIZE,
+)
 from .interfaces import ELASTIC_SEARCH, INDEXER_QUEUE
 from ..settings import Settings
 
@@ -915,25 +921,39 @@ def get_items_to_upgrade(app, es, in_type):
     Search existing items in Elasticsearch and identify any need of
     upgrade as indicated by schema version number.
 
-    :param app:
-    :param es:
-    :param in_type:
-    :returns: set of uuids in need of upgrade
+    :param app: pyramid application
+    :param es: Elasticsearch client
+    :param in_type: str item type
+    :returns: set of uuids of in_type in need of upgrade
     """
     uuids_to_upgrade = set()
     schema_props = app.registry[TYPES][in_type].schema.get("properties", {})
     current_schema_version = schema_props.get("schema_version", {}).get("default")
+    scan_query = {
+        "query": {
+            "bool": {
+                "filter": {
+                    "bool": {
+                        "must_not": {
+                            "match": {"embedded.schema_version": current_schema_version}
+                        }
+                    }
+                }
+            }
+        },
+        "_source": "embedded.uuid",
+    } 
     if current_schema_version:
         namespaced_index = get_namespaced_index(app, in_type)
         if check_if_index_exists(es, namespaced_index):
-            search = Search(using=es, index=namespaced_index, doc_type=in_type)
-            search_source = search.source([])
+            search = scan(
+                es, index=namespaced_index, query=scan_query, size=SCAN_PAGE_SIZE
+            )
             es_embedded_items = [
-                es_item.embedded for es_item in search_source.scan()
+                es_item.get("_id") for es_item in search if es_item.get("_id")
             ]
-            for embedded_item in es_embedded_items:
-                if embedded_item.schema_version != current_schema_version:
-                    uuids_to_upgrade.add(embedded_item.uuid)
+            if es_embedded_items:
+                uuids_to_upgrade = set(es_embedded_items)
     return uuids_to_upgrade
 
 
