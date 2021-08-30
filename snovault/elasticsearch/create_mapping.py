@@ -866,7 +866,15 @@ def check_and_reindex_existing(app, es, in_type, uuids_to_index, index_diff=Fals
                         % (in_type, diff_uuids), collection=in_type)
     elif es_count is None or es_count != db_count:
         if index_diff:
-            diff_uuids.union(uuids_to_upgrade)
+            if uuids_to_upgrade:
+                diff_uuids.union(uuids_to_upgrade)
+                log.info(
+                    "MAPPING: queueing %s items found in existing index %s requiring an"
+                    " upgrade for reindexing"
+                    % (str(len(uuids_to_upgrade)), in_type), 
+                    items_queued=str(len(uuids_to_upgrade)),
+                    collection=in_type,
+                )
             log.info('MAPPING: queueing %s items found in DB but not ES or in need of'
                         ' upgrade in the index %s for reindexing' 
                         % (str(len(diff_uuids)), in_type), items_queued=str(len(diff_uuids)), collection=in_type)

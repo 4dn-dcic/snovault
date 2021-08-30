@@ -163,7 +163,7 @@ def biosample(testapp):
     return testapp.post_json(url, item, status=201).json["@graph"][0]
 
 
-def mock_scan(uuids=[]):
+def mock_scan(uuids=None):
     """Mock for ES scan which returns list of dicts."""
     embedded_item = []
     if uuids:
