@@ -3,7 +3,12 @@ import pytest
 import mock
 
 from ..interfaces import TYPES
-from ..elasticsearch.create_mapping import merge_schemas, type_mapping, update_mapping_by_embed
+from ..elasticsearch.create_mapping import (
+    merge_schemas,
+    type_mapping,
+    update_mapping_by_embed,
+    get_items_to_upgrade,
+)
 from ..elasticsearch.interfaces import ELASTIC_SEARCH
 from .test_views import PARAMETERIZED_NAMES
 from ..settings import Settings
@@ -146,3 +151,47 @@ def test_create_mapping_correctly_maps_embeds(registry, item_type):
             else:
                 assert split_ in mapping_pointer['properties']
                 mapping_pointer = mapping_pointer['properties'][split_]
+
+
+@pytest.fixture
+def biosample(testapp):
+    url = "/testing-biosample-sno"
+    item = {
+        "identifier": "test_biosample",
+        "ranking": 5,
+    }
+    return testapp.post_json(url, item, status=201).json["@graph"][0]
+
+
+def mock_scan(uuids=None):
+    """Mock for ES scan which returns list of dicts."""
+    embedded_item = []
+    if uuids:
+        for uuid in uuids:
+            embedded_item.append({"_id": uuid})
+    mocked_scan = mock.Mock()
+    mocked_scan.return_value = embedded_item 
+    return mocked_scan
+
+
+@mock.patch("snovault.elasticsearch.create_mapping.check_if_index_exists", return_value=True)
+def test_get_items_to_upgrade(mock_check_index, testapp, biosample):
+    """
+    Test Elasticsearch items requiring an upgrade are identified for
+    indexing.
+    """
+    app = testapp.app
+    es = None  # ES component mocked
+    item_type = "testing_biosample_sno"
+    biosample_uuid = biosample["uuid"]
+    with mock.patch("snovault.elasticsearch.create_mapping.scan", new=mock_scan()):
+        # Mocked scan found no uuids to upgrade
+        to_upgrade = get_items_to_upgrade(app, es, item_type)
+        assert not to_upgrade
+    with mock.patch(
+        "snovault.elasticsearch.create_mapping.scan",
+        new=mock_scan(uuids=[biosample_uuid])
+    ):
+        # Mocked scan found the biosample uuid to upgrade
+        to_upgrade = get_items_to_upgrade(app, es, item_type)
+        assert to_upgrade == set([biosample_uuid])
