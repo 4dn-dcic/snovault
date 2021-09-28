@@ -129,14 +129,40 @@ but once you have checked that the updates are sound, you may wish to check the 
 Publishing
 ==========
 
-Normally, a successful build on a tagged branch will cause publication automatically.
-It should not be necessary for you to manually use::
+Normally, a successful build on a tagged branch (including a branch tagged as a beta)
+will cause publication automatically. The process begins by obtaining the version. You might do
 
-    $ poetry publish
+    $ head pyproject.toml
 
-Also, you would need appropriate credentials on PyPi for such publication to succeed. As presently configured,
-these credentials need to be in the environment variables ``PYPI_USER`` and ``PYPI_PASSWORD``.
-If you attempt to do this manually, be sure the version is set properly!
+to see the first few lines of `pyproject.toml`, which will contain a line like ``version = 100.200.300``, which
+is the ``snovault`` version.  You should prepend the letter ``v`` to that version, and create the tag and push
+it to the GitHub server:
+
+    $ git tag v100.200.300
+    $ git push origin v100.200.300
+
+Please do NOT use some other syntax for ``git push`` that pushes all of your tags. That might pick up tags that
+do not belong on the server and can generally cause tag pollution. Push specifically the tag you intend to publish.
+
+Pushing such a tag should trigger publication automatically within a few minutes.
+
+Manual Publication
+------------------
+
+There might be rare occasions where you need to do the publication manually, but normally it is not necessary
+or desirable. In most cases, it will either fail or will cause the automatic publication step to fail. The main
+case where this is known to be needed is where publication has failed on a tagged branch for reasons other than
+the fact of that tag being already published (e.g., a network interruption or a premature shutdown of the GitHub
+Actions task). An incomplete publication on GitHub Actions cannot be easily retried, so only in that case you may
+need to do:
+
+    $ make publish
+
+However, to do this command locally, you would need appropriate credentials on PyPi for such publication to succeed.
+As presently configured, these credentials need to be in the environment variables ``PYPI_USER`` and ``PYPI_PASSWORD``.
+The script that runs if you manually attempt ``make publish`` checks that you have properly declared credentials
+before it attempts to publish. Note that GitHub Actions is already configured with credentials, so you do not
+need to worry about them if you just push a tag and let the pre-defined action do the publication.
 
 Running tests
 =============
