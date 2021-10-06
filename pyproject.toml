@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "dcicsnovault"
-version = "4.9.1"
+version = "4.9.2"
 description = "Storage support for 4DN Data Portals."
 authors = ["4DN-DCIC Team <support@4dnucleome.org>"]
 license = "MIT"
@@ -43,7 +43,7 @@ aws_requests_auth = "^0.4.1"
 boto3 = "^1.17.53"
 elasticsearch = "6.8.1"
 elasticsearch_dsl = "^6.4.0"
-dcicutils = "3.0.1.1b4"  # "^3.0.0"
+dcicutils = "^3.1.0"
 # TODO: Probably want ">=0.15.2,<1" here since "^" is different for "0.xx" than for higher versions. Changing it
 #       would require re-testing I don't have time for, so it'll have to be a future future change. -kmp 20-Feb-2020
 future = "^0.15.2"
