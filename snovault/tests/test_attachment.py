@@ -1,6 +1,4 @@
-import base64
-from base64 import b64decode, b64encode
-#from dcicutils.qa_utils import ignored
+from base64 import b64decode
 import pytest
 import webtest
 import boto3
@@ -36,22 +34,6 @@ def testing_download(testapp):
         },
     }
     res = testapp.post_json(url, item, status=201)
-    return res.location
-
-
-def testing_encrypted_download(encrypted_testapp):
-    url = '/testing-downloads/'
-    item = {
-        'attachment': {
-            'download': 'red-dot.png',
-            'href': RED_DOT,
-        },
-        'attachment2': {
-            'download': 'blue-dot.png',
-            'href': BLUE_DOT,
-        },
-    }
-    res = encrypted_testapp.post_json(url, item, status=201)
     return res.location
 
 
@@ -259,10 +241,24 @@ class TestAttachment:
 class TestAttachmentEncrypted:
     """ TODO: It would be great if this class could be elegantly merged with the previous one.
         Note though that the tests do differ in some subtle ways. For example, when using
-        s3blobs, we follow s3 redirects via presigned URLs - these URLs are parsed via
+        s3blobs, we follow s3 redirects via pre-signed URLs - these URLs are parsed via
         helper function and acquired through boto3 in order to interact through moto. -Will Jan 4 2022
     """
     url = '/testing-downloads/'
+
+    def testing_encrypted_download(self, testapp):
+        item = {
+            'attachment': {
+                'download': 'red-dot.png',
+                'href': RED_DOT,
+            },
+            'attachment2': {
+                'download': 'blue-dot.png',
+                'href': BLUE_DOT,
+            },
+        }
+        res = testapp.post_json(self.url, item, status=201)
+        return res.location
 
     @staticmethod
     def parse_s3_url(url):
@@ -282,13 +278,12 @@ class TestAttachmentEncrypted:
             [bucket, key] = parsed_url.path.lstrip('/').split('/', 1)
         return bucket, key
 
-    @staticmethod
-    def create_bucket_and_post_download(testapp):
+    def create_bucket_and_post_download(self, testapp):
         """ Bootstraps moto and creates some data to work with. """
         blob_bucket = 'encoded-4dn-blobs'  # note that this bucket exists but is mocked out here
         conn = boto3.resource('s3', region_name='us-east-1')
         conn.create_bucket(Bucket=blob_bucket)
-        return testing_encrypted_download(testapp)
+        return self.testing_encrypted_download(testapp)
 
     def get_attachment_from_s3(self, client, url):
         bucket, key = self.parse_s3_url(url)
