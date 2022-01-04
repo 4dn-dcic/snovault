@@ -1,4 +1,4 @@
-import os
+import uuid
 import pytest
 import webtest
 
@@ -53,6 +53,17 @@ def app(app_settings):
        will have to make snovault dummy main app
     '''
     return main({}, **app_settings)
+
+
+@pytest.fixture
+def encrypted_testapp(app):
+    ''' TestApp with S3_ENCRYPT_KEY_ID set (encrypted buckets) '''
+    environ = {
+        'HTTP_ACCEPT': 'application/json',
+        'REMOTE_USER': 'TEST',
+        's3_encrypt_key_id': uuid.uuid4()
+    }
+    return webtest.TestApp(app, environ)
 
 
 @pytest.fixture

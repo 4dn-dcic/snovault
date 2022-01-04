@@ -38,8 +38,8 @@ from .interfaces import (
 from dcicutils.misc_utils import ignored
 from pyramid.threadlocal import get_current_request
 import boto3
+from botocore.client import Config
 import uuid
-import time
 import structlog
 
 log = structlog.getLogger(__name__)
@@ -664,9 +664,9 @@ class S3BlobStorage(object):
     def __init__(self, bucket):
         self.bucket = bucket
         session = boto3.session.Session(region_name='us-east-1')
-        self.s3 = session.client('s3')
+        self.s3 = session.client('s3', config=Config(signature_version='s3v4'))
 
-    def store_blob(self, data, download_meta, blob_id=None):
+    def store_blob(self, data, download_meta, blob_id=None, kms_key_id=None):
         """
         Create a new s3 key = blob_id
         upload the contents and return the meta in download_meta
@@ -679,12 +679,19 @@ class S3BlobStorage(object):
         if blob_id is None:
             blob_id = str(uuid.uuid4())
 
-        content_type = download_meta.get('type','binary/octet-stream')
-        self.s3.put_object(Bucket=self.bucket,
-                           Key=blob_id,
-                           Body=data,
-                           ContentType=content_type
-                           )
+        content_type = download_meta.get('type', 'binary/octet-stream')
+        put_kwargs = dict(
+            Bucket=self.bucket,
+            Key=blob_id,
+            Body=data,
+            ContentType=content_type
+        )
+        if kms_key_id is not None:
+            put_kwargs.update({
+                'ServerSideEncryption': 'aws:kms',
+                'SSEKMSKeyId': kms_key_id
+            })
+        self.s3.put_object(**put_kwargs)
         download_meta['bucket'] = self.bucket
         download_meta['key'] = blob_id
         download_meta['blob_id'] = str(blob_id)
@@ -725,7 +732,7 @@ class S3BlobStorage(object):
         """
         bucket_name, key = self._get_bucket_key(download_meta)
         response = self.s3.get_object(Bucket=bucket_name,
-                                 Key=key)
+                                      Key=key)
         return response['Body'].read().decode()
 
 
