@@ -617,12 +617,14 @@ class UUID(types.TypeDecorator):
             return uuid.UUID(value)
 
 
+# TODO: refactor to wrap blob storage in common API, so we do not need
+# to pass args like kms_key_id in this class
 class RDBBlobStorage(object):
     """ Handlers to blobs we store in RDB """
     def __init__(self, DBSession):
         self.DBSession = DBSession
 
-    def store_blob(self, data, download_meta, blob_id=None):
+    def store_blob(self, data, download_meta, blob_id=None, kms_key_id=None):
         """ Initializes a db session and stores the data
 
         Args:
@@ -631,6 +633,7 @@ class RDBBlobStorage(object):
             unless the caller wants to retain the blob_id
             blob_id: optional arg specifying the id, will be generated if not
             provided
+            kms_key_id: this arg is only used for s3 storage, so it is ignored
         """
         if blob_id is None:
             blob_id = uuid.uuid4()
@@ -675,6 +678,7 @@ class S3BlobStorage(object):
             data: raw blob to store
             download_meta: unused beyond setting some meta data fields
             blob_id: optional ID if you want to provide it, one will be generated
+            kms_key_id: optional kms key if using encrypted buckets
         """
         if blob_id is None:
             blob_id = str(uuid.uuid4())

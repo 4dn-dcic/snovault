@@ -1,6 +1,7 @@
 import uuid
 import pytest
 import webtest
+from moto import mock_s3
 
 from ..interfaces import DBSESSION
 from .. import main  # Function main actually defined in __init__.py (should maybe be defined elsewhere)
@@ -55,15 +56,28 @@ def app(app_settings):
     return main({}, **app_settings)
 
 
+@pytest.fixture(scope='session')
+def encrypted_app(app_settings):
+    ''' WSGI application level functional testing with encrypted buckets.
+        Note that this also forced use of s3 blob storage.
+        Setting blob_bucket in registry.settings == enabling S3blobstorage (and disable DB blobs)
+    '''
+    app_settings.update({
+        's3_encrypt_key_id': str(uuid.uuid4()),  # moto does not check this is valid
+        'blob_bucket': 'encoded-4dn-blobs'  # note that this bucket exists but is mocked out
+    })
+    return main({}, **app_settings)
+
+
 @pytest.fixture
-def encrypted_testapp(app):
-    ''' TestApp with S3_ENCRYPT_KEY_ID set (encrypted buckets) '''
+def encrypted_testapp(encrypted_app):
+    ''' TestApp with S3_ENCRYPT_KEY_ID set (encrypted buckets)
+    '''
     environ = {
         'HTTP_ACCEPT': 'application/json',
         'REMOTE_USER': 'TEST',
-        's3_encrypt_key_id': uuid.uuid4()
     }
-    return webtest.TestApp(app, environ)
+    return webtest.TestApp(encrypted_app, environ)
 
 
 @pytest.fixture
