@@ -100,9 +100,10 @@ def register_storage(registry, write_override=None, read_override=None):
 
     # set up blob storage if not configured already
     blob_bucket = registry.settings.get('blob_bucket', None)
-    registry[BLOBS] = (S3BlobStorage(blob_bucket)
-                   if blob_bucket
-                   else RDBBlobStorage(registry[DBSESSION]))
+    s3_encrypt_key_id = registry.settings.get('s3_encrypt_key_id', None)  # TODO: refactor SettingsKey
+    registry[BLOBS] = (S3BlobStorage(blob_bucket, kms_key_id=s3_encrypt_key_id)
+                       if blob_bucket
+                       else RDBBlobStorage(registry[DBSESSION]))
 
 
 Base = declarative_base()
@@ -624,7 +625,7 @@ class RDBBlobStorage(object):
     def __init__(self, DBSession):
         self.DBSession = DBSession
 
-    def store_blob(self, data, download_meta, blob_id=None, kms_key_id=None):
+    def store_blob(self, data, download_meta, blob_id=None):
         """ Initializes a db session and stores the data
 
         Args:
@@ -633,7 +634,6 @@ class RDBBlobStorage(object):
             unless the caller wants to retain the blob_id
             blob_id: optional arg specifying the id, will be generated if not
             provided
-            kms_key_id: this arg is only used for s3 storage, so it is ignored
         """
         if blob_id is None:
             blob_id = uuid.uuid4()
@@ -664,12 +664,13 @@ class RDBBlobStorage(object):
 
 class S3BlobStorage(object):
     """ Handler to blobs we store in S3 """
-    def __init__(self, bucket):
+    def __init__(self, bucket, kms_key_id=None):
         self.bucket = bucket
+        self.kms_key_id = kms_key_id
         session = boto3.session.Session(region_name='us-east-1')
         self.s3 = session.client('s3', config=Config(signature_version='s3v4'))
 
-    def store_blob(self, data, download_meta, blob_id=None, kms_key_id=None):
+    def store_blob(self, data, download_meta, blob_id=None):
         """
         Create a new s3 key = blob_id
         upload the contents and return the meta in download_meta
@@ -678,7 +679,6 @@ class S3BlobStorage(object):
             data: raw blob to store
             download_meta: unused beyond setting some meta data fields
             blob_id: optional ID if you want to provide it, one will be generated
-            kms_key_id: optional kms key if using encrypted buckets
         """
         if blob_id is None:
             blob_id = str(uuid.uuid4())
@@ -690,10 +690,10 @@ class S3BlobStorage(object):
             Body=data,
             ContentType=content_type
         )
-        if kms_key_id is not None:
+        if self.kms_key_id is not None:
             put_kwargs.update({
                 'ServerSideEncryption': 'aws:kms',
-                'SSEKMSKeyId': kms_key_id
+                'SSEKMSKeyId': self.kms_key_id
             })
         self.s3.put_object(**put_kwargs)
         download_meta['bucket'] = self.bucket

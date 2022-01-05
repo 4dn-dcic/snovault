@@ -174,8 +174,7 @@ class ItemWithAttachment(Item):
         # store blob in blobstorage
         registry = find_root(self).registry
         blob_id = str(uuid.uuid4())
-        s3_encrypt_key_id = registry.settings.get('s3_encrypt_key_id', None)  # TODO: refactor SettingsKey
-        registry[BLOBS].store_blob(data, download_meta, blob_id, kms_key_id=s3_encrypt_key_id)
+        registry[BLOBS].store_blob(data, download_meta, blob_id)
 
         attachment['href'] = '@@download/%s/%s' % (prop_name, quote(filename))
         attachment['blob_id'] = blob_id

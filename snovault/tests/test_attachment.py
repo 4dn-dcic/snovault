@@ -3,7 +3,7 @@ import pytest
 import webtest
 import boto3
 from moto import mock_s3
-from urllib.parse import urlparse
+from dcicutils.ff_utils import parse_s3_bucket_and_key_url
 
 
 # Test for blob storage
@@ -260,24 +260,6 @@ class TestAttachmentEncrypted:
         res = testapp.post_json(self.url, item, status=201)
         return res.location
 
-    @staticmethod
-    def parse_s3_url(url):
-        """ Parses the given s3 URL into its pair of bucket, key
-            Note that this function works the way it does because of how these
-            urls end up in our database. Eventually we should clean this up.
-            TODO: use version in utils
-            Format:
-                https://s3.amazonaws.com/cgap-devtest-main-application-cgap-devtest-wfout/GAPFI1HVXJ5F/fastqc_report.html
-                https://cgap-devtest-main-application-tibanna-logs.s3.amazonaws.com/41c2fJDQcLk3.metrics/metrics.html
-        """
-        parsed_url = urlparse(url)
-        if parsed_url.hostname.endswith('.s3.amazonaws.com'):
-            bucket = parsed_url.hostname[:-len('.s3.amazonaws.com')]
-            key = parsed_url.path.lstrip('/')
-        else:
-            [bucket, key] = parsed_url.path.lstrip('/').split('/', 1)
-        return bucket, key
-
     def create_bucket_and_post_download(self, testapp):
         """ Bootstraps moto and creates some data to work with. """
         blob_bucket = 'encoded-4dn-blobs'  # note that this bucket exists but is mocked out here
@@ -285,8 +267,12 @@ class TestAttachmentEncrypted:
         conn.create_bucket(Bucket=blob_bucket)
         return self.testing_encrypted_download(testapp)
 
-    def get_attachment_from_s3(self, client, url):
-        bucket, key = self.parse_s3_url(url)
+    @staticmethod
+    def get_attachment_from_s3(client, url):
+        """ Uses ff_utils.parse_s3_bucket_and_key_url to parse the s3 URL in our data into it's
+            bucket, key pairs and acquires/reads the content.
+        """
+        bucket, key = parse_s3_bucket_and_key_url(url)
         return client.get_object(Bucket=bucket, Key=key)['Body'].read()
 
     def attachment_is_red_dot(self, client, url):
