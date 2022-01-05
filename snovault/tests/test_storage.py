@@ -238,11 +238,11 @@ def test_S3BlobStorage(s3_encrypt_key_id):
     conn = boto3.resource('s3', region_name='us-east-1')
     conn.create_bucket(Bucket=blob_bucket)
 
-    storage = S3BlobStorage(blob_bucket)
+    storage = S3BlobStorage(blob_bucket, kms_key_id=s3_encrypt_key_id)
     assert storage.bucket == blob_bucket
 
     download_meta = {'download': 'test.txt'}
-    storage.store_blob('data', download_meta, kms_key_id=s3_encrypt_key_id)
+    storage.store_blob('data', download_meta)
     assert download_meta['bucket'] == blob_bucket
     assert 'key' in download_meta
 
