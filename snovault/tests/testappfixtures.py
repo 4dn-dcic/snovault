@@ -60,11 +60,11 @@ def encrypted_app(app_settings):
         Note that this also forced use of s3 blob storage.
         Setting blob_bucket in registry.settings == enabling S3blobstorage (and disable DB blobs)
     """
-    app_settings.update({
+    app_settings_copy = dict(app_settings, **{
         's3_encrypt_key_id': str(uuid.uuid4()),  # moto does not check this is valid
         'blob_bucket': 'encoded-4dn-blobs'  # note that this bucket exists but is mocked out
     })
-    return main({}, **app_settings)
+    return main({}, **app_settings_copy)
 
 
 @pytest.fixture
