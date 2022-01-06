@@ -33,10 +33,6 @@ def testing_download(testapp):
             'href': BLUE_DOT,
         },
     }
-    # try:
-    assert not testapp.app.registry.settings.get('blob_bucket', None)
-    # except:
-    #     import pdb; pdb.set_trace()
     res = testapp.post_json(url, item, status=201)
     return res.location
 
@@ -242,6 +238,7 @@ class TestAttachment:
         testapp.post_json(url, item, status=422)
 
 
+@pytest.mark.filterwarnings('ignore:stream argument is deprecated')
 class TestAttachmentEncrypted:
     """ TODO: It would be great if this class could be elegantly merged with the previous one.
         Note though that the tests do differ in some subtle ways. For example, when using
