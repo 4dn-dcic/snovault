@@ -27,8 +27,8 @@ build-after-poetry:  # continuation of build after poetry install
 test:
 	pytest -vv --timeout=200
 
-travis-test:
-	poetry run pytest -vvv --timeout=200 --aws-auth --es search-fourfront-testing-6-8-kncqa2za2r43563rkcmsvgn2fq.us-east-1.es.amazonaws.com:443
+remote-test:
+	poetry run pytest -vvv --timeout=400 --aws-auth --es search-fourfront-testing-6-8-kncqa2za2r43563rkcmsvgn2fq.us-east-1.es.amazonaws.com:443
 
 update:
 	poetry update

@@ -57,19 +57,19 @@ jobs:
       - name: QA
         env:
           S3_ENCRYPT_KEY: ${{ secrets.S3_ENCRYPT_KEY }}
-          # The need for this old environment variable name will go away soon.
-          TRAVIS_JOB_ID: sno-x-test-${{ github.run_number }}-
+          # # The need for this old environment variable name will go away soon.
+          # TRAVIS_JOB_ID: sno-x-test-${{ github.run_number }}-
           # This will be the new environment variable name.
           TEST_JOB_ID: sno-test-${{ github.run_number }}-
         run: |
-          make travis-test
+          make remote-test
 
       - name: Cleanup
         if: ${{ always() }}
         env:
           S3_ENCRYPT_KEY: ${{ secrets.S3_ENCRYPT_KEY }}
           # The need for this old environment variable name will go away soon.
-          TRAVIS_JOB_ID: sno-x-test-${{ github.run_number }}-
+          # TRAVIS_JOB_ID: sno-x-test-${{ github.run_number }}-
           # This will be the new environment variable name.
           TEST_JOB_ID: sno-test-${{ github.run_number }}-
         run: |

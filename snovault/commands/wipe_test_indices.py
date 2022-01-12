@@ -9,7 +9,7 @@ logger = logging.getLogger(__name__)
 def main():
     logging.basicConfig()
     if len(sys.argv) < 3:
-        logger.error('Usage: python wipe_test_indices.py <TRAVIS_JOB_ID> <REMOTE_ES>\n')
+        logger.error('Usage: python wipe_test_indices.py <TEST_JOB_ID> <REMOTE_ES>\n')
         exit(1)
 
     jid, r_es = sys.argv[1], sys.argv[2]
