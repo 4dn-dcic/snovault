@@ -1462,8 +1462,8 @@ test = ["zope.testing"]
 
 [metadata]
 lock-version = "1.1"
-python-versions = ">=3.6.1,<3.7"
-content-hash = "79bdad2711c9f31ef5924b8b8e8b73b69419f468d0e1f5bcf010c27c31a9a169"
+python-versions = ">=3.6.1,<3.8"
+content-hash = "dce5049c6cf845ac9748bb3be40f930bd3da0465d0bf7b5e30d86aaef2766d6e"
 
 [metadata.files]
 atomicwrites = [
