@@ -2,10 +2,12 @@ clean:
 	rm -rf *.egg-info
 
 configure:  # does any pre-requisite installs
-	pip install --upgrade pip==21.0.1
-	pip install poetry==1.1.9  # this version is known to work. -kmp 5-Oct-2021
+	@#pip install --upgrade pip==21.0.1
+	pip install --upgrade pip
+	@#pip install poetry==1.1.9  # this version is known to work. -kmp 5-Oct-2021
+	pip install poetry
 
-moto-setup:
+moto-setup: # As of 2022-01-13, this loads Jinja2-3.0.3 click-8.0.3 flask-2.0.2 itsdangerous-2.0.1
 	poetry run python -m pip install "moto[server]==1.3.7"
 
 macpoetry-install:
