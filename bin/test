@@ -27,6 +27,4 @@ if [ "${TEST_JOB_ID}" = "" -o "${TEST_JOB_ID:0:4}" = "4dn-" ]; then
     echo "NOTE: Simulating TEST_JOB_ID=$TEST_JOB_ID"
 fi
 
-date
 python $(dirname $0)/test.py "$@"
-date
