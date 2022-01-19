@@ -703,7 +703,11 @@ class S3BlobStorage(object):
     def _get_bucket_key(self, download_meta):
         """ Helper for the below two methods """
         if 'bucket' in download_meta:
-            return download_meta['bucket'], download_meta['key']
+            resolved_bucket = download_meta['bucket']
+            if resolved_bucket != self.bucket:
+                log.error(f'Bucket mismatch found with blobs, overriding metadata and using bucket {self.bucket}')
+                resolved_bucket = self.bucket
+            return resolved_bucket, download_meta['key']
         else:
             return self.bucket, download_meta['blob_id']
 
