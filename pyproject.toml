@@ -81,7 +81,7 @@ pytz = ">=2021.1"
 # awscli appears to add its own restrictions, but our uses are pretty simple.
 # 5.2 had soe bugs that were probably only in Python 2, but we require 5.2 here just in case.
 # The narrowing to 5.3 is just to help 'poetry lock' converge faster. -kmp 1-Mar-2020
-PyYAML = ">=5.1,<5.3"
+PyYAML = ">=5.1,<5.5"
 rdflib = "^4.2.2"
 rdflib-jsonld = ">=0.5.0,<1.0.0"
 rutter = ">=0.3,<1"
