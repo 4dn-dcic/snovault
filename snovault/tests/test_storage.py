@@ -2,6 +2,7 @@ import pytest
 import re
 import transaction as transaction_management
 import uuid
+import boto3
 
 from pyramid.threadlocal import manager
 from sqlalchemy import func
@@ -19,7 +20,7 @@ from ..storage import (
     Resource,
     S3BlobStorage,
 )
-
+from moto import mock_s3
 
 pytestmark = pytest.mark.storage
 
@@ -230,9 +231,14 @@ def test_get_sids_by_uuids(session, storage):
     assert set(sids) == {str(resource.rid)}
 
 
-def test_S3BlobStorage():
-    blob_bucket = 'encoded-4dn-blobs'
-    storage = S3BlobStorage(blob_bucket)
+@mock_s3
+@pytest.mark.parametrize('s3_encrypt_key_id', [None, str(uuid.uuid4())])
+def test_S3BlobStorage(s3_encrypt_key_id):
+    blob_bucket = 'encoded-4dn-blobs'  # note that this bucket exists but is mocked out here
+    conn = boto3.resource('s3', region_name='us-east-1')
+    conn.create_bucket(Bucket=blob_bucket)
+
+    storage = S3BlobStorage(blob_bucket, kms_key_id=s3_encrypt_key_id)
     assert storage.bucket == blob_bucket
 
     download_meta = {'download': 'test.txt'}
@@ -249,6 +255,7 @@ def test_S3BlobStorage():
     assert 'Signature' in url
 
 
+@mock_s3
 def test_S3BlobStorage_get_blob_url_for_non_s3_file():
     blob_bucket = 'encoded-4dn-blobs'
     storage = S3BlobStorage(blob_bucket)
