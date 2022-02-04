@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "dcicsnovault"
-version = "4.9.2.1b4"  # was "4.9.2", but should be "5.0.0" on release
+version = "5.0.0.1b5" # incorporates 5.0.0, targets 5.1.0
 description = "Storage support for 4DN Data Portals."
 authors = ["4DN-DCIC Team <support@4dnucleome.org>"]
 license = "MIT"
@@ -40,10 +40,10 @@ aws_requests_auth = "^0.4.1"
 # TODO: This is a backport of Python's statistics library for versions earlier than Python 3.4,
 #       so may no longer be needed. Something to investigate later. -kmp 20-Feb-2020
 "backports.statistics" = "0.1.0"
-boto3 = "^1.20.34"
+boto3 = "^1.20.49"
 elasticsearch = "6.8.1"
 elasticsearch_dsl = "^6.4.0"
-dcicutils = "^3.6.0"
+dcicutils = "^3.8.0"
 future = ">=0.15.2,<1"
 futures = "^3.1.1"
 # Needed by Moto but not us
@@ -58,7 +58,7 @@ passlib = "^1.7.4"
 Pillow = "^6.2.2"  # later version known to work - Will 11/17/20
 psutil = "^5.9.0"
 psycopg2-binary = "^2.9.3"
-PyBrowserID = "^0.10.0"
+PyBrowserID = "^0.14.0"
 pyramid = "1.10.4"
 pyramid_localroles = ">=0.1,<1"
 pyramid-multiauth = ">=0.9.0,<1"
@@ -72,7 +72,7 @@ python-dateutil = "^2.8.2"
 # Refs:
 #  - https://travis-ci.org/github/4dn-dcic/snovault/builds/684503833
 #  - https://github.com/4dn-dcic/snovault/pull/147
-python_magic = ">=0.4.15"
+python_magic = ">=0.4.25"
 pytz = ">=2021.3"
 # There was no version 4 of PyYAML. We upgraded today to PyYAML 5 per compatibility info in:
 # https://github.com/yaml/pyyaml/issues/265
