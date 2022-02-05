@@ -27,6 +27,7 @@ build-after-poetry:  # continuation of build after poetry install
 	make moto-setup
 
 test:
+	@git log -1 --decorate | head -1
 	@date
 	pytest -vv --timeout=200
 	@date
