@@ -4,6 +4,7 @@ import transaction as transaction_management
 import uuid
 import boto3
 
+from dcicutils.misc_utils import filtered_warnings
 from pyramid.threadlocal import manager
 from sqlalchemy import func
 from sqlalchemy.orm.exc import FlushError
@@ -231,9 +232,14 @@ def test_get_sids_by_uuids(session, storage):
     assert set(sids) == {str(resource.rid)}
 
 
-@mock_s3
 @pytest.mark.parametrize('s3_encrypt_key_id', [None, str(uuid.uuid4())])
 def test_S3BlobStorage(s3_encrypt_key_id):
+    with filtered_warnings('ignore', category=DeprecationWarning):
+        _test_S3BlobStorage(s3_encrypt_key_id)
+
+@mock_s3
+def _test_S3BlobStorage(s3_encrypt_key_id):
+
     blob_bucket = 'encoded-4dn-blobs'  # note that this bucket exists but is mocked out here
     conn = boto3.resource('s3', region_name='us-east-1')
     conn.create_bucket(Bucket=blob_bucket)
@@ -255,8 +261,14 @@ def test_S3BlobStorage(s3_encrypt_key_id):
     assert 'Signature' in url
 
 
-@mock_s3
 def test_S3BlobStorage_get_blob_url_for_non_s3_file():
+    with filtered_warnings('ignore', category=DeprecationWarning):
+        _test_S3BlobStorage_get_blob_url_for_non_s3_file()
+
+
+@mock_s3
+def _test_S3BlobStorage_get_blob_url_for_non_s3_file():
+
     blob_bucket = 'encoded-4dn-blobs'
     storage = S3BlobStorage(blob_bucket)
     assert storage.bucket == blob_bucket

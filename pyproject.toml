@@ -44,7 +44,7 @@ boto3 = "^1.20.49"
 elasticsearch = "6.8.1"
 elasticsearch_dsl = "^6.4.0"
 dcicutils = "^3.8.0"
-future = ">=0.15.2,<1"
+future = ">=0.18.2,<1"
 futures = "^3.1.1"
 # Needed by Moto but not us
 # Version 1.0b8 is the same as 0.9999999.
@@ -74,13 +74,7 @@ python-dateutil = "^2.8.2"
 #  - https://github.com/4dn-dcic/snovault/pull/147
 python_magic = ">=0.4.25"
 pytz = ">=2021.3"
-# There was no version 4 of PyYAML. We upgraded today to PyYAML 5 per compatibility info in:
-# https://github.com/yaml/pyyaml/issues/265
-# We must have 5.1 to get the new yaml.safe_load method.
-# awscli appears to add its own restrictions, but our uses are pretty simple.
-# 5.2 had soe bugs that were probably only in Python 2, but we require 5.2 here just in case.
-# The narrowing to 5.3 is just to help 'poetry lock' converge faster. -kmp 1-Mar-2020
-PyYAML = ">=5.1,<5.3"
+PyYAML = ">=6.0"
 rdflib = "^4.2.2"
 rdflib-jsonld = ">=0.5.0,<1.0.0"
 rutter = ">=0.3,<1"
@@ -110,7 +104,13 @@ codacy-coverage = ">=1.3.11"
 coveralls = ">=3.3.1"
 flake8 = ">=3.9.2"
 flaky = ">=3.7.0"
-moto = "1.3.7"
+# moto 2.0.0 (see https://github.com/spulec/moto/blob/master/CHANGELOG.md) has incompatibilities in how it needs
+# to be configured, so will require some adaptation. moto 1.3,14 will support python 3.8, but python 3.9 support
+# needs moto 2.2.5.  Note also that ALL moto 1.x versions call into responses in a way that tickles a deprecation
+# issue in responses 0.17.0. But there seems to be no higher version of responses where the deprecation has gone
+# into play, so I guess we are stable for now.
+# -kmp 5-Feb-2022
+moto = "^1.3.14"  # 2.x is available but needs adaptation. See note above. -kmp 5-Feb-2022
 pip-licenses = "^3.5.3"
 # Experimental upgrade to PyTest 4.5. It may be possible to upgrade further, but I think this is an improvement.
 # -kmp 11-May-2020
@@ -124,7 +124,11 @@ pytest-mock = ">=0.11.0"
 pytest-runner = ">=4.0"
 pytest-timeout = ">=1.0.0"
 "repoze.debug" = ">=1.0.2"
-responses = "^0.17.0"
+# Before upgrading beyond 0.17.x, make sure to check on the deprecation warning
+#   /Users/kentpitman/py/snovault6/sno6env/lib/python3.6/site-packages/responses/__init__.py:484:
+#   DeprecationWarning: stream argument is deprecated. Use stream parameter in request directly
+#   The call in question are from moto 1.x and affects tests in test_storage.py, which have just muzzled it.
+responses = "^0.17.0"  # 0.17.0 is latest and needed for moto 1.x compatibility. See note above. -kmp 5-Feb-2022
 
 [tool.poetry.scripts]
 wipe-test-indices = "snovault.commands.wipe_test_indices:main"
