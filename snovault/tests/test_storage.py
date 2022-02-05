@@ -234,7 +234,19 @@ def test_get_sids_by_uuids(session, storage):
 
 @pytest.mark.parametrize('s3_encrypt_key_id', [None, str(uuid.uuid4())])
 def test_S3BlobStorage(s3_encrypt_key_id):
+    # NOTE: I have separated the call to _test_S3BlobStorage into a separate function so I can wrap it with
+    #       @mock_s3 after establishing this context manager to suppress a warning. (It could have been an
+    #       internal function, but it shows up better in the patch diffs if I do it this way, and will be
+    #       easier to simplify later. The warning is due to a call made by moto 1.3.x that uses deprecated
+    #       support complained about in responses 0.17.0. Hopefully if we ever get higher than that version
+    #       of moto, we can reconsider this. However, moto 2.0 requires some change in configuration that we'd
+    #       have to take time to learn about. -kmp 5-Feb-2022
     with filtered_warnings('ignore', category=DeprecationWarning):
+        # The warning being suppressed (which comes from moto 1.3.x) looks like:
+        #   ...env/lib/python3.6/site-packages/responses/__init__.py:484:
+        #   DeprecationWarning: stream argument is deprecated. Use stream parameter in request directly
+        # HOPEFULLY that's the only deprecation warning that would come from this test, which is why it
+        # would be good to remove these warnings when we are able. -kmp 5-Feb-2022
         _test_S3BlobStorage(s3_encrypt_key_id)
 
 @mock_s3
@@ -262,7 +274,12 @@ def _test_S3BlobStorage(s3_encrypt_key_id):
 
 
 def test_S3BlobStorage_get_blob_url_for_non_s3_file():
+    # NOTE: See test_S3BlobStorage for note explaining this filtering of warning and when/how it can go away.
+    #       -kmp 5-Feb-2022
     with filtered_warnings('ignore', category=DeprecationWarning):
+        # The warning being suppressed (which comes from moto 1.3.x) looks like:
+        #   ...env/lib/python3.6/site-packages/responses/__init__.py:484:
+        #   DeprecationWarning: stream argument is deprecated. Use stream parameter in request directly
         _test_S3BlobStorage_get_blob_url_for_non_s3_file()
 
 
