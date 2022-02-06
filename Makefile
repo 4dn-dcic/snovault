@@ -30,10 +30,11 @@ test:
 	@git log -1 --decorate | head -1
 	@date
 	pytest -vv --timeout=200
+	@git log -1 --decorate | head -1
 	@date
 
 remote-test:
-	poetry run pytest -vvv --timeout=250 --aws-auth --es search-fourfront-testing-6-8-kncqa2za2r43563rkcmsvgn2fq.us-east-1.es.amazonaws.com:443
+	poetry run pytest -vvv --timeout=400 --aws-auth --es search-fourfront-testing-6-8-kncqa2za2r43563rkcmsvgn2fq.us-east-1.es.amazonaws.com:443
 
 update:
 	poetry update
