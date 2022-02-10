@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "dcicsnovault"
-version = "5.1.0.1b1"
+version = "5.1.0.1b2"
 description = "Storage support for 4DN Data Portals."
 authors = ["4DN-DCIC Team <support@4dnucleome.org>"]
 license = "MIT"
@@ -99,6 +99,7 @@ venusian = "^1.2.0"
 WebOb = "^1.8.7"
 WebTest = "^2.0.35"
 WSGIProxy2 = "0.4.2"
+wheel = ">=0.29.0"
 xlrd = "^1.0.0"
 # zope = "^4.2.1"
 "zope.deprecation" = "^4.4.0"
