@@ -1,7 +1,5 @@
 import logging
-import os
-import psutil
-import time
+
 
 # from pkg_resources import resource_filename
 from pyramid.events import BeforeRender, subscriber

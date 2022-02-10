@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "dcicsnovault"
-version = "5.0.0"
+version = "5.1.0"
 description = "Storage support for 4DN Data Portals."
 authors = ["4DN-DCIC Team <support@4dnucleome.org>"]
 license = "MIT"
@@ -35,31 +35,30 @@ classifiers = [
 ]
 
 [tool.poetry.dependencies]
-python = ">=3.6.1,<3.7"
+python = ">=3.6.1,<3.8"
 aws_requests_auth = "^0.4.1"
 # TODO: This is a backport of Python's statistics library for versions earlier than Python 3.4,
 #       so may no longer be needed. Something to investigate later. -kmp 20-Feb-2020
 "backports.statistics" = "0.1.0"
-boto3 = "^1.17.53"
+boto3 = "^1.20.49"
 elasticsearch = "6.8.1"
 elasticsearch_dsl = "^6.4.0"
-dcicutils = "^3.5.0"
-# TODO: Probably want ">=0.15.2,<1" here since "^" is different for "0.xx" than for higher versions. Changing it
-#       would require re-testing I don't have time for, so it'll have to be a future future change. -kmp 20-Feb-2020
-future = "^0.15.2"
+dcicutils = "^3.8.0"
+future = ">=0.18.2,<1"
 futures = "^3.1.1"
+# Needed by Moto but not us
 # Version 1.0b8 is the same as 0.9999999.
-html5lib = "0.9999999"
+# html5lib = "0.9999999"
 humanfriendly = "^1.44.9"
 jsonschema_serialize_fork = "^2.1.1"
-MarkupSafe = ">=0.23,<1"
+# 2.0.1 is current. This is needed by Moto but not us.
+# MarkupSafe = ">=0.23,<1"
 netaddr = ">=0.8.0,<1"
 passlib = "^1.7.4"
 Pillow = "^6.2.2"  # later version known to work - Will 11/17/20
-psutil = "^5.8.0"
-# psycopg2 = "2.8.4"
-psycopg2 = "^2.9.1"
-PyBrowserID = "^0.10.0"
+psutil = "^5.9.0"
+psycopg2-binary = "^2.9.3"
+PyBrowserID = "^0.14.0"
 pyramid = "1.10.4"
 pyramid_localroles = ">=0.1,<1"
 pyramid-multiauth = ">=0.9.0,<1"
@@ -73,20 +72,14 @@ python-dateutil = "^2.8.2"
 # Refs:
 #  - https://travis-ci.org/github/4dn-dcic/snovault/builds/684503833
 #  - https://github.com/4dn-dcic/snovault/pull/147
-python_magic = "0.4.15"  # ">=0.4.11,<1"
-pytz = ">=2021.1"
-# There was no version 4 of PyYAML. We upgraded today to PyYAML 5 per compatibility info in:
-# https://github.com/yaml/pyyaml/issues/265
-# We must have 5.1 to get the new yaml.safe_load method.
-# awscli appears to add its own restrictions, but our uses are pretty simple.
-# 5.2 had soe bugs that were probably only in Python 2, but we require 5.2 here just in case.
-# The narrowing to 5.3 is just to help 'poetry lock' converge faster. -kmp 1-Mar-2020
-PyYAML = ">=5.1,<5.3"
+python_magic = ">=0.4.25"
+pytz = ">=2021.3"
+PyYAML = ">=6.0"
 rdflib = "^4.2.2"
 rdflib-jsonld = ">=0.5.0,<1.0.0"
 rutter = ">=0.3,<1"
 # setuptools = "^36.6.0"
-simplejson = "^3.17.0"
+simplejson = "^3.17.6"
 SPARQLWrapper = "^1.8.5"
 SQLAlchemy = "1.3.16"  # Pinned because >=1.3.17 is a problem
 # Our use of structlog is pretty vanilla, so we should be OK with changes across the 18-19 major version boundary.
@@ -106,13 +99,17 @@ xlrd = "^1.0.0"
 "zope.sqlalchemy" = "1.3"
 
 [tool.poetry.dev-dependencies]
-coverage = ">=5.3.1"
+coverage = ">=6.2"
 codacy-coverage = ">=1.3.11"
-coveralls = ">=3.2.0"
-flake8 = "^3.9.0"
+coveralls = ">=3.3.1"
+flake8 = ">=3.9.2"
 flaky = ">=3.7.0"
-moto = "1.3.7"
-pip-licenses = "^3.5.1"
+# moto 2.0.0 (see https://github.com/spulec/moto/blob/master/CHANGELOG.md) has incompatibilities in how it needs
+# to be configured, so will require some adaptation. moto 1.3,14 will support python 3.8, but python 3.9 support
+# needs moto 2.2.5. If we do eventually upgrade, there are some tests in test_storage.py that may be possible to
+# simplify. -kmp 5-Feb-2022
+moto = "^1.3.14"  # 2.x is available but needs adaptation. See note above. -kmp 5-Feb-2022
+pip-licenses = "^3.5.3"
 # Experimental upgrade to PyTest 4.5. It may be possible to upgrade further, but I think this is an improvement.
 # -kmp 11-May-2020
 pytest = "4.5.0"
@@ -125,7 +122,8 @@ pytest-mock = ">=0.11.0"
 pytest-runner = ">=4.0"
 pytest-timeout = ">=1.0.0"
 "repoze.debug" = ">=1.0.2"
-responses = "^0"
+# Used only by moto, not explicitly by us.
+# responses = "^0.17.0"  # 0.17.0 is the last version compliant with Python 3.6
 
 [tool.poetry.scripts]
 wipe-test-indices = "snovault.commands.wipe_test_indices:main"
