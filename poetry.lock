@@ -704,7 +704,7 @@ docs = ["Sphinx (>=1.7.5)", "pylons-sphinx-themes"]
 name = "pillow"
 version = "6.2.2"
 description = "Python Imaging Library (Fork)"
-category = "main"
+category = "dev"
 optional = false
 python-versions = ">=2.7, !=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*, !=3.4.*"
 
@@ -1097,7 +1097,7 @@ python-versions = "*"
 name = "pyyaml"
 version = "5.4.1"
 description = "YAML parser and emitter for Python"
-category = "main"
+category = "dev"
 optional = false
 python-versions = ">=2.7, !=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*, !=3.4.*, !=3.5.*"
 
@@ -1584,7 +1584,7 @@ test = ["zope.testing"]
 [metadata]
 lock-version = "1.1"
 python-versions = ">=3.6.1,<3.8"
-content-hash = "e6a87aaded71b42ab733292aaf8d6aebc89bb6870d023d107b62cdd7a4395393"
+content-hash = "5ea33ff767e3ba28d2322fc9786e6a735983f89c9dd3559dbaa59770068d2b80"
 
 [metadata.files]
 atomicwrites = [
