@@ -8,7 +8,7 @@ configure:  # does any pre-requisite installs
 	pip install poetry
 
 moto-setup: # As of 2022-01-13, this loads Jinja2-3.0.3 click-8.0.3 flask-2.0.2 itsdangerous-2.0.1
-	poetry run python -m pip install "moto[server]==1.3.16"
+	poetry run python -m pip install "moto[server]==1.3.7"
 
 macpoetry-install:
 	scripts/macpoetry-install
