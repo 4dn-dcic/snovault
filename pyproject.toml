@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "dcicsnovault"
-version = "5.1.1.1b0"
+version = "5.2.0"
 description = "Storage support for 4DN Data Portals."
 authors = ["4DN-DCIC Team <support@4dnucleome.org>"]
 license = "MIT"
@@ -111,6 +111,8 @@ moto = "^1.3.14"  # 2.x is available but needs adaptation. See note above. -kmp 
 pip-licenses = "^3.5.3"
 # Not even sure we need an explicit dependence on Pillow, though it might help keep from searching older versions.
 # -kmp 22-Feb-2022
+# Might also be a good idea to use >= instead of ^ when we have time to test that. For now am going with what is tested.
+# -kmp 23-Feb-2022
 Pillow = "^6.2.2"  # later version known to work - Will 11/17/20
 # Experimental upgrade to PyTest 4.5. It may be possible to upgrade further, but I think this is an improvement.
 # -kmp 11-May-2020
