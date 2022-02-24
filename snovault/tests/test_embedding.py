@@ -1,10 +1,16 @@
 import pytest
 
-from dcicutils.qa_utils import ignored, notice_pytest_fixtures
+from dcicutils.qa_utils import ignored, notice_pytest_fixtures, Retry
 from re import findall
 from ..interfaces import TYPES
 from ..util import add_default_embeds, crawl_schemas_by_embeds
 from .test_views import PARAMETERIZED_NAMES
+
+
+class DecayingRetry(Retry):
+    DEFAULT_RETRIES_ALLOWED = 3
+    DEFAULT_WAIT_SECONDS = 1
+    DEFAULT_WAIT_MULTIPLIER = 2
 
 
 targets = [
@@ -88,6 +94,7 @@ def test_manual_embeds(registry, item_type):
         assert error is None
 
 
+@DecayingRetry.retry_allowed(retries_allowed=3)
 def test_linked_uuids_unset(content, dummy_request, threadlocals):
     notice_pytest_fixtures(content, dummy_request, threadlocals)
     # without setting _indexing_view = True on the request,
@@ -97,6 +104,7 @@ def test_linked_uuids_unset(content, dummy_request, threadlocals):
     assert dummy_request._sid_cache == {}
 
 
+@DecayingRetry.retry_allowed(retries_allowed=3)
 def test_linked_uuids_object(content, dummy_request, threadlocals):
     notice_pytest_fixtures(content, dummy_request, threadlocals)
     # needed to track _linked_uuids
@@ -106,6 +114,7 @@ def test_linked_uuids_object(content, dummy_request, threadlocals):
     assert dummy_request._rev_linked_uuids_by_item == {}
 
 
+@DecayingRetry.retry_allowed(retries_allowed=3)
 def test_linked_uuids_embedded(content, dummy_request, threadlocals):
     notice_pytest_fixtures(content, dummy_request, threadlocals)
     # needed to track _linked_uuids
@@ -121,6 +130,7 @@ def test_linked_uuids_embedded(content, dummy_request, threadlocals):
     }
 
 
+@DecayingRetry.retry_allowed(retries_allowed=3)
 def test_linked_uuids_page(content, dummy_request, threadlocals):
     notice_pytest_fixtures(content, dummy_request, threadlocals)
     # needed to track _linked_uuids
@@ -135,6 +145,7 @@ def test_linked_uuids_page(content, dummy_request, threadlocals):
     }
 
 
+@DecayingRetry.retry_allowed(retries_allowed=3)
 def test_linked_uuids_expand_target(content, dummy_request, threadlocals):
     notice_pytest_fixtures(content, dummy_request, threadlocals)
     # needed to track _linked_uuids
@@ -150,6 +161,7 @@ def test_linked_uuids_expand_target(content, dummy_request, threadlocals):
     }
 
 
+@DecayingRetry.retry_allowed(retries_allowed=3)
 def test_linked_uuids_index_data(content, dummy_request, threadlocals):
     notice_pytest_fixtures(content, dummy_request, threadlocals)
     # this is the main view use to create data model for indexing
