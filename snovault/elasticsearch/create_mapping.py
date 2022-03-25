@@ -30,7 +30,11 @@ from ..interfaces import COLLECTIONS, TYPES
 from dcicutils.log_utils import set_logging
 from ..commands.es_index_data import run as run_index_data
 from ..schema_utils import combine_schemas
-from ..util import add_default_embeds, find_collection_subtypes
+from ..util import (
+    add_default_embeds, find_collection_subtypes, IndexSettings,
+    NUM_SHARDS, NUM_REPLICAS, SEARCH_MAX, KW_IGNORE_ABOVE, MIN_NGRAM,
+    MAX_NGRAM, NESTED_ENABLED, REFRESH_INTERVAL
+)
 from .indexer_utils import (
     get_namespaced_index,
     find_uuids_for_indexing,
@@ -44,21 +48,6 @@ from ..settings import Settings
 EPILOG = __doc__
 
 log = structlog.getLogger(__name__)
-
-# number of shards and replica, currently used for all indices
-NUM_SHARDS = 1
-NUM_REPLICAS = 1
-# memory safeguard; how many documents can be covered by from + size search req
-SEARCH_MAX = 100000
-# ignore above this number of kb when mapping keyword fields
-KW_IGNORE_ABOVE = 512
-# used to customize ngram filter behavior
-MIN_NGRAM = 2
-MAX_NGRAM = 10
-# used to disable nested mapping on array of object fields
-NESTED_ENABLED = 'enable_nested'
-# global index.refresh_interval - currently the default of 1s
-REFRESH_INTERVAL = '1s'
 
 
 def determine_if_is_date_field(field, schema):
@@ -242,13 +231,13 @@ def schema_mapping(field, schema, top_level=False, from_array=False):
         }
 
 
-def index_settings():
+def index_settings(type_specific_settings=None):
     """
     Return a dictionary of index settings, which dictate things such as
     shard/replica config per index, as well as filters, analyzers, and
     normalizers. Several settings are configured using global values
     """
-    return {
+    settings_template = {
         'index': {
             'number_of_shards': NUM_SHARDS,
             'number_of_replicas': NUM_REPLICAS,
@@ -312,6 +301,18 @@ def index_settings():
             }
         }
     }
+    if type_specific_settings:
+        settings_template['index']['number_of_shards'] = type_specific_settings.settings['index']['number_of_shards']
+        settings_template['index']['number_of_replicas'] = type_specific_settings.settings['index']['number_of_replicas']
+        settings_template['index']['refresh_interval'] = type_specific_settings.settings['index']['refresh_interval']
+        settings_template['index']['analysis']['filter']['ngram_filter']['min_gram'] = \
+            type_specific_settings.settings['index']['analysis']['filter']['ngram_filter']['min_gram']
+        settings_template['index']['analysis']['filter']['ngram_filter']['max_gram'] = \
+            type_specific_settings.settings['index']['analysis']['filter']['ngram_filter']['max_gram']
+        settings_template['index']['analysis']['filter']['truncate_to_ngram']['length'] = \
+            type_specific_settings.settings['index']['analysis']['filter']['truncate_to_ngram']['length']
+
+    return settings_template
 
 
 def validation_error_mapping():
@@ -350,7 +351,8 @@ def validation_error_mapping():
 
 
 # generate an index record, which contains a mapping and settings
-def build_index_record(mapping, in_type):
+def build_index_record(mapping, in_type,
+                       type_specific_settings=None):
     """
     Generate an index record, which is the entire mapping + settings for the
     given index (in_type)
@@ -358,10 +360,9 @@ def build_index_record(mapping, in_type):
     NOTE: you could disable dynamic mappings globally here, but doing so will break ES
     Item because it relies on the dynamic mappings used for unique keys.
     """
-    #mapping['dynamic'] = 'false'  # disable dynamic mappings GLOBALLY, ES demands use of 'false' here
     return {
         'mappings': {in_type: mapping},
-        'settings': index_settings()
+        'settings': index_settings(type_specific_settings=type_specific_settings)
     }
 
 
@@ -779,7 +780,9 @@ def build_index(app, es, index_name, in_type, mapping, uuids_to_index, dry_run,
         return
 
     # combines mapping and settings
-    this_index_record = build_index_record(mapping, in_type)
+    collection_settings = app.registry[COLLECTIONS][in_type].index_settings()
+    this_index_record = build_index_record(mapping, in_type,
+                                           type_specific_settings=collection_settings)
 
     if dry_run:
         log.info('___DRY RUN___')
@@ -871,12 +874,12 @@ def check_and_reindex_existing(app, es, in_type, uuids_to_index, index_diff=Fals
                 log.info(
                     "MAPPING: queueing %s items found in existing index %s requiring an"
                     " upgrade for reindexing"
-                    % (str(len(uuids_to_upgrade)), in_type), 
+                    % (str(len(uuids_to_upgrade)), in_type),
                     items_queued=str(len(uuids_to_upgrade)),
                     collection=in_type,
                 )
             log.info('MAPPING: queueing %s items found in DB but not ES or in need of'
-                        ' upgrade in the index %s for reindexing' 
+                        ' upgrade in the index %s for reindexing'
                         % (str(len(diff_uuids)), in_type), items_queued=str(len(diff_uuids)), collection=in_type)
             uuids_to_index[in_type] = diff_uuids
         else:
@@ -887,7 +890,7 @@ def check_and_reindex_existing(app, es, in_type, uuids_to_index, index_diff=Fals
         log.info(
             "MAPPING: queueing %s items found in existing index %s requiring an"
             " upgrade for reindexing"
-            % (str(len(uuids_to_upgrade)), in_type), 
+            % (str(len(uuids_to_upgrade)), in_type),
             items_queued=str(len(uuids_to_upgrade)),
             collection=in_type,
         )
@@ -950,7 +953,7 @@ def get_items_to_upgrade(app, es, in_type):
             }
         },
         "_source": "embedded.uuid",
-    } 
+    }
     if current_schema_version:
         namespaced_index = get_namespaced_index(app, in_type)
         if check_if_index_exists(es, namespaced_index):

@@ -22,6 +22,76 @@ log = structlog.getLogger(__name__)
 ###################
 
 
+# These used to be in create_mapping.py
+# number of shards and replica, currently used for all indices
+NUM_SHARDS = 1
+NUM_REPLICAS = 1
+# memory safeguard; how many documents can be covered by from + size search req
+SEARCH_MAX = 100000
+# ignore above this number of kb when mapping keyword fields
+KW_IGNORE_ABOVE = 512
+# used to customize ngram filter behavior
+MIN_NGRAM = 2
+MAX_NGRAM = 10
+# used to disable nested mapping on array of object fields
+NESTED_ENABLED = 'enable_nested'
+# global index.refresh_interval - currently the default of 1s
+REFRESH_INTERVAL = '1s'
+
+
+class IndexSettings:
+    """ Object wrapping important ElasticSearch index settings. Previously these
+        settings were determined by the constants above, but depending on data model
+        structure and size it can be necessary to tune these.
+
+        number_of_shards: determines how many shards to split each replica into
+                          large collections can benefit from increasing this value
+        number_of_replicas: number of times to replicate the index across the cluster
+                            large collections also benefit from increasing this value,
+                            but note that it has a multiplicative effect on the number
+                            of shards ie: 2 replicas divided into 3 shards results in 6
+                            total shards across the cluster
+        min_ngram: shortest string length to map for string matching or q= searching
+        max_ngram: longest string length to map for string matching or q= searching
+                   the relationship between min and max ngram dictates both the amount of
+                   free text data that is generated and the length of strings that are
+                   indexed - for example min=2 and max=3 would produce ngrams for the word
+                   "sentence" = [se, en, nt, te, en, nc, ce, sen, ent, nte, ten, enc, nce]
+                   note the implications of this structure - if max is too low, terms may
+                   not be long enough to match your important terms, which will affect the
+                   accuracy of search results and may even be misleading to the user
+        refresh_interval: determines how often index refreshes occur - an index refresh is
+                          when a blocking forced update is triggered by the cluster for all
+                          replicas and shards of the index - note that this operation blocks
+                          even if no changes are present in the index, so tuning this value
+                          up from the default may be necessary if we can tolerate indexing
+                          delay for search results, which in many cases we can
+    """
+    def __init__(self, *, shard_count=NUM_SHARDS, replica_count=NUM_REPLICAS,
+                 min_ngram=MIN_NGRAM, max_ngram=MAX_NGRAM, refresh_interval=REFRESH_INTERVAL):
+        self.settings = {
+            'index': {
+                'number_of_shards': shard_count,
+                'number_of_replicas': replica_count,
+                'refresh_interval': refresh_interval,
+                'analysis': {
+                    'filter': {
+                        'ngram_filter': {
+                            'type': 'edgeNGram',
+                            'min_gram': min_ngram,
+                            'max_gram': max_ngram
+                        },
+                        # truncate tokens to size MAX_NGRAM
+                        'truncate_to_ngram': {
+                            'type': 'truncate',
+                            'length': max_ngram
+                        }
+                    }
+                }
+            }
+        }
+
+
 @contextlib.contextmanager
 def mappings_use_nested(value=True):
     """ Context manager that sets the MAPPINGS_USE_NESTED setting with the given value, default True """
