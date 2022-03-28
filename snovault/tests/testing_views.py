@@ -22,7 +22,7 @@ from ..config import collection, abstract_collection
 from ..schema_utils import load_schema
 from ..attachment import ItemWithAttachment
 from ..interfaces import CONNECTION
-# from .root import TestRoot
+from ..util import IndexSettings
 
 
 def includeme(config):
@@ -483,6 +483,11 @@ class TestingPostPutPatchSno(Item):
     item_type = 'testing_post_put_patch_sno'
     embedded_list = ['protected_link.*']
     schema = load_schema('snovault:test_schemas/TestingPostPutPatchSno.json')
+
+    class Collection(Item.Collection):
+        """ Overwrite the parent index settings. """
+        def index_settings(self):
+            return IndexSettings(replica_count=2)
 
 
 @collection('testing-server-defaults')

@@ -32,7 +32,7 @@ from .util import (
     uuid_to_path
 )
 from past.builtins import basestring
-from .util import add_default_embeds
+from .util import add_default_embeds, IndexSettings
 
 logger = logging.getLogger(__name__)
 
@@ -242,6 +242,11 @@ class AbstractCollection(Resource, Mapping):
 
 class Collection(AbstractCollection):
     ''' Separate class so add views do not apply to AbstractCollection '''
+
+    @staticmethod
+    def index_settings():
+        """ Corresponds to the default index settings prior to the existence of this property """
+        return IndexSettings()
 
 
 # Almost every single display_title should have the same

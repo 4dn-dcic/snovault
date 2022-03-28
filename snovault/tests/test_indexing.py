@@ -24,7 +24,7 @@ from sqlalchemy import MetaData
 from unittest import mock
 from webtest.app import AppError
 from zope.sqlalchemy import mark_changed
-from ..interfaces import TYPES, DBSESSION, STORAGE
+from ..interfaces import TYPES, DBSESSION, STORAGE, COLLECTIONS
 from .. import util  # The filename util.py, not something in __init__.py
 from .. import main  # Function main actually defined in __init__.py (should maybe be defined elsewhere)
 from ..elasticsearch import create_mapping, indexer_utils
@@ -58,6 +58,7 @@ TEST_COLL = '/testing-post-put-patch-sno/'
 TEST_TYPE = 'testing_post_put_patch_sno'  # use one collection for testing
 
 # we just need single shard for these tests
+# XXX: use new type
 create_mapping.NUM_SHARDS = 1
 
 
@@ -167,6 +168,9 @@ def test_indexing_post_then_get_immediately(testapp, indexer_testapp):
     res = indexer_testapp.post_json('/index', {'record': True})
     assert res.json['indexing_count'] == 1
     testapp.get('/' + test_uuid, status=[301, 200])
+    # check our collection specific index settings propagated
+    index_settings = indexer_testapp.app.registry[COLLECTIONS][TEST_TYPE].index_settings()
+    assert index_settings.settings['index']['number_of_replicas'] == 2  # should match value in testing_views.py
 
 
 def test_indexer_namespacing(app, testapp, indexer_testapp):
