@@ -240,7 +240,7 @@ def _inject_custom_settings(*, template: dict, custom_settings: IndexSettings) -
 
     :param template: base settings
     :param custom_settings: new settings to override with
-    :return: update settings
+    :return: updated settings
     """
     template['index']['number_of_shards'] = custom_settings.settings['index']['number_of_shards']
     template['index']['number_of_replicas'] = custom_settings.settings['index']['number_of_replicas']

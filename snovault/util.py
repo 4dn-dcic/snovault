@@ -33,7 +33,7 @@ KW_IGNORE_ABOVE = 512
 # used to customize ngram filter behavior
 MIN_NGRAM = 2
 MAX_NGRAM = 10
-# used to disable nested mapping on array of object fields
+# used to enable nested mapping on array of object fields
 NESTED_ENABLED = 'enable_nested'
 # global index.refresh_interval - currently the default of 1s
 REFRESH_INTERVAL = '1s'
