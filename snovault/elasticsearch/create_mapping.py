@@ -231,6 +231,29 @@ def schema_mapping(field, schema, top_level=False, from_array=False):
         }
 
 
+def _inject_custom_settings(*, template: dict, custom_settings: IndexSettings) -> dict:
+    """ Adds our custom settings to the base template
+        note that because of the nested structure of the settings dict,
+        "cleaner" methods of doing this sort of operation fail
+        thus this method is reliant on the ES 6.8 index setting structure, which may
+        need revising on upgrade
+
+    :param template: base settings
+    :param custom_settings: new settings to override with
+    :return: update settings
+    """
+    template['index']['number_of_shards'] = custom_settings.settings['index']['number_of_shards']
+    template['index']['number_of_replicas'] = custom_settings.settings['index']['number_of_replicas']
+    template['index']['refresh_interval'] = custom_settings.settings['index']['refresh_interval']
+    template['index']['analysis']['filter']['ngram_filter']['min_gram'] = \
+        custom_settings.settings['index']['analysis']['filter']['ngram_filter']['min_gram']
+    template['index']['analysis']['filter']['ngram_filter']['max_gram'] = \
+        custom_settings.settings['index']['analysis']['filter']['ngram_filter']['max_gram']
+    template['index']['analysis']['filter']['truncate_to_ngram']['length'] = \
+        custom_settings.settings['index']['analysis']['filter']['truncate_to_ngram']['length']
+    return template
+
+
 def index_settings(type_specific_settings=None):
     """
     Return a dictionary of index settings, which dictate things such as
@@ -302,16 +325,8 @@ def index_settings(type_specific_settings=None):
         }
     }
     if type_specific_settings:
-        settings_template['index']['number_of_shards'] = type_specific_settings.settings['index']['number_of_shards']
-        settings_template['index']['number_of_replicas'] = type_specific_settings.settings['index']['number_of_replicas']
-        settings_template['index']['refresh_interval'] = type_specific_settings.settings['index']['refresh_interval']
-        settings_template['index']['analysis']['filter']['ngram_filter']['min_gram'] = \
-            type_specific_settings.settings['index']['analysis']['filter']['ngram_filter']['min_gram']
-        settings_template['index']['analysis']['filter']['ngram_filter']['max_gram'] = \
-            type_specific_settings.settings['index']['analysis']['filter']['ngram_filter']['max_gram']
-        settings_template['index']['analysis']['filter']['truncate_to_ngram']['length'] = \
-            type_specific_settings.settings['index']['analysis']['filter']['truncate_to_ngram']['length']
-
+        settings_template = _inject_custom_settings(template=settings_template,
+                                                    custom_settings=type_specific_settings)
     return settings_template
 
 
