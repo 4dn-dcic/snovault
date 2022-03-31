@@ -44,7 +44,10 @@ class JSONResult(object):
             return BinaryFromJSON(fp.app_iter)
 
 
-json_renderer = JSON(serializer=JSONResult.serializer)
+# Previous - override the serializer behavior
+# New - do not do this as it produces small _app_iter chunks internally
+# See https://github.com/Pylons/waitress/issues/373
+json_renderer = JSON()
 
 
 def uuid_adapter(obj, request):
