@@ -16,6 +16,22 @@ _app_settings = {
     'retry.attempts': 3,
     'production': True,
     'structlog.dir': '/tmp/',
+    'auth0.client': 'dummy-client',
+    'auth0.domain': 'dummy.domain',
+    'auth0.options': {
+        'auth': {
+            'sso': False,
+            'redirect': False,
+            'responseType': 'token',
+            'params': {
+                'scope': 'openid email',
+                'prompt': 'select_account'
+            }
+        },
+        'allowedConnections': [
+            'github', 'google-oauth2', 'partners'
+        ]
+    },
     'multiauth.policies': 'session remoteuser accesskey webuser',
     'multiauth.groupfinder': 'snovault.tests.authorization.groupfinder',
     'multiauth.policy.session.use': 'snovault.tests.authentication.NamespacedAuthenticationPolicy',

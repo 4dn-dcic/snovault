@@ -417,3 +417,21 @@ def test_item_revision_history(testapp, registry):
     # they should be ordered by sid, recall the patch order above
     for patched_metadata, revision in zip([objv1, objv2, objv3, objv2, objv1], revisions):
         assert revision['title'] == patched_metadata['title']
+
+
+def _test_auth_config(testapp, registry):
+    cfg = testapp.get('/auth0_config').json
+    assert cfg['title'] == 'Auth0 Config'
+    assert cfg['auth0Client'] == registry.settings['auth0.client']
+    assert cfg['auth0Domain'] == registry.settings['auth0.domain']
+    assert cfg['auth0Options'] == registry.settings['auth0.options']
+
+
+def test_auth0_config_admin(testapp, registry):
+    """ Tests that acquiring auth0 config gives the expected values from settings. """
+    _test_auth_config(testapp, registry)
+
+
+def test_auth0_config_anon(anontestapp, registry):
+    """ Tests that acquiring auth0 config gives the expected values from settings. """
+    _test_auth_config(anontestapp, registry)

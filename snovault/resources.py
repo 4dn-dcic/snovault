@@ -38,6 +38,7 @@ logger = logging.getLogger(__name__)
 
 
 def includeme(config):
+    config.include(auth0_config)
     config.scan(__name__)
 
 
@@ -119,6 +120,33 @@ class Root(Resource):
     })
     def jsonld_type(self):
         return ['Portal']
+
+
+def auth0_config(config):
+    """ Route that exposes the auth0 domain and client ID for this app. """
+    config.add_route(
+        'auth0-config',
+        '/auth0_config'
+    )
+    auth0_config_values = {  # determines which values are echoed
+        'auth0.client': 'auth0Client',
+        'auth0.domain': 'auth0Domain',
+        'auth0.options': 'auth0Options'
+    }
+
+    def auth0_config_view(request):
+        response = request.response
+        response.content_type = 'application/json; charset=utf-8'
+        response_dict = {
+            'title': 'Auth0 Config',
+        }
+        settings = config.registry.settings
+        for config_key, result_key in auth0_config_values.items():
+            if config_key in settings:
+                response_dict[result_key] = settings[config_key]
+        return response_dict
+
+    config.add_view(auth0_config_view, route_name='auth0-config')
 
 
 class AbstractCollection(Resource, Mapping):
