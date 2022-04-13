@@ -428,10 +428,10 @@ def _test_auth_config(testapp, registry):
 
 
 def test_auth0_config_admin(testapp, registry):
-    """ Tests that acquiring auth0 config gives the expected values from settings. """
+    """ Tests that acquiring auth0 config gives the expected values from settings for admins. """
     _test_auth_config(testapp, registry)
 
 
 def test_auth0_config_anon(anontestapp, registry):
-    """ Tests that acquiring auth0 config gives the expected values from settings. """
+    """ Tests that acquiring auth0 config gives the expected values from settings for anonymous users. """
     _test_auth_config(anontestapp, registry)

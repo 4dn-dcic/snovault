@@ -15,7 +15,6 @@ from pyramid.view import (
     view_config,
 )
 
-import snovault
 from .calculated import calculate_properties
 from .resources import (
     AbstractCollection,
@@ -316,4 +315,3 @@ def item_view_raw(context, request):
     # add uuid to raw view
     props['uuid'] = str(context.uuid)
     return props
-
