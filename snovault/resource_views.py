@@ -311,7 +311,7 @@ def item_view_raw(context, request):
     props = context.properties
     # only upgrade properties if explicitly requested
     if asbool(request.params.get('upgrade', True)):
-        props =  context.upgrade_properties()
+        props = context.upgrade_properties()
     # add uuid to raw view
     props['uuid'] = str(context.uuid)
     return props
