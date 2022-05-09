@@ -1,3 +1,4 @@
+import os
 import elasticsearch.exceptions
 from elasticsearch.helpers import scan
 from elasticsearch_dsl import Search, Q
@@ -14,6 +15,8 @@ from .create_mapping import SEARCH_MAX
 from ..storage import register_storage
 from ..util import CachedField
 from dcicutils import es_utils, ff_utils
+from dcicutils.misc_utils import override_environ
+from dcicutils.secrets_utils import assume_identity
 import structlog
 
 log = structlog.getLogger(__name__)
@@ -265,20 +268,27 @@ class ElasticSearchStorage(object):
             log.info('PURGE: successfully deleted %s in ElasticSearch' % rid)
         return True
 
-    def _get_cached_mirror_health(self, mirror_env):
-
+    def _get_cached_mirror_health(self):
+        """ Helper function that resolves the health page, configured to handle
+            both legacy and GAC setups.
+        """
         cached_mirror_health = self.registry.settings['mirror_health']
         if 'error' not in cached_mirror_health:
             return cached_mirror_health
 
         mirror_env = self.registry.settings['mirror.env.name']
-        mirror_health_now = ff_utils.get_health_page(ff_env=mirror_env)
+        if 'IDENTITY' in os.environ:  # GAC behavior, must pull secret
+            with override_environ(**assume_identity()):
+                mirror_health_now = ff_utils.get_health_page(ff_env=mirror_env)
+        else:  # legacy behavior, s3 key is already sourced in env
+            mirror_health_now = ff_utils.get_health_page(ff_env=mirror_env)
         if 'error' not in mirror_health_now:
             return mirror_health_now
 
         raise RuntimeError('PURGE: Could not resolve mirror health on retry with error: %s' % mirror_health_now)
 
     def _assure_mirror_client(self, es_mirror_server_and_port):
+        """ Helper method that creates the ES client that connects to the  mirror ES """
         if not self.mirror:
             raise RuntimeError("Attempt to call ._assure_mirror_client() when there is no self.mirror.")
 
@@ -308,7 +318,7 @@ class ElasticSearchStorage(object):
         log.info('PURGE: attempting to purge %s from mirror storage %s' % (rid, mirror_env))
 
         try:
-            mirror_health = self._get_cached_mirror_health(mirror_env)
+            mirror_health = self._get_cached_mirror_health()
         except RuntimeError:
             log.error("PURGE: Tried to purge %s from mirror storage but couldn't get health page. Is staging up?" % rid)
             raise
@@ -393,10 +403,10 @@ class ElasticSearchStorage(object):
                 linking_dict = self.get_by_uuid(linking_uuid).source.get('embedded')
                 linking_property = self.find_linking_property(linking_dict, rid)
                 linked_info.append({
-                    '@id' : linking_dict.get('@id', linking_dict['uuid']),
-                    'display_title' : linking_dict.get('display_title', linking_dict['uuid']),
-                    'uuid' : linking_uuid,
-                    'field' : linking_property or "Not Embedded"
+                    '@id': linking_dict.get('@id', linking_dict['uuid']),
+                    'display_title': linking_dict.get('display_title', linking_dict['uuid']),
+                    'uuid': linking_uuid,
+                    'field': linking_property or "Not Embedded"
                 })
         return linked_info
 
