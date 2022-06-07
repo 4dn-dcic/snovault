@@ -51,7 +51,7 @@ class Upgrader(object):
         self.schema_upgraders[schema_name] = schema_upgrader
 
     def upgrade(self, type_, value,
-                current_version='', target_version=None, **kw):
+                current_version='1', target_version=None, **kw):
         schema_name = self.types[type_].name
         schema_upgrader = self.schema_upgraders[schema_name]
         return schema_upgrader.upgrade(
@@ -82,7 +82,7 @@ class SchemaUpgrader(object):
             raise ConfigurationError('duplicate step for source', source)
         self.upgrade_steps[parse_version(source)] = UpgradeStep(step, source, dest)
 
-    def upgrade(self, value, current_version='', target_version=None, **kw):
+    def upgrade(self, value, current_version='1', target_version=None, **kw):
         if target_version is None:
             target_version = self.version
 
@@ -238,8 +238,8 @@ def default_upgrade_finalizer(finalizer):
 
 # Upgrade
 def upgrade(request, schema_name, value,
-            current_version='', target_version=None, **kw):
+            current_version='1', target_version=None, **kw):
     upgrader = request.registry[UPGRADER]
     return upgrader.upgrade(
-        schema_name, value, current_version='', target_version=None,
+        schema_name, value, current_version=current_version, target_version=None,
         request=request, **kw)
