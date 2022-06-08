@@ -71,7 +71,7 @@ def worker(batch):
 
 def update_item(storage, context):
     target_version = context.type_info.schema_version
-    current_version = context.properties.get('schema_version', '')
+    current_version = context.properties.get('schema_version', '1')
     update = False
     errors = []
     properties = context.properties

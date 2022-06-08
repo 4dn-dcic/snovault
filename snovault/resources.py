@@ -439,7 +439,7 @@ class Item(Resource):
         except KeyError:
             # don't fail if we try to upgrade properties on something not there yet
             return None
-        current_version = properties.get('schema_version', '')
+        current_version = properties.get('schema_version', '1')
         target_version = self.type_info.schema_version
         if target_version is not None and current_version != target_version:
             upgrader = self.registry[UPGRADER]
