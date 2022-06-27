@@ -43,11 +43,23 @@ def includeme(config):
     config.scan(__name__)
 
 
+def extract_and_populate_deleted_fields(request, body: dict):
+    """ Reads the request parameters looking for 'delete_fields', and if it finds them
+        manually add a diff entry for those fields so they are picked up in the diff
+        Modifies the body in place
+    """
+    if 'delete_fields' in request.params:
+        deleted_fields = request.params['delete_fields'].split(',')
+        for deleted_field in deleted_fields:
+            body[deleted_field] = ''
+
+
 def build_diff_from_request(context, request):
     """ Unpacks request.body as JSON and computes a diff """
     try:
         item_type = context.type_info.name
         body = json.loads(request.body)
+        extract_and_populate_deleted_fields(request, body)
         dm = DiffManager(label=item_type)
     except json.decoder.JSONDecodeError:
         log.info('Request body is not valid JSON!')  # can happen from indirect patch, such as with access key
