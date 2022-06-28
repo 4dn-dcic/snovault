@@ -153,6 +153,24 @@ def test_create_mapping_correctly_maps_embeds(registry, item_type):
                 mapping_pointer = mapping_pointer['properties'][split_]
 
 
+def test_create_mapping_drops_unmappable_properties(registry):
+    """Use EmbeddingTest schema to ensure unmappable properties under
+    patternProperties and additionalProperties are not mapped.
+    """
+    test_item_type = "embedding_test"
+    expected_embeds = ["pattern_property_embed", "additional_property_embed"]
+    expected_mapped_property = "should_be_mapped"
+    mapping = type_mapping(registry[TYPES], test_item_type)
+    mapped_properties = mapping.get("properties")
+    assert mapped_properties
+    for expected_embed in expected_embeds:
+        mapped_embed = mapped_properties.get(expected_embed)
+        assert mapped_embed
+        mapped_embed_properties = mapped_embed.get("properties", {})
+        assert len(mapped_embed_properties.keys()) == 1
+        assert mapped_embed_properties.get(expected_mapped_property)
+
+
 @pytest.fixture
 def biosample(testapp):
     url = "/testing-biosample-sno"
