@@ -39,10 +39,9 @@ NESTED_ENABLED = 'enable_nested'
 REFRESH_INTERVAL = '1s'
 
 # Schema keys to ignore when finding embeds
-SCHEMA_KEYS_TO_IGNORE_FOR_EMBEDS = [
+SCHEMA_KEYS_TO_IGNORE_FOR_EMBEDS = set([
     "items", "properties", "additionalProperties", "patternProperties"
-]
-
+])
 
 
 class IndexSettings:
