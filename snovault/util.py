@@ -38,6 +38,12 @@ NESTED_ENABLED = 'enable_nested'
 # global index.refresh_interval - currently the default of 1s
 REFRESH_INTERVAL = '1s'
 
+# Schema keys to ignore when finding embeds
+SCHEMA_KEYS_TO_IGNORE_FOR_EMBEDS = [
+    "items", "properties", "additionalProperties", "patternProperties"
+]
+
+
 
 class IndexSettings:
     """ Object wrapping important ElasticSearch index settings. Previously these
@@ -676,8 +682,7 @@ def find_default_embeds_for_schema(path_thus_far, subschema):
         props_linkTos = find_default_embeds_for_schema(path_thus_far, subschema['properties'])
         linkTo_paths += props_linkTos
     for key, val in subschema.items():
-        keys_to_ignore = ["items", "properties", "additionalProperties", "patternProperties"]
-        if key in keys_to_ignore:
+        if key in SCHEMA_KEYS_TO_IGNORE_FOR_EMBEDS:
             continue
         elif key == 'linkTo':
             linkTo_paths.append(path_thus_far)
