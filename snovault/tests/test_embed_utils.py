@@ -42,13 +42,28 @@ def test_build_default_embeds():
 
 
 def test_find_default_embeds_and_expand_emb_list(registry):
-    # use EmbeddingTest as test case
-    # 'attachment' -> linkTo TestingDownload
+    """Use EmbeddingTest schema as test case.
+
+    Ensure objects with patternProperties or additionalProperties
+    sub-objects are only embedded if parent objects also include
+    other properties.
+    """
     type_info = registry[TYPES].by_item_type['embedding_test']
     schema_props = type_info.schema.get('properties')
     default_embeds = find_default_embeds_for_schema('', schema_props)
-    expected_embeds = ['attachment', 'principals_allowed.*']
+    expected_embeds = [
+        'attachment',  # 'attachment' -> linkTo TestingDownload
+        'principals_allowed.*',
+        'pattern_property_embed.*',
+        'additional_property_embed.*',
+    ]
+    expected_not_embeds = [  # In props but not default embeds == success
+        "pattern_property_no_embed",
+        "additional_property_no_embed",
+    ]
     assert(set(default_embeds) == set(expected_embeds))
+    for expected_not_embed in expected_not_embeds:
+        assert expected_not_embed in schema_props
 
     # get expansions from 'attachment'
     dummy_emb_list = [
