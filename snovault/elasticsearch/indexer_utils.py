@@ -232,36 +232,34 @@ def filter_invalidation_scope(registry, diff, invalidated_with_type, secondary_u
             # we must determine it's type and determine if the given diff could've
             # resulted in an invalidation
             split_embed = embed.split('.')
-            base_field, terminal_field = '.'.join(split_embed[0:-1]), split_embed[-1]
-            base_field_schema = crawl_schema(registry['types'], base_field, properties)
-            base_field_item_type = base_field_schema.get('linkTo', None)
+            link_depth, base_field_item_type = 0, None
 
-            # recursive helper function that will drill down as much as necessary
-            def locate_link_to(schema_cursor):
-                if 'items' in schema_cursor:  # array
-                    if 'properties' in schema_cursor['items']:
-                        for field_name, details in schema_cursor['items']['properties'].items():
-                            if base_field.endswith(field_name):
-                                if 'linkTo' in details:
-                                    return details['linkTo']
-                                else:
-                                    return locate_link_to(details)
-                    else:
-                        return schema_cursor['items']['linkTo']
-                elif 'properties' in schema_cursor:  # object
-                    for field_name, details in schema_cursor['properties'].items():
-                        if base_field.endswith(field_name):
-                            if 'linkTo' in details:
-                                return details['linkTo']
-                            else:
-                                return locate_link_to(details)
-                else:
-                    log.error(schema_cursor)
-                    raise Exception('Unexpected')
+            # crawl schema by each increasingly shorter embed searching for where
+            # the last link target ends and the terminal field begins
+            for i in range(len(split_embed), 0, -1):
+                embed_path = '.'.join(split_embed[0:i])
+                if embed_path.endswith('*'):
+                    continue
+                embed_part_schema = crawl_schema(registry['types'], embed_path, properties)
+                if 'linkTo' in embed_part_schema:
+                    base_field_item_type = embed_part_schema.get('linkTo', None)
+                    link_depth = i
+                    break
+                elif 'items' in embed_part_schema:
+                    array = embed_part_schema['items']
+                    if 'linkTo' in array:
+                        base_field_item_type = array.get('linkTo', None)
+                        link_depth = i
+                        break
 
-            # if we are not a top level linkTo, drill down
+            # if we did not find a linkTo, there is an issue with this embed
+            # log the split_embed path and continue, as there is nothing to do
             if base_field_item_type is None:
-                base_field_item_type = locate_link_to(base_field_schema)
+                log.error(f'Encountered unexpected embed structure {split_embed}, skipping')
+                continue
+
+            # grab terminal field based on the actual linkTo depth
+            terminal_field = '.'.join(split_embed[link_depth:])
 
             # Collect diffs from all possible item_types
             all_possible_diffs = diffs.get(base_field_item_type, [])
@@ -298,12 +296,12 @@ def filter_invalidation_scope(registry, diff, invalidated_with_type, secondary_u
             item_type_is_invalidated[invalidated_item_type] = False
 
     # XXX: Enable to get debugging information on invalidation scope
-    # def _sort(tp):
-    #     return tp[0]
-    # log.error('Diff: %s Invalidated: %s Cleared: %s' % (diffs, sorted(list((k, v) for k, v in item_type_is_invalidated.items()
-    #                                                                        if v is True), key=_sort),
-    #                                                            sorted(list((k, v) for k, v in item_type_is_invalidated.items()
-    #                                                                        if v is False), key=_sort)))
+    def _sort(tp):
+        return tp[0]
+    log.error('Diff: %s Invalidated: %s Cleared: %s' % (diffs, sorted(list((k, v) for k, v in item_type_is_invalidated.items()
+                                                                           if v is True), key=_sort),
+                                                               sorted(list((k, v) for k, v in item_type_is_invalidated.items()
+                                                                           if v is False), key=_sort)))
     if verbose:  # noQA this function is intended to be considered 'void' but will return info if asked - Will
         return item_type_is_invalidated
 
