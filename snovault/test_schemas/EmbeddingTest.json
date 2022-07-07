@@ -2,7 +2,10 @@
     "title": "EmbeddingTest",
     "description": "Dummy Schema for testing embedding",
     "type": "object",
-    "required": ["title", "description"],
+    "required": [
+        "title",
+        "description"
+    ],
     "properties": {
         "schema_version": {
             "type": "object",
@@ -14,6 +17,64 @@
         },
         "uuid": {
             "type": "string"
+        },
+        "pattern_property_embed": {
+            "type": "object",
+            "patternProperties": {
+                "^testing_": {
+                    "type": "object",
+                    "properties": {
+                        "not_mapped": {
+                            "type": "string"
+                        }
+                    }
+                }
+            },
+            "properties": {
+                "should_be_mapped": {
+                    "type": "string"
+                }
+            }
+        },
+        "pattern_property_no_embed": {
+            "type": "object",
+            "patternProperties": {
+                "^testing_": {
+                    "type": "object",
+                    "properties": {
+                        "not_mapped": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "additional_property_embed": {
+            "type": "object",
+            "additionalProperties": {
+                "type": "object",
+                "properties": {
+                    "not_mapped": {
+                        "type": "string"
+                    }
+                }
+            },
+            "properties": {
+                "should_be_mapped": {
+                    "type": "string"
+                }
+            }
+        },
+        "additional_property_no_embed": {
+            "type": "object",
+            "additionalProperties": {
+                "type": "object",
+                "properties": {
+                    "not_mapped": {
+                        "type": "string"
+                    }
+                }
+            }
         }
     },
     "columns": {
