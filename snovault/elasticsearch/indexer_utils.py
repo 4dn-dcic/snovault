@@ -284,6 +284,16 @@ def filter_invalidation_scope(registry, diff, invalidated_with_type, secondary_u
             if not all_possible_diffs:  # no diffs match this embed
                 continue
 
+            # Checks that the 'field' passed is actually contained in the embed list
+            def field_is_part_of_target_embed(field):
+                search_index = 0
+                for field_part in field.split('.'):
+                    if field_part not in split_embed[search_index:]:
+                        return False
+                    else:
+                        search_index = split_embed.index(field_part)
+                return True
+
             # VERY IMPORTANT: for this to work correctly, the fields used in calculated properties MUST
             # be embedded! In addition, if you embed * on a linkTo, modifications to that linkTo will ALWAYS
             # invalidate the item_type
@@ -291,7 +301,7 @@ def filter_invalidation_scope(registry, diff, invalidated_with_type, secondary_u
                 if terminal_field == field:
                     print(f'Invalidating item type {invalidated_item_type} based on edit to field {field} given embed'
                           f' {split_embed}')
-                elif terminal_field.endswith('*'):
+                elif field_is_part_of_target_embed(field) and terminal_field.endswith('*'):
                     print(f'Invalidating item type {invalidated_item_type} for field {field} based on star embed {split_embed}')
                 else:
                     print(f'Skipping field {field} as {split_embed} does not match')
