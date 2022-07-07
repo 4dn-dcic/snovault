@@ -196,10 +196,25 @@ def filter_invalidation_scope(registry, diff, invalidated_with_type, secondary_u
             [(<uuid>, <item_type>), ...]
         Removes uuids of item types that were not invalidated from the set of secondary_uuids.
 
+        NOTE: The core logic of invalidation scope occurs in this function.
+        The algorithm proceeds roughly as follows:
+            for invalidated_item_type:
+                for each embed in the invalidated_item_type's embedded list:
+                    if this embed does not form a link to the diff target:
+                        keep searching
+                    else (it forms a candidate link):
+                        determine all possible diffs for the valid types
+                        if any part of the diff is embedded directly through a terminal field or via *:
+                            mark this type as invalidated, cache type result to avoid re-computation
+                        else:
+                            keep searching embeds
+                if we reach this point and have not invalidated, the type is cleared
+
     :param registry: application registry, used to retrieve type information
     :param diff: a diff of the change (from SQS), see build_diff_from_request
     :param invalidated_with_type: list of 2-tuple (uuid, item_type)
     :param secondary_uuids: primary set of uuids to be invalidated
+    :returns: dictionary mapping types to a boolean on whether or not the type is invalidated
     """
     skip, diffs, diff_type, child_to_parent_type = build_diff_metadata(registry, diff)
     valid_diff_types = child_to_parent_type.get(diff_type, []) + [diff_type]
