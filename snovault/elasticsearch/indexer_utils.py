@@ -315,12 +315,12 @@ def filter_invalidation_scope(registry, diff, invalidated_with_type, secondary_u
             # invalidate the item_type
             for field in all_possible_diffs:
                 if terminal_field == field:
-                    print(f'Invalidating item type {invalidated_item_type} based on edit to field {field} given embed'
-                          f' {split_embed}')
+                    log.info(f'Invalidating item type {invalidated_item_type} based on edit to field {field} given embed'
+                             f' {split_embed}')
                 elif terminal_field == '*' or (terminal_field.endswith('*') and field_is_part_of_target_embed(field)):
-                    print(f'Invalidating item type {invalidated_item_type} for field {field} based on star embed {split_embed}')
+                    log.info(f'Invalidating item type {invalidated_item_type} for field {field} based on star embed {split_embed}')
                 else:
-                    print(f'Skipping field {field} as {split_embed} does not match')
+                    log.info(f'Skipping field {field} as {split_embed} does not match')
                     continue
                 item_type_is_invalidated[invalidated_item_type] = True
                 break
@@ -328,13 +328,7 @@ def filter_invalidation_scope(registry, diff, invalidated_with_type, secondary_u
             if item_type_is_invalidated.get(invalidated_item_type):
                 break  # if found we don't need to continue searching
 
-            # if (any(terminal_field == field for field in all_possible_diffs) or
-            #         (field in terminal_field and terminal_field.endswith('*'))):
-            #     print(f'Invalidating item type {invalidated_item_type} based on edit to field {field} given embed {terminal_field}')
-            #     item_type_is_invalidated[invalidated_item_type] = True
-            #     break
-
-        # if we didnt break out of the above loop, we never found an embedded field that was
+        # if we didn't break out of the above loop, we never found an embedded field that was
         # touched, so set this item type to False so all items of this type are NOT invalidated
         if invalidated_item_type not in item_type_is_invalidated:
             secondary_uuids.discard(invalidated_uuid)
