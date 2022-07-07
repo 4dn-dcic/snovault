@@ -189,7 +189,7 @@ def build_diff_metadata(registry, diff):
     return skip, diffs, modified_item_type, child_to_parent_type
 
 
-def filter_invalidation_scope(registry, diff, invalidated_with_type, secondary_uuids, verbose=False):
+def filter_invalidation_scope(registry, diff, invalidated_with_type, secondary_uuids):
     """ Function that given a diff in the following format:
             ItemType.base_field.terminal_field --> {ItemType: base_field.terminal_field} intermediary
         And a list of invalidated uuids with their type information as a 2-tuple:
@@ -200,21 +200,17 @@ def filter_invalidation_scope(registry, diff, invalidated_with_type, secondary_u
     :param diff: a diff of the change (from SQS), see build_diff_from_request
     :param invalidated_with_type: list of 2-tuple (uuid, item_type)
     :param secondary_uuids: primary set of uuids to be invalidated
-    :param verbose: specifies if we would like to return debugging info
     """
     skip, diffs, diff_type, child_to_parent_type = build_diff_metadata(registry, diff)
+    valid_diff_types = child_to_parent_type.get(diff_type, []) + [diff_type]
     # go through all invalidated uuids, looking at the embedded list of the item type
     item_type_is_invalidated = {}
     for invalidated_uuid, invalidated_item_type in invalidated_with_type:
         if skip is True:  # if we detected a change to a default embed, invalidate everything
 
-            # if in debug mode, populate invalidation metadata at the expense of performance
-            if verbose:
-                if invalidated_item_type not in item_type_is_invalidated:
-                    item_type_is_invalidated[invalidated_item_type] = True
-                continue
-            else:  # in production, exit immediately if we see this, as this works by side-effect
-                break
+            if invalidated_item_type not in item_type_is_invalidated:
+                item_type_is_invalidated[invalidated_item_type] = True
+            continue
 
         # remove this uuid if its item type has been seen before and found to
         # not be invalidated
@@ -224,7 +220,7 @@ def filter_invalidation_scope(registry, diff, invalidated_with_type, secondary_u
             continue  # nothing else to do here
 
         # if we get here, we are looking at an invalidated_item_type that exists in the
-        # diff and we need to inspect the embedded list to see if the diff fields are
+        # diff, and we need to inspect the embedded list to see if the diff fields are
         # embedded
         properties = extract_type_properties(registry, invalidated_item_type)
         embedded_list = extract_type_embedded_list(registry, invalidated_item_type)
@@ -237,8 +233,8 @@ def filter_invalidation_scope(registry, diff, invalidated_with_type, secondary_u
             link_depth, base_field_item_type = 0, None
 
             # Checks that schema_part is a linkTo and it is of type item_type
-            def is_matched_linkto(schema_part, item_type):
-                if 'linkTo' in schema_part and schema_part['linkTo'] == item_type:
+            def is_matched_linkto(schema_part, item_types):
+                if 'linkTo' in schema_part and schema_part['linkTo'] in item_types:
                     return True
                 return False
 
@@ -249,13 +245,13 @@ def filter_invalidation_scope(registry, diff, invalidated_with_type, secondary_u
                 if embed_path.endswith('*'):
                     continue
                 embed_part_schema = crawl_schema(registry['types'], embed_path, properties)
-                if is_matched_linkto(embed_part_schema, diff_type):
+                if is_matched_linkto(embed_part_schema, valid_diff_types):
                     base_field_item_type = embed_part_schema.get('linkTo', None)
                     link_depth = i
                     break
                 elif 'items' in embed_part_schema:
                     array = embed_part_schema['items']
-                    if is_matched_linkto(array, diff_type):
+                    if is_matched_linkto(array, valid_diff_types):
                         base_field_item_type = array.get('linkTo')
                         link_depth = i
                         break
@@ -291,18 +287,20 @@ def filter_invalidation_scope(registry, diff, invalidated_with_type, secondary_u
             # VERY IMPORTANT: for this to work correctly, the fields used in calculated properties MUST
             # be embedded! In addition, if you embed * on a linkTo, modifications to that linkTo will ALWAYS
             # invalidate the item_type
-            print(f'Reference embedded list: {embedded_list}')
             for field in all_possible_diffs:
                 if terminal_field == field:
                     print(f'Invalidating item type {invalidated_item_type} based on edit to field {field} given embed'
-                          f' {terminal_field}')
+                          f' {split_embed}')
                 elif terminal_field.endswith('*'):
-                    print(f'Invalidating item type {invalidated_item_type} based on star embed {terminal_field}')
+                    print(f'Invalidating item type {invalidated_item_type} for field {field} based on star embed {split_embed}')
                 else:
-                    print(f'Skipping field {field} as {terminal_field} does not match')
+                    print(f'Skipping field {field} as {split_embed} does not match')
                     continue
                 item_type_is_invalidated[invalidated_item_type] = True
                 break
+
+            if item_type_is_invalidated.get(invalidated_item_type):
+                break  # if found we don't need to continue searching
 
             # if (any(terminal_field == field for field in all_possible_diffs) or
             #         (field in terminal_field and terminal_field.endswith('*'))):
@@ -323,8 +321,7 @@ def filter_invalidation_scope(registry, diff, invalidated_with_type, secondary_u
     #                                                                        if v is True), key=_sort),
     #                                                            sorted(list((k, v) for k, v in item_type_is_invalidated.items()
     #                                                                        if v is False), key=_sort)))
-    if verbose:  # noQA this function is intended to be considered 'void' but will return info if asked - Will
-        return item_type_is_invalidated
+    return item_type_is_invalidated
 
 
 def _compute_invalidation_scope_base(request, result, source_type, target_type, simulated_prop):
@@ -335,8 +332,7 @@ def _compute_invalidation_scope_base(request, result, source_type, target_type, 
 
     dummy_diff = ['.'.join([source_type, simulated_prop])]
     invalidated_with_type = [('dummy', target_type)]
-    invalidated_metadata = filter_invalidation_scope(request.registry, dummy_diff, invalidated_with_type, set(),
-                                                     verbose=True)
+    invalidated_metadata = filter_invalidation_scope(request.registry, dummy_diff, invalidated_with_type, set())
     if invalidated_metadata.get(target_type, False):
         result['Invalidated'].append(simulated_prop)
     else:
