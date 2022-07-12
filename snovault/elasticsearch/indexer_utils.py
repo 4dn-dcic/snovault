@@ -283,8 +283,6 @@ def filter_invalidation_scope(registry, diff, invalidated_with_type, secondary_u
             all_possible_diffs = diffs.get(base_field_item_type, [])
 
             # A linkTo target could be a child type (in that we need to look at parent type diffs as well)
-            # NOTE: this situation doesn't actually occur in our system as of right now
-            # but theoretically could
             parent_types = child_to_parent_type.get(base_field_item_type, None)
             if parent_types is not None:
                 for parent_type in child_to_parent_type.get(base_field_item_type, []):
