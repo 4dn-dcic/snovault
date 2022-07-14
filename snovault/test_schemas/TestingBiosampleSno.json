@@ -30,6 +30,16 @@
     },
     "uuid": {
       "type": "string"
-    }
+    },
+    "technical_reviews":{
+            "title": "Notes",
+            "description": "Notes associated with this item",
+            "type": "array",
+            "items": {
+                "title": "Notes",
+                "type": "string",
+                "linkTo": "TestingNoteSno"
+            }
+        }
   }
 }
