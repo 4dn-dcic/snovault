@@ -99,9 +99,11 @@
             }
         },
         "previous_note": {
+            "type": "string",
             "linkTo": "TestingNoteSno"
         },
         "superseding_note": {
+            "type": "string",
             "linkTo": "TestingNoteSno"
         }
     }

@@ -466,14 +466,15 @@ def invalidation_scope_note_data():
     ]
 
 
-@pytest.fixture()
+@pytest.fixture
 def invalidation_scope_workbook(testapp, invalidation_scope_biosample_data, invalidation_scope_biosource_data,
                                 invalidation_scope_biogroup_data, invalidation_scope_individual_data,
                                 invalidation_scope_note_data):
     """ Posts 2 individuals, 3 biosamples, 2 biosources and 1 biogroup for integrated testing. """
     groups, sources, samples, notes = [], [], [], []
-    # for note in invalidation_scope_note_data:
-    #     testapp.post_json('/TestingNoteSno', note, status=201)
+    for note in invalidation_scope_note_data:
+        res = testapp.post_json('/TestingNoteSno', note, status=201).json['@graph'][0]
+        notes.append(res)
     for indiv in invalidation_scope_individual_data:
         testapp.post_json('/TestingIndividualSno', indiv, status=201)
     for biosample in invalidation_scope_biosample_data:
@@ -583,15 +584,27 @@ class TestingInvalidationScopeIntegrated:
 
     def test_invalidation_scope_integrated_link_subobject(self, testapp, invalidation_scope_workbook):
         """ Tests patching biosource.sample_object.notes, which should invalidate """
-        groups, sources, samples, _ = invalidation_scope_workbook
+        groups, _, _, _ = invalidation_scope_workbook
         diff = ['TestingBiosourceSno.sample_objects.notes']
         invalidated = [(obj['@id'], obj['@type'][0]) for obj in groups]
         secondary = {obj['@id'] for obj in groups}
         with type_embedded_list_mock(embedded_list=['sources.sample_objects.notes']):
             self.runtest(testapp, diff, invalidated, secondary, 1)
 
-    def test_invalidation_scope_integrated_multiple_links(self, testapp, invalidation_scope_workbook):
-        pass
+    @pytest.mark.parametrize('diff,expected', [
+        (['TestingNoteSno.superseding_note'], 2),
+        (['TestingNoteSno.assessment'], 5),
+        (['TestingNoteSno.assessment.call'], 5),
+        (['TestingNoteSno.assessment.date_call_made'], 0),
+        (['TestingNoteSno.review'], 3),
+        (['TestingNoteSno.review.date_reviewed'], 3),
+        (['TestingNoteSno.previous_note'], 0),
+    ])
+    def test_invalidation_scope_integrated_multiple_links(self, testapp, invalidation_scope_workbook, diff, expected):
+        groups, sources, samples, notes = invalidation_scope_workbook
+        invalidated = [(obj['@id'], obj['@type'][0]) for obj in groups + sources + samples + notes]
+        secondary = {obj['@id'] for obj in groups + sources + samples + notes}
+        self.runtest(testapp, diff, invalidated, secondary, expected)
 
     def test_invalidation_scope_default_diff(self, testapp, invalidation_scope_workbook):
         """ Integrated test verifies that default_diff is added correctly

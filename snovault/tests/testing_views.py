@@ -743,7 +743,7 @@ class TestingNoteSno(Item):
     name_key = 'identifier'
     schema = load_schema('snovault:test_schemas/TestingNoteSno.json')
     embedded_list = [
-        'superseding_note.call'
+        'superseding_note.assessment.call'
     ]
 
 
@@ -756,7 +756,7 @@ class TestingBiosampleSno(Item):
     embedded_list = [
         'contributor.specimen',
         'technical_reviews.assessment.call',
-        'technical_reviews.review'
+        'technical_reviews.review.*'
     ]
 
 

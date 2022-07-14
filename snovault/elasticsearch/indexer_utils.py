@@ -218,6 +218,7 @@ def filter_invalidation_scope(registry, diff, invalidated_with_type, secondary_u
     """
     skip, diffs, diff_type, child_to_parent_type = build_diff_metadata(registry, diff)
     valid_diff_types = child_to_parent_type.get(diff_type, []) + [diff_type]
+    diff_source_properties = extract_type_properties(registry, diff_type)
     # go through all invalidated uuids, looking at the embedded list of the item type
     item_type_is_invalidated = {}
     for invalidated_uuid, invalidated_item_type in invalidated_with_type:
@@ -239,6 +240,7 @@ def filter_invalidation_scope(registry, diff, invalidated_with_type, secondary_u
         # embedded
         properties = extract_type_properties(registry, invalidated_item_type)
         embedded_list = extract_type_embedded_list(registry, invalidated_item_type)
+
         for embed in embedded_list:
 
             # check the field up to the embed as this is the path to the linkTo
@@ -300,23 +302,26 @@ def filter_invalidation_scope(registry, diff, invalidated_with_type, secondary_u
             # Checks that the 'field' passed is actually contained in the embed list
             def field_is_part_of_target_embed(field):
                 terminal_field_as_list = terminal_field.split('.')
-                search_index = 0
                 for field_part in field.split('.'):
-                    if field_part not in terminal_field_as_list[search_index:]:
-                        return False
-                    else:
-                        search_index = terminal_field_as_list.index(field_part)
-                return True
+                    if field_part in terminal_field_as_list:
+                        return True
+                return False
 
             # VERY IMPORTANT: for this to work correctly, the fields used in calculated properties MUST
             # be embedded! In addition, if you embed * on a linkTo, modifications to that linkTo will ALWAYS
             # invalidate the item_type
             for field in all_possible_diffs:
+                # if terminal field matches a diff exactly, invalidate
                 if terminal_field == field:
-                    log.info(f'Invalidating item type {invalidated_item_type} based on edit to field {field} given embed'
-                             f' {split_embed}')
+                    log.info(f'Invalidating item type {invalidated_item_type} based on edit to field {field} given exact'
+                             f'embed {terminal_field}')
+                # if terminal field is *, invalidate
                 elif terminal_field == '*' or (terminal_field.endswith('*') and field_is_part_of_target_embed(field)):
                     log.info(f'Invalidating item type {invalidated_item_type} for field {field} based on star embed {split_embed}')
+                # if we edited a link itself or any field on the path, invalidate
+                elif field in split_embed:
+                    log.info(f'Invalidating item type {invalidated_item_type} based on edit to field {field} given embed'
+                             f' path {split_embed}')
                 else:
                     log.info(f'Skipping field {field} as {split_embed} does not match')
                     continue
