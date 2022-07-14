@@ -15,7 +15,8 @@
     ],
     "properties": {
         "schema_version": {
-            "default": "1"
+            "default": "1",
+            "type": "string"
         },
         "uuid": {
             "type": "string"
