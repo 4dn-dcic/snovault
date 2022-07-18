@@ -823,18 +823,24 @@ def build_index(app, es, index_name, in_type, mapping, uuids_to_index, dry_run,
         return
 
     # delete the index. Ignore 404 because new item types will not be present
+    # note that sometimes we can encounter error because the index we are trying to delete
+    # is being snapshot - wait for it to complete then try again
     if this_index_exists:
-        res = es_safe_execute(es.indices.delete, index=index_name, ignore=[404])
-        if res is not None:
-            if res.get('status') == 404:
-                log.info('MAPPING: index %s not found and cannot be deleted' % in_type,
-                         collection=in_type)
+        for _ in range(12):  # recover from snapshot related errors, 2 mins max
+            res = es_safe_execute(es.indices.delete, index=index_name, ignore=[404])
+            if res is not None:
+                if res.get('status') == 404:
+                    log.info('MAPPING: index %s not found and cannot be deleted' % in_type,
+                             collection=in_type)
+                    break
+                else:
+                    assert res.get('acknowledged') is True
+                    log.info('MAPPING: index successfully deleted for %s' % in_type,
+                             collection=in_type)
+                    break
             else:
-                assert res.get('acknowledged') is True
-                log.info('MAPPING: index successfully deleted for %s' % in_type,
-                         collection=in_type)
-        else:
-            log.error('MAPPING: error on delete index for %s' % in_type, collection=in_type)
+                log.error('MAPPING: error on delete index for %s' % in_type, collection=in_type)
+                time.sleep(10)
 
     # first, create the mapping. adds settings and mappings in the body
     res = es_safe_execute(es.indices.create, index=index_name, body=this_index_record)
