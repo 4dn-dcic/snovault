@@ -42,6 +42,8 @@
 
 # PyEnv
 .python-version
+# KMP's env tools
+.python-cmd
 
 # Microsoft Office lock and backup files
 ~$*
