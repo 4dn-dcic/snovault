@@ -15,6 +15,7 @@ import structlog
 import time
 
 from collections import OrderedDict
+from dcicutils.misc_utils import ignored
 from elasticsearch.exceptions import (
     TransportError,
     RequestError,
@@ -31,7 +32,7 @@ from dcicutils.log_utils import set_logging
 from ..commands.es_index_data import run as run_index_data
 from ..schema_utils import combine_schemas
 from ..util import (
-    add_default_embeds, find_collection_subtypes, IndexSettings,
+    add_default_embeds, IndexSettings,
     NUM_SHARDS, NUM_REPLICAS, SEARCH_MAX, KW_IGNORE_ABOVE, MIN_NGRAM,
     MAX_NGRAM, NESTED_ENABLED, REFRESH_INTERVAL
 )
@@ -52,15 +53,18 @@ log = structlog.getLogger(__name__)
 
 def determine_if_is_date_field(field, schema):
     """
-    Helper funciton to determine whether a given `schema` for a field is a date.
-    TODO: remove unused `field` parameter. Requires search.py change
+    Helper function to determine whether a given `schema` for a field is a date.
+
+    :param field: unused
+    :param schema: the schema element description whose format is to be checked
     """
+    ignored(field)  # TODO: remove unused `field` parameter. Requires search.py change
     is_date_field = False
     if schema.get('format') is not None:
         if schema['format'] == 'date' or schema['format'] == 'date-time':
             is_date_field = True
     elif schema.get('anyOf') is not None and len(schema['anyOf']) > 1:
-        is_date_field = True # Will revert to false unless all anyOfs are format date/datetime.
+        is_date_field = True  # Will revert to False unless all anyOfs are format date/datetime.
         for schema_option in schema['anyOf']:
             if schema_option.get('format') not in ['date', 'date-time']:
                 is_date_field = False
@@ -97,6 +101,7 @@ def schema_mapping(field, schema, top_level=False, from_array=False):
     normalize to lowercase the keyword value.
     TODO: rename 'lower_case_sort' to 'lowercase' and adjust search code
     """
+    ignored(top_level)  # TODO: maybe wants to be used below, but isn't yet?
     type_ = schema['type']
 
     # Elasticsearch handles multiple values for a field
@@ -282,13 +287,13 @@ def index_settings(type_specific_settings=None):
                     # create tokens between size MIN_NGRAM and MAX_NGRAM
                     'ngram_filter': {
                         'type': 'edgeNGram',
-                         'min_gram': MIN_NGRAM,
-                         'max_gram': MAX_NGRAM
+                        'min_gram': MIN_NGRAM,
+                        'max_gram': MAX_NGRAM
                     },
                     # truncate tokens to size MAX_NGRAM
                     'truncate_to_ngram': {
-                         'type': 'truncate',
-                         'length': MAX_NGRAM
+                        'type': 'truncate',
+                        'length': MAX_NGRAM
                     }
                 },
                 'analyzer': {
@@ -639,8 +644,8 @@ def aggregated_items_mapping(types, item_type):
                     }
                 else:
                     mapping_val = {'properties': {}}
-                if (split_part not in ptr or
-                    ('properties' in mapping_val and 'properties' not in ptr[split_part])):
+                if (split_part not in ptr
+                        or ('properties' in mapping_val and 'properties' not in ptr[split_part])):
                     ptr[split_part] = mapping_val
                 if 'properties' in ptr[split_part]:
                     ptr = ptr[split_part]['properties']
@@ -666,7 +671,7 @@ def type_mapping(types, item_type, embed=True):
     """
     type_info = types[item_type]
     schema = type_info.schema
-    # use top_level parameter here for schema_mapping
+    # TODO: use top_level parameter here for schema_mapping
     mapping = schema_mapping('*', schema, from_array=False)
     if not embed:
         return mapping
@@ -675,7 +680,8 @@ def type_mapping(types, item_type, embed=True):
     embeds = add_default_embeds(item_type, types, type_info.embedded_list, schema)
     embeds.sort()
     for prop in embeds:
-        single_embed = {}
+        # TODO: unused?
+        # single_embed = {}
         curr_s = schema
         curr_m = mapping
         split_embed_path = prop.split('.')
@@ -777,7 +783,7 @@ def create_mapping_by_type(in_type, registry):
 
 
 def build_index(app, es, index_name, in_type, mapping, uuids_to_index, dry_run,
-                check_first=False,index_diff=False, print_count_only=False):
+                check_first=False, index_diff=False, print_count_only=False):
     """
     Creates an es index for the given `in_type` with the given mapping and
     settings defined by item_settings(). Delete existing index first.
@@ -801,7 +807,7 @@ def build_index(app, es, index_name, in_type, mapping, uuids_to_index, dry_run,
 
     if dry_run:
         log.info('___DRY RUN___')
-        log.info('MAPPING: would use the attached mapping/settings for index %s' % (in_type),
+        log.info(f'MAPPING: would use the attached mapping/settings for index {in_type}',
                  collection=in_type, mapping=this_index_record)
         return
 
@@ -810,16 +816,16 @@ def build_index(app, es, index_name, in_type, mapping, uuids_to_index, dry_run,
 
     # if the index exists, we might not need to delete it
     # otherwise, run if we are using the check-first or index_diff args
-    if ((check_first or index_diff) and this_index_exists
-        and compare_against_existing_mapping(es, index_name, in_type, this_index_record, True)):
+    if ((check_first or index_diff)
+            and this_index_exists
+            and compare_against_existing_mapping(es, index_name, in_type, this_index_record, True)):
         check_and_reindex_existing(app, es, in_type, uuids_to_index, index_diff)
-        log.info('MAPPING: using existing index for collection %s' % (in_type), collection=in_type)
+        log.info(f'MAPPING: using existing index for collection {in_type}', collection=in_type)
         return
 
     # if index_diff and we've made it here, the mapping must be off
     if index_diff:
-        log.error('MAPPING: cannot index-diff for index %s due to differing mappings'
-                  % (in_type), collection=in_type)
+        log.error(f'MAPPING: cannot index-diff for index {in_type} due to differing mappings', collection=in_type)
         return
 
     # delete the index. Ignore 404 because new item types will not be present
@@ -840,9 +846,9 @@ def build_index(app, es, index_name, in_type, mapping, uuids_to_index, dry_run,
     res = es_safe_execute(es.indices.create, index=index_name, body=this_index_record)
     if res is not None:
         assert res.get('acknowledged') is True
-        log.info('MAPPING: new index created for %s' % (in_type), collection=in_type)
+        log.info(f'MAPPING: new index created for {in_type}', collection=in_type)
     else:
-        log.error('MAPPING: new index failed for %s' % (in_type), collection=in_type)
+        log.error(f'MAPPING: new index failed for {in_type}', collection=in_type)
 
     # check to debug create-mapping issues and ensure correct mappings
     confirm_mapping(es, index_name, in_type, this_index_record)
@@ -875,13 +881,12 @@ def check_and_reindex_existing(app, es, in_type, uuids_to_index, index_diff=Fals
     """
     db_count, es_count, db_uuids, diff_uuids = get_db_es_counts_and_db_uuids(app, es, in_type, index_diff)
     uuids_to_upgrade = get_items_to_upgrade(app, es, in_type)
-    log.info("DB count is %s and ES count is %s for index: %s" %
-                (str(db_count), str(es_count), in_type), collection=in_type,
-                 db_count=str(db_count), cat='collection_counts', es_count=str(es_count))
+    log.info(f"DB count is {str(db_count)} and ES count is {str(es_count)} for index: {in_type}",
+             collection=in_type, db_count=str(db_count), cat='collection_counts', es_count=str(es_count))
     if print_counts:  # just display things, don't actually queue the uuids
         if index_diff and diff_uuids:
-            log.info("The following UUIDs are found in the DB but not the ES index: %s\n%s"
-                        % (in_type, diff_uuids), collection=in_type)
+            log.info(f"The following UUIDs are found in the DB but not the ES index: {in_type}\n{diff_uuids}",
+                     collection=in_type)
     elif es_count is None or es_count != db_count:
         if index_diff:
             if uuids_to_upgrade:
@@ -898,17 +903,14 @@ def check_and_reindex_existing(app, es, in_type, uuids_to_index, index_diff=Fals
                         % (str(len(diff_uuids)), in_type), items_queued=str(len(diff_uuids)), collection=in_type)
             uuids_to_index[in_type] = diff_uuids
         else:
-            log.info('MAPPING: queueing %s items found in the existing index %s for reindexing'
-                        % (str(len(db_uuids)), in_type), items_queued=str(len(db_uuids)), collection=in_type)
+            log.info(f'MAPPING: queueing {str(len(db_uuids))} items found'
+                     f' in the existing index {in_type} for reindexing',
+                     items_queued=str(len(db_uuids)), collection=in_type)
             uuids_to_index[in_type] = db_uuids
     elif uuids_to_upgrade:
-        log.info(
-            "MAPPING: queueing %s items found in existing index %s requiring an"
-            " upgrade for reindexing"
-            % (str(len(uuids_to_upgrade)), in_type),
-            items_queued=str(len(uuids_to_upgrade)),
-            collection=in_type,
-        )
+        log.info(f"MAPPING: queueing {str(len(uuids_to_upgrade))} items found"
+                 f"in existing index {in_type} requiring an upgrade for reindexing",
+                 items_queued=str(len(uuids_to_upgrade)), collection=in_type)
         uuids_to_index[in_type] = uuids_to_upgrade
 
 
@@ -1113,8 +1115,8 @@ def flatten_and_sort_uuids(registry, uuids_to_index, item_order):
     (e.g. MyType)
 
     Args:
-        reigstry: current Pyramid Registry
-        uuids_to_index (set): keys are item_type and values are set of uuids
+        registry: current Pyramid Registry
+        uuids_to_index (dict): keys are item_type and values are set of uuids
         item_order (list): string item types / item names to order by
 
     Returns:
@@ -1271,11 +1273,11 @@ def run(app, collections=None, dry_run=False, check_first=False, skip_indexing=F
 
 
     log.info('\n___GREATEST MAPPING TIME: %s\n' % greatest_mapping_time,
-                cat='max mapping time', **greatest_mapping_time)
+             cat='max mapping time', **greatest_mapping_time)
     log.info('\n___GREATEST INDEX CREATION TIME: %s\n' % greatest_index_creation_time,
-                cat='max index create time', **greatest_index_creation_time)
+             cat='max index create time', **greatest_index_creation_time)
     log.info('\n___TIME FOR ALL COLLECTIONS: %s\n' % (overall_end - overall_start),
-                cat='overall mapping time', duration=str(overall_end - overall_start))
+             cat='overall mapping time', duration=str(overall_end - overall_start))
     if skip_indexing or print_count_only:
         return timings
 
