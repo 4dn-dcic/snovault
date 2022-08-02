@@ -614,3 +614,12 @@ class TestingInvalidationScopeIntegrated:
         invalidated = [(obj['@id'], obj['@type'][0]) for obj in groups + sources + samples]
         secondary = {obj['@id'] for obj in groups + sources + samples}
         self.runtest(testapp, ['TestingBiosourceSno.identifier'], invalidated, secondary, 1)
+
+    def test_invalidation_scope_empty_patch(self, testapp, invalidation_scope_workbook):
+        """ Integrated test verifies that default_diff is added correctly
+            ie: diff should not trigger invalidation, but default_diff will
+        """
+        groups, sources, samples, _ = invalidation_scope_workbook
+        invalidated = [(obj['@id'], obj['@type'][0]) for obj in groups + sources + samples]
+        secondary = {obj['@id'] for obj in groups + sources + samples}
+        self.runtest(testapp, [], invalidated, secondary, 0)
