@@ -28,6 +28,7 @@ from pyramid.paster import get_app
 from timeit import default_timer as timer
 from ..interfaces import COLLECTIONS, TYPES
 from dcicutils.log_utils import set_logging
+from dcicutils.misc_utils import as_seconds
 from ..commands.es_index_data import run as run_index_data
 from ..schema_utils import combine_schemas
 from ..util import (
@@ -828,7 +829,7 @@ def build_index(app, es, index_name, in_type, mapping, uuids_to_index, dry_run,
     if this_index_exists:
         allowed_time = as_seconds(minutes=2)
         retry_wait = 10  # seconds
-        for _ in range(allowed_time/sleep_time):  # recover from snapshot related errors, 2 mins max
+        for _ in range(allowed_time/retry_wait):  # recover from snapshot related errors, 2 mins max
             res = es_safe_execute(es.indices.delete, index=index_name, ignore=[404])
             if res is not None:
                 if res.get('status') == 404:
@@ -842,7 +843,7 @@ def build_index(app, es, index_name, in_type, mapping, uuids_to_index, dry_run,
                     break
             else:
                 log.error('MAPPING: error on delete index for %s' % in_type, collection=in_type)
-                time.sleep(10)
+                time.sleep(retry_wait)
 
     # first, create the mapping. adds settings and mappings in the body
     res = es_safe_execute(es.indices.create, index=index_name, body=this_index_record)
