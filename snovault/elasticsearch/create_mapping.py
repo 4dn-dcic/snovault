@@ -829,7 +829,7 @@ def build_index(app, es, index_name, in_type, mapping, uuids_to_index, dry_run,
     if this_index_exists:
         allowed_time = as_seconds(minutes=2)
         retry_wait = 10  # seconds
-        for _ in range(allowed_time/retry_wait):  # recover from snapshot related errors, 2 mins max
+        for _ in range(allowed_time // retry_wait):  # recover from snapshot related errors, 2 mins max
             res = es_safe_execute(es.indices.delete, index=index_name, ignore=[404])
             if res is not None:
                 if res.get('status') == 404:
