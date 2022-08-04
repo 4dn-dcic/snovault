@@ -218,7 +218,6 @@ def filter_invalidation_scope(registry, diff, invalidated_with_type, secondary_u
     """
     skip, diffs, diff_type, child_to_parent_type = build_diff_metadata(registry, diff)
     valid_diff_types = child_to_parent_type.get(diff_type, []) + [diff_type]
-    diff_source_properties = extract_type_properties(registry, diff_type)
     # go through all invalidated uuids, looking at the embedded list of the item type
     item_type_is_invalidated = {}
     for invalidated_uuid, invalidated_item_type in invalidated_with_type:
