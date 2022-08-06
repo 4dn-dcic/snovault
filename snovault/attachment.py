@@ -3,6 +3,7 @@ import mimetypes
 import uuid
 
 from base64 import b64decode
+from dcicutils.lang_utils import disjoined_list
 from hashlib import md5
 from io import BytesIO
 from mimetypes import guess_type
@@ -103,7 +104,7 @@ class ItemWithAttachment(Item):
         # verify data format
         if not href.startswith('data:'):
             msg = "Expected data URI."
-            raise ValidationFailure('body', [prop_name, 'href'], msg)
+            raise ValidationFailure(location='body', name=[prop_name, 'href'], description=msg)
 
         properties[prop_name] = attachment = attachment.copy()
         download_meta = downloads[prop_name] = {}
@@ -113,7 +114,7 @@ class ItemWithAttachment(Item):
             mime_type, charset, data = self.parse_data_uri(href)
         except (ValueError, TypeError):
             msg = 'Could not parse data URI.'
-            raise ValidationFailure('body', [prop_name, 'href'], msg)
+            raise ValidationFailure(location='body', name=[prop_name, 'href'], description=msg)
         if charset is not None:
             download_meta['charset'] = charset
 
@@ -125,8 +126,9 @@ class ItemWithAttachment(Item):
         if mime_type:
             if not self.mimetypes_are_equal(mime_type, mime_type_from_filename):
                 raise ValidationFailure(
-                    'body', [prop_name, 'href'],
-                    'Wrong file extension for %s mimetype.' % mime_type)
+                    location='body', name=[prop_name, 'href'],
+                    description=(f'Wrong file extension for {mime_type!r} mimetype.'
+                                 f' {filename!r} has implied mime type {mime_type_from_filename!r}.'))
         else:
             mime_type = mime_type_from_filename
 
@@ -139,7 +141,7 @@ class ItemWithAttachment(Item):
 
         if not self.mimetypes_are_equal(mime_type, mime_type_detected):
             msg = "Incorrect file type. (Appears to be %s)" % mime_type_detected
-            raise ValidationFailure('body', [prop_name, 'href'], msg)
+            raise ValidationFailure(location='body', name=[prop_name, 'href'], description=msg)
 
         attachment['type'] = mime_type
         if mime_type is not None:
@@ -153,7 +155,9 @@ class ItemWithAttachment(Item):
         else:
             if mime_type not in allowed_types:
                 raise ValidationFailure(
-                    'body', [prop_name, 'href'], 'Mimetype %s is not allowed.' % mime_type)
+                    location='body', name=[prop_name, 'href'],
+                    description=(f'Mimetype {mime_type!r} is not allowed.'
+                                 f' Expected one of {disjoined_list(allowed_types)}.'))
 
         # Validate images and store height/width
         major, minor = mime_type.split('/')
@@ -167,7 +171,7 @@ class ItemWithAttachment(Item):
         md5sum = md5(data).hexdigest()
         if 'md5sum' in attachment and attachment['md5sum'] != md5sum:
             raise ValidationFailure(
-                'body', [prop_name, 'md5sum'], 'MD5 checksum does not match uploaded data.')
+                location='body', name=[prop_name, 'md5sum'], description='MD5 checksum does not match uploaded data.')
         else:
             download_meta['md5sum'] = attachment['md5sum'] = md5sum
 
@@ -206,7 +210,7 @@ class ItemWithAttachment(Item):
             attachment = properties[prop_name]
             if 'href' not in attachment:
                 msg = "Expected data uri or existing uri."
-                raise ValidationFailure('body', [prop_name, 'href'], msg)
+                raise ValidationFailure(location='body', name=[prop_name, 'href'], description=msg)
 
             href = attachment['href']
             if href.startswith('@@download/'):
@@ -216,7 +220,7 @@ class ItemWithAttachment(Item):
                     existing = None
                 if existing and existing != href:
                     msg = "Expected data uri or existing uri."
-                    raise ValidationFailure('body', [prop_name, 'href'], msg)
+                    raise ValidationFailure(location='body', name=[prop_name, 'href'], description=msg)
                 if self.propsheets.get('downloads', {}).get(prop_name):
                     # there is already a propsheet present with same href
                     unchanged.append(prop_name)
