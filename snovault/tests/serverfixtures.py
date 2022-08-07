@@ -137,6 +137,7 @@ def _DBSession(conn):
 
 @pytest.fixture(scope='session')
 def DBSession(_DBSession, zsa_savepoints, check_constraints):
+    notice_pytest_fixtures(zsa_savepoints, check_constraints)
     return _DBSession
 
 

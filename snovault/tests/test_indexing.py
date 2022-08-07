@@ -360,8 +360,8 @@ def test_dlq_to_primary(app, anontestapp, indexer_testapp):
     assert not failed, "Failed. .add_uuids() reported failure during test setup phase."
     n_queued = len(success)
     print(n_queued, "UUIDs queued to DLQ:")
-    for i, uuid in enumerate(success):
-        print("UUID", i, json.dumps(uuid, indent=2, default=str))
+    for i, uuid_i in enumerate(success):
+        print("UUID", i, json.dumps(uuid_i, indent=2, default=str))
     assert n_queued == 2
     print("Done with setup phase. Entering test phase.")
     print("Executing .get('/dlq_to_primary') [authenticated]")
@@ -528,6 +528,7 @@ def test_indexing_queue_records(app, testapp, indexer_testapp):
     """
     es = app.registry[ELASTIC_SEARCH]
     indexer_queue = app.registry[INDEXER_QUEUE]
+    ignored(indexer_queue)  # TODO: Should this be used? In some tests here, we clear the queue.
     namespaced_indexing = indexer_utils.get_namespaced_index(app, 'indexing')
     # first clear out the indexing records
     es.indices.delete(index=namespaced_indexing)
@@ -592,6 +593,7 @@ def test_sync_and_queue_indexing(app, testapp, indexer_testapp):
     # post second item to database but do not index (don't load into es)
     # queued on post - total of two items queued
     res = testapp.post_json(TEST_COLL, {'required': ''})
+    ignored(res)  # TODO: Should this be tested?
     # time.sleep(2)
     doc_count = es.count(index=namespaced_index, doc_type=TEST_TYPE).get('count')
     # doc_count has not yet updated
@@ -619,6 +621,7 @@ def test_queue_indexing_with_linked(app, testapp, indexer_testapp, dummy_request
     """
     es = app.registry[ELASTIC_SEARCH]
     indexer_queue = app.registry[INDEXER_QUEUE]
+    ignored(indexer_queue)  # TODO: Should this be used? In some tests here, we clear the queue.
     # first, run create mapping with the indices we will use
     create_mapping.run(
         app,
@@ -785,6 +788,7 @@ def test_queue_indexing_with_linked(app, testapp, indexer_testapp, dummy_request
 @pytest.mark.flaky
 def test_indexing_invalid_sid(app, testapp, indexer_testapp):
     indexer_queue = app.registry[INDEXER_QUEUE]
+    ignored(indexer_queue)  # TODO: Should this be used? In some tests here, we clear the queue.
     es = app.registry[ELASTIC_SEARCH]
     # post an item, index, then find version (sid)
     res = testapp.post_json(TEST_COLL, {'required': ''})
@@ -799,6 +803,7 @@ def test_indexing_invalid_sid(app, testapp, indexer_testapp):
 
     # now increment the version and check it
     res = testapp.patch_json(TEST_COLL + test_uuid, {'required': 'meh'})
+    ignored(res)  # TODO: Should this be tested?
     res = indexer_testapp.post_json('/index', {'record': True})
     assert res.json['indexing_count'] == 1
     time.sleep(4)
@@ -922,18 +927,21 @@ def test_es_indices(app, elasticsearch):
     """
     es = app.registry[ELASTIC_SEARCH]
     item_types = app.registry[TYPES].by_item_type
+    ignored(item_types)  # TODO: Should this be used?
     test_collections = [TEST_TYPE]
     # run create mapping for all types, but no need to index
     run(app, collections=test_collections, skip_indexing=True)
     # check that mappings and settings are in index
     for item_type in test_collections:
         item_mapping = type_mapping(app.registry[TYPES], item_type)
+        ignored(item_mapping)  # TODO: Should this be used?
         try:
             namespaced_index = indexer_utils.get_namespaced_index(app, item_type)
             item_index = es.indices.get(index=namespaced_index)
         except:
             assert False
-        found_index_mapping = item_index.get(namespaced_index, {}).get('mappings', {}).get(item_type, {}).get('properties', {}).get('embedded')
+        found_index_mapping = (item_index.get(namespaced_index, {})
+                               .get('mappings', {}).get(item_type, {}).get('properties', {}).get('embedded'))
         found_index_settings = item_index.get(namespaced_index, {}).get('settings')
         assert found_index_mapping
         assert found_index_settings
@@ -952,7 +960,11 @@ def test_index_settings(app, testapp, indexer_testapp):
     es = app.registry[ELASTIC_SEARCH]
     namespaced_test_type = indexer_utils.get_namespaced_index(app, TEST_TYPE)
     curr_settings = es.indices.get_settings(index=namespaced_test_type)
-    found_max_window = curr_settings.get(namespaced_test_type, {}).get('settings', {}).get('index', {}).get('max_result_window', None)
+    found_max_window = (curr_settings
+                        .get(namespaced_test_type, {})
+                        .get('settings', {})
+                        .get('index', {})
+                        .get('max_result_window', None))
     # test one important setting
     assert int(found_max_window) == max_result_window
 
@@ -1022,6 +1034,7 @@ def test_check_and_reindex_existing(app, testapp):
     # this will cause the testing-ppp index to queue reindexing when we call
     # check_and_reindex_existing
     res = testapp.post_json(TEST_COLL, {'required': ''})
+    ignored(res)  # TODO: Should this be used?
     time.sleep(2)
     namespaced_index = indexer_utils.get_namespaced_index(app, TEST_TYPE)
     doc_count = es.count(index=namespaced_index, doc_type=TEST_TYPE).get('count')
@@ -1103,10 +1116,10 @@ def test_create_mapping_check_first(app, testapp, indexer_testapp):
     time.sleep(2)
     second_count = es.count(index=namespaced_index, doc_type=TEST_TYPE).get('count')
     counter = 0
-    while (second_count != initial_count and counter < 10):
+    while second_count != initial_count and counter < 10:
         time.sleep(2)
         second_count = es.count(index=namespaced_index, doc_type=TEST_TYPE).get('count')
-        counter +=1
+        counter += 1
     assert second_count == initial_count
 
     # remove the index manually and do not index
@@ -1122,6 +1135,7 @@ def test_create_mapping_check_first(app, testapp, indexer_testapp):
 
 def delay_rerun(*args):
     """ Rerun function for flaky """
+    ignored(args)
     time.sleep(10)
     return True
 
@@ -1261,6 +1275,7 @@ def test_aggregated_items(app, testapp, indexer_testapp):
     """
     es = app.registry[ELASTIC_SEARCH]
     indexer_queue = app.registry[INDEXER_QUEUE]
+    ignored(indexer_queue)  # TODO: Should this be used? In some tests here, we clear the queue.
     # first, run create mapping with the indices we will use
     namespaced_aggregate = indexer_utils.get_namespaced_index(app, 'testing_link_aggregate_sno')
     create_mapping.run(
@@ -1884,8 +1899,8 @@ def test_queue_manager_purge_queue_wait():
                 myenv + '-secondary-indexer-queue': secondary,
                 myenv + '-dlq': dlq,
             }
-            with mock.patch("socket.gethostname") as mock_gethostname:
-                with mock.patch.object(QueueManager, "get_queue_url") as mock_get_queue_url:
+            with mock.patch("socket.gethostname"):  # as mock_gethostname:
+                with mock.patch.object(QueueManager, "get_queue_url"):  # as mock_get_queue_url:
 
                     registry = MockRegistry()
                     manager = QueueManager(registry)

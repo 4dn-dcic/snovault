@@ -1,23 +1,25 @@
 import os
 import elasticsearch.exceptions
-from elasticsearch.helpers import scan
+import structlog
+
+from dcicutils import es_utils, ff_utils
+from dcicutils.misc_utils import override_environ, ignored
+from dcicutils.secrets_utils import assume_identity
 from elasticsearch_dsl import Search, Q
-from zope.interface import alsoProvides
+from elasticsearch.helpers import scan
 from uuid import UUID
+from zope.interface import alsoProvides
+from .create_mapping import SEARCH_MAX
+from .indexer_utils import get_namespaced_index, namespace_index_from_health, find_uuids_for_indexing
 from .interfaces import (
     ELASTIC_SEARCH,
-    INDEXER_QUEUE_MIRROR,
+    # INDEXER_QUEUE_MIRROR,
     INDEXER,
     ICachedItem,
 )
-from .indexer_utils import get_namespaced_index, namespace_index_from_health, find_uuids_for_indexing
-from .create_mapping import SEARCH_MAX
 from ..storage import register_storage
 from ..util import CachedField
-from dcicutils import es_utils, ff_utils
-from dcicutils.misc_utils import override_environ
-from dcicutils.secrets_utils import assume_identity
-import structlog
+
 
 log = structlog.getLogger(__name__)
 
@@ -80,7 +82,8 @@ class CachedModel(object):
     def max_sid(self):
         return self.source['max_sid']
 
-    def used_for(self, item):
+    @classmethod
+    def used_for(cls, item):
         alsoProvides(item, ICachedItem)
 
 
@@ -101,7 +104,8 @@ class ElasticSearchStorage(object):
         self.mappings = CachedField('mappings',
                                     lambda: self.es.indices.get_mapping(index=self.index))
 
-    def _one(self, search):
+    @classmethod
+    def _one(cls, search):
         # execute search and return a model if there is one hit
         hits = search.execute()
         if len(hits) != 1:
@@ -184,9 +188,10 @@ class ElasticSearchStorage(object):
         Perform a search with an given key and value.
         Returns CachedModel if found, otherwise None
         """
+        ignored(default)  # TODO: Is that right? Should it not be used somewhere below? -kmp 7-Aug-2022
         # find the term with the specific type
         term = 'embedded.' + key + '.raw'
-        index = get_namespaced_index(self.registry, item_type)
+        index = get_namespaced_index(self.registry, item_type)  # TODO: Should default be passed here? -kmp 7-Aug-2022
         search = Search(using=self.es, index=index)
         search = search.filter('term', **{term: value})
         search = search.filter('type', value=item_type)
@@ -235,12 +240,14 @@ class ElasticSearchStorage(object):
         Returns:
             dict keyed by rid with integer sid values
         """
+        ignored(self, rids)
         return {}
 
     def get_max_sid(self):
         """
         Currently not implemented for ES. Just return None
         """
+        ignored(self)
         return None
 
     @staticmethod
@@ -393,9 +400,9 @@ class ElasticSearchStorage(object):
         linked_info = []
         # we only care about linkTos the item and not reverse links here
         # we also do not care about invalidation scope
-        uuids_linking_to_item, _ = find_uuids_for_indexing(self.registry, set([rid]))
+        uuids_linking_to_item, _ = find_uuids_for_indexing(self.registry, {rid})
         # remove the item itself from the list
-        uuids_linking_to_item = uuids_linking_to_item - set([rid])
+        uuids_linking_to_item = uuids_linking_to_item - {rid}
         if 0 < len(uuids_linking_to_item) < 1000:  # more than 1000 can trigger 504
             # Return list of { '@id', 'display_title', 'uuid' } in 'comment'
             # property of HTTPException response to assist with any manual unlinking.

@@ -9,14 +9,15 @@ from uuid import uuid4
 from ..interfaces import TYPES
 from ..util import mappings_use_nested
 from .testing_views import (
-    NESTED_OBJECT_LINK_TARGET_GUID_1, NESTED_OBJECT_LINK_TARGET_GUID_2,
+    NESTED_OBJECT_LINK_TARGET_GUID_1,
+    # NESTED_OBJECT_LINK_TARGET_GUID_2,
     NESTED_EMBEDDING_CONTAINER_GUID, NESTED_OBJECT_LINK_TARGET_GUIDS,
 )
 
 
 # These are taken care of by pytest.ini and should not be explicitly repeated.
 # -kmp 4-Jul-2020
-#from .toolfixtures import registry, root
+# from .toolfixtures import registry, root
 
 
 TYPE_NAMES = ['TestingPostPutPatchSno', 'TestingDownload']

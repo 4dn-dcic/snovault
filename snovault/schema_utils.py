@@ -1,10 +1,11 @@
 import codecs
 import collections
-from datetime import datetime
 import uuid
 import json
 import requests
 
+from datetime import datetime
+from dcicutils.misc_utils import ignored
 from jsonschema_serialize_fork import (
     Draft4Validator,
     FormatChecker,
@@ -114,7 +115,7 @@ def mixinSchemas(schema, resolver, key_name='properties'):
                 if prop[k] == v:
                     continue
                 if key_name == 'facets':
-                    continue # Allow schema facets to override, as well.
+                    continue  # Allow schema facets to override, as well.
                 raise ValueError('Schema mixin conflict for %s/%s' % (name, k))
     # Allow schema properties to override
     base = schema.get(key_name, {})
@@ -198,6 +199,7 @@ class IgnoreUnchanged(ValidationError):
 
 
 def requestMethod(validator, requestMethod, instance, schema):
+    ignored(instance, schema)
     if validator.is_type(requestMethod, "string"):
         requestMethod = [requestMethod]
     elif not validator.is_type(requestMethod, "array"):
@@ -211,6 +213,7 @@ def requestMethod(validator, requestMethod, instance, schema):
 
 
 def permission(validator, permission, instance, schema):
+    ignored(instance, schema)
     if not validator.is_type(permission, "string"):
         raise Exception("Bad schema")  # raise some sort of schema error
 
@@ -247,6 +250,8 @@ def calculatedProperty(validator, linkTo, instance, schema):
             2. It is an array of objects ie: calculated property applied across an array of
                sub-embedded objects.
     """
+    ignored(instance)
+
     def schema_is_sub_embedded(schema):
         return schema.get('sub-embedded', False)
 
@@ -347,7 +352,10 @@ def validate(schema, data, current=None, validate_current=False):
                     for key in error.path:
                         validated_value = validated_value[key]
                 except Exception:
+                    # TODO: Should this be validated_value, not validate_value? Looks like a typo. -kmp 7-Aug-2022
                     validate_value = None  # not found
+                # TODO: Should this test be indented left by 4 spaces so that the other arms of the 'if' affect it?
+                #       Right now those other arms set seemingly-unused variables. -kmp 7-Aug-2022
                 if validated_value == current_value:
                     continue  # value is unchanged between data/current; ignore
         filtered_errors.append(error)
@@ -427,9 +435,11 @@ def utc_now_str():
 
 @server_default
 def userid(instance, subschema):  # args required by jsonschema-serialize-fork
+    ignored(instance, subschema)
     return str(uuid.uuid4())
 
 
 @server_default
 def now(instance, subschema):  # args required by jsonschema-serialize-fork
+    ignored(instance, subschema)
     return utc_now_str()

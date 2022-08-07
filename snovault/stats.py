@@ -14,6 +14,7 @@ from .util import get_root_request
 def includeme(config):
     config.add_tween('snovault.stats.stats_tween_factory', under=pyramid.tweens.INGRESS)
 
+
 log = get_logger()
 
 

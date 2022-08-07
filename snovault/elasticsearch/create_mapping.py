@@ -907,9 +907,9 @@ def check_and_reindex_existing(app, es, in_type, uuids_to_index, index_diff=Fals
                     items_queued=str(len(uuids_to_upgrade)),
                     collection=in_type,
                 )
-            log.info('MAPPING: queueing %s items found in DB but not ES or in need of'
-                        ' upgrade in the index %s for reindexing'
-                        % (str(len(diff_uuids)), in_type), items_queued=str(len(diff_uuids)), collection=in_type)
+            log.info(f'MAPPING: queueing {str(len(diff_uuids))} items found in DB'
+                     f' but not ES or in need of upgrade in the index {in_type} for reindexing',
+                     items_queued=str(len(diff_uuids)), collection=in_type)
             uuids_to_index[in_type] = diff_uuids
         else:
             log.info(f'MAPPING: queueing {str(len(db_uuids))} items found'
@@ -918,7 +918,7 @@ def check_and_reindex_existing(app, es, in_type, uuids_to_index, index_diff=Fals
             uuids_to_index[in_type] = db_uuids
     elif uuids_to_upgrade:
         log.info(f"MAPPING: queueing {str(len(uuids_to_upgrade))} items found"
-                 f"in existing index {in_type} requiring an upgrade for reindexing",
+                 f" in existing index {in_type} requiring an upgrade for reindexing",
                  items_queued=str(len(uuids_to_upgrade)), collection=in_type)
         uuids_to_index[in_type] = uuids_to_upgrade
 
@@ -1022,7 +1022,7 @@ def find_and_replace_dynamic_mappings(new_mapping, found_mapping):
             continue
         found_val = found_mapping[key]
         if ((new_val.get('type') == 'object' and 'properties' not in new_val)
-            or (new_val.get('properties') == {} and 'type' not in new_val)):
+                or (new_val.get('properties') == {} and 'type' not in new_val)):
             if found_val.get('properties') is not None and 'type' not in found_val:
                 # this was an dynamically created mapping. Reset it
                 del found_val['properties']
@@ -1045,6 +1045,7 @@ def compare_against_existing_mapping(es, index_name, in_type, this_index_record,
 
     Args:
         es: current Elasticsearch client
+        index_name: ...
         in_type (str): item type of current index
         this_index_record (dict): record of current index, with mapping and settings
         live_mapping (bool): if True, compare new mapping to live one and remove
@@ -1081,15 +1082,15 @@ def confirm_mapping(es, index_name, in_type, this_index_record):
             mapping_check = True
         else:
             count = es.count(index=index_name, doc_type=in_type).get('count', 0)
-            log.info('___BAD MAPPING FOUND FOR %s. RETRYING___\nDocument count in that index is %s.'
-                        % (in_type, count), collection=in_type, count=count, cat='bad mapping')
+            log.info(f'___BAD MAPPING FOUND FOR {in_type}. RETRYING___\nDocument count in that index is {count}.',
+                     collection=in_type, count=count, cat='bad mapping')
             es_safe_execute(es.indices.delete, index=index_name)
             # do not increment tries if an error arises from creating the index
             try:
                 es_safe_execute(es.indices.create, index=index_name, body=this_index_record)
             except (TransportError, RequestError) as e:
-                log.info('___COULD NOT CREATE INDEX FOR %s AS IT ALREADY EXISTS.\nError: %s\nRETRYING___'
-                            % (in_type, str(e)), collection=in_type, cat='index already exists')
+                log.info(f'___COULD NOT CREATE INDEX FOR {in_type} AS IT ALREADY EXISTS.\nError: {e}\nRETRYING___',
+                         collection=in_type, cat='index already exists')
             else:
                 tries += 1
             time.sleep(2)
@@ -1208,10 +1209,10 @@ def run(app, collections=None, dry_run=False, check_first=False, skip_indexing=F
 
     # always overwrite telemetry id
     global log
-    telemetry_id='cm_run_' + datetime.datetime.now().isoformat()
+    telemetry_id = 'cm_run_' + datetime.datetime.now().isoformat()
     log = log.bind(telemetry_id=telemetry_id)
-    log.info('\n___CREATE-MAPPING___:\ncollections: %s\ncheck_first %s\n index_diff %s\n' %
-                (collections, check_first, index_diff), cat=cat)
+    log.info(f'\n___CREATE-MAPPING___:\ncollections: {collections}'
+             f'\ncheck_first {check_first}\n index_diff {index_diff}\n', cat=cat)
     log.info('\n___ES___:\n %s\n' % (str(es.cat.client)), cat=cat)
     log.info('\n___ES NODES___:\n %s\n' % (str(es.cat.nodes())), cat=cat)
     log.info('\n___ES HEALTH___:\n %s\n' % (str(es.cat.health())), cat=cat)
@@ -1263,10 +1264,10 @@ def run(app, collections=None, dry_run=False, check_first=False, skip_indexing=F
         build_index(app, es, namespaced_index, collection_name, mapping, uuids_to_index,
                     dry_run, check_first, index_diff, print_count_only)
         index_time = timer() - start
-        log.info('___FINISHED %s___\n' % (collection_name))
+        log.info(f'___FINISHED {collection_name}___\n')
         log.info('___Mapping Time: %s  Index time %s ___\n' % (mapping_time, index_time),
-                    cat='index mapping time', collection=collection_name, map_time=mapping_time,
-                    index_time=index_time)
+                 cat='index mapping time', collection=collection_name, map_time=mapping_time,
+                 index_time=index_time)
         if mapping_time > greatest_mapping_time['duration']:
             greatest_mapping_time['collection'] = collection_name
             greatest_mapping_time['duration'] = mapping_time
@@ -1279,7 +1280,6 @@ def run(app, collections=None, dry_run=False, check_first=False, skip_indexing=F
     cat = 'finished mapping'
     log.info('\n___ES INDICES (POST-MAPPING)___:\n %s\n' % (str(es.cat.indices())), cat=cat)
     log.info('\n___FINISHED CREATE-MAPPING___\n', cat=cat)
-
 
     log.info('\n___GREATEST MAPPING TIME: %s\n' % greatest_mapping_time,
              cat='max mapping time', **greatest_mapping_time)
@@ -1325,7 +1325,7 @@ def run(app, collections=None, dry_run=False, check_first=False, skip_indexing=F
             # sort by-type uuids into one list and index synchronously
             to_index_list = flatten_and_sort_uuids(app.registry, uuids_to_index, item_order)
             log.info('\n___UUIDS TO INDEX (SYNC)___: %s\n' % len(to_index_list),
-                        cat='uuids to index', count=len(to_index_list))
+                     cat='uuids to index', count=len(to_index_list))
             run_indexing(app, to_index_list)
         else:
             # if non-strict and attempting to reindex a ton, it is faster
@@ -1340,7 +1340,7 @@ def run(app, collections=None, dry_run=False, check_first=False, skip_indexing=F
             # sort by-type uuids into one list and queue for indexing
             to_index_list = flatten_and_sort_uuids(app.registry, uuids_to_index, item_order)
             log.info('\n___UUIDS TO INDEX (QUEUED)___: %s\n' % len(to_index_list),
-                        cat='uuids to index', count=len(to_index_list))
+                     cat='uuids to index', count=len(to_index_list))
             indexer_queue.add_uuids(app.registry, to_index_list, strict=use_strict,
                                     target_queue='secondary', telemetry_id=telemetry_id)
     return timings
@@ -1363,7 +1363,8 @@ def main():
     parser.add_argument('--index-diff', action='store_true',
                         help="reindex any items in the db but not es store for all/given collections")
     parser.add_argument('--strict', action='store_true',
-                        help="used with check_first in combination with item-type. Only index the given types (ignore associated items). Advanced users only")
+                        help=("used with check_first in combination with item-type."
+                              " Only index the given types (ignore associated items). Advanced users only"))
     parser.add_argument('--sync-index', action='store_true',
                         help="add to trigger synchronous indexing instead of queued")
     parser.add_argument('--print-count-only', action='store_true',
@@ -1382,6 +1383,7 @@ def main():
     uuids = run(app, collections=args.item_type, dry_run=args.dry_run, check_first=args.check_first,
                 skip_indexing=args.skip_indexing, index_diff=args.index_diff, strict=args.strict,
                 sync_index=args.sync_index, print_count_only=args.print_count_only, purge_queue=args.purge_queue)
+    ignored(uuids)  # TODO: Should this be ignored?
     return
 
 

@@ -1,5 +1,6 @@
 import sys
 import logging
+
 from dcicutils.es_utils import create_es_client
 
 
@@ -16,16 +17,17 @@ def main():
     logger.info('Wiping ES instances on %s with prefix %s\n' % (r_es, jid))
     try:
         client = create_es_client(r_es, use_aws_auth=True)
-    except:
+    except Exception:
         logger.error('Failed to get ES client')
         exit(1)
 
     try:
-        client.indices.delete(index=jid+'*')
+        client.indices.delete(index=jid + '*')  # noQA - PyCharm wrongly thinks client might not get set
         logger.info('Successfully deleted indices with prefix %s' % jid)
     except Exception as exc:
         logger.error('Failed to delete indices with exception: %s\n' % str(exc))
         exit(1)
+
 
 if __name__ == '__main__':
     main()

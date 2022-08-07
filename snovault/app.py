@@ -7,6 +7,7 @@ import psycopg2
 import subprocess
 import zope.sqlalchemy
 
+from pyramid.config import Configurator
 from pyramid.path import AssetResolver, caller_package
 from pyramid.session import SignedCookieSessionFactory
 from pyramid.settings import asbool
@@ -208,6 +209,7 @@ def main(global_config, **local_config):
     if docsdir is not None:
         docsdir = [path.strip() for path in docsdir.strip().split('\n')]
     if workbook_filename:
+        # TODO: load_workbook is undefined. where is it supposed to come from? -kmp 7-Aug-2022
         load_workbook(app, workbook_filename, docsdir, test=load_test_only)
 
     return app

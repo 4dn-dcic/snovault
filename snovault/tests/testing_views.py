@@ -351,6 +351,7 @@ class EmbeddingTest(Item):
         'attachment.*'
     ]
 
+
 # Formerly b58bc82f-249e-418f-bbcd-8a80af2e58d3
 NESTED_OBJECT_LINK_TARGET_GUID_1 = 'f738e192-85f4-4886-bdc4-e099a2e2102a'
 NESTED_OBJECT_LINK_TARGET_GUID_2 = 'c48dfba9-ad62-4b32-ad29-a4b6ca47e5d4'
