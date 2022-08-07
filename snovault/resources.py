@@ -2,10 +2,11 @@
 import logging
 from collections import Mapping
 from copy import deepcopy
+from dcicutils.misc_utils import ignored
 from pyramid.decorator import reify
 from pyramid.httpexceptions import HTTPInternalServerError
 from pyramid.security import (
-    Allow,
+    # Allow,
     Everyone,
     Authenticated,
     principals_allowed_by_permission
@@ -31,7 +32,6 @@ from .util import (
     simple_path_ids,
     uuid_to_path
 )
-from past.builtins import basestring
 from .util import add_default_embeds, IndexSettings
 
 logger = logging.getLogger(__name__)
@@ -109,6 +109,7 @@ class Root(Resource):
         return resource
 
     def __json__(self, request=None):
+        ignored(request)
         return self.properties.copy()
 
     @calculated_property(name='@type', schema={
@@ -252,6 +253,7 @@ class AbstractCollection(Resource, Mapping):
             yield uuid
 
     def __json__(self, request):
+        ignored(request)
         return self.properties.copy()
 
     @calculated_property(name='@type', schema={
@@ -269,7 +271,7 @@ class AbstractCollection(Resource, Mapping):
 
 
 class Collection(AbstractCollection):
-    ''' Separate class so add views do not apply to AbstractCollection '''
+    """ Separate class so add views do not apply to AbstractCollection """
 
     @staticmethod
     def index_settings():
@@ -390,6 +392,7 @@ class Item(Resource):
         Returns:
             list of str uuids of the given rev_link
         """
+        ignored(request)
         types = self.registry[TYPES]
         type_name, rel = self.rev[name]
         types = types[type_name].subtypes
@@ -461,6 +464,7 @@ class Item(Resource):
         This function is used to get the "complete" properties of the Item
         after calling `upgrade_properties`
         """
+        ignored(request)
         return self.upgrade_properties()
 
     def item_with_links(self, request):
@@ -490,16 +494,17 @@ class Item(Resource):
         return properties
 
     def __resource_url__(self, request, info):
+        ignored(request, info)
         return None
 
     @classmethod
     def create(cls, registry, uuid, properties, sheets=None):
-        '''
+        """
         This class method is called in crud_views.py - `collection_add` (API endpoint) > `create_item` (method) > `type_info.factory.create` (this class method)
 
         This method instantiates a new Item class instance from provided `uuid` and `properties`,
         then runs the `_update` (instance method) to save the Item to the database.
-        '''
+        """
         model = registry[CONNECTION].create(cls.__name__, uuid)
         item_instance = cls(registry, model)
         item_instance._update(properties, sheets)
@@ -512,7 +517,7 @@ class Item(Resource):
         alphanumeric characters and few others
         """
         also_allowed = ['_', '-', ':', ',', '.', ' ', '@']
-        if not isinstance(value, basestring):
+        if not isinstance(value, str):  # formerly basestring
             raise ValueError('Identifying property %s must be a string. Value: %s' % (field, value))
         forbidden = [char for char in value
                      if (not char.isalnum() and char not in also_allowed)]
@@ -522,17 +527,17 @@ class Item(Resource):
             raise ValidationFailure('body', 'Item: path characters', msg)
 
     def update(self, properties, sheets=None):
-        '''Alias of _update, called in crud_views.py - `update_item` (method)'''
+        """Alias of _update, called in crud_views.py - `update_item` (method)"""
         self._update(properties, sheets)
 
     def _update(self, properties, sheets=None):
-        '''
+        """
         This instance method is called in Item.create (classmethod) as well as in crud_views.py - `item_edit` (API endpoint) > `update_item` (method) > `context.update` (instance method).
 
         This method is used to assert lack of duplicate unique keys in database and then to perform database update of `properties` (dict).
 
         Optionally define this method in inherited classes to extend `properties` on Item updates.
-        '''
+        """
         unique_keys = None
         links = None
         if properties is not None:

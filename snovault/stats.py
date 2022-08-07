@@ -1,17 +1,19 @@
 import psutil
 import time
 import pyramid.tweens
+
+from dcicutils.misc_utils import ignored
 from sqlalchemy import event
 from sqlalchemy.engine import Engine
+from structlog import get_logger
 from urllib.parse import urlencode
 from .util import get_root_request
-from uuid import uuid4
+# from uuid import uuid4
 
 
 def includeme(config):
     config.add_tween('snovault.stats.stats_tween_factory', under=pyramid.tweens.INGRESS)
 
-from structlog import get_logger
 log = get_logger()
 
 
@@ -20,6 +22,7 @@ def requests_timing_hook(prefix='requests'):
     time_key = prefix + '_time'
 
     def response_hook(r, *args, **kwargs):
+        ignored(args, kwargs)
         request = get_root_request()
         if request is None:
             return
@@ -36,14 +39,14 @@ def requests_timing_hook(prefix='requests'):
 
 # See http://www.sqlalchemy.org/trac/wiki/UsageRecipes/Profiling
 @event.listens_for(Engine, 'before_cursor_execute')
-def before_cursor_execute(
-        conn, cursor, statement, parameters, context, executemany):
+def before_cursor_execute(conn, cursor, statement, parameters, context, executemany):
+    ignored(conn, cursor, statement, parameters, executemany)
     context._query_start_time = int(time.time() * 1e6)
 
 
 @event.listens_for(Engine, 'after_cursor_execute')
-def after_cursor_execute(
-        conn, cursor, statement, parameters, context, executemany):
+def after_cursor_execute(conn, cursor, statement, parameters, context, executemany):
+    ignored(conn, cursor, statement, parameters, executemany)
     end = int(time.time() * 1e6)
 
     request = get_root_request()
@@ -58,6 +61,7 @@ def after_cursor_execute(
 
 # http://docs.pylonsproject.org/projects/pyramid/en/latest/narr/hooks.html#creating-a-tween-factory
 def stats_tween_factory(handler, registry):
+    ignored(registry)
     process = psutil.Process()
 
     def stats_tween(request):

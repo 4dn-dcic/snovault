@@ -457,7 +457,7 @@ def test_indexing_logging(app, testapp, indexer_testapp, capfd):
     HOWEVER, logging cannot be reset to NOT use ES (which is what is currently
     desired), so for the time being, the second part of the test is disabled
     """
-    ### PART OF ES LOGGING TEST (DISABLED)
+    # == PART OF ES LOGGING TEST (DISABLED) ==
     # import logging
     # import structlog
     # from dcicutils.log_utils import calculate_log_index, set_logging
@@ -505,7 +505,7 @@ def test_indexing_logging(app, testapp, indexer_testapp, capfd):
     # but on travis it fails
     # assert item_idx_record['url_path'] == '/index'
 
-    ### PART OF ES LOGGING TEST (DISABLED)
+    # == PART OF ES LOGGING TEST (DISABLED) ==
     # # now get the log from ES
     # log_uuid = item_idx_record['log_uuid']
     # log_doc = es.get(index=log_index_name, doc_type='log', id=log_uuid)
@@ -537,6 +537,7 @@ def test_indexing_queue_records(app, testapp, indexer_testapp):
     assert doc_count == 0
     # post a document but do not yet index
     res = testapp.post_json(TEST_COLL, {'required': ''})
+    ignored(res)   # TODO: should we check it?
     doc_count = es.count(index=namespaced_index, doc_type=TEST_TYPE).get('count')
     assert doc_count == 0
     # indexing record should not yet exist (expect error)
@@ -558,7 +559,7 @@ def test_indexing_queue_records(app, testapp, indexer_testapp):
     indexing_start = indexing_doc_source.get('indexing_started')
     indexing_end = indexing_doc_source.get('indexing_finished')
     assert indexing_start and indexing_end
-    time_start =  datetime.strptime(indexing_start, '%Y-%m-%dT%H:%M:%S.%f')
+    time_start = datetime.strptime(indexing_start, '%Y-%m-%dT%H:%M:%S.%f')
     time_done = datetime.strptime(indexing_end, '%Y-%m-%dT%H:%M:%S.%f')
     assert time_start < time_done
     # get indexing record by start_time
@@ -575,6 +576,7 @@ def test_sync_and_queue_indexing(app, testapp, indexer_testapp):
     indexer_queue.clear_queue()
     # queued on post - total of one item queued
     res = testapp.post_json(TEST_COLL, {'required': ''})
+    ignored(res)   # TODO: should we check it?
     # synchronously index
     create_mapping.run(app, collections=[TEST_TYPE], sync_index=True)
     # time.sleep(6)
@@ -635,6 +637,7 @@ def test_queue_indexing_with_linked(app, testapp, indexer_testapp, dummy_request
     }
     target_res = testapp.post_json('/testing-link-targets-sno/', target, status=201)
     res = indexer_testapp.post_json('/index', {'record': True})
+    ignored(res)   # TODO: should we check it?
     time.sleep(2)
     # wait for the first item to index
     namespaced_link_target = indexer_utils.get_namespaced_index(app, 'testing_link_target_sno')
@@ -737,12 +740,14 @@ def test_queue_indexing_with_linked(app, testapp, indexer_testapp, dummy_request
     # lastly, test purge_uuid and delete functionality
     with pytest.raises(webtest.AppError) as excinfo:
         del_res0 = testapp.delete_json('/' + source['uuid'] + '/?purge=True')
+        ignored(del_res0)   # TODO: should we check it?
     assert 'Item status must equal deleted before purging' in str(excinfo.value)
     del_res1 = testapp.delete_json('/' + source['uuid'])
     assert del_res1.json['status'] == 'success'
     # this item will still have items linking to it indexing occurs
     with pytest.raises(webtest.AppError) as excinfo:
         del_res2 = testapp.delete_json('/' + source['uuid'] + '/?purge=True')
+        ignored(del_res2)   # TODO: should we check it?
     assert 'Cannot purge item as other items still link to it' in str(excinfo.value)
     # the source should fail due to outdated sids
     # must manually update _sid_cache on dummy_request for source
@@ -756,6 +761,7 @@ def test_queue_indexing_with_linked(app, testapp, indexer_testapp, dummy_request
     valid3 = util.validate_es_content(target_ctxt2, dummy_request, tar_es_res_obj, 'object')
     assert valid3 is False
     res = indexer_testapp.post_json('/index', {'record': True})
+    ignored(res)   # TODO: should we check it?
     del_res3 = testapp.delete_json('/' + source['uuid'] + '/?purge=True')
     assert del_res3.json['status'] == 'success'
     assert del_res3.json['notification'] == 'Permanently deleted ' + source['uuid']
@@ -939,6 +945,7 @@ def test_index_settings(app, testapp, indexer_testapp):
     max_result_window = es_settings['index']['max_result_window']
     # preform some initial indexing to build meta
     res = testapp.post_json(TEST_COLL, {'required': ''})
+    ignored(res)   # TODO: should we check it?
     res = indexer_testapp.post_json('/index', {'record': True})
     # need to make sure an xmin was generated for the following to work
     assert 'indexing_finished' in res.json
@@ -1029,7 +1036,7 @@ def test_check_and_reindex_existing(app, testapp):
 def test_es_purge_uuid(app, testapp, indexer_testapp, session):
     indexer_queue = app.registry[INDEXER_QUEUE]
     es = app.registry[ELASTIC_SEARCH]
-    ## Adding new test resource to DB
+    # == Adding new test resource to DB ==
     storage = app.registry[STORAGE]
     test_body = {'required': '', 'simple1': 'foo', 'simple2': 'bar'}
     res = testapp.post_json(TEST_COLL, test_body)
@@ -1143,9 +1150,11 @@ def test_create_mapping_index_diff(app, testapp, indexer_testapp):
 
     # patch the item to increment version
     res = testapp.patch_json(TEST_COLL + test_uuid, {'required': 'meh'})
+    ignored(res)   # TODO: should we check it?
     # index with index_diff to ensure the item is reindexed
     create_mapping.run(app, collections=[TEST_TYPE], index_diff=True)
     res = indexer_testapp.post_json('/index', {'record': True})
+    ignored(res)   # TODO: should we check it?
     time.sleep(4)
     third_count = es.count(index=namespaced_index, doc_type=TEST_TYPE).get('count')
     assert third_count == initial_count
@@ -1157,6 +1166,7 @@ def test_indexing_esstorage(app, testapp, indexer_testapp):
     Test some esstorage methods (a.k.a. registry[STORAGE].read)
     """
     indexer_queue = app.registry[INDEXER_QUEUE]
+    ignored(indexer_queue)  # TODO: Should we be using this? -kmp 7-Aug-2022
     es = app.registry[ELASTIC_SEARCH]
     esstorage = app.registry[STORAGE].read
     # post an item, index, then find version (sid)
@@ -1278,9 +1288,12 @@ def test_aggregated_items(app, testapp, indexer_testapp):
         'status': 'current'
     }
     # you can do stuff like this and it will take effect
-    # app.registry['types']['testing_link_aggregate_sno'].aggregated_items['targets'] = ['target.name', 'test_description']
+    # app.registry['types']['testing_link_aggregate_sno'].aggregated_items['targets'] = (
+    #    ['target.name', 'test_description'])
     target1_res = testapp.post_json('/testing-link-targets-sno/', target1, status=201)
+    ignored(target1_res)   # we already required status=201
     target2_res = testapp.post_json('/testing-link-targets-sno/', target2, status=201)
+    ignored(target2_res)   # we already required status=201
     agg_res = testapp.post_json('/testing-link-aggregates-sno/', aggregated, status=201)
     agg_res_atid = agg_res.json['@graph'][0]['@id']
     # ensure that aggregated-items view shows nothing before indexing
@@ -1381,7 +1394,7 @@ def test_indexing_info(app, testapp, indexer_testapp):
     assert 'embedded_view' in src_idx_info.json['indexing_stats']
     # up to date
     assert src_idx_info.json['sid_es'] == src_idx_info.json['sid_db']
-    assert set(src_idx_info.json['uuids_invalidated']) == set([target1['uuid'], source['uuid']])
+    assert set(src_idx_info.json['uuids_invalidated']) == {target1['uuid'], source['uuid']}
     # update without indexing; view should capture the changes but sid_es will not change
     testapp.patch_json('/testing-link-sources-sno/' + source['uuid'], {'target': target2['uuid']})
     src_idx_info2 = testapp.get('/indexing-info?uuid=%s' % source['uuid'])
@@ -1391,7 +1404,7 @@ def test_indexing_info(app, testapp, indexer_testapp):
     # es is now out of date, since not indexed yet
     assert src_idx_info2.json['sid_es'] < src_idx_info2.json['sid_db']
     # target1 will still be in invalidated uuids, since es has not updated
-    assert set(src_idx_info2.json['uuids_invalidated']) == set([target1['uuid'], target2['uuid'], source['uuid']])
+    assert set(src_idx_info2.json['uuids_invalidated']) == {target1['uuid'], target2['uuid'], source['uuid']}
     indexer_testapp.post_json('/index', {'record': True})
     time.sleep(2)
     # after indexing, make sure sid_es is updated

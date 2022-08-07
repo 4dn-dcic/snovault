@@ -183,8 +183,8 @@ def search(context, request, search_type=None, return_generator=False, forced_ty
             return result
 
     result['@graph'] = list(graph)
-    if search_session_id: # Is 'None' if e.g. limit=all
-        request.response.set_cookie('searchSessionID', search_session_id) # Save session ID for re-requests / subsequent pages.
+    if search_session_id:  # Is 'None' if e.g. limit=all
+        request.response.set_cookie('searchSessionID', search_session_id)  # Save session ID for re-requests / subsequent pages.
     return result
 
 
@@ -390,7 +390,7 @@ def prepare_search_term(request):
     for field, val in request.normalized_params.iteritems():
         if field.startswith('validation_errors') or field.startswith('aggregated_items'):
             continue
-        elif field == 'q': # searched string has field 'q'
+        elif field == 'q':  # searched string has field 'q'
             # people shouldn't provide multiple queries, but if they do,
             # combine them with AND logic
             if 'q' in prepared_terms:
@@ -504,7 +504,7 @@ def build_query(search, prepared_terms, source_fields):
         string_query = {'must': {'simple_query_string': query_info}}
         query_dict = {'query': {'bool': string_query}}
     else:
-        query_dict = {'query': {'bool':{}}}
+        query_dict = {'query': {'bool': {}}}
     search.update_from_dict(query_dict)
     return search, string_query
 
@@ -591,11 +591,12 @@ def set_sort_order(request, search, search_term, types, doc_types, result):
             }
     elif not sort and text_search and text_search != '*':
         search = search.sort(                   # Multi-level sort. See http://www.elastic.co/guide/en/elasticsearch/guide/current/_sorting.html#_multilevel_sorting & https://stackoverflow.com/questions/46458803/python-elasticsearch-dsl-sorting-with-multiple-fields
-            { '_score' : { "order": "desc" } },
-            { 'embedded.date_created.raw' : { 'order': 'desc', 'unmapped_type': 'keyword' }, 'embedded.label.raw' : { 'order': 'asc',  'unmapped_type': 'keyword', 'missing': '_last' } },
-            { '_uid' : { 'order': 'asc' } }     # 'embedded.uuid.raw' (instd of _uid) sometimes results in 400 bad request : 'org.elasticsearch.index.query.QueryShardException: No mapping found for [embedded.uuid.raw] in order to sort on'
+            {'_score': {"order": "desc"}},
+            {'embedded.date_created.raw': {'order': 'desc', 'unmapped_type': 'keyword'},
+             'embedded.label.raw': {'order': 'asc', 'unmapped_type': 'keyword', 'missing': '_last'}},
+            {'_uid': {'order': 'asc'}}  # 'embedded.uuid.raw' (instd of _uid) sometimes results in 400 bad request : 'org.elasticsearch.index.query.QueryShardException: No mapping found for [embedded.uuid.raw] in order to sort on'
         )
-        result['sort'] = result_sort = { '_score' : { "order" : "desc" } }
+        result['sort'] = result_sort = {'_score': {"order": "desc"}}
         return search
 
     if sort and result_sort:
@@ -612,17 +613,17 @@ def set_filters(request, search, result, principals, doc_types):
     # these next two dictionaries should each have keys equal to query_field
     # and values: must_terms: [<list of terms>], must_not_terms: [<list of terms>], add_no_value: True/False/None
     field_filters = {
-        'principals_allowed.view' : {
+        'principals_allowed.view': {
             'must_terms': principals,
             'must_not_terms': [],
             'add_no_value': None
         },
-        'embedded.@type.raw' : {
+        'embedded.@type.raw': {
             'must_terms': doc_types,
             'must_not_terms': [],
             'add_no_value': None
         },
-        'embedded.status.raw' : {
+        'embedded.status.raw': {
             'must_terms': [],
             'must_not_terms': [],
             'add_no_value': None
@@ -644,9 +645,9 @@ def set_filters(request, search, result, principals, doc_types):
         field_filters['embedded.@type.raw']['must_not_terms'].append('OntologyTerm')
 
     for field, term in request.normalized_params.items():
-        not_field = False # keep track if query is NOT (!)
-        exists_field = False # keep track of null values
-        range_type = False # If we determine is a range request (field.to, field.from), will be populated with string 'date' or 'numerical'
+        not_field = False  # keep track if query is NOT (!)
+        exists_field = False  # keep track of null values
+        range_type = False  # If we determine is a range request (field.to, field.from), will be populated with string 'date' or 'numerical'
         range_direction = None
         if field in COMMON_EXCLUDED_URI_PARAMS + ['q']:
             continue
@@ -683,8 +684,8 @@ def set_filters(request, search, result, principals, doc_types):
             remove_path += 'type=Item'
 
         result['filters'].append({
-            'field' : field,
-            'term'  : term,
+            'field': field,
+            'term': term,
             'remove': remove_path
         })
 
@@ -702,7 +703,6 @@ def set_filters(request, search, result, principals, doc_types):
             query_field = 'embedded.@type.raw'
         else:
             query_field = 'embedded.' + field + '.raw'
-
 
         if range_type:
             if query_field not in range_filters:
@@ -762,14 +762,14 @@ def set_filters(request, search, result, principals, doc_types):
             should_arr = [must_terms] if must_terms else []
             should_arr.append({'exists': {'field': query_field}})
             must_filters.append({'bool': {'should': should_arr}})
-        else: # no filtering on 'No value'
+        else:  # no filtering on 'No value'
             if must_terms: must_filters.append(must_terms)
         if must_not_terms: must_not_filters.append(must_not_terms)
 
     # lastly, add range limits to filters if given
     for range_field, range_def in range_filters.items():
         must_filters.append({
-            'range' : { range_field : range_def }
+            'range': {range_field: range_def}
         })
 
     # To modify filters of elasticsearch_dsl Search, must call to_dict(),
@@ -824,7 +824,7 @@ def initialize_facets(request, doc_types, prepared_terms, schemas):
             for schema_facet in schema_facets.items():
                 if schema_facet[1].get('disabled', False):
                     disabled_facets.append(schema_facet[0])
-                    continue # Skip disabled facets.
+                    continue  # Skip disabled facets.
                 facets.append(schema_facet)
 
     # == Add facets for any non-schema ?field=value filters requested in the search (unless already set) ==
@@ -885,11 +885,11 @@ def initialize_facets(request, doc_types, prepared_terms, schemas):
 
     # Append additional facets (status, validation_errors, ...) at the end of
     # list unless were already added via schemas, etc.
-    used_facets = [ facet[0] for facet in facets ] # Reset this var
+    used_facets = [facet[0] for facet in facets] # Reset this var
     for ap_facet in append_facets + validation_error_facets:
         if ap_facet[0] not in used_facets:
             facets.append(ap_facet)
-        else: # Update with better title if not already defined from e.g. requested filters.
+        else:  # Update with better title if not already defined from e.g. requested filters.
             existing_facet_index = used_facets.index(ap_facet[0])
             if facets[existing_facet_index][1].get('title') in (None, facets[existing_facet_index][0]):
                 facets[existing_facet_index][1]['title'] = ap_facet[1]['title']
@@ -898,7 +898,7 @@ def initialize_facets(request, doc_types, prepared_terms, schemas):
 
 
 def schema_for_field(field, request, doc_types, should_log=False):
-    '''
+    """
     Find the schema for the given field (in embedded '.' format). Uses
     ff_utils.crawl_schema from snovault and logs any cases where there is an
     error finding the field from the schema
@@ -911,7 +911,7 @@ def schema_for_field(field, request, doc_types, should_log=False):
 
     Returns:
         Dictionary schema for the field, or None if not found
-    '''
+    """
     types = request.registry[TYPES]
     schemas = [ types[dt].schema for dt in doc_types ]
 
@@ -1343,7 +1343,7 @@ def build_table_columns(request, schemas, doc_types):
 
     any_abstract_types = 'Item' in doc_types
     if not any_abstract_types: # Check explictly-defined types to see if any are abstract.
-        type_infos = [ request.registry[TYPES][type] for type in doc_types if type != 'Item' ]
+        type_infos = [request.registry[TYPES][type] for type in doc_types if type != 'Item']
         for ti in type_infos:
             # We use `type` instead of `isinstance` since we don't want to catch subclasses.
             if type(ti) == AbstractTypeInfo:
@@ -1354,17 +1354,17 @@ def build_table_columns(request, schemas, doc_types):
 
     # Add title column, at beginning always
     columns['display_title'] = {
-        "title" : "Title",
-        "order" : -100
+        "title": "Title",
+        "order": -100
     }
 
     # Add type column if any abstract types in search
     if any_abstract_types and request.normalized_params.get('currentAction') != 'selection':
         columns['@type'] = {
-            "title" : "Item Type",
-            "colTitle" : "Type",
-            "order" : -80,
-            "description" : "Type or category of Item",
+            "title": "Item Type",
+            "colTitle": "Type",
+            "order": -80,
+            "description": "Type or category of Item",
             # Alternative below, if we want type column to be available but hidden by default in selection mode:
             # "default_hidden": request.normalized_params.get('currentAction') == 'selection'
         }
@@ -1390,17 +1390,17 @@ def build_table_columns(request, schemas, doc_types):
     # Add status column, if not present, at end.
     if 'status' not in columns:
         columns['status'] = {
-            "title"             : "Status",
-            "default_hidden"    : True,
-            "order"             : 501
+            "title": "Status",
+            "default_hidden": True,
+            "order": 501
         }
     # Add date column, if not present, at end.
     if 'date_created' not in columns:
         columns['date_created'] = {
-            "title"             : "Date Created",
-            "colTitle"          : "Created",
-            "default_hidden"    : True,
-            "order"             : 510
+            "title": "Date Created",
+            "colTitle": "Created",
+            "default_hidden": True,
+            "order": 510
         }
     return columns
 

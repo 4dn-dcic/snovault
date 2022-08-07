@@ -1,13 +1,8 @@
 import venusian
-from pyramid.interfaces import (
-    PHASE2_CONFIG,
-)
-from .interfaces import (
-    COLLECTIONS,
-    PHASE1_5_CONFIG,
-    ROOT,
-    TYPES,
-)
+
+from dcicutils.misc_utils import ignored
+from pyramid.interfaces import PHASE2_CONFIG
+from .interfaces import COLLECTIONS, PHASE1_5_CONFIG, ROOT, TYPES
 from .resources import Root
 
 
@@ -39,6 +34,7 @@ def root(factory):
         config.registry[ROOT] = root
 
     def callback(scanner, factory_name, factory):
+        ignored(factory_name)
         scanner.config.action(('root',), set_root,
                               args=(scanner.config, factory),
                               order=PHASE1_5_CONFIG)
@@ -63,7 +59,9 @@ def collection(name, **kw):
     def decorate(Item):
         # https://stackoverflow.com/questions/58624641/how-to-prevent-pytestcollectionwarning-when-testing-class-testament-via-pytest  # noqa
         Item.__test__ = False  # Notwithstanding the name of this decorated collection class, it is not a test class
+
         def callback(scanner, factory_name, factory):
+            ignored(factory_name, factory)
             scanner.config.action(('collection', name), set_collection,
                                   args=(scanner.config, Item.Collection, name, Item),
                                   kw=kw,
@@ -92,6 +90,7 @@ def abstract_collection(name, **kw):
     def decorate(Item):
 
         def callback(scanner, factory_name, factory):
+            ignored(factory_name, factory)
             scanner.config.action(('collection', name), set_collection,
                                   args=(scanner.config, Item.AbstractCollection, name, Item),
                                   kw=kw,
@@ -112,6 +111,7 @@ class CollectionsTool(dict):
     """
     def __init__(self):
         self.by_item_type = {}
+        super().__init__()
 
     def register(self, name, value):
         self[name] = value
