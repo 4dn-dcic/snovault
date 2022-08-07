@@ -1,8 +1,8 @@
 from uuid import UUID
 from .schema_utils import validate_request, validate, IgnoreUnchanged
 from .validation import ValidationFailure
-from pyramid.security import ACLDenied
-from .elasticsearch.create_mapping import determine_if_is_date_field
+# from pyramid.security import ACLDenied
+# from .elasticsearch.create_mapping import determine_if_is_date_field
 
 
 # No-validation validators

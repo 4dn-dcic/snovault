@@ -16,7 +16,7 @@ import psycopg2
 import signal
 import sqlalchemy.exc
 import structlog
-import sys
+# import sys
 import threading
 import time
 import webtest
@@ -56,7 +56,7 @@ def run(testapp, interval=DEFAULT_INTERVAL, dry_run=False, path='/index', update
     while True:
         # if not messages to index, skip the /index call. Counts are approximate
         queue_counts = queue.number_of_messages()
-        if (not queue_counts['primary_waiting'] and not queue_counts['secondary_waiting']):
+        if not queue_counts['primary_waiting'] and not queue_counts['secondary_waiting']:
             time.sleep(interval)
             continue
 
@@ -136,7 +136,6 @@ def composite(loader, global_conf, **settings):
         'REMOTE_USER': username,
     }
     testapp = webtest.TestApp(app, environ)
-
 
     timestamp = datetime.datetime.now().isoformat()
     status_holder = {
@@ -221,7 +220,6 @@ def main():
 
     # logging.basicConfig()
     testapp = internal_app(args.config_uri, args.app_name, args.username)
-
 
     # Loading app will have configured from config file. Reconfigure here:
     level = logging.INFO

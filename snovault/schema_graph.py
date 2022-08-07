@@ -1,7 +1,7 @@
-import sys
+# import sys
 
 from collections import defaultdict
-from past.builtins import basestring
+from dcicutils.misc_utils import ignored
 from pyramid.response import Response
 from pyramid.view import view_config
 from subprocess import Popen, PIPE
@@ -18,10 +18,11 @@ def includeme(config):
 
 def node(type_name, props):
     yield (
-        '{type_name} [shape=plaintext label=<\n'
-        '  <table border="1" cellborder="0" cellspacing="0" align="left">\n'
-        '  <tr><td PORT="uuid" border="1" sides="B" bgcolor="lavender" href="/profiles/{type_name}.json">{type_name}</td></tr>'
-    ).format(type_name=type_name)
+        f'{type_name} [shape=plaintext label=<\n'
+        f'  <table border="1" cellborder="0" cellspacing="0" align="left">\n'
+        f'  <tr><td PORT="uuid" border="1" sides="B" bgcolor="lavender" href="/profiles/{type_name}.json">{type_name}'
+        f'</td></tr>'
+    )
     items = sorted(props.items())
     for name, prop in items:
         if name == 'uuid' or prop.get('calculatedProperty'):
@@ -37,7 +38,7 @@ def node(type_name, props):
 
 
 def edges(source, name, linkTo, exclude, subclasses):
-    if isinstance(linkTo, basestring):
+    if isinstance(linkTo, str):  # formerly basestring
         if linkTo in subclasses:
             linkTo = subclasses[linkTo]
         else:
@@ -82,6 +83,7 @@ def digraph(types, exclude=None):
 @view_config(route_name='graph_dot', request_method='GET')
 @debug_log
 def schema_dot(context, request):
+    ignored(context)
     dot = digraph(request.registry[TYPES].by_item_type, request.params.getall('exclude'))
     return Response(dot, content_type='text/vnd.graphviz', charset='utf-8')
 
@@ -89,6 +91,7 @@ def schema_dot(context, request):
 @view_config(route_name='graph_svg', request_method='GET')
 @debug_log
 def schema_svg(context, request):
+    ignored(context)
     dot = digraph(request.registry[TYPES].by_item_type, request.params.getall('exclude'))
     p = Popen(['dot', '-Tsvg'], stdin=PIPE, stdout=PIPE, stderr=PIPE)
     svg, err = p.communicate(dot.encode('utf-8'))

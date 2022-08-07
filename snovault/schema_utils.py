@@ -91,7 +91,7 @@ class NoRemoteResolver(RefResolverOrdered):
         raise ValueError('Resolution disallowed for: %s' % uri)
 
 
-def mixinSchemas(schema, resolver, key_name = 'properties'):
+def mixinSchemas(schema, resolver, key_name='properties'):
     mixinKeyName = 'mixin' + key_name.capitalize()
     mixins = schema.get(mixinKeyName)
     if mixins is None:
@@ -256,8 +256,8 @@ def calculatedProperty(validator, linkTo, instance, schema):
     def schema_is_array_of_objects(schema):
         return schema.get('type') == 'array' and schema_is_object(schema.get('items', {}))
 
-    if not schema_is_sub_embedded(schema) or (
-        not schema_is_array_of_objects(schema) and not schema_is_object(schema)):
+    if (not schema_is_sub_embedded(schema)
+            or (not schema_is_array_of_objects(schema) and not schema_is_object(schema))):
         yield ValidationError('submission of calculatedProperty disallowed')
 
 
@@ -287,7 +287,7 @@ def load_schema(filename):
     # use mixinProperties, mixinFacets, mixinAggregations, and mixinColumns (if provided)
     schema = mixinSchemas(
         mixinSchemas(
-            mixinSchemas( mixinSchemas(schema, resolver, 'properties'), resolver, 'facets' ),
+            mixinSchemas(mixinSchemas(schema, resolver, 'properties'), resolver, 'facets'),
             resolver,
             'aggregations'
         ),
@@ -409,12 +409,15 @@ def combine_schemas(a, b):
             allValues.update(a[name])
             allValues.update(b[name])
             intersectedKeys = set(a[name].keys()).intersection(set(b[name].keys()))
-            combined[name] = { k:v for k,v in allValues.items() if k in intersectedKeys }
+            combined[name] = {k: v
+                              for k, v in allValues.items()
+                              if k in intersectedKeys}
     for name in set(a.keys()).difference(b.keys()):
         combined[name] = a[name]
     for name in set(b.keys()).difference(a.keys()):
         combined[name] = b[name]
     return combined
+
 
 # for integrated tests
 def utc_now_str():

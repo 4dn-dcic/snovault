@@ -1,19 +1,20 @@
 from __future__ import unicode_literals
 
-import sys
+# import sys
 
-from contextlib import contextmanager
-from timeit import default_timer as timer
+# from contextlib import contextmanager
+# from timeit import default_timer as timer
 
-from pyramid.settings import asbool
+from dcicutils.misc_utils import ignored
+# from pyramid.settings import asbool
 from pyramid.traversal import resource_path
 from pyramid.view import view_config
 from pyramid.settings import asbool
 from timeit import default_timer as timer
 from contextlib import contextmanager
 
-from .resources import Item
-from .interfaces import STORAGE
+# from .resources import Item
+# from .interfaces import STORAGE
 from .elasticsearch.indexer_utils import find_uuids_for_indexing
 from .embed import make_subrequest
 from .interfaces import STORAGE
@@ -227,11 +228,13 @@ def indexing_info(context, request):
     If you do not want to calculate the embedded object, use `run=False`
 
     Args:
+        context: ignored
         request: current Request object
 
     Returns:
         dict response
     """
+    ignored(context)
     uuid = request.params.get('uuid')
     if not uuid:
         return {'status': 'error', 'title': 'Error', 'message': 'ERROR! Provide a uuid to the query.'}
@@ -248,13 +251,14 @@ def indexing_info(context, request):
         index_view = request.invoke_view(path, index_uuid=uuid, as_user='INDEXER')
         response['indexing_stats'] = index_view['indexing_stats']
         # since there is no diff, we cannot compute invalidation scope here.
-        es_assc_uuids, _ = find_uuids_for_indexing(request.registry, set([uuid]))
+        es_assc_uuids, _ = find_uuids_for_indexing(request.registry, {uuid})
         new_rev_link_uuids = get_rev_linked_items(request, uuid)
         # invalidated: items linking to this in es + newly rev linked items
         response['uuids_invalidated'] = list(es_assc_uuids | new_rev_link_uuids)
-        response['description'] = 'Using live results for embedded view of %s. Query with run=False to skip this.' % uuid
+        description = f'Using live results for embedded view of {uuid}. Query with run=False to skip this.'
     else:
-        response['description'] = 'Query with run=True to calculate live information on invalidation and embedding time.'
+        description = 'Query with run=True to calculate live information on invalidation and embedding time.'
+    response['description'] = description
     response['display_title'] = 'Indexing Info for %s' % uuid
     response['status'] = 'success'
     return response
@@ -269,11 +273,13 @@ def max_sid(context, request):
     with the other sid/indexing related code.
 
     Args:
+        context: ignored
         request: current Request object
 
     Returns:
         dict response
     """
+    ignored(context)
     response = {'display_title': 'Current maximum database sid'}
     try:
         max_sid = request.registry[STORAGE].write.get_max_sid()

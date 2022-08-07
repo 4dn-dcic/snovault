@@ -1,4 +1,4 @@
-import sys
+# import sys
 
 from pyramid.events import ApplicationCreated, subscriber
 from pyramid.httpexceptions import HTTPNotFound

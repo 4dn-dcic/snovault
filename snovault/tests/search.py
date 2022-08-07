@@ -11,19 +11,19 @@ from elasticsearch import (
     RequestError,
     ConnectionTimeout
 )
-from elasticsearch.helpers import scan
+# from elasticsearch.helpers import scan
 from elasticsearch_dsl import Search
 from pyramid.httpexceptions import HTTPBadRequest
 from pyramid.view import view_config
 from urllib.parse import urlencode
 from webob.multidict import MultiDict
 from ..resources import AbstractCollection
-from ..interfaces import  TYPES, COLLECTIONS
+from ..interfaces import TYPES, COLLECTIONS
 from ..elasticsearch import ELASTIC_SEARCH
 from ..elasticsearch.indexer_utils import get_namespaced_index
 from ..elasticsearch.create_mapping import determine_if_is_date_field
 from ..embed import make_subrequest
-from ..resource_views import collection_view_listing_db
+# from ..resource_views import collection_view_listing_db
 from ..typeinfo import AbstractTypeInfo
 from ..util import (
     find_collection_subtypes,
@@ -38,6 +38,7 @@ def includeme(config):
     config.add_route('search', '/search{slash:/?}')
     config.add_route('browse', '/browse{slash:/?}')
     config.scan(__name__)
+
 
 sanitize_search_string_re = re.compile(r'[\\\+\-\&\|\!\(\)\{\}\[\]\^\~\:\/\\\*\?]')
 
@@ -59,7 +60,7 @@ def search(context, request, search_type=None, return_generator=False, forced_ty
     doc_types = set_doc_types(request, types, search_type)
     # sets request.normalized_params
     search_base = normalize_query(request, types, doc_types)
-    ### INITIALIZE RESULT.
+    # == INITIALIZE RESULT ==
     result = {
         '@context': request.route_path('jsonld_context'),
         '@id': '/' + forced_type.lower() + '/' + search_base,
@@ -79,7 +80,7 @@ def search(context, request, search_type=None, return_generator=False, forced_ty
     # get desired frame for this search
     search_frame = request.normalized_params.get('frame', 'embedded')
 
-    ### PREPARE SEARCH TERM
+    # == PREPARE SEARCH TERM ==
     prepared_terms = prepare_search_term(request)
 
     schemas = [types[item_type].schema for item_type in doc_types]
@@ -99,7 +100,7 @@ def search(context, request, search_type=None, return_generator=False, forced_ty
     # set up clear_filters path
     result['clear_filters'] = clear_filters_setup(request, doc_types, forced_type)
 
-    ### SET TYPE FILTERS
+    # == SET TYPE FILTERS ==
     build_type_filters(result, request, doc_types, types)
 
     # get the fields that will be used as source for the search
@@ -107,38 +108,38 @@ def search(context, request, search_type=None, return_generator=False, forced_ty
     # this is okay because the only non-embedded access will be programmatic
     source_fields = sorted(list_source_fields(request, doc_types, search_frame))
 
-    ### GET FILTERED QUERY
+    # == GET FILTERED QUERY ==
     # Builds filtered query which supports multiple facet selection
     search, string_query = build_query(search, prepared_terms, source_fields)
 
-    ### Set sort order
+    # == Set sort order ==
     search = set_sort_order(request, search, prepared_terms, types, doc_types, result)
     # TODO: implement BOOST here?
 
-    ### Set filters
+    # == Set filters ==
     search, query_filters = set_filters(request, search, result, principals, doc_types)
 
-    ### Set starting facets
+    # == Set starting facets ==
     facets = initialize_facets(request, doc_types, prepared_terms, schemas)
 
-    ### Adding facets, plus any optional custom aggregations.
-    ### Uses 'size' and 'from_' to conditionally skip (no facets if from > 0; no aggs if size > 0).
+    # == Adding facets, plus any optional custom aggregations. ==
+    # Uses 'size' and 'from_' to conditionally skip (no facets if from > 0; no aggs if size > 0).
     search = set_facets(search, facets, query_filters, string_query, request, doc_types, custom_aggregations, size, from_)
 
-    ### Add preference from session, if available
+    # == Add preference from session, if available ==
     search_session_id = None
-    if request.__parent__ is None and not return_generator and size != 'all': # Probably unnecessary, but skip for non-paged, sub-reqs, etc.
+    if request.__parent__ is None and not return_generator and size != 'all':  # Probably unnecessary, but skip for non-paged, sub-reqs, etc.
         search_session_id = request.cookies.get('searchSessionID', 'SESSION-' + str(uuid.uuid1()))
         search = search.params(preference=search_session_id)
 
-    ### Execute the query
+    # == Execute the query ==
     if size == 'all':
         es_results = execute_search_for_all_results(search)
     else:
         size_search = search[from_:from_ + size]
         es_results = execute_search(size_search)
 
-    ### Record total number of hits
+    # == Record total number of hits ==
     result['total'] = total = es_results['hits']['total']
     result['facets'] = format_facets(es_results, facets, total, search_frame)
     result['aggregations'] = format_extra_aggregations(es_results)
@@ -148,7 +149,7 @@ def search(context, request, search_type=None, return_generator=False, forced_ty
     # Implement later
     # result.update(search_result_actions(request, doc_types, es_results))
 
-    ### Add all link for collections
+    # == Add all link for collections ==
     if size not in (None, 'all') and size < result['total']:
         params = [(k, v) for k, v in request.normalized_params.items() if k != 'limit']
         params.append(('limit', 'all'))
@@ -171,7 +172,7 @@ def search(context, request, search_type=None, return_generator=False, forced_ty
 
     result['notification'] = 'Success'
 
-    ### Format results for JSON-LD
+    # == Format results for JSON-LD ==
     graph = format_results(request, es_results['hits']['hits'], search_frame)
 
     if request.__parent__ is not None or return_generator:
@@ -235,7 +236,7 @@ def get_pagination(request):
 def get_all_subsequent_results(initial_search_result, search, extra_requests_needed_count, size_increment):
     from_ = 0
     while extra_requests_needed_count > 0:
-        #print(str(extra_requests_needed_count) + " requests left to get all results.")
+        # print(str(extra_requests_needed_count) + " requests left to get all results.")
         from_ = from_ + size_increment
         subsequent_search = search[from_:from_ + size_increment]
         subsequent_search_result = execute_search(subsequent_search)
@@ -243,14 +244,15 @@ def get_all_subsequent_results(initial_search_result, search, extra_requests_nee
         for hit in subsequent_search_result['hits'].get('hits', []):
             yield hit
 
-def execute_search_for_all_results(search):
-    size_increment = 100 # Decrease this to like 5 or 10 to test.
 
-    first_search = search[0:size_increment] # get aggregations from here
+def execute_search_for_all_results(search):
+    size_increment = 100  # Decrease this to like 5 or 10 to test.
+
+    first_search = search[0:size_increment]  # get aggregations from here
     es_result = execute_search(first_search)
 
-    total_results_expected = es_result['hits'].get('total',0)
-    extra_requests_needed_count = int(math.ceil(total_results_expected / size_increment)) - 1 # Decrease by 1 (first es_result already happened)
+    total_results_expected = es_result['hits'].get('total', 0)
+    extra_requests_needed_count = int(math.ceil(total_results_expected / size_increment)) - 1  # Decrease by 1 (first es_result already happened)
 
     if extra_requests_needed_count > 0:
         es_result['hits']['hits'] = itertools.chain(es_result['hits']['hits'], get_all_subsequent_results(es_result, search, extra_requests_needed_count, size_increment))
@@ -329,7 +331,7 @@ def normalize_query(request, types, doc_types):
 
 
 def clear_filters_setup(request, doc_types, forced_type):
-    '''
+    """
     Clear Filters URI path
 
     Make a URI path that clears all non-datatype filters
@@ -338,7 +340,7 @@ def clear_filters_setup(request, doc_types, forced_type):
 
     Returns:
         A URL path
-    '''
+    """
     seach_query_specs = request.normalized_params.getall('q')
     seach_query_url = urlencode([("q", seach_query) for seach_query in seach_query_specs])
     # types_url will always be present (always >=1 doc_type)
@@ -825,7 +827,7 @@ def initialize_facets(request, doc_types, prepared_terms, schemas):
                     continue # Skip disabled facets.
                 facets.append(schema_facet)
 
-    ## Add facets for any non-schema ?field=value filters requested in the search (unless already set)
+    # == Add facets for any non-schema ?field=value filters requested in the search (unless already set) ==
     used_facets = [ facet[0] for facet in facets + append_facets ]
     used_facet_titles = [facet[1]['title'] for facet in facets + append_facets
                          if 'title' in facet[1]]

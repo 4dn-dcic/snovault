@@ -1,7 +1,10 @@
 import os
-import pytest
+# import pytest
 import subprocess
-from .postgresql_fixture import SNOVAULT_DB_TEST_PORT, DEFAULT_SNOVAULT_DB_TEST_PORT
+from .postgresql_fixture import (
+    # SNOVAULT_DB_TEST_PORT,
+    DEFAULT_SNOVAULT_DB_TEST_PORT
+)
 from dcicutils.qa_utils import override_environ
 
 

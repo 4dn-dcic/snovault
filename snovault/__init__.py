@@ -1,4 +1,4 @@
-import sys
+# import sys
 import netaddr
 from pyramid.config import Configurator
 from pyramid.settings import (
@@ -29,7 +29,7 @@ from .app import (
     json_from_path,
     )
 import logging
-import os
+# import os
 from dcicutils.log_utils import set_logging
 from dcicutils.ff_utils import get_health_page
 

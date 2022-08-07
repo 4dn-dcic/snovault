@@ -10,14 +10,14 @@ from pyramid.authentication import (
 from pyramid.httpexceptions import HTTPForbidden
 from pyramid.path import caller_package, DottedNameResolver
 from pyramid.security import (
-    Authenticated,
-    Everyone,
+    # Authenticated,
+    # Everyone,
     forget,
     NO_PERMISSION_REQUIRED,
     remember,
-    principals_allowed_by_permission,
+    # principals_allowed_by_permission,
 )
-from pyramid.settings import asbool, aslist
+from pyramid.settings import asbool  # , aslist
 from pyramid.view import view_config
 from ..interfaces import ROOT, COLLECTIONS
 from ..storage import User

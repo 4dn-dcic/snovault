@@ -1,4 +1,3 @@
-from past.builtins import basestring
 from pyramid.decorator import reify
 from uuid import UUID
 from .cache import ManagerLRUCache
@@ -19,7 +18,7 @@ class UnknownItemTypeError(Exception):
 
 
 class Connection(object):
-    '''
+    """
     Intermediary between the storage and the rest of the system.
     Storage class should be storage.PickStorage, which is used to interface
     between different storage types (presumably Postgres and ES)
@@ -30,7 +29,7 @@ class Connection(object):
     See `PickStorage.storage` for more info
 
     The class also sets a number of caches that are used throughout snovault
-    '''
+    """
     def __init__(self, registry):
         self.registry = registry
         self.item_cache = ManagerLRUCache('snovault.connection.item_cache', 1000)
@@ -71,7 +70,7 @@ class Connection(object):
         Gets model from storage and returns Item. Uses item cache.
         Get the item by uuid (will not work for other name keys)
         """
-        if isinstance(uuid, basestring):
+        if isinstance(uuid, str):  # formerly basestring
             # some times we get @id type things here
             uuid = uuid.strip("/").split("/")[-1]
             try:
@@ -162,8 +161,9 @@ class Connection(object):
         """
         item = self.get_by_uuid(uuid)
         # may need to get the item from an alternate datastore
-        if (item and item.properties_datastore != item.default_properties_datastore
-            and item.model.used_datastore != item.properties_datastore):
+        if (item
+                and item.properties_datastore != item.default_properties_datastore
+                and item.model.used_datastore != item.properties_datastore):
             # clear cache so that alternate storage result is returned
             if self.item_cache.get(uuid):
                 del self.item_cache[uuid]

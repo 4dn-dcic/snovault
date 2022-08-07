@@ -1,4 +1,4 @@
-import os
+# import os
 import pytest
 import mock
 
@@ -9,7 +9,7 @@ from ..elasticsearch.create_mapping import (
     update_mapping_by_embed,
     get_items_to_upgrade,
 )
-from ..elasticsearch.interfaces import ELASTIC_SEARCH
+# from ..elasticsearch.interfaces import ELASTIC_SEARCH
 from .test_views import PARAMETERIZED_NAMES
 from ..settings import Settings
 from ..util import add_default_embeds
