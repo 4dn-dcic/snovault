@@ -253,10 +253,7 @@ def check_constraints(conn, _DBSession):
                 sp = self.conn.begin_nested()
                 try:
                     self.conn.execute('SET CONSTRAINTS ALL IMMEDIATE')
-                except:
-                    # TODO: Figure out if this should be rewritten as 'Exception' or 'BaseException'
-                    #       Probably the latter, though if a success flag were used, the issue might be bypassed.
-                    #       -kmp 7-Aug-2022
+                except Exception:
                     sp.rollback()
                     raise
                 else:
