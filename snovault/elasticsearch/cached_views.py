@@ -25,9 +25,10 @@ def includeme(config):
     config.scan(__name__)
 
 
-@view_config(context=ICachedItem, request_method='GET', name='embedded')
+@view_config(context=ICachedItem, request_method='GET',
+             name='embedded')
 @debug_log
-def cached_view_embedded(context, request):
+def cached_view_embedded(context, request):  # This name duplicates the next definition.
     source = context.model.source
     allowed = set(source['principals_allowed']['view'])
     if allowed.isdisjoint(request.effective_principals):
@@ -37,7 +38,8 @@ def cached_view_embedded(context, request):
 
 @view_config(context=ICachedItem, permission='view', request_method='GET',
              name='embedded')
-def cached_view_embedded(context, request):
+@debug_log
+def cached_view_embedded(context, request):  # This name duplicates the previous definition.
     """
     Use the 'embedded' view that is stored the ElasticSearch unless we
     are using an Item with 'elasticsearch' properties_datastore, in which case
