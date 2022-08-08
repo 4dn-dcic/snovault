@@ -1174,7 +1174,7 @@ def execute_search(search):
         # try to get a specific error message. May fail in some cases
         try:
             err_detail = str(exc.info['error']['root_cause'][0]['reason'])
-        except:
+        except Exception:
             err_detail = str(exc)
         err_exp = 'The search failed due to a request error: ' + err_detail
     except TransportError as exc:
@@ -1189,7 +1189,7 @@ def execute_search(search):
         err_exp = 'The search failed. The DCIC team has been notified.'
     if err_exp:
         raise HTTPBadRequest(explanation=err_exp)
-    return es_results
+    return es_results  # noQA - PyCharm wrongly worries this might not have been set.
 
 
 def format_facets(es_results, facets, total, search_frame='embedded'):
