@@ -494,7 +494,7 @@ class TestingInvalidationScopeIntegrated:
 
     @staticmethod
     def runtest(testapp, diff, invalidated, secondary, expected):
-        __test__ = False
+        __test__ = False  # noQA - Lint tools may not understand this is declaring this not to be a test.
         filter_invalidation_scope(testapp.app.registry, diff, invalidated, secondary)
         assert len(secondary) == expected
 

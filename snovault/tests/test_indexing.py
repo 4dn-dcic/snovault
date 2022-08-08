@@ -16,7 +16,7 @@ import yaml
 
 from datetime import datetime, timedelta
 from dcicutils.lang_utils import n_of
-from dcicutils.misc_utils import ignored
+from dcicutils.misc_utils import ignored, get_error_message
 from dcicutils.qa_utils import ControlledTime, notice_pytest_fixtures
 from elasticsearch.exceptions import NotFoundError
 from pyramid.traversal import traverse
@@ -487,7 +487,9 @@ def test_indexing_logging(app, testapp, indexer_testapp, capfd):
             continue
         try:
             proc_record = yaml.safe_load('{' + record.strip().split('{', 1)[1])
-        except:
+        except Exception:
+            # TODO: Should something at least be logged here? Is this normal to fail?
+            #       At minimum, an explanation of why it's OK to quietly continue here would be nice.
             continue
         if not isinstance(proc_record, dict):
             continue
@@ -938,8 +940,8 @@ def test_es_indices(app, elasticsearch):
         try:
             namespaced_index = indexer_utils.get_namespaced_index(app, item_type)
             item_index = es.indices.get(index=namespaced_index)
-        except:
-            assert False
+        except Exception as e:
+            raise AssertionError(f"Didn't find index mapping. {get_error_message(e)}")
         found_index_mapping = (item_index.get(namespaced_index, {})
                                .get('mappings', {}).get(item_type, {}).get('properties', {}).get('embedded'))
         found_index_settings = item_index.get(namespaced_index, {}).get('settings')
@@ -1067,8 +1069,8 @@ def test_es_purge_uuid(app, testapp, indexer_testapp, session):
     try:
         namespaced_index = indexer_utils.get_namespaced_index(app, TEST_TYPE)
         es_item = es.get(index=namespaced_index, doc_type=TEST_TYPE, id=test_uuid)
-    except:
-        assert False
+    except Exception as e:
+        raise AssertionError(f"Couldn't find item uuid. {get_error_message(e)}")
     item_uuid = es_item.get('_source', {}).get('uuid')
     assert item_uuid == test_uuid
 
