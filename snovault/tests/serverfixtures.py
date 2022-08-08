@@ -253,7 +253,7 @@ def check_constraints(conn, _DBSession):
                 sp = self.conn.begin_nested()
                 try:
                     self.conn.execute('SET CONSTRAINTS ALL IMMEDIATE')
-                except Exception:
+                except BaseException:  # even things like keyboard interrupt
                     sp.rollback()
                     raise
                 else:
