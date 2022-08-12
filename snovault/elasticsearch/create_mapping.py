@@ -1214,6 +1214,10 @@ def run(app, collections=None, dry_run=False, check_first=False, skip_indexing=F
     log.info('\n___ES NODES___:\n %s\n' % (str(es.cat.nodes())), cat=cat)
     log.info('\n___ES HEALTH___:\n %s\n' % (str(es.cat.health())), cat=cat)
     log.info('\n___ES INDICES (PRE-MAPPING)___:\n %s\n' % str(es.cat.indices()), cat=cat)
+
+    if check_first and strict:
+        log.warning("In create_mapping.run, check_first=True and strict=True is an unusual combination.")
+
     # keep track of uuids to be indexed after mapping is done.
     # Set of uuids for each item type; keyed by item type. Order for python < 3.6
     uuids_to_index = OrderedDict()

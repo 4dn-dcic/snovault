@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "dcicsnovault"
-version = "6.0.2"
+version = "6.0.4"
 description = "Storage support for 4DN Data Portals."
 authors = ["4DN-DCIC Team <support@4dnucleome.org>"]
 license = "MIT"
@@ -141,7 +141,6 @@ PyYAML = ">=5.1,<5.5"
 # Used only by moto, not explicitly by us.
 # responses = "^0.17.0"  # 0.17.0 is the last version compliant with Python 3.6
 wheel = ">=0.29.0"
-
 
 [tool.poetry.scripts]
 wipe-test-indices = "snovault.commands.wipe_test_indices:main"
