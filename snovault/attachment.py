@@ -1,9 +1,11 @@
 import magic
 import mimetypes
+import os
 import uuid
 
 from base64 import b64decode
 from dcicutils.lang_utils import disjoined_list
+from dcicutils.misc_utils import ignored
 from hashlib import md5
 from io import BytesIO
 from mimetypes import guess_type
@@ -27,6 +29,43 @@ def includeme(config):
 
 
 log = getLogger(__name__)
+
+
+def file_type(filename):
+    return os.path.splitext(filename)[1]
+
+
+FALLBACK_MIMETYPES = {
+    ".txt": "text/plain",
+    ".text": "text/plain",
+    ".csv": "text/csv",
+    ".tsv": "text/tab-separated-values",
+    ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    ".xls": "application/vnd.ms-excel",
+    ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    ".doc": "application/msword",
+    ".htm": "text/html",
+    ".html": "text/html",
+    ".json": "application/json"
+}
+
+DEFAULT_FALLBACK_MIME_TYPE = 'application/octet-stream'
+
+
+def fallback_mime_type(file):
+    return FALLBACK_MIMETYPES.get(file_type(file))
+
+
+def system_mime_type(file):
+    mime_type, encoding = mimetypes.guess_type(file)
+    ignored(encoding)
+    return mime_type
+
+
+def guess_mime_type(file):
+    return (system_mime_type(file)          # normal way to get mime type, but vulnerable to misconfiguration
+            or fallback_mime_type(file)     # special-case info about our commonly-used file types in case of misconfig
+            or DEFAULT_FALLBACK_MIME_TYPE)  # handling of random types we didn't expect
 
 
 class ItemWithAttachment(Item):
@@ -93,8 +132,7 @@ class ItemWithAttachment(Item):
 
         Args:
             prop_name: name of property containing attachment
-            properties: item properties where property containing attachment is
-            located
+            properties: item properties where property containing attachment is located
             downloads: metadata for downloads, used by _update and reset to {}
             for the given prop_name
         """
@@ -120,9 +158,7 @@ class ItemWithAttachment(Item):
 
         # Make sure the file extensions matches the mimetype
         download_meta['download'] = filename = attachment['download']
-        mime_type_from_filename, _ = mimetypes.guess_type(filename)
-        if mime_type_from_filename is None:
-            mime_type_from_filename = 'application/octet-stream'
+        mime_type_from_filename = guess_mime_type(filename)
         if mime_type:
             if not self.mimetypes_are_equal(mime_type, mime_type_from_filename):
                 raise ValidationFailure(
