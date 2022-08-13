@@ -1,9 +1,13 @@
-from base64 import b64decode
 import pytest
 import webtest
 import boto3
-from moto import mock_s3
+
+from base64 import b64decode
 from dcicutils.ff_utils import parse_s3_bucket_and_key_url
+from moto import mock_s3
+from unittest import mock
+from .. import attachment as attachment_module
+from ..attachment import file_type, guess_mime_type, system_mime_type, fallback_mime_type, DEFAULT_FALLBACK_MIME_TYPE
 
 
 # Test for blob storage
@@ -484,3 +488,50 @@ class TestAttachmentEncrypted:
             'md5sum': 'deadbeef',
         }}
         encrypted_testapp.post_json(self.url, item, status=422)
+
+
+def test_file_type():
+
+    assert file_type("/xyz/foo") == ""
+    assert file_type("/xyz/foo.abc") == ".abc"
+    assert file_type("/xyz/foo.abc.def") == ".def"
+
+    assert file_type("xyz/foo.abc") == ".abc"
+    assert file_type("foo.abc") == ".abc"
+
+
+def test_system_mime_type():
+    check_mime_type(system_mime_type, unknown=None)
+
+
+def test_fallback_mime_type():
+    check_mime_type(fallback_mime_type, unknown=None)
+
+
+def test_guess_mime_type():
+    check_mime_type(guess_mime_type, unknown=DEFAULT_FALLBACK_MIME_TYPE)
+    with mock.patch.object(attachment_module, "system_mime_type") as mock_system_mime_type:
+        mock_system_mime_type.return_value = None
+        assert mock_system_mime_type.call_count == 0
+        check_mime_type(guess_mime_type, unknown=DEFAULT_FALLBACK_MIME_TYPE)
+        assert mock_system_mime_type.call_count > 0
+
+
+def check_mime_type(guesser, *, unknown):
+    assert guesser("/xyz/foo.txt") == "text/plain"
+    assert guesser("/xyz/foo.text") == "text/plain"
+    assert guesser("/xyz/foo.csv") == "text/csv"
+    assert guesser("/xyz/foo.tsv") == "text/tab-separated-values"
+    assert guesser("/xyz/foo.xlsx") == "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    assert guesser("/xyz/foo.xls") == "application/vnd.ms-excel"
+    assert guesser("/xyz/foo.docx") == "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    assert guesser("/xyz/foo.doc") == "application/msword"
+    assert guesser("/xyz/foo.htm") == "text/html"
+    assert guesser("/xyz/foo.html") == "text/html"
+    assert guesser("/xyz/foo.json") == "application/json"
+
+    # There is no recommende extension for "application/ld+json"
+    # assert guesser(...) == "application/ld+json"
+
+    # Random type just returns None
+    assert guesser("/xyz/foo.xyzzy") is unknown
