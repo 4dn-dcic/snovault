@@ -17,7 +17,7 @@ else
 fi
 
 
-if [ "${TEST_JOB_ID}" = "" -a "${TRAVIS_JOB_ID} != "" ]; then
+if [ "${TEST_JOB_ID}" = "" -a "${TRAVIS_JOB_ID}" != "" ]; then
     export TEST_JOB_ID=${TRAVIS_JOB_ID}
     unset TRAVIS_JOB_ID
 fi

@@ -28,6 +28,7 @@ from pyramid.paster import get_app
 from timeit import default_timer as timer
 from ..interfaces import COLLECTIONS, TYPES
 from dcicutils.log_utils import set_logging
+from dcicutils.misc_utils import as_seconds
 from ..commands.es_index_data import run as run_index_data
 from ..schema_utils import combine_schemas
 from ..util import (
@@ -823,18 +824,26 @@ def build_index(app, es, index_name, in_type, mapping, uuids_to_index, dry_run,
         return
 
     # delete the index. Ignore 404 because new item types will not be present
+    # note that sometimes we can encounter error because the index we are trying to delete
+    # is being snapshot - wait for it to complete then try again
     if this_index_exists:
-        res = es_safe_execute(es.indices.delete, index=index_name, ignore=[404])
-        if res is not None:
-            if res.get('status') == 404:
-                log.info('MAPPING: index %s not found and cannot be deleted' % in_type,
-                         collection=in_type)
+        allowed_time = as_seconds(minutes=2)
+        retry_wait = 10  # seconds
+        for _ in range(allowed_time // retry_wait):  # recover from snapshot related errors, 2 mins max
+            res = es_safe_execute(es.indices.delete, index=index_name, ignore=[404])
+            if res is not None:
+                if res.get('status') == 404:
+                    log.info('MAPPING: index %s not found and cannot be deleted' % in_type,
+                             collection=in_type)
+                    break
+                else:
+                    assert res.get('acknowledged') is True
+                    log.info('MAPPING: index successfully deleted for %s' % in_type,
+                             collection=in_type)
+                    break
             else:
-                assert res.get('acknowledged') is True
-                log.info('MAPPING: index successfully deleted for %s' % in_type,
-                         collection=in_type)
-        else:
-            log.error('MAPPING: error on delete index for %s' % in_type, collection=in_type)
+                log.error('MAPPING: error on delete index for %s' % in_type, collection=in_type)
+                time.sleep(retry_wait)
 
     # first, create the mapping. adds settings and mappings in the body
     res = es_safe_execute(es.indices.create, index=index_name, body=this_index_record)
@@ -1205,6 +1214,10 @@ def run(app, collections=None, dry_run=False, check_first=False, skip_indexing=F
     log.info('\n___ES NODES___:\n %s\n' % (str(es.cat.nodes())), cat=cat)
     log.info('\n___ES HEALTH___:\n %s\n' % (str(es.cat.health())), cat=cat)
     log.info('\n___ES INDICES (PRE-MAPPING)___:\n %s\n' % str(es.cat.indices()), cat=cat)
+
+    if check_first and strict:
+        log.warning("In create_mapping.run, check_first=True and strict=True is an unusual combination.")
+
     # keep track of uuids to be indexed after mapping is done.
     # Set of uuids for each item type; keyed by item type. Order for python < 3.6
     uuids_to_index = OrderedDict()

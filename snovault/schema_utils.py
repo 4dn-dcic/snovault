@@ -1,14 +1,8 @@
 import codecs
 import collections
-import copy
+from datetime import datetime
+import uuid
 import json
-
-# In jsonschema_serialize_fork, where we got the RefResolver code, requests was defined for the module as:
-#   try:
-#       import requests
-#   except ImportError:
-#       requests = None
-# but since we are in Python 3.6 now, requests should reliably import.
 import requests
 
 from jsonschema_serialize_fork import (
@@ -421,3 +415,18 @@ def combine_schemas(a, b):
     for name in set(b.keys()).difference(a.keys()):
         combined[name] = b[name]
     return combined
+
+# for integrated tests
+def utc_now_str():
+    # from jsonschema_serialize_fork date-time format requires a timezone
+    return datetime.utcnow().isoformat() + '+00:00'
+
+
+@server_default
+def userid(instance, subschema):  # args required by jsonschema-serialize-fork
+    return str(uuid.uuid4())
+
+
+@server_default
+def now(instance, subschema):  # args required by jsonschema-serialize-fork
+    return utc_now_str()

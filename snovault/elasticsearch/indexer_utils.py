@@ -138,7 +138,7 @@ def determine_parent_types(registry, item_type):
     try:
         base_types = extract_base_types(registry, item_type)
     except KeyError:  # indicative of an error if not testing
-        log.info('Tried to determine parent type of invalid type: %s' % item_type)
+        log.info(f'Tried to determine parent type of invalid type: {item_type}')
     return [b for b in base_types if b != 'Item']
 
 
@@ -157,15 +157,17 @@ def build_diff_metadata(registry, diff):
 
     :param registry: application registry, used to retrieve type information
     :param diff: a diff of the change (from SQS), see build_diff_from_request
-    :returns: 3-tuple:
+    :returns: 4-tuple:
                 * skip bool (to invalidate everything),
                 * diff intermediary
+                * type that the diff modifies
                 * child -> parent type mappings (if they exist, in case we are modifying a leaf type)
     """
     # build representation of diffs
     # item type -> modified fields mapping
     diffs, child_to_parent_type = {}, {}
     skip = False  # if a modified field is a default embed, EVERYTHING has to be invalidated
+    modified_item_type = None  # this will get set to the last value in the diff, if any
     for _d in diff:
         modified_item_type, modified_field = _d.split('.', 1)
         if ('.' + modified_field) in DEFAULT_EMBEDS:
@@ -184,35 +186,46 @@ def build_diff_metadata(registry, diff):
         if modified_item_parent_types:
             child_to_parent_type[modified_item_type] = modified_item_parent_types
 
-    return skip, diffs, child_to_parent_type
+    return skip, diffs, modified_item_type, child_to_parent_type
 
 
-def filter_invalidation_scope(registry, diff, invalidated_with_type, secondary_uuids, verbose=False):
+def filter_invalidation_scope(registry, diff, invalidated_with_type, secondary_uuids):
     """ Function that given a diff in the following format:
             ItemType.base_field.terminal_field --> {ItemType: base_field.terminal_field} intermediary
         And a list of invalidated uuids with their type information as a 2-tuple:
             [(<uuid>, <item_type>), ...]
         Removes uuids of item types that were not invalidated from the set of secondary_uuids.
 
+        NOTE: The core logic of invalidation scope occurs in this function.
+        The algorithm proceeds roughly as follows:
+            for invalidated_item_type:
+                for each embed in the invalidated_item_type's embedded list:
+                    if this embed does not form a link to the diff target:
+                        keep searching
+                    else (it forms a candidate link):
+                        determine all possible diffs for the valid types
+                        if any part of the diff is embedded directly through a terminal field or via *:
+                            mark this type as invalidated, cache type result to avoid re-computation
+                        else:
+                            keep searching embeds
+                if we reach this point and have not invalidated, the type is cleared
+
     :param registry: application registry, used to retrieve type information
     :param diff: a diff of the change (from SQS), see build_diff_from_request
     :param invalidated_with_type: list of 2-tuple (uuid, item_type)
     :param secondary_uuids: primary set of uuids to be invalidated
-    :param verbose: specifies if we would like to return debugging info
+    :returns: dictionary mapping types to a boolean on whether or not the type is invalidated
     """
-    skip, diffs, child_to_parent_type = build_diff_metadata(registry, diff)
+    skip, diffs, diff_type, child_to_parent_type = build_diff_metadata(registry, diff)
+    valid_diff_types = child_to_parent_type.get(diff_type, []) + [diff_type]
     # go through all invalidated uuids, looking at the embedded list of the item type
     item_type_is_invalidated = {}
     for invalidated_uuid, invalidated_item_type in invalidated_with_type:
         if skip is True:  # if we detected a change to a default embed, invalidate everything
 
-            # if in debug mode, populate invalidation metadata at the expense of performance
-            if verbose:
-                if invalidated_item_type not in item_type_is_invalidated:
-                    item_type_is_invalidated[invalidated_item_type] = True
-                continue
-            else:  # in production, exit immediately if we see this, as this works by side-effect
-                break
+            if invalidated_item_type not in item_type_is_invalidated:
+                item_type_is_invalidated[invalidated_item_type] = True
+            continue
 
         # remove this uuid if its item type has been seen before and found to
         # not be invalidated
@@ -222,53 +235,55 @@ def filter_invalidation_scope(registry, diff, invalidated_with_type, secondary_u
             continue  # nothing else to do here
 
         # if we get here, we are looking at an invalidated_item_type that exists in the
-        # diff and we need to inspect the embedded list to see if the diff fields are
+        # diff, and we need to inspect the embedded list to see if the diff fields are
         # embedded
         properties = extract_type_properties(registry, invalidated_item_type)
         embedded_list = extract_type_embedded_list(registry, invalidated_item_type)
+
         for embed in embedded_list:
 
             # check the field up to the embed as this is the path to the linkTo
-            # we must determine it's type and determine if the given diff could've
+            # we must determine its type and determine if the given diff could've
             # resulted in an invalidation
             split_embed = embed.split('.')
-            base_field, terminal_field = '.'.join(split_embed[0:-1]), split_embed[-1]
-            base_field_schema = crawl_schema(registry['types'], base_field, properties)
-            base_field_item_type = base_field_schema.get('linkTo', None)
+            link_depth, base_field_item_type = 0, None
 
-            # recursive helper function that will drill down as much as necessary
-            def locate_link_to(schema_cursor):
-                if 'items' in schema_cursor:  # array
-                    if 'properties' in schema_cursor['items']:
-                        for field_name, details in schema_cursor['items']['properties'].items():
-                            if base_field.endswith(field_name):
-                                if 'linkTo' in details:
-                                    return details['linkTo']
-                                else:
-                                    return locate_link_to(details)
-                    else:
-                        return schema_cursor['items']['linkTo']
-                elif 'properties' in schema_cursor:  # object
-                    for field_name, details in schema_cursor['properties'].items():
-                        if base_field.endswith(field_name):
-                            if 'linkTo' in details:
-                                return details['linkTo']
-                            else:
-                                return locate_link_to(details)
-                else:
-                    log.error(schema_cursor)
-                    raise Exception('Unexpected')
+            # Checks that schema_part is a linkTo and it is of type item_type
+            def is_matched_linkto(schema_part, item_types):
+                if 'linkTo' in schema_part and schema_part['linkTo'] in item_types:
+                    return True
+                return False
 
-            # if we are not a top level linkTo, drill down
+            # crawl schema by each increasingly shorter embed searching for where
+            # the last link target ends and the terminal field begins
+            for i in range(len(split_embed), 0, -1):
+                embed_path = '.'.join(split_embed[0:i])
+                if embed_path.endswith('*'):
+                    continue
+                embed_part_schema = crawl_schema(registry['types'], embed_path, properties)
+                if is_matched_linkto(embed_part_schema, valid_diff_types):
+                    base_field_item_type = embed_part_schema.get('linkTo', None)
+                    link_depth = i
+                    break
+                elif 'items' in embed_part_schema:
+                    array = embed_part_schema['items']
+                    if is_matched_linkto(array, valid_diff_types):
+                        base_field_item_type = array.get('linkTo')
+                        link_depth = i
+                        break
+
+            # if we did not find a linkTo, this diff is not represented in the current embed
+            # so continue looking through the rest of the embeds
             if base_field_item_type is None:
-                base_field_item_type = locate_link_to(base_field_schema)
+                continue
+
+            # grab terminal field based on the actual linkTo depth
+            terminal_field = '.'.join(split_embed[link_depth:])
 
             # Collect diffs from all possible item_types
             all_possible_diffs = diffs.get(base_field_item_type, [])
 
             # A linkTo target could be a child type (in that we need to look at parent type diffs as well)
-            # NOTE: this situation doesn't actually occur in our system as of right now
-            # but theoretically could
             parent_types = child_to_parent_type.get(base_field_item_type, None)
             if parent_types is not None:
                 for parent_type in child_to_parent_type.get(base_field_item_type, []):
@@ -283,15 +298,39 @@ def filter_invalidation_scope(registry, diff, invalidated_with_type, secondary_u
             if not all_possible_diffs:  # no diffs match this embed
                 continue
 
+            # Checks that the 'field' passed is actually contained in the embed list
+            def field_is_part_of_target_embed(field):
+                terminal_field_as_list = terminal_field.split('.')
+                for field_part in field.split('.'):
+                    if field_part in terminal_field_as_list:
+                        return True
+                return False
+
             # VERY IMPORTANT: for this to work correctly, the fields used in calculated properties MUST
             # be embedded! In addition, if you embed * on a linkTo, modifications to that linkTo will ALWAYS
             # invalidate the item_type
-            if (any(terminal_field == field for field in all_possible_diffs) or
-                    terminal_field.endswith('*')):
+            for field in all_possible_diffs:
+                # if terminal field matches a diff exactly, invalidate
+                if terminal_field == field:
+                    log.info(f'Invalidating item type {invalidated_item_type} based on edit to field {field} given exact'
+                             f'embed {terminal_field}')
+                # if terminal field is *, invalidate
+                elif terminal_field == '*' or (terminal_field.endswith('*') and field_is_part_of_target_embed(field)):
+                    log.info(f'Invalidating item type {invalidated_item_type} for field {field} based on star embed {split_embed}')
+                # if we edited a link itself or any field on the path, invalidate
+                elif field in split_embed:
+                    log.info(f'Invalidating item type {invalidated_item_type} based on edit to field {field} given embed'
+                             f' path {split_embed}')
+                else:
+                    log.info(f'Skipping field {field} as {split_embed} does not match')
+                    continue
                 item_type_is_invalidated[invalidated_item_type] = True
                 break
 
-        # if we didnt break out of the above loop, we never found an embedded field that was
+            if item_type_is_invalidated.get(invalidated_item_type):
+                break  # if found we don't need to continue searching
+
+        # if we didn't break out of the above loop, we never found an embedded field that was
         # touched, so set this item type to False so all items of this type are NOT invalidated
         if invalidated_item_type not in item_type_is_invalidated:
             secondary_uuids.discard(invalidated_uuid)
@@ -304,8 +343,7 @@ def filter_invalidation_scope(registry, diff, invalidated_with_type, secondary_u
     #                                                                        if v is True), key=_sort),
     #                                                            sorted(list((k, v) for k, v in item_type_is_invalidated.items()
     #                                                                        if v is False), key=_sort)))
-    if verbose:  # noQA this function is intended to be considered 'void' but will return info if asked - Will
-        return item_type_is_invalidated
+    return item_type_is_invalidated
 
 
 def _compute_invalidation_scope_base(request, result, source_type, target_type, simulated_prop):
@@ -316,8 +354,7 @@ def _compute_invalidation_scope_base(request, result, source_type, target_type, 
 
     dummy_diff = ['.'.join([source_type, simulated_prop])]
     invalidated_with_type = [('dummy', target_type)]
-    invalidated_metadata = filter_invalidation_scope(request.registry, dummy_diff, invalidated_with_type, set(),
-                                                     verbose=True)
+    invalidated_metadata = filter_invalidation_scope(request.registry, dummy_diff, invalidated_with_type, set())
     if invalidated_metadata.get(target_type, False):
         result['Invalidated'].append(simulated_prop)
     else:

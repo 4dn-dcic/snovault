@@ -13,6 +13,9 @@ moto-setup: # As of 2022-01-13, this loads Jinja2-3.0.3 click-8.0.3 flask-2.0.2 
 macpoetry-install:
 	scripts/macpoetry-install
 
+lint:
+	flake8 snovault
+
 macbuild:
 	make configure
 	make macpoetry-install

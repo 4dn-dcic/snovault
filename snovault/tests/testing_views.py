@@ -736,6 +736,17 @@ class TestingIndividualSno(Item):
         return full_name.split()[1]
 
 
+@collection(name='testing-note-sno', unique_key='testing_note_sno:identifier')
+class TestingNoteSno(Item):
+    """ Note integrated testing type. """
+    item_type = 'testing_note_sno'
+    name_key = 'identifier'
+    schema = load_schema('snovault:test_schemas/TestingNoteSno.json')
+    embedded_list = [
+        'superseding_note.assessment.call'
+    ]
+
+
 @collection(name='testing-biosample-sno', unique_key='testing_biosample_sno:identifier')
 class TestingBiosampleSno(Item):
     """ Biosample integrated testing type. """
@@ -743,7 +754,9 @@ class TestingBiosampleSno(Item):
     name_key = 'identifier'
     schema = load_schema('snovault:test_schemas/TestingBiosampleSno.json')
     embedded_list = [
-        'contributor.specimen'
+        'contributor.specimen',
+        'technical_reviews.assessment.call',
+        'technical_reviews.review.*'
     ]
 
 

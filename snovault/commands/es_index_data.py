@@ -5,7 +5,9 @@ import webtest
 from pyramid.paster import get_app
 from dcicutils.log_utils import set_logging
 
+
 EPILOG = __doc__
+INDEXING_RUN_ITERATIONS = 100
 
 
 def run(app, uuids=None):
@@ -19,7 +21,10 @@ def run(app, uuids=None):
     }
     if uuids:
         post_body['uuids'] = list(uuids)
-    testapp.post_json('/index', post_body)
+        testapp.post_json('/index', post_body)
+    else:
+        for _ in range(INDEXING_RUN_ITERATIONS):
+            testapp.post_json('/index', post_body)
 
 
 def main():
