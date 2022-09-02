@@ -6,6 +6,13 @@ snovault
 Change Log
 ----------
 
+
+6.0.6
+=====
+
+* Miscellaneous PEP8.
+
+
 6.0.5
 =====
 
