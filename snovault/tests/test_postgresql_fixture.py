@@ -5,7 +5,7 @@ from .postgresql_fixture import (
     # SNOVAULT_DB_TEST_PORT,
     DEFAULT_SNOVAULT_DB_TEST_PORT
 )
-from dcicutils.qa_utils import override_environ
+from dcicutils.misc_utils import override_environ
 
 
 def test_snovault_db_test_port():

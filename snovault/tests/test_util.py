@@ -3,7 +3,7 @@ import pytest
 import random
 import re
 
-from dcicutils.qa_utils import override_environ
+from dcicutils.misc_utils import override_environ
 from ..util import (
     dictionary_lookup, DictionaryKeyError, merge_calculated_into_properties, CachedField,
     generate_indexer_namespace_for_testing,
