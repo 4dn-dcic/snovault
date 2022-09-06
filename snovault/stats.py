@@ -77,6 +77,12 @@ def stats_tween_factory(handler, registry):
         if request.registry.settings.get('env_name'):
             log_keys['ff_env'] = request.registry.settings.get('env_name')
 
+        # TODO: If stray unicode characters are inserted in the query string, for example, it's possible
+        #       to get an error such as:
+        #         UnicodeDecodeError: 'utf-8' codec can't decode byte 0xc0 in position 1: invalid start byte
+        #       We see this when WhiteHat pelts us with strange requests as part of a pen test.
+        #       The error occurs in the request.path computation.
+        #       Ref: https://hms-dbmi.atlassian.net/browse/C4-887
         log_keys['url_path'] = request.path
         log_keys['url_qs'] = request.query_string
         log_keys['host'] = request.host.split(":")[0]
