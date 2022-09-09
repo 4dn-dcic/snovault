@@ -6,6 +6,12 @@ snovault
 Change Log
 ----------
 
+6.0.6
+=====
+
+* Evaluate KMS args as truthy for blob storage to avoid errors for empty string KMS key
+
+
 6.0.5
 =====
 
