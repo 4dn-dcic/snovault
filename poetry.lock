@@ -1,6 +1,6 @@
 [[package]]
 name = "atomicwrites"
-version = "1.4.0"
+version = "1.4.1"
 description = "Atomic file writes."
 category = "dev"
 optional = false
@@ -789,6 +789,17 @@ optional = false
 python-versions = ">=3.6,<4"
 
 [[package]]
+name = "greenlet"
+version = "1.1.3"
+description = "Lightweight in-process concurrent programming"
+category = "main"
+optional = false
+python-versions = ">=2.7,!=3.0.*,!=3.1.*,!=3.2.*,!=3.3.*,!=3.4.*"
+
+[package.extras]
+docs = ["sphinx"]
+
+[[package]]
 name = "html5lib"
 version = "1.1"
 description = "HTML parser based on the WHATWG HTML specification"
@@ -1015,7 +1026,7 @@ test = ["pytest (<5.4)", "pytest-cov"]
 
 [[package]]
 name = "more-itertools"
-version = "8.13.0"
+version = "8.14.0"
 description = "More routines for operating on iterables, beyond itertools"
 category = "dev"
 optional = false
@@ -1455,26 +1466,6 @@ pytest = ">=3.6"
 testing = ["fields", "hunter", "process-tests (==2.0.2)", "six", "pytest-xdist", "virtualenv"]
 
 [[package]]
-name = "pytest-docker-fixtures"
-version = "1.3.14"
-description = "pytest docker fixtures"
-category = "dev"
-optional = false
-python-versions = "*"
-
-[package.dependencies]
-docker = "*"
-pytest = "*"
-requests = "*"
-
-[package.extras]
-kafka = ["kafka-python"]
-memcached = ["pymemcached"]
-mysql = ["mysql-connector-python (>=8.0.17,<8.1.0)"]
-pg = ["psycopg2-binary"]
-rabbitmq = ["pika (==0.12.0)"]
-
-[[package]]
 name = "pytest-exact-fixtures"
 version = "0.3"
 description = "Parse queries in Lucene and Elasticsearch syntaxes"
@@ -1780,23 +1771,36 @@ keepalive = ["keepalive (>=0.5)"]
 
 [[package]]
 name = "sqlalchemy"
-version = "1.3.16"
+version = "1.4.41"
 description = "Database Abstraction Library"
 category = "main"
 optional = false
-python-versions = ">=2.7, !=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*"
+python-versions = "!=3.0.*,!=3.1.*,!=3.2.*,!=3.3.*,!=3.4.*,!=3.5.*,>=2.7"
+
+[package.dependencies]
+greenlet = {version = "!=0.4.17", markers = "python_version >= \"3\" and (platform_machine == \"aarch64\" or platform_machine == \"ppc64le\" or platform_machine == \"x86_64\" or platform_machine == \"amd64\" or platform_machine == \"AMD64\" or platform_machine == \"win32\" or platform_machine == \"WIN32\")"}
+importlib-metadata = {version = "*", markers = "python_version < \"3.8\""}
 
 [package.extras]
+aiomysql = ["greenlet (!=0.4.17)", "aiomysql"]
+aiosqlite = ["typing_extensions (!=3.10.0.1)", "greenlet (!=0.4.17)", "aiosqlite"]
+asyncio = ["greenlet (!=0.4.17)"]
+asyncmy = ["greenlet (!=0.4.17)", "asyncmy (>=0.2.3,!=0.2.4)"]
+mariadb_connector = ["mariadb (>=1.0.1,!=1.1.2)"]
 mssql = ["pyodbc"]
 mssql_pymssql = ["pymssql"]
 mssql_pyodbc = ["pyodbc"]
-mysql = ["mysqlclient"]
-oracle = ["cx-oracle"]
-postgresql = ["psycopg2"]
-postgresql_pg8000 = ["pg8000"]
+mypy = ["sqlalchemy2-stubs", "mypy (>=0.910)"]
+mysql = ["mysqlclient (>=1.4.0,<2)", "mysqlclient (>=1.4.0)"]
+mysql_connector = ["mysql-connector-python"]
+oracle = ["cx_oracle (>=7,<8)", "cx_oracle (>=7)"]
+postgresql = ["psycopg2 (>=2.7)"]
+postgresql_asyncpg = ["greenlet (!=0.4.17)", "asyncpg"]
+postgresql_pg8000 = ["pg8000 (>=1.16.6,!=1.29.0)"]
 postgresql_psycopg2binary = ["psycopg2-binary"]
 postgresql_psycopg2cffi = ["psycopg2cffi"]
-pymysql = ["pymysql"]
+pymysql = ["pymysql (<1)", "pymysql"]
+sqlcipher = ["sqlcipher3-binary"]
 
 [[package]]
 name = "sshpubkeys"
@@ -1854,7 +1858,7 @@ python-versions = ">=2.6, !=3.0.*, !=3.1.*, !=3.2.*"
 
 [[package]]
 name = "transaction"
-version = "2.4.0"
+version = "3.0.1"
 description = "Transaction management for Python"
 category = "main"
 optional = false
@@ -1864,9 +1868,9 @@ python-versions = "*"
 "zope.interface" = "*"
 
 [package.extras]
-docs = ["sphinx", "repoze.sphinx.autointerface"]
+testing = ["mock", "coverage", "nose"]
 test = ["mock"]
-testing = ["nose", "coverage", "mock"]
+docs = ["repoze.sphinx.autointerface", "sphinx"]
 
 [[package]]
 name = "translationstring"
@@ -2077,14 +2081,14 @@ testing = ["zope.event", "nose", "coverage"]
 
 [[package]]
 name = "zope.sqlalchemy"
-version = "1.3"
+version = "1.6"
 description = "Minimal Zope/SQLAlchemy transaction integration"
 category = "main"
 optional = false
 python-versions = "*"
 
 [package.dependencies]
-SQLAlchemy = ">=0.7"
+SQLAlchemy = ">=0.9,<1.4.0 || >1.4.0,<1.4.1 || >1.4.1,<1.4.2 || >1.4.2,<1.4.3 || >1.4.3,<1.4.4 || >1.4.4,<1.4.5 || >1.4.5,<1.4.6 || >1.4.6"
 transaction = ">=1.6.0"
 "zope.interface" = ">=3.6.0"
 
@@ -2094,7 +2098,7 @@ test = ["zope.testing"]
 [metadata]
 lock-version = "1.1"
 python-versions = ">=3.7.1,<3.9"
-content-hash = "3b67a9fcc996df24c8b6f4481546ee9cb21e024855ba8726586c09f5fe0176cc"
+content-hash = "7a12944232e0c2e34ae0ba6afead93a97cac26332a527ee4b4d291f768f1c3dc"
 
 [metadata.files]
 atomicwrites = []
@@ -2134,6 +2138,7 @@ futures = []
 gitdb = []
 gitpython = []
 graphql-core = []
+greenlet = []
 html5lib = []
 humanfriendly = []
 hupper = []
@@ -2187,7 +2192,6 @@ pyramid-translogger = []
 pyrsistent = []
 pytest = []
 pytest-cov = []
-pytest-docker-fixtures = []
 pytest-exact-fixtures = []
 pytest-instafail = []
 pytest-mock = []

@@ -10,14 +10,13 @@ from contextlib import contextmanager
 from dcicutils.misc_utils import ignored
 from dcicutils.qa_utils import notice_pytest_fixtures
 from transaction.interfaces import ISynchronizer
-from urllib.parse import quote
 from zope.interface import implementer
 
 from ..app import configure_engine
 from ..storage import Base
 from .elasticsearch_fixture import server_process as elasticsearch_server_process
 from .postgresql_fixture import (
-    initdb, server_process as postgres_server_process, SNOVAULT_DB_TEST_PORT, make_snovault_db_test_url,
+    initdb, server_process as postgres_server_process, make_snovault_db_test_url,
 )
 
 
@@ -142,12 +141,12 @@ def DBSession(_DBSession, zsa_savepoints, check_constraints):
 def external_tx(request, conn):
     notice_pytest_fixtures(request)
     # print('BEGIN external_tx')
+    tx = conn.begin_nested()
     try:
-        tx = conn.begin_nested()
         yield tx
         tx.rollback()
     except Exception:
-        conn.rollback()
+        tx.rollback()  # conn does not implement .rollback()
     # # The database should be empty unless a data fixture was loaded
     # for table in Base.metadata.sorted_tables:
     #     assert conn.execute(table.count()).scalar() == 0
@@ -169,6 +168,7 @@ def zsa_savepoints(conn):
     than that at the start of the test.
     """
     notice_pytest_fixtures(conn)
+
     @implementer(ISynchronizer)
     class Savepoints(object):
         def __init__(self, conn):
@@ -185,7 +185,7 @@ def zsa_savepoints(conn):
                 return
             if self.state == 'commit':
                 self.state = 'completion'
-                self.sp.commit()
+                # self.sp.commit() this call is not necessary and throwing exception in sqlalchemy
             else:
                 self.state = 'abort'
                 self.sp.rollback()

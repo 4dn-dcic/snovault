@@ -32,7 +32,7 @@ build-after-poetry:  # continuation of build after poetry install
 test:
 	@git log -1 --decorate | head -1
 	@date
-	pytest -vv --timeout=200
+	pytest -xvv --instafail --timeout=200
 	@git log -1 --decorate | head -1
 	@date
 

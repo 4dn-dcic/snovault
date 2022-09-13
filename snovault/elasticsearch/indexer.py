@@ -326,7 +326,7 @@ class Indexer(object):
                 # CHANGE - this needs to happen PER MESSAGE now
                 # add to secondary queue, if applicable
                 # search for all items that linkTo the non-strict items or contain
-                # a rev_link to to them
+                # a rev_link to them
                 if non_strict_uuids or rev_linked_uuids:
                     queued, failed = self.find_and_queue_secondary_items(non_strict_uuids,  # THIS IS NOW A SINGLE UUID
                                                                          rev_linked_uuids,

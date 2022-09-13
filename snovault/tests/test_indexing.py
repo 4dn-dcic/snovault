@@ -95,7 +95,7 @@ else:
 @pytest.yield_fixture(scope='module', params=INDEXER_APP_PARAMS)  # must happen AFTER scope='session' moto setup
 def app(app_settings, request):
     if request.param:  # run tests both with and without mpindexer
-        app_settings['mpindexer'] = True  # temporarily disable so can drop directly in
+        app_settings['mpindexer'] = True
     app = main({}, **app_settings)
     yield app
 

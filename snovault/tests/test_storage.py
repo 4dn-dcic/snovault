@@ -8,7 +8,7 @@ import boto3
 from dcicutils.misc_utils import filtered_warnings
 from pyramid.threadlocal import manager
 from sqlalchemy import func
-from sqlalchemy.orm.exc import FlushError
+from sqlalchemy.exc import IntegrityError
 from ..interfaces import DBSESSION, STORAGE
 from ..storage import (
     Blob,
@@ -50,19 +50,18 @@ def test_storage_creation(session):
 
 def test_transaction_record_rollback(session):
     rid = uuid.uuid4()
+    sp1 = session.begin_nested()
     resource = Resource('test_item', {'': {}}, rid=rid)
     session.add(resource)
-    transaction_management.commit()
-    transaction_management.begin()
-    sp = session.begin_nested()
+    sp1.commit()
+    sp2 = session.begin_nested()
     resource = Resource('test_item', {'': {}}, rid=rid)
     session.add(resource)
     with pytest.raises(Exception):
-        sp.commit()
-    sp.rollback()
+        sp2.commit()
+    sp2.rollback()
     resource = Resource('test_item', {'': {}})
     session.add(resource)
-    transaction_management.commit()
 
 
 def test_current_propsheet(session):
@@ -222,7 +221,8 @@ def test_keys(session):
     session.flush()
     key3 = Key(rid=resource2.rid, name=testname, value=props1[testname])
     session.add(key3)
-    with pytest.raises(FlushError):
+    # try to insert a duplicate unique key, previously threw FlushError
+    with pytest.raises(IntegrityError):  # in newer sqlalchemy versions IntegrityError is more accurate
         session.flush()
 
 
