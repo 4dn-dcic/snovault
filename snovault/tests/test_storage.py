@@ -27,15 +27,17 @@ from moto import mock_s3
 pytestmark = pytest.mark.storage
 
 
-POSTGRES_MAJOR_VERSION_EXPECTED = 11
+# These 3 versions are known to be compatible, older versions should not be
+# used, odds are 14 can be used as well - Will Sept 13 2022
+POSTGRES_COMPATIBLE_MAJOR_VERSIONS = ['11', '12', '13']
 
 
 def test_postgres_version(session):
-
+    """ Tests that the local postgres is running one of the compatible versions """
     (version_info,) = session.query(func.version()).one()
     print("version_info=", version_info)
     assert isinstance(version_info, str)
-    assert re.match("PostgreSQL %s([.][0-9]+)? " % POSTGRES_MAJOR_VERSION_EXPECTED, version_info)
+    assert re.match("PostgreSQL (%s)([.][0-9]+)? " % '|'.join(POSTGRES_COMPATIBLE_MAJOR_VERSIONS), version_info)
 
 
 def test_storage_creation(session):

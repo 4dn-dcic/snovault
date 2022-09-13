@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "dcicsnovault"
-version = "6.0.6"
+version = "6.0.7"
 description = "Storage support for 4DN Data Portals."
 authors = ["4DN-DCIC Team <support@4dnucleome.org>"]
 license = "MIT"
@@ -43,9 +43,9 @@ aws_requests_auth = "^0.4.1"
 "backports.statistics" = "0.1.0"
 botocore = ">=1.27.36"  # no particular version required, but this speeds up search
 boto3 = ">=1.24.36"  # no particular version required, but this speeds up search
-elasticsearch = "6.8.1"
-elasticsearch_dsl = "^6.4.0"
-dcicutils = "^4.0.0"
+elasticsearch = "7.13.4"  # versions >= 7.14.0 lock out AWS ES
+elasticsearch_dsl = "^7.4.0"
+dcicutils = "^5.0.0.1b0"
 future = ">=0.15.2,<1"
 futures = "^3.1.1"
 # Needed by Moto but not us
@@ -82,7 +82,7 @@ rutter = ">=0.3,<1"
 # setuptools = "^36.6.0"
 simplejson = "^3.17.6"
 SPARQLWrapper = "^1.8.5"
-SQLAlchemy = "1.3.16"  # Pinned because >=1.3.17 is a problem
+SQLAlchemy = "1.3.16"  # trying to take this version - Will Sept 12 2022
 # Our use of structlog is pretty vanilla, so we should be OK with changes across the 18-19 major version boundary.
 structlog = ">=19.2.0,<20"
 subprocess_middleware = ">=0.3,<1"
@@ -98,6 +98,8 @@ xlrd = "^1.0.0"
 "zope.deprecation" = "^4.4.0"
 "zope.interface" = "^4.7.2"
 "zope.sqlalchemy" = "1.3"
+moto = {extras = ["server"], version = "^4.0.3"}
+mock = "^4.0.3"
 
 [tool.poetry.dev-dependencies]
 botocore-stubs = ">=1.27.36"  # no particular version required, but this speeds up search
@@ -115,7 +117,6 @@ flaky = ">=3.7.0"
 #
 # We tried 1.3.14 but it adds stuff we don't need (until Python 3.8) and it doesn't work as well.
 # See https://github.com/spulec/moto/blob/master/CHANGELOG.md
-moto = "^1.3.7"  # 2.x is available but needs adaptation. See note above. -kmp 5-Feb-2022
 pip-licenses = "^3.5.3"
 # Not even sure we need an explicit dependence on Pillow, though it might help keep from searching older versions.
 # -kmp 22-Feb-2022
@@ -124,6 +125,7 @@ Pillow = ">=6.2.2"  # later version known to work - Will 11/17/20
 # -kmp 11-May-2020
 pytest = "4.5.0"
 pytest-cov = ">=2.2.1"
+pytest-docker-fixtures = "^1.3.14"
 pytest-exact-fixtures = ">=0.3"
 pytest-instafail = ">=0.3.0"
 # TODO: Investigate whether a major version upgrade is allowable for 'pytest-mock'.

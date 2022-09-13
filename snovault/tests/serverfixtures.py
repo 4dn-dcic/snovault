@@ -142,9 +142,12 @@ def DBSession(_DBSession, zsa_savepoints, check_constraints):
 def external_tx(request, conn):
     notice_pytest_fixtures(request)
     # print('BEGIN external_tx')
-    tx = conn.begin_nested()
-    yield tx
-    tx.rollback()
+    try:
+        tx = conn.begin_nested()
+        yield tx
+        tx.rollback()
+    except Exception:
+        conn.rollback()
     # # The database should be empty unless a data fixture was loaded
     # for table in Base.metadata.sorted_tables:
     #     assert conn.execute(table.count()).scalar() == 0

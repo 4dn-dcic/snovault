@@ -139,14 +139,14 @@ def index(context, request):
 
         if record:
             try:
-                es.index(index=namespaced_index, doc_type='indexing', body=indexing_record, id=index_start_str)
-                es.index(index=namespaced_index, doc_type='indexing', body=indexing_record, id='latest_indexing')
+                es.index(index=namespaced_index, body=indexing_record, id=index_start_str)
+                es.index(index=namespaced_index, body=indexing_record, id='latest_indexing')
             except Exception:
                 indexing_record['indexing_status'] = 'errored'
                 error_messages = copy.deepcopy(indexing_record['errors'])
                 del indexing_record['errors']
-                es.index(index=namespaced_index, doc_type='indexing', body=indexing_record, id=index_start_str)
-                es.index(index=namespaced_index, doc_type='indexing', body=indexing_record, id='latest_indexing')
+                es.index(index=namespaced_index, body=indexing_record, id=index_start_str)
+                es.index(index=namespaced_index, body=indexing_record, id='latest_indexing')
                 for item in error_messages:
                     if 'error_message' in item:
                         log.error('Indexing error', **item)
@@ -455,7 +455,7 @@ class Indexer(object):
             try:
                 namespaced_index = get_namespaced_index(request, result['item_type'])
                 self.es.index(
-                    index=namespaced_index, doc_type=result['item_type'], body=result,
+                    index=namespaced_index, body=result,
                     id=str(uuid), version=result['sid'], version_type='external_gte',
                     request_timeout=30
                 )

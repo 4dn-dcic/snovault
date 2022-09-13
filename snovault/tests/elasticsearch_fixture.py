@@ -26,7 +26,7 @@ def server_process(datadir, host='localhost', port=9200, prefix='', echo=False):
     #     '-XX:MaxDirectMemorySize=4096m',
     # ]
     args = [
-        os.path.join(prefix, 'elasticsearch'),
+        os.path.join(prefix, 'opensearch'),
         '-Enetwork.host=%s' % host,
         '-Ehttp.port=%d' % port,
         '-Epath.data=%s' % os.path.join(datadir, 'data'),

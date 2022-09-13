@@ -139,7 +139,7 @@ def search(context, request, search_type=None, return_generator=False, forced_ty
         es_results = execute_search(size_search)
 
     ### Record total number of hits
-    result['total'] = total = es_results['hits']['total']
+    result['total'] = total = es_results['hits']['total']['value']
     result['facets'] = format_facets(es_results, facets, total, search_frame)
     result['aggregations'] = format_extra_aggregations(es_results)
 

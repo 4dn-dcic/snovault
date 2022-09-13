@@ -282,7 +282,7 @@ def index_settings(type_specific_settings=None):
                 'filter': {
                     # create tokens between size MIN_NGRAM and MAX_NGRAM
                     'ngram_filter': {
-                        'type': 'edgeNGram',
+                        'type': 'edge_ngram',
                          'min_gram': MIN_NGRAM,
                          'max_gram': MAX_NGRAM
                     },
@@ -377,7 +377,7 @@ def build_index_record(mapping, in_type,
     Item because it relies on the dynamic mappings used for unique keys.
     """
     return {
-        'mappings': {in_type: mapping},
+        'mappings': mapping,  # in ES7, only 1 mapping per index
         'settings': index_settings(type_specific_settings=type_specific_settings)
     }
 
@@ -930,12 +930,12 @@ def get_db_es_counts_and_db_uuids(app, es, in_type, index_diff=False):
     namespaced_index = get_namespaced_index(app, in_type)
     if check_if_index_exists(es, namespaced_index):
         if index_diff:
-            search = Search(using=es, index=namespaced_index, doc_type=in_type)
+            search = Search(using=es, index=namespaced_index)
             search_source = search.source([])
             es_uuids = set([h.meta.id for h in search_source.scan()])
             es_count = len(es_uuids)
         else:
-            count_res = es.count(index=namespaced_index, doc_type=in_type)
+            count_res = es.count(index=namespaced_index)
             es_count = count_res.get('count')
             es_uuids = set()
     else:
@@ -1053,9 +1053,9 @@ def compare_against_existing_mapping(es, index_name, in_type, this_index_record,
     """
     found_mapping = es.indices.get_mapping(index=index_name).get(index_name).get('mappings', {})
     new_mapping = this_index_record['mappings']
-    if live_mapping:
-        find_and_replace_dynamic_mappings(new_mapping[in_type]['properties'],
-                                          found_mapping[in_type]['properties'])
+    if live_mapping:  # in ES7, there are no more type specific mappings, only 1 mapping per index
+        find_and_replace_dynamic_mappings(new_mapping['properties'],
+                                          found_mapping['properties'])
     # dump to JSON to compare the mappings
     found_map_json = json.dumps(found_mapping, sort_keys=True)
     new_map_json = json.dumps(new_mapping, sort_keys=True)
@@ -1078,7 +1078,7 @@ def confirm_mapping(es, index_name, in_type, this_index_record):
         if compare_against_existing_mapping(es, index_name, in_type, this_index_record):
             mapping_check = True
         else:
-            count = es.count(index=index_name, doc_type=in_type).get('count', 0)
+            count = es.count(index=index_name).get('count', 0)
             log.info('___BAD MAPPING FOUND FOR %s. RETRYING___\nDocument count in that index is %s.'
                         % (in_type, count), collection=in_type, count=count, cat='bad mapping')
             es_safe_execute(es.indices.delete, index=index_name)
@@ -1252,7 +1252,7 @@ def run(app, collections=None, dry_run=False, check_first=False, skip_indexing=F
         if registry[COLLECTIONS][collection_name].properties_datastore == 'elasticsearch':
             namespaced_index = get_namespaced_index(app, collection_name)
             if check_if_index_exists(es, namespaced_index):
-                count_res = es.count(index=namespaced_index, doc_type=collection_name)
+                count_res = es.count(index=namespaced_index)
                 if count_res.get('count', 0) > 0:
                     log.info('Skipping %s mapping since it is an ES-based '
                              'collection with items in it' % collection_name)
