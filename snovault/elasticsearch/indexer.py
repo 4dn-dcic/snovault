@@ -277,7 +277,12 @@ class Indexer(object):
                 msg_sid = msg_body['sid']
                 msg_curr_time = msg_body['timestamp']
                 msg_detail = msg_body.get('detail')
-                ignored(msg_detail)  # TODO: Should it be used? Or why are we fetching it?
+
+                # TODO: Should msg_detail be used? Or why are we fetching it?
+                #       Added logging here to get more data on what the msg_detail looks like. -kmp 14-Sep-2022
+                log.info("Unused Variable", msg_detail=msg_detail)
+                ignored(msg_detail)
+
                 msg_telemetry = msg_body.get('telemetry_id')
                 msg_diff = msg_body.get('diff', None)
 
