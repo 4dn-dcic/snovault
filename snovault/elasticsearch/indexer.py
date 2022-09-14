@@ -250,7 +250,17 @@ class Indexer(object):
         rev_linked_uuids = set()
         to_delete = []  # hold messages that will be deleted
         to_defer = []  # hold messages once we need to restart the worker
-        # max_sid does not change of the lifetime of request
+
+        # A note for the record of history: the idea behind this check is to store in
+        # ES the max_sid acquired at this time alongside the documents indexed into ES, so we have
+        # an "approximate" database time when the indexing occurred.
+        # What's going on here is when you make a DB edit that is successful, the sid assigned to that edit
+        # is passed to the indexing queue, and when that message is pulled down the indexer workers ask the
+        # DB what the current max_sid is, and if the msg sid is greater than the max_sid acquired at the start of
+        # the indexing run, it will re-drive the message to get processed by a worker who pulls down a "newer" sid.
+        # This is necessary because that indexer worker could have stale data in the embed cache. By having the message
+        # retrieved by a "newer" worker you are guaranteeing an up-to-date embed cache. A rare case indeed but still a
+        # possibility. - Will Sept 13 2022
         max_sid = request.registry[STORAGE].write.get_max_sid()
         deferred = False  # if true, we need to restart the worker
         messages, target_queue = self.get_messages_from_queue()

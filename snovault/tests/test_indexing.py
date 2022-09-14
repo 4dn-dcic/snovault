@@ -24,7 +24,7 @@ from sqlalchemy import MetaData
 from unittest import mock
 from webtest.app import AppError
 from zope.sqlalchemy import mark_changed
-from ..interfaces import TYPES, DBSESSION, STORAGE, COLLECTIONS
+from ..interfaces import DBSESSION, STORAGE, COLLECTIONS
 from .. import util  # The filename util.py, not something in __init__.py
 from .. import main  # Function main actually defined in __init__.py (should maybe be defined elsewhere)
 from ..storage import Base
@@ -38,7 +38,6 @@ from ..elasticsearch.create_mapping import (
     create_mapping_by_type,
     index_settings,
     run,
-    type_mapping,
 )
 from ..elasticsearch.indexer import check_sid, SidException
 from ..elasticsearch.indexer_queue import QueueManager
@@ -113,10 +112,6 @@ def setup_and_teardown(app):
     DB tables after the test
     """
     # BEFORE THE TEST - just run CM for the TEST_TYPE by default
-    # session = app.registry[DBSESSION]
-    # connection = session.connection()
-    # Base.metadata.create_all(bind=connection)
-    # transaction_management.commit()
     create_mapping.run(app, collections=[TEST_TYPE], skip_indexing=True)
     app.registry[INDEXER_QUEUE].clear_queue()
 
@@ -131,13 +126,7 @@ def setup_and_teardown(app):
     # Ref: https://stackoverflow.com/questions/44193823/get-existing-table-using-sqlalchemy-metadata/44205552
     meta = MetaData(bind=session.connection())
     meta.reflect()
-    # meta.drop_all()  should work but doesn't
-    # below no longer works due to foreign key constraint
-    # for table in reversed(meta.sorted_tables):
-    #     print('Clear table %s' % table)
-    #     print('Count before -->', str(connection.scalar("SELECT COUNT(*) FROM %s" % table)))
-    #     connection.execute(table.delete())
-    #     print('Count after -->', str(connection.scalar("SELECT COUNT(*) FROM %s" % table)))
+    # sqlalchemy 1.4 - use TRUNCATE instead of DELETE
     connection.execute('TRUNCATE {} RESTART IDENTITY;'.format(
         ','.join(table.name
                  for table in reversed(Base.metadata.sorted_tables))))
