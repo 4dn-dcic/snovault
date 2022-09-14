@@ -691,7 +691,7 @@ class S3BlobStorage(object):
             Body=data,
             ContentType=content_type
         )
-        if self.kms_key_id is not None:
+        if self.kms_key_id:
             put_kwargs.update({
                 'ServerSideEncryption': 'aws:kms',
                 'SSEKMSKeyId': self.kms_key_id

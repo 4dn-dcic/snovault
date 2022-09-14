@@ -1,3 +1,4 @@
+import mock
 import pytest
 import re
 import transaction as transaction_management
@@ -27,6 +28,7 @@ pytestmark = pytest.mark.storage
 
 
 POSTGRES_MAJOR_VERSION_EXPECTED = 11
+
 
 def test_postgres_version(session):
 
@@ -232,8 +234,11 @@ def test_get_sids_by_uuids(session, storage):
     assert set(sids) == {str(resource.rid)}
 
 
-@pytest.mark.parametrize('s3_encrypt_key_id', [None, str(uuid.uuid4())])
-def test_S3BlobStorage(s3_encrypt_key_id):
+@pytest.mark.parametrize(
+    's3_encrypt_key_id,kms_args_expected',
+    [(None, False), ("", False), (str(uuid.uuid4()), True)],
+)
+def test_S3BlobStorage(s3_encrypt_key_id, kms_args_expected):
     # NOTE: I have separated the call to _test_S3BlobStorage into a separate function so I can wrap it with
     #       @mock_s3 after establishing this context manager to suppress a warning. (It could have been an
     #       internal function, but it shows up better in the patch diffs if I do it this way, and will be
@@ -247,10 +252,11 @@ def test_S3BlobStorage(s3_encrypt_key_id):
         #   DeprecationWarning: stream argument is deprecated. Use stream parameter in request directly
         # HOPEFULLY that's the only deprecation warning that would come from this test, which is why it
         # would be good to remove these warnings when we are able. -kmp 5-Feb-2022
-        _test_S3BlobStorage(s3_encrypt_key_id)
+        _test_S3BlobStorage(s3_encrypt_key_id, kms_args_expected)
+
 
 @mock_s3
-def _test_S3BlobStorage(s3_encrypt_key_id):
+def _test_S3BlobStorage(s3_encrypt_key_id, kms_args_expected):
 
     blob_bucket = 'encoded-4dn-blobs'  # note that this bucket exists but is mocked out here
     conn = boto3.resource('s3', region_name='us-east-1')
@@ -260,9 +266,20 @@ def _test_S3BlobStorage(s3_encrypt_key_id):
     assert storage.bucket == blob_bucket
 
     download_meta = {'download': 'test.txt'}
-    storage.store_blob('data', download_meta)
-    assert download_meta['bucket'] == blob_bucket
-    assert 'key' in download_meta
+    with mock.patch.object(
+        storage.s3, "put_object", side_effect=storage.s3.put_object
+    ) as mocked_s3_put_object:  # To obtain calls while retaining function
+        storage.store_blob('data', download_meta)
+        assert download_meta['bucket'] == blob_bucket
+        assert 'key' in download_meta
+        mocked_s3_put_object.assert_called_once()
+        call_kwargs = mocked_s3_put_object.call_args.kwargs
+        if kms_args_expected:
+            assert call_kwargs.get("ServerSideEncryption") == "aws:kms"
+            assert call_kwargs.get("SSEKMSKeyId") == s3_encrypt_key_id
+        else:
+            assert "ServerSideEncryption" not in call_kwargs
+            assert "SSEKMSKeyId" not in call_kwargs
 
     data = storage.get_blob(download_meta)
     assert data == 'data'
