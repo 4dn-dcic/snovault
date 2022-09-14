@@ -592,6 +592,7 @@ class UUID(types.TypeDecorator):
     CHAR(32), storing as stringified hex values.
 
     """
+    cache_ok = True  # allow caching of uuids (avoid repeated string building)
     impl = types.CHAR
 
     def load_dialect_impl(self, dialect):
