@@ -209,7 +209,9 @@ def main(global_config, **local_config):
     if docsdir is not None:
         docsdir = [path.strip() for path in docsdir.strip().split('\n')]
     if workbook_filename:
+        raise NotImplementedError("The load_workbook option is not implemented.")
         # TODO: load_workbook is undefined. where is it supposed to come from? -kmp 7-Aug-2022
-        load_workbook(app, workbook_filename, docsdir, test=load_test_only)
+        # load_workbook(app, workbook_filename, docsdir, test=load_test_only)
 
+    # TODO: Maybe we should keep better track of what settings are used and not, and warn about unused options?
     return app

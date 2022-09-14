@@ -338,6 +338,8 @@ def validate(schema, data, current=None, validate_current=False):
     for error in errors:
         # Possibly ignore validation if it results in no change to data
         if current is not None and isinstance(error, IgnoreUnchanged):
+            # TODO: Should this next assignment be outside the 'for' and should this in loop be testing current_value?
+            #       -kmp 13-Sep-2022
             current_value = current
             try:
                 for key in error.path:
@@ -350,8 +352,7 @@ def validate(schema, data, current=None, validate_current=False):
                     for key in error.path:
                         validated_value = validated_value[key]
                 except Exception:
-                    # TODO: Should this be validated_value, not validate_value? Looks like a typo. -kmp 7-Aug-2022
-                    validate_value = None  # not found
+                    validated_value = None  # not found
                 # TODO: Should this test be indented left by 4 spaces so that the other arms of the 'if' affect it?
                 #       Right now those other arms set seemingly-unused variables. -kmp 7-Aug-2022
                 if validated_value == current_value:

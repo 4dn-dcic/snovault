@@ -25,15 +25,17 @@ def includeme(config):
     config.scan(__name__)
 
 
-@view_config(context=ICachedItem, request_method='GET',
-             name='embedded')
-@debug_log
-def cached_view_embedded(context, request):  # This name duplicates the next definition.
-    source = context.model.source
-    allowed = set(source['principals_allowed']['view'])
-    if allowed.isdisjoint(request.effective_principals):
-        raise HTTPForbidden()
-    return filter_embedded(source['embedded'], request.effective_principals)
+# As discussed in code review, we THINK this was unused (is redefined by the subsequent definition of same name).
+#
+# @view_config(context=ICachedItem, request_method='GET',
+#              name='embedded')
+# @debug_log
+# def cached_view_embedded(context, request):  # This name duplicates the next definition.
+#     source = context.model.source
+#     allowed = set(source['principals_allowed']['view'])
+#     if allowed.isdisjoint(request.effective_principals):
+#         raise HTTPForbidden()
+#     return filter_embedded(source['embedded'], request.effective_principals)
 
 
 @view_config(context=ICachedItem, permission='view', request_method='GET',

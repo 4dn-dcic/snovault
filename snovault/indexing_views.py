@@ -252,10 +252,10 @@ def indexing_info(context, request):
         new_rev_link_uuids = get_rev_linked_items(request, uuid)
         # invalidated: items linking to this in es + newly rev linked items
         response['uuids_invalidated'] = list(es_assc_uuids | new_rev_link_uuids)
-        description = f'Using live results for embedded view of {uuid}. Query with run=False to skip this.'
+        response['description'] = f'Using live results for embedded view of {uuid}. Query with run=False to skip this.'
     else:
-        description = 'Query with run=True to calculate live information on invalidation and embedding time.'
-    response['description'] = description
+        response['description'] = (f'Query with run=True to calculate live information on invalidation'
+                                   f' and embedding time.')
     response['display_title'] = 'Indexing Info for %s' % uuid
     response['status'] = 'success'
     return response
