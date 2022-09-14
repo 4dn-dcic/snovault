@@ -16,7 +16,6 @@ import psycopg2
 import signal
 import sqlalchemy.exc
 import structlog
-# import sys
 import threading
 import time
 import webtest
@@ -24,6 +23,7 @@ import webtest
 from dcicutils.log_utils import set_logging
 from dcicutils.misc_utils import ignored
 from pyramid import paster
+
 from .interfaces import ELASTIC_SEARCH, INDEXER_QUEUE
 
 

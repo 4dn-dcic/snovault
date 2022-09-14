@@ -1,32 +1,25 @@
 import itertools
 import math
 import re
-
-# import requests
 import structlog
 import uuid
 
 from collections import OrderedDict
 from copy import deepcopy
 from dcicutils.misc_utils import ignored
-from elasticsearch import (
-    TransportError,
-    RequestError,
-    ConnectionTimeout
-)
-# from elasticsearch.helpers import scan
+from elasticsearch import TransportError, RequestError, ConnectionTimeout
 from elasticsearch_dsl import Search
 from pyramid.httpexceptions import HTTPBadRequest
 from pyramid.view import view_config
 from urllib.parse import urlencode
 from webob.multidict import MultiDict
-from ..resources import AbstractCollection
-from ..interfaces import TYPES, COLLECTIONS
+
 from ..elasticsearch import ELASTIC_SEARCH
-from ..elasticsearch.indexer_utils import get_namespaced_index
 from ..elasticsearch.create_mapping import determine_if_is_date_field
+from ..elasticsearch.indexer_utils import get_namespaced_index
 from ..embed import make_subrequest
-# from ..resource_views import collection_view_listing_db
+from ..interfaces import TYPES, COLLECTIONS
+from ..resources import AbstractCollection
 from ..typeinfo import AbstractTypeInfo
 from ..util import find_collection_subtypes, crawl_schema
 

@@ -1,7 +1,6 @@
-# import pytest
+from dcicutils.qa_utils import notice_pytest_fixtures
 from urllib3.util import parse_url
 
-from dcicutils.qa_utils import notice_pytest_fixtures
 from .postgresql_fixture import (
     SNOVAULT_DB_TEST_DBNAME, SNOVAULT_DB_TEST_HOSTNAME, SNOVAULT_DB_TEST_PORT, SNOVAULT_DB_TEST_USERNAME,
 )

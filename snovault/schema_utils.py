@@ -128,13 +128,6 @@ def mixinSchemas(schema, resolver, key_name='properties'):
 
 
 def linkTo(validator, linkTo, instance, schema):
-
-    # Hopefully not needed now that I'm importing from ".resources" instead of "." -kmp 9-Jun-2020
-    #
-    # # TODO: Eliminate this circularity issue. -kmp 10-Feb-2020
-    # # avoid circular import
-    # from . import Item, COLLECTIONS
-
     if not validator.is_type(instance, "string"):
         return
 
@@ -147,16 +140,19 @@ def linkTo(validator, linkTo, instance, schema):
         base = request.root
     else:
         raise Exception("Bad schema")  # raise some sort of schema error
+
     try:
         item = find_resource(base, instance.replace(':', '%3A'))
     except KeyError:
         error = "%r not found" % instance
         yield ValidationError(error)
         return
+
     if not isinstance(item, Item):
         error = "%r is not a linkable resource" % instance
         yield ValidationError(error)
         return
+
     if linkTo and not set([item.type_info.name] + item.base_types).intersection(set(linkTo)):
         reprs = (repr(it) for it in linkTo)
         error = "%r is not of type %s" % (instance, ", ".join(reprs))
@@ -167,6 +163,7 @@ def linkTo(validator, linkTo, instance, schema):
     if linkEnum is not None:
         if not validator.is_type(linkEnum, "array"):
             raise Exception("Bad schema")
+
         if not any(UUID(enum_uuid) == item.uuid for enum_uuid in linkEnum):
             reprs = ', '.join(repr(it) for it in linkTo)
             error = "%r is not one of %s" % (instance, reprs)
@@ -179,6 +176,7 @@ def linkTo(validator, linkTo, instance, schema):
             if principal.startswith('userid.'):
                 userid = principal[len('userid.'):]
                 break
+
         if userid is not None:
             user = request.root[userid]
             submits_for = user.upgrade_properties().get('submits_for')

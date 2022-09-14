@@ -1,39 +1,25 @@
 import atexit
-# import logging
+import signal
 import structlog
 import time
-# import transaction
-import signal
 import zope.sqlalchemy
 
 from contextlib import contextmanager
+from dcicutils.log_utils import set_logging
 from dcicutils.misc_utils import ignored
 from functools import partial
-from multiprocessing import (
-    get_context,
-    cpu_count,
-    # TimeoutError,
-)
+from multiprocessing import get_context, cpu_count
 from multiprocessing.pool import Pool
 from pyramid.request import apply_request_extensions
-from pyramid.threadlocal import (
-    get_current_request,
-    manager
-)
+from pyramid.threadlocal import get_current_request, manager
 from sqlalchemy import orm
 
-from ..interfaces import DBSESSION
-from dcicutils.log_utils import set_logging
 from ..app import configure_engine
-from .indexer import (
-    INDEXER,
-    Indexer,
-)
-from .interfaces import (
-    APP_FACTORY,
-    # INDEXER_QUEUE,
-)
+from ..interfaces import DBSESSION
 from ..storage import register_storage, RDBStorage
+
+from .indexer import INDEXER, Indexer
+from .interfaces import APP_FACTORY
 
 
 log = structlog.getLogger(__name__)

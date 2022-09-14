@@ -3,16 +3,12 @@ import mock
 
 from contextlib import contextmanager
 from dcicutils.misc_utils import ignored
-from ..elasticsearch.create_mapping import (
-    merge_schemas,
-    type_mapping,
-    update_mapping_by_embed,
-    get_items_to_upgrade,
-)
-# from ..elasticsearch.interfaces import ELASTIC_SEARCH
+
+from ..elasticsearch.create_mapping import merge_schemas, type_mapping, update_mapping_by_embed, get_items_to_upgrade
 from ..interfaces import TYPES
 from ..settings import Settings
 from ..util import add_default_embeds
+
 from .test_views import PARAMETERIZED_NAMES
 
 

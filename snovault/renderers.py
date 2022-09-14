@@ -1,21 +1,16 @@
 import logging
 
-
 from dcicutils.misc_utils import ignorable, ignored
-# from pkg_resources import resource_filename
 from pyramid.events import BeforeRender, subscriber
 from pyramid.httpexceptions import (
-    HTTPMovedPermanently,
-    HTTPPreconditionFailed,
-    HTTPUnauthorized,
-    HTTPUnsupportedMediaType,
+    HTTPMovedPermanently, HTTPPreconditionFailed, HTTPUnauthorized, HTTPUnsupportedMediaType,
 )
 from pyramid.security import forget
 from pyramid.settings import asbool
 from pyramid.threadlocal import manager
 from pyramid.traversal import split_path_info, _join_path_tuple
-# from subprocess_middleware.tween import SubprocessTween
 from webob.cookies import Cookie
+
 from .validation import CSRFTokenError
 
 

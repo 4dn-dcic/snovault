@@ -1,20 +1,12 @@
 from __future__ import unicode_literals
 
-# import sys
-
-# from contextlib import contextmanager
-# from timeit import default_timer as timer
-
+from contextlib import contextmanager
 from dcicutils.misc_utils import ignored
-# from pyramid.settings import asbool
 from pyramid.traversal import resource_path
 from pyramid.view import view_config
 from pyramid.settings import asbool
 from timeit import default_timer as timer
-from contextlib import contextmanager
 
-# from .resources import Item
-# from .interfaces import STORAGE
 from .elasticsearch.indexer_utils import find_uuids_for_indexing
 from .embed import make_subrequest
 from .interfaces import STORAGE
@@ -55,9 +47,14 @@ def join_linked_uuids_sids(request, uuid_type_pairs):
     Returns:
         A list of dicts containing uuid, up-to-date db sid and item type
     """
-    return [{'uuid': uuid,
-             'sid': request._sid_cache[uuid],
-             'item_type': item_type} for uuid, item_type in uuid_type_pairs]
+    return [
+        {
+            'uuid': uuid,
+            'sid': request._sid_cache[uuid],
+            'item_type': item_type,
+        }
+        for uuid, item_type in uuid_type_pairs
+    ]
 
 
 def get_rev_linked_items(request, uuid):

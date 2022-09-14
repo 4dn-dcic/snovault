@@ -10,7 +10,6 @@ from contextlib import contextmanager
 from dcicutils.misc_utils import ignored
 from dcicutils.qa_utils import notice_pytest_fixtures
 from transaction.interfaces import ISynchronizer
-# from urllib.parse import quote
 from zope.interface import implementer
 
 from ..app import configure_engine

@@ -1,14 +1,14 @@
 import psutil
-import time
 import pyramid.tweens
+import time
 
 from dcicutils.misc_utils import ignored
 from sqlalchemy import event
 from sqlalchemy.engine import Engine
 from structlog import get_logger
 from urllib.parse import urlencode
+
 from .util import get_root_request
-# from uuid import uuid4
 
 
 def includeme(config):

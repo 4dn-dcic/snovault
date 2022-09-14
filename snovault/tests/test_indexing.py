@@ -1907,6 +1907,8 @@ def test_queue_manager_purge_queue_wait():
                     registry = MockRegistry()
                     manager = QueueManager(registry)
 
+                    assert mock_initialize.call_count == 1  # just to be sure, make sure this got called
+
                     # Make sure things are set up for our test
                     assert isinstance(manager.client, MockSqsClient)
 
