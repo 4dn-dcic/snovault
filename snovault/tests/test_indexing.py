@@ -540,8 +540,7 @@ def test_indexing_queue_records(app, testapp, indexer_testapp):
     doc_count = es.count(index=namespaced_index, doc_type=TEST_TYPE).get('count')
     assert doc_count == 0
     # post a document but do not yet index
-    res = testapp.post_json(TEST_COLL, {'required': ''})
-    ignored(res)   # TODO: should we check it?
+    testapp.post_json(TEST_COLL, {'required': ''})
     doc_count = es.count(index=namespaced_index, doc_type=TEST_TYPE).get('count')
     assert doc_count == 0
     # indexing record should not yet exist (expect error)
@@ -579,8 +578,7 @@ def test_sync_and_queue_indexing(app, testapp, indexer_testapp):
     # clear queue before starting this one
     indexer_queue.clear_queue()
     # queued on post - total of one item queued
-    res = testapp.post_json(TEST_COLL, {'required': ''})
-    ignored(res)   # TODO: should we check it?
+    testapp.post_json(TEST_COLL, {'required': ''})
     # synchronously index
     create_mapping.run(app, collections=[TEST_TYPE], sync_index=True)
     # time.sleep(6)
@@ -595,8 +593,7 @@ def test_sync_and_queue_indexing(app, testapp, indexer_testapp):
     assert doc_count == 1
     # post second item to database but do not index (don't load into es)
     # queued on post - total of two items queued
-    res = testapp.post_json(TEST_COLL, {'required': ''})
-    ignored(res)  # TODO: Should this be tested?
+    testapp.post_json(TEST_COLL, {'required': ''})
     # time.sleep(2)
     doc_count = es.count(index=namespaced_index, doc_type=TEST_TYPE).get('count')
     # doc_count has not yet updated
@@ -642,8 +639,7 @@ def test_queue_indexing_with_linked(app, testapp, indexer_testapp, dummy_request
         'status': 'current',
     }
     target_res = testapp.post_json('/testing-link-targets-sno/', target, status=201)
-    res = indexer_testapp.post_json('/index', {'record': True})
-    ignored(res)   # TODO: should we check it?
+    indexer_testapp.post_json('/index', {'record': True})
     time.sleep(2)
     # wait for the first item to index
     namespaced_link_target = indexer_utils.get_namespaced_index(app, 'testing_link_target_sno')
@@ -745,15 +741,13 @@ def test_queue_indexing_with_linked(app, testapp, indexer_testapp, dummy_request
 
     # lastly, test purge_uuid and delete functionality
     with pytest.raises(webtest.AppError) as excinfo:
-        del_res0 = testapp.delete_json('/' + source['uuid'] + '/?purge=True')
-        ignored(del_res0)   # TODO: should we check it?
+        testapp.delete_json('/' + source['uuid'] + '/?purge=True')
     assert 'Item status must equal deleted before purging' in str(excinfo.value)
     del_res1 = testapp.delete_json('/' + source['uuid'])
     assert del_res1.json['status'] == 'success'
     # this item will still have items linking to it indexing occurs
     with pytest.raises(webtest.AppError) as excinfo:
-        del_res2 = testapp.delete_json('/' + source['uuid'] + '/?purge=True')
-        ignored(del_res2)   # TODO: should we check it?
+        testapp.delete_json('/' + source['uuid'] + '/?purge=True')
     assert 'Cannot purge item as other items still link to it' in str(excinfo.value)
     # the source should fail due to outdated sids
     # must manually update _sid_cache on dummy_request for source
@@ -766,8 +760,7 @@ def test_queue_indexing_with_linked(app, testapp, indexer_testapp, dummy_request
     target_ctxt2 = traverse(dummy_request.root, target_res.json['@graph'][0]['@id'])['context']
     valid3 = util.validate_es_content(target_ctxt2, dummy_request, tar_es_res_obj, 'object')
     assert valid3 is False
-    res = indexer_testapp.post_json('/index', {'record': True})
-    ignored(res)   # TODO: should we check it?
+    indexer_testapp.post_json('/index', {'record': True})
     del_res3 = testapp.delete_json('/' + source['uuid'] + '/?purge=True')
     assert del_res3.json['status'] == 'success'
     assert del_res3.json['notification'] == 'Permanently deleted ' + source['uuid']
@@ -805,8 +798,7 @@ def test_indexing_invalid_sid(app, testapp, indexer_testapp):
     assert es_item['_source']['max_sid'] == initial_version
 
     # now increment the version and check it
-    res = testapp.patch_json(TEST_COLL + test_uuid, {'required': 'meh'})
-    ignored(res)  # TODO: Should this be tested?
+    testapp.patch_json(TEST_COLL + test_uuid, {'required': 'meh'})
     res = indexer_testapp.post_json('/index', {'record': True})
     assert res.json['indexing_count'] == 1
     time.sleep(4)
@@ -955,8 +947,7 @@ def test_index_settings(app, testapp, indexer_testapp):
     es_settings = index_settings()
     max_result_window = es_settings['index']['max_result_window']
     # preform some initial indexing to build meta
-    res = testapp.post_json(TEST_COLL, {'required': ''})
-    ignored(res)   # TODO: should we check it?
+    testapp.post_json(TEST_COLL, {'required': ''})
     res = indexer_testapp.post_json('/index', {'record': True})
     # need to make sure an xmin was generated for the following to work
     assert 'indexing_finished' in res.json
@@ -1036,8 +1027,7 @@ def test_check_and_reindex_existing(app, testapp):
     # post an item but don't reindex
     # this will cause the testing-ppp index to queue reindexing when we call
     # check_and_reindex_existing
-    res = testapp.post_json(TEST_COLL, {'required': ''})
-    ignored(res)  # TODO: Should this be used?
+    testapp.post_json(TEST_COLL, {'required': ''})
     time.sleep(2)
     namespaced_index = indexer_utils.get_namespaced_index(app, TEST_TYPE)
     doc_count = es.count(index=namespaced_index, doc_type=TEST_TYPE).get('count')
@@ -1166,12 +1156,10 @@ def test_create_mapping_index_diff(app, testapp, indexer_testapp):
     assert second_count == 1
 
     # patch the item to increment version
-    res = testapp.patch_json(TEST_COLL + test_uuid, {'required': 'meh'})
-    ignored(res)   # TODO: should we check it?
+    testapp.patch_json(TEST_COLL + test_uuid, {'required': 'meh'})
     # index with index_diff to ensure the item is reindexed
     create_mapping.run(app, collections=[TEST_TYPE], index_diff=True)
-    res = indexer_testapp.post_json('/index', {'record': True})
-    ignored(res)   # TODO: should we check it?
+    indexer_testapp.post_json('/index', {'record': True})
     time.sleep(4)
     third_count = es.count(index=namespaced_index, doc_type=TEST_TYPE).get('count')
     assert third_count == initial_count
@@ -1308,10 +1296,8 @@ def test_aggregated_items(app, testapp, indexer_testapp):
     # you can do stuff like this and it will take effect
     # app.registry['types']['testing_link_aggregate_sno'].aggregated_items['targets'] = (
     #    ['target.name', 'test_description'])
-    target1_res = testapp.post_json('/testing-link-targets-sno/', target1, status=201)
-    ignored(target1_res)   # we already required status=201
-    target2_res = testapp.post_json('/testing-link-targets-sno/', target2, status=201)
-    ignored(target2_res)   # we already required status=201
+    testapp.post_json('/testing-link-targets-sno/', target1, status=201)
+    testapp.post_json('/testing-link-targets-sno/', target2, status=201)
     agg_res = testapp.post_json('/testing-link-aggregates-sno/', aggregated, status=201)
     agg_res_atid = agg_res.json['@graph'][0]['@id']
     # ensure that aggregated-items view shows nothing before indexing
@@ -1756,8 +1742,7 @@ def test_assert_transactions_table_is_gone(app):
     serverfixtures to be established (used for indexing)
     """
     session = app.registry[DBSESSION]
-    connection = session.connection().connect()
-    ignored(connection)
+    session.connection().connect()
     # The reflect=True argument to MetaData was deprecated. Instead, one is supposed to call the .reflect()
     # method after creation. (This comment is transitional and can go away if things seem to work normally.)
     # -kmp 11-May-2020
