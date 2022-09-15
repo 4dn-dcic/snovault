@@ -1,5 +1,3 @@
-from webob.compat import parse_qsl_text
-
 from dcicutils.qa_utils import known_bug_expected
 
 

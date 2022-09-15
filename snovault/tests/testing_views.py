@@ -1,4 +1,6 @@
 import copy
+
+from dcicutils.misc_utils import ignorable
 from pyramid.security import (
     # ALL_PERMISSIONS,
     Allow,
@@ -218,10 +220,12 @@ class Item(BaseItem):
             # TODO: This will fail. There is no function _award_viewing_group anywhere in snovault.
             #       Maybe we should create a hook that Fourfront but not CGAP can set that knows about awards.
             #       Probably 'lab' above has the same issues. -kmp 4-Jul-2020
-            viewing_group = _award_viewing_group(properties['award'], find_root(self))
-            if viewing_group is not None:
-                viewing_group_members = 'viewing_group.%s' % viewing_group
-                roles[viewing_group_members] = 'role.viewing_group_member'
+            ignorable(find_root)  # this would get used in commented-out code below
+            raise NotImplementedError('_award_viewing_group is not implemented in snovault.')
+            # viewing_group = _award_viewing_group(properties['award'], find_root(self))
+            # if viewing_group is not None:
+            #     viewing_group_members = 'viewing_group.%s' % viewing_group
+            #     roles[viewing_group_members] = 'role.viewing_group_member'
         return roles
 
     def unique_keys(self, properties):
@@ -255,9 +259,7 @@ class Item(BaseItem):
                 return display_title
         # if none of the existing terms are available, use @type + date_created
         try:
-            # TODO: PyCharm thinks self.__class__.__name__ will return 'property' not 'string'.
-            #       That's probably a bug in PyCharm I should report. -kmp 4-Jul-2020
-            type_date = self.__class__.__name__ + " from " + self.properties.get("date_created", None)[:10]
+            type_date = f"{self.__class__.__name__} from {self.properties.get('date_created', None)[:10]}"
             return type_date
         # last resort, use uuid
         except Exception:
