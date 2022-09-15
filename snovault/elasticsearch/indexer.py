@@ -276,12 +276,9 @@ class Indexer(object):
                 msg_uuid = dictionary_lookup(msg_body, 'uuid')
                 msg_sid = msg_body['sid']
                 msg_curr_time = msg_body['timestamp']
-                msg_detail = msg_body.get('detail')
-
-                # TODO: Should msg_detail be used? Or why are we fetching it?
-                #       Added logging here to get more data on what the msg_detail looks like. -kmp 14-Sep-2022
-                log.info("Unused Variable", msg_detail=msg_detail)
-                ignored(msg_detail)
+                # This variable was unused, and Will thinks it's never passed.
+                # Just commented out during transition, but can be deleted soon. -kmp 15-Sep-2022
+                # msg_detail = msg_body.get('detail')
 
                 msg_telemetry = msg_body.get('telemetry_id')
                 msg_diff = msg_body.get('diff', None)
