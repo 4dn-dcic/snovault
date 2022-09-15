@@ -3,17 +3,17 @@ import datetime
 import json
 import time
 import os
-from timeit import default_timer as timer
-
 import structlog
+
+from dcicutils.misc_utils import ignorable, ignored
 from elasticsearch.exceptions import (
     ConflictError,
     ConnectionError,
     TransportError,
 )
 from pyramid.view import view_config
+from timeit import default_timer as timer
 from urllib3.exceptions import ReadTimeoutError
-
 from ..interfaces import (
     DBSESSION,
     STORAGE
@@ -72,6 +72,7 @@ def check_sid(sid, max_sid):
 @view_config(route_name='index', request_method='POST', permission="index")
 @debug_log
 def index(context, request):
+    ignored(context)
     # Setting request.datastore here only works because routed views are not traversed.
     request.datastore = 'database'
     record = request.json.get('record', False)  # if True, make a record in es
@@ -275,7 +276,10 @@ class Indexer(object):
                 msg_uuid = dictionary_lookup(msg_body, 'uuid')
                 msg_sid = msg_body['sid']
                 msg_curr_time = msg_body['timestamp']
-                msg_detail = msg_body.get('detail')
+                # This variable was unused, and Will thinks it's never passed.
+                # Just commented out during transition, but can be deleted soon. -kmp 15-Sep-2022
+                # msg_detail = msg_body.get('detail')
+
                 msg_telemetry = msg_body.get('telemetry_id')
                 msg_diff = msg_body.get('diff', None)
 
@@ -418,6 +422,7 @@ class Indexer(object):
             log.bind(collection=result.get('item_type'))
             # log.info("Time for index-data", duration=duration, cat="indexing view")
         except SidException as e:
+            ignored(e)
             duration = timer() - start
             log.warning('Invalid max sid. Resending...', duration=duration, cat=cat)
             # causes the item to be deferred by restarting worker
@@ -449,7 +454,8 @@ class Indexer(object):
         if add_to_secondary is not None:
             add_to_secondary.update(result['rev_linked_to_me'])
 
-        last_exc = None
+        last_exc = None  # We intend to set it to something else later, but this is just in case we goof
+        ignorable(last_exc)
         for backoff in [0, 1, 2]:
             time.sleep(backoff)
             try:

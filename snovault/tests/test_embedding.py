@@ -1,6 +1,7 @@
 import pytest
 
-from dcicutils.qa_utils import ignored, notice_pytest_fixtures, Retry
+from dcicutils.misc_utils import ignored
+from dcicutils.qa_utils import notice_pytest_fixtures, Retry
 from re import findall
 from ..interfaces import TYPES
 from ..util import add_default_embeds, crawl_schemas_by_embeds

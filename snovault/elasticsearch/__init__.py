@@ -1,5 +1,6 @@
 import json
 
+from dcicutils.misc_utils import exported
 from dcicutils.es_utils import create_es_client
 from elasticsearch.connection import RequestsHttpConnection
 from elasticsearch.serializer import SerializationError
@@ -7,6 +8,12 @@ from pyramid.settings import asbool
 from ..json_renderer import json_renderer
 from ..util import get_root_request
 from .interfaces import APP_FACTORY, ELASTIC_SEARCH
+
+
+exported(
+    APP_FACTORY,  # e.g., re-exported by snovault/__init__.py
+    ELASTIC_SEARCH,  # e.g., imported by snovault/tests/search.py
+)
 
 
 def includeme(config):

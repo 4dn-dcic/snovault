@@ -1,27 +1,29 @@
 import base64
 import os
 
+from dcicutils.misc_utils import ignored
 from operator import itemgetter
 from passlib.context import CryptContext
 from pyramid.authentication import (
     BasicAuthAuthenticationPolicy as _BasicAuthAuthenticationPolicy,
     CallbackAuthenticationPolicy
 )
-from pyramid.httpexceptions import HTTPForbidden
+from pyramid.httpexceptions import HTTPForbidden, HTTPFound
 from pyramid.path import caller_package, DottedNameResolver
 from pyramid.security import (
-    Authenticated,
-    Everyone,
+    # Authenticated,
+    # Everyone,
     forget,
     NO_PERMISSION_REQUIRED,
     remember,
-    principals_allowed_by_permission,
+    # principals_allowed_by_permission,
 )
-from pyramid.settings import asbool, aslist
+from pyramid.settings import asbool  # , aslist
 from pyramid.view import view_config
 from ..interfaces import ROOT, COLLECTIONS
 from ..storage import User
 from ..calculated import calculate_properties
+from ..validation import ValidationFailure
 from ..validators import no_validate_item_content_post
 
 
@@ -87,6 +89,7 @@ class NamespacedAuthenticationPolicy(object):
         return super(NamespacedAuthenticationPolicy, klass).__new__(klass)
 
     def __init__(self, namespace, base, *args, **kw):
+        ignored(namespace, base)
         super(NamespacedAuthenticationPolicy, self).__init__(*args, **kw)
 
     def unauthenticated_userid(self, request):
@@ -125,10 +128,10 @@ class WebUserAuthenticationPolicy(CallbackAuthenticationPolicy):
     method = 'POST'
 
     def unauthenticated_userid(self, request):
-        '''
+        """
         So basically this is used to do a login, instead of the actual
         login view... not sure why, but yeah..
-        '''
+        """
         # if we aren't posting to login just return None
         if request.method != self.method or request.path != self.login_path:
             return None
@@ -147,10 +150,14 @@ class WebUserAuthenticationPolicy(CallbackAuthenticationPolicy):
         request._webuser_authenticated = login
         return login
 
-    def remember(self, request, principal, **kw):
+    @classmethod
+    def remember(cls, request, principal, **kw):
+        ignored(request, principal, kw)
         return []
 
-    def forget(self, request):
+    @classmethod
+    def forget(cls, request):
+        ignored(request)
         return []
 
 
@@ -189,6 +196,7 @@ def logout(request):
         raise HTTPFound(location=request.resource_path(request.root))
     return {}
 
+
 @view_config(route_name='session-properties', request_method='GET',
              permission=NO_PERMISSION_REQUIRED)
 def session_properties(request):
@@ -214,12 +222,14 @@ def session_properties(request):
 
 
 def webuser_check(username, password, request):
-    #webusers have email address for username, thus, make sure we have an email address
-    if not '@' in username:
+    ignored(request)
+    # webusers have email address for username, thus, make sure we have an email address
+    if '@' not in username:
         return None
     if not User.check_password(username, password):
         return None
     return []
+
 
 def basic_auth_check(username, password, request):
     # We may get called before the context is found and the root set
@@ -238,11 +248,12 @@ def basic_auth_check(username, password, request):
     if not valid:
         return None
 
-    #valid, new_hash = crypt_context.verify_and_update(password, hash)
-    #if new_hash:
-    #    replace_user_hash(user, new_hash)
+    # valid, new_hash = crypt_context.verify_and_update(password, hash)
+    # if new_hash:
+    #     replace_user_hash(user, new_hash)
 
     return []
+
 
 @view_config(route_name='impersonate-user', request_method='POST',
              validators=[no_validate_item_content_post],
@@ -269,6 +280,7 @@ def impersonate_user(request):
 
     return user_properties
 
+
 def generate_user():
     """ Generate a random user name with 64 bits of entropy
         used to generate access_key
@@ -280,6 +292,7 @@ def generate_user():
     user = base64.b32encode(random_bytes).decode('ascii').rstrip('=').upper()
     user = user.replace("@", "")
     return user
+
 
 def generate_password():
     """ Generate a password with 80 bits of entropy

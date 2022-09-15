@@ -15,6 +15,7 @@ import structlog
 import time
 
 from collections import OrderedDict
+from dcicutils.misc_utils import ignored
 from elasticsearch.exceptions import (
     TransportError,
     RequestError,
@@ -32,7 +33,7 @@ from dcicutils.misc_utils import as_seconds
 from ..commands.es_index_data import run as run_index_data
 from ..schema_utils import combine_schemas
 from ..util import (
-    add_default_embeds, find_collection_subtypes, IndexSettings,
+    add_default_embeds, IndexSettings,
     NUM_SHARDS, NUM_REPLICAS, SEARCH_MAX, KW_IGNORE_ABOVE, MIN_NGRAM,
     MAX_NGRAM, NESTED_ENABLED, REFRESH_INTERVAL
 )
@@ -53,15 +54,18 @@ log = structlog.getLogger(__name__)
 
 def determine_if_is_date_field(field, schema):
     """
-    Helper funciton to determine whether a given `schema` for a field is a date.
-    TODO: remove unused `field` parameter. Requires search.py change
+    Helper function to determine whether a given `schema` for a field is a date.
+
+    :param field: unused
+    :param schema: the schema element description whose format is to be checked
     """
+    ignored(field)  # TODO: remove unused `field` parameter. Requires search.py change
     is_date_field = False
     if schema.get('format') is not None:
         if schema['format'] == 'date' or schema['format'] == 'date-time':
             is_date_field = True
     elif schema.get('anyOf') is not None and len(schema['anyOf']) > 1:
-        is_date_field = True # Will revert to false unless all anyOfs are format date/datetime.
+        is_date_field = True  # Will revert to False unless all anyOfs are format date/datetime.
         for schema_option in schema['anyOf']:
             if schema_option.get('format') not in ['date', 'date-time']:
                 is_date_field = False
@@ -98,6 +102,7 @@ def schema_mapping(field, schema, top_level=False, from_array=False):
     normalize to lowercase the keyword value.
     TODO: rename 'lower_case_sort' to 'lowercase' and adjust search code
     """
+    ignored(top_level)  # TODO: maybe wants to be used below, but isn't yet?
     type_ = schema['type']
 
     # Elasticsearch handles multiple values for a field
@@ -283,13 +288,13 @@ def index_settings(type_specific_settings=None):
                     # create tokens between size MIN_NGRAM and MAX_NGRAM
                     'ngram_filter': {
                         'type': 'edgeNGram',
-                         'min_gram': MIN_NGRAM,
-                         'max_gram': MAX_NGRAM
+                        'min_gram': MIN_NGRAM,
+                        'max_gram': MAX_NGRAM
                     },
                     # truncate tokens to size MAX_NGRAM
                     'truncate_to_ngram': {
-                         'type': 'truncate',
-                         'length': MAX_NGRAM
+                        'type': 'truncate',
+                        'length': MAX_NGRAM
                     }
                 },
                 'analyzer': {
@@ -640,8 +645,8 @@ def aggregated_items_mapping(types, item_type):
                     }
                 else:
                     mapping_val = {'properties': {}}
-                if (split_part not in ptr or
-                    ('properties' in mapping_val and 'properties' not in ptr[split_part])):
+                if (split_part not in ptr
+                        or ('properties' in mapping_val and 'properties' not in ptr[split_part])):
                     ptr[split_part] = mapping_val
                 if 'properties' in ptr[split_part]:
                     ptr = ptr[split_part]['properties']
@@ -667,7 +672,7 @@ def type_mapping(types, item_type, embed=True):
     """
     type_info = types[item_type]
     schema = type_info.schema
-    # use top_level parameter here for schema_mapping
+    # TODO: use top_level parameter here for schema_mapping
     mapping = schema_mapping('*', schema, from_array=False)
     if not embed:
         return mapping
@@ -676,7 +681,8 @@ def type_mapping(types, item_type, embed=True):
     embeds = add_default_embeds(item_type, types, type_info.embedded_list, schema)
     embeds.sort()
     for prop in embeds:
-        single_embed = {}
+        # TODO: unused?
+        # single_embed = {}
         curr_s = schema
         curr_m = mapping
         split_embed_path = prop.split('.')
@@ -778,7 +784,7 @@ def create_mapping_by_type(in_type, registry):
 
 
 def build_index(app, es, index_name, in_type, mapping, uuids_to_index, dry_run,
-                check_first=False,index_diff=False, print_count_only=False):
+                check_first=False, index_diff=False, print_count_only=False):
     """
     Creates an es index for the given `in_type` with the given mapping and
     settings defined by item_settings(). Delete existing index first.
@@ -802,7 +808,7 @@ def build_index(app, es, index_name, in_type, mapping, uuids_to_index, dry_run,
 
     if dry_run:
         log.info('___DRY RUN___')
-        log.info('MAPPING: would use the attached mapping/settings for index %s' % (in_type),
+        log.info(f'MAPPING: would use the attached mapping/settings for index {in_type}',
                  collection=in_type, mapping=this_index_record)
         return
 
@@ -811,16 +817,16 @@ def build_index(app, es, index_name, in_type, mapping, uuids_to_index, dry_run,
 
     # if the index exists, we might not need to delete it
     # otherwise, run if we are using the check-first or index_diff args
-    if ((check_first or index_diff) and this_index_exists
-        and compare_against_existing_mapping(es, index_name, in_type, this_index_record, True)):
+    if ((check_first or index_diff)
+            and this_index_exists
+            and compare_against_existing_mapping(es, index_name, in_type, this_index_record, True)):
         check_and_reindex_existing(app, es, in_type, uuids_to_index, index_diff)
-        log.info('MAPPING: using existing index for collection %s' % (in_type), collection=in_type)
+        log.info(f'MAPPING: using existing index for collection {in_type}', collection=in_type)
         return
 
     # if index_diff and we've made it here, the mapping must be off
     if index_diff:
-        log.error('MAPPING: cannot index-diff for index %s due to differing mappings'
-                  % (in_type), collection=in_type)
+        log.error(f'MAPPING: cannot index-diff for index {in_type} due to differing mappings', collection=in_type)
         return
 
     # delete the index. Ignore 404 because new item types will not be present
@@ -849,9 +855,9 @@ def build_index(app, es, index_name, in_type, mapping, uuids_to_index, dry_run,
     res = es_safe_execute(es.indices.create, index=index_name, body=this_index_record)
     if res is not None:
         assert res.get('acknowledged') is True
-        log.info('MAPPING: new index created for %s' % (in_type), collection=in_type)
+        log.info(f'MAPPING: new index created for {in_type}', collection=in_type)
     else:
-        log.error('MAPPING: new index failed for %s' % (in_type), collection=in_type)
+        log.error(f'MAPPING: new index failed for {in_type}', collection=in_type)
 
     # check to debug create-mapping issues and ensure correct mappings
     confirm_mapping(es, index_name, in_type, this_index_record)
@@ -884,13 +890,12 @@ def check_and_reindex_existing(app, es, in_type, uuids_to_index, index_diff=Fals
     """
     db_count, es_count, db_uuids, diff_uuids = get_db_es_counts_and_db_uuids(app, es, in_type, index_diff)
     uuids_to_upgrade = get_items_to_upgrade(app, es, in_type)
-    log.info("DB count is %s and ES count is %s for index: %s" %
-                (str(db_count), str(es_count), in_type), collection=in_type,
-                 db_count=str(db_count), cat='collection_counts', es_count=str(es_count))
+    log.info(f"DB count is {str(db_count)} and ES count is {str(es_count)} for index: {in_type}",
+             collection=in_type, db_count=str(db_count), cat='collection_counts', es_count=str(es_count))
     if print_counts:  # just display things, don't actually queue the uuids
         if index_diff and diff_uuids:
-            log.info("The following UUIDs are found in the DB but not the ES index: %s\n%s"
-                        % (in_type, diff_uuids), collection=in_type)
+            log.info(f"The following UUIDs are found in the DB but not the ES index: {in_type}\n{diff_uuids}",
+                     collection=in_type)
     elif es_count is None or es_count != db_count:
         if index_diff:
             if uuids_to_upgrade:
@@ -902,22 +907,19 @@ def check_and_reindex_existing(app, es, in_type, uuids_to_index, index_diff=Fals
                     items_queued=str(len(uuids_to_upgrade)),
                     collection=in_type,
                 )
-            log.info('MAPPING: queueing %s items found in DB but not ES or in need of'
-                        ' upgrade in the index %s for reindexing'
-                        % (str(len(diff_uuids)), in_type), items_queued=str(len(diff_uuids)), collection=in_type)
+            log.info(f'MAPPING: queueing {str(len(diff_uuids))} items found in DB'
+                     f' but not ES or in need of upgrade in the index {in_type} for reindexing',
+                     items_queued=str(len(diff_uuids)), collection=in_type)
             uuids_to_index[in_type] = diff_uuids
         else:
-            log.info('MAPPING: queueing %s items found in the existing index %s for reindexing'
-                        % (str(len(db_uuids)), in_type), items_queued=str(len(db_uuids)), collection=in_type)
+            log.info(f'MAPPING: queueing {str(len(db_uuids))} items found'
+                     f' in the existing index {in_type} for reindexing',
+                     items_queued=str(len(db_uuids)), collection=in_type)
             uuids_to_index[in_type] = db_uuids
     elif uuids_to_upgrade:
-        log.info(
-            "MAPPING: queueing %s items found in existing index %s requiring an"
-            " upgrade for reindexing"
-            % (str(len(uuids_to_upgrade)), in_type),
-            items_queued=str(len(uuids_to_upgrade)),
-            collection=in_type,
-        )
+        log.info(f"MAPPING: queueing {str(len(uuids_to_upgrade))} items found"
+                 f" in existing index {in_type} requiring an upgrade for reindexing",
+                 items_queued=str(len(uuids_to_upgrade)), collection=in_type)
         uuids_to_index[in_type] = uuids_to_upgrade
 
 
@@ -1020,7 +1022,7 @@ def find_and_replace_dynamic_mappings(new_mapping, found_mapping):
             continue
         found_val = found_mapping[key]
         if ((new_val.get('type') == 'object' and 'properties' not in new_val)
-            or (new_val.get('properties') == {} and 'type' not in new_val)):
+                or (new_val.get('properties') == {} and 'type' not in new_val)):
             if found_val.get('properties') is not None and 'type' not in found_val:
                 # this was an dynamically created mapping. Reset it
                 del found_val['properties']
@@ -1043,6 +1045,7 @@ def compare_against_existing_mapping(es, index_name, in_type, this_index_record,
 
     Args:
         es: current Elasticsearch client
+        index_name: ...
         in_type (str): item type of current index
         this_index_record (dict): record of current index, with mapping and settings
         live_mapping (bool): if True, compare new mapping to live one and remove
@@ -1079,15 +1082,15 @@ def confirm_mapping(es, index_name, in_type, this_index_record):
             mapping_check = True
         else:
             count = es.count(index=index_name, doc_type=in_type).get('count', 0)
-            log.info('___BAD MAPPING FOUND FOR %s. RETRYING___\nDocument count in that index is %s.'
-                        % (in_type, count), collection=in_type, count=count, cat='bad mapping')
+            log.info(f'___BAD MAPPING FOUND FOR {in_type}. RETRYING___\nDocument count in that index is {count}.',
+                     collection=in_type, count=count, cat='bad mapping')
             es_safe_execute(es.indices.delete, index=index_name)
             # do not increment tries if an error arises from creating the index
             try:
                 es_safe_execute(es.indices.create, index=index_name, body=this_index_record)
             except (TransportError, RequestError) as e:
-                log.info('___COULD NOT CREATE INDEX FOR %s AS IT ALREADY EXISTS.\nError: %s\nRETRYING___'
-                            % (in_type, str(e)), collection=in_type, cat='index already exists')
+                log.info(f'___COULD NOT CREATE INDEX FOR {in_type} AS IT ALREADY EXISTS.\nError: {e}\nRETRYING___',
+                         collection=in_type, cat='index already exists')
             else:
                 tries += 1
             time.sleep(2)
@@ -1122,8 +1125,8 @@ def flatten_and_sort_uuids(registry, uuids_to_index, item_order):
     (e.g. MyType)
 
     Args:
-        reigstry: current Pyramid Registry
-        uuids_to_index (set): keys are item_type and values are set of uuids
+        registry: current Pyramid Registry
+        uuids_to_index (dict): keys are item_type and values are set of uuids
         item_order (list): string item types / item names to order by
 
     Returns:
@@ -1206,10 +1209,10 @@ def run(app, collections=None, dry_run=False, check_first=False, skip_indexing=F
 
     # always overwrite telemetry id
     global log
-    telemetry_id='cm_run_' + datetime.datetime.now().isoformat()
+    telemetry_id = 'cm_run_' + datetime.datetime.now().isoformat()
     log = log.bind(telemetry_id=telemetry_id)
-    log.info('\n___CREATE-MAPPING___:\ncollections: %s\ncheck_first %s\n index_diff %s\n' %
-                (collections, check_first, index_diff), cat=cat)
+    log.info(f'\n___CREATE-MAPPING___:\ncollections: {collections}'
+             f'\ncheck_first {check_first}\n index_diff {index_diff}\n', cat=cat)
     log.info('\n___ES___:\n %s\n' % (str(es.cat.client)), cat=cat)
     log.info('\n___ES NODES___:\n %s\n' % (str(es.cat.nodes())), cat=cat)
     log.info('\n___ES HEALTH___:\n %s\n' % (str(es.cat.health())), cat=cat)
@@ -1265,10 +1268,10 @@ def run(app, collections=None, dry_run=False, check_first=False, skip_indexing=F
         build_index(app, es, namespaced_index, collection_name, mapping, uuids_to_index,
                     dry_run, check_first, index_diff, print_count_only)
         index_time = timer() - start
-        log.info('___FINISHED %s___\n' % (collection_name))
+        log.info(f'___FINISHED {collection_name}___\n')
         log.info('___Mapping Time: %s  Index time %s ___\n' % (mapping_time, index_time),
-                    cat='index mapping time', collection=collection_name, map_time=mapping_time,
-                    index_time=index_time)
+                 cat='index mapping time', collection=collection_name, map_time=mapping_time,
+                 index_time=index_time)
         if mapping_time > greatest_mapping_time['duration']:
             greatest_mapping_time['collection'] = collection_name
             greatest_mapping_time['duration'] = mapping_time
@@ -1282,13 +1285,12 @@ def run(app, collections=None, dry_run=False, check_first=False, skip_indexing=F
     log.info('\n___ES INDICES (POST-MAPPING)___:\n %s\n' % (str(es.cat.indices())), cat=cat)
     log.info('\n___FINISHED CREATE-MAPPING___\n', cat=cat)
 
-
     log.info('\n___GREATEST MAPPING TIME: %s\n' % greatest_mapping_time,
-                cat='max mapping time', **greatest_mapping_time)
+             cat='max mapping time', **greatest_mapping_time)
     log.info('\n___GREATEST INDEX CREATION TIME: %s\n' % greatest_index_creation_time,
-                cat='max index create time', **greatest_index_creation_time)
+             cat='max index create time', **greatest_index_creation_time)
     log.info('\n___TIME FOR ALL COLLECTIONS: %s\n' % (overall_end - overall_start),
-                cat='overall mapping time', duration=str(overall_end - overall_start))
+             cat='overall mapping time', duration=str(overall_end - overall_start))
     if skip_indexing or print_count_only:
         return timings
 
@@ -1327,7 +1329,7 @@ def run(app, collections=None, dry_run=False, check_first=False, skip_indexing=F
             # sort by-type uuids into one list and index synchronously
             to_index_list = flatten_and_sort_uuids(app.registry, uuids_to_index, item_order)
             log.info('\n___UUIDS TO INDEX (SYNC)___: %s\n' % len(to_index_list),
-                        cat='uuids to index', count=len(to_index_list))
+                     cat='uuids to index', count=len(to_index_list))
             run_indexing(app, to_index_list)
         else:
             # if non-strict and attempting to reindex a ton, it is faster
@@ -1342,7 +1344,7 @@ def run(app, collections=None, dry_run=False, check_first=False, skip_indexing=F
             # sort by-type uuids into one list and queue for indexing
             to_index_list = flatten_and_sort_uuids(app.registry, uuids_to_index, item_order)
             log.info('\n___UUIDS TO INDEX (QUEUED)___: %s\n' % len(to_index_list),
-                        cat='uuids to index', count=len(to_index_list))
+                     cat='uuids to index', count=len(to_index_list))
             indexer_queue.add_uuids(app.registry, to_index_list, strict=use_strict,
                                     target_queue='secondary', telemetry_id=telemetry_id)
     return timings
@@ -1365,7 +1367,8 @@ def main():
     parser.add_argument('--index-diff', action='store_true',
                         help="reindex any items in the db but not es store for all/given collections")
     parser.add_argument('--strict', action='store_true',
-                        help="used with check_first in combination with item-type. Only index the given types (ignore associated items). Advanced users only")
+                        help=("used with check_first in combination with item-type."
+                              " Only index the given types (ignore associated items). Advanced users only"))
     parser.add_argument('--sync-index', action='store_true',
                         help="add to trigger synchronous indexing instead of queued")
     parser.add_argument('--print-count-only', action='store_true',
@@ -1384,6 +1387,7 @@ def main():
     uuids = run(app, collections=args.item_type, dry_run=args.dry_run, check_first=args.check_first,
                 skip_indexing=args.skip_indexing, index_diff=args.index_diff, strict=args.strict,
                 sync_index=args.sync_index, print_count_only=args.print_count_only, purge_queue=args.purge_queue)
+    ignored(uuids)  # TODO: Should this be ignored?
     return
 
 

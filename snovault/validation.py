@@ -1,3 +1,6 @@
+import simplejson as json  # TODO: Reconsider whether this renaming is needed? -kmp 7-Aug-2022
+
+from dcicutils.misc_utils import ignored
 from pyramid.config.views import DefaultViewMapper
 from pyramid.httpexceptions import (
     HTTPError,
@@ -7,10 +10,8 @@ from pyramid.httpexceptions import (
     HTTPServiceUnavailable,
     HTTPUnprocessableEntity,
 )
-from past.builtins import basestring
 from pyramid.util import LAST
 from sqlalchemy.exc import InternalError
-import simplejson as json
 
 
 def includeme(config):
@@ -25,6 +26,7 @@ def includeme(config):
     config.add_view(view=refresh_session, context=CSRFTokenError)
     config.add_view(view=refresh_session, context=HTTPForbidden)
     config.add_view(view=refresh_session, context=HTTPPreconditionFailed)
+    # TODO: Is this the only use of json (simplejson). Why is it renamed?
     config.add_view(view=jsondecode_error, context=json.JSONDecodeError)
     config.add_view_predicate('validators', ValidatorsPredicate, weighs_more_than=LAST)
 
@@ -139,9 +141,9 @@ def prepare_validators(validators):
     prepared = []
     mapper = DefaultViewMapper()
     for validator in validators:
-        if isinstance(validator, basestring):
+        if isinstance(validator, str):  # formerly basestring
             # XXX should support dotted names here
-            raise NotImplemented
+            raise NotImplementedError
         validator = mapper(validator)
         prepared.append(validator)
     return tuple(prepared)
@@ -149,12 +151,14 @@ def prepare_validators(validators):
 
 class ValidatorsPredicate(object):
     def __init__(self, val, config):
+        ignored(config)  # TODO: Should it be used?
         self.validators = prepare_validators(val)
 
     def text(self):
         return 'validators = %r' % (self.validators,)
 
-    def phash(self):
+    @classmethod
+    def phash(cls):
         # Return a constant to ensure views discriminated only by validators
         # may not be registered.
         return 'validators'

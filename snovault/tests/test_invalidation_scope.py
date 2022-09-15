@@ -307,7 +307,8 @@ class TestInvalidationScopeUnit:
     @pytest.mark.parametrize('diff,embedded_list',
                              [([ITEM_C + '.name', 'Item_X.value'], ['link_one.value']),
                               ([ITEM_D + '.value', ITEM_E + '.key'], ['link_two.name', 'link_three.value']),
-                              ([ITEM_C + '.key', ITEM_D + '.key', ITEM_E + '.key'], ['link_one.value', 'link_two.name'])])
+                              ([ITEM_C + '.key', ITEM_D + '.key', ITEM_E + '.key'],
+                               ['link_one.value', 'link_two.name'])])
     def test_invalidation_scope_negative_diffs(self, testapp, test_link_source_schema, diff, embedded_list):
         """ Tests a few possible edit + embedding_list combinations that should NOT result
             in re-indexing (so the added item_type is removed from the invalidation scope).
@@ -493,7 +494,7 @@ class TestingInvalidationScopeIntegrated:
 
     @staticmethod
     def runtest(testapp, diff, invalidated, secondary, expected):
-        __test__ = False
+        __test__ = False  # noQA - Lint tools may not understand this is declaring this not to be a test.
         filter_invalidation_scope(testapp.app.registry, diff, invalidated, secondary)
         assert len(secondary) == expected
 

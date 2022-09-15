@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "dcicsnovault"
-version = "6.0.6"
+version = "6.0.7"
 description = "Storage support for 4DN Data Portals."
 authors = ["4DN-DCIC Team <support@4dnucleome.org>"]
 license = "MIT"
@@ -45,7 +45,7 @@ botocore = ">=1.27.36"  # no particular version required, but this speeds up sea
 boto3 = ">=1.24.36"  # no particular version required, but this speeds up search
 elasticsearch = "6.8.1"
 elasticsearch_dsl = "^6.4.0"
-dcicutils = "^4.0.0"
+dcicutils = "^5.1.0"
 future = ">=0.15.2,<1"
 futures = "^3.1.1"
 # Needed by Moto but not us
