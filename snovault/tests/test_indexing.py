@@ -485,11 +485,12 @@ def test_indexing_logging(app, testapp, indexer_testapp, capfd):
     for record in check_logs:
         if not record:
             continue
+        to_load = "(error computing what to load)"
         try:
-            proc_record = yaml.safe_load('{' + record.strip().split('{', 1)[1])
-        except Exception:
-            # TODO: Should something at least be logged here? Is this normal to fail?
-            #       At minimum, an explanation of why it's OK to quietly continue here would be nice.
+            to_load = '{' + record.strip().split('{', 1)[1]
+            proc_record = yaml.safe_load(to_load)
+        except Exception as e:
+            print(f"Error in yaml.safe_load of {to_load!r}: {get_error_message(e)}")
             continue
         if not isinstance(proc_record, dict):
             continue
