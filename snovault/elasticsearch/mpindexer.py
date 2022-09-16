@@ -1,41 +1,29 @@
 import atexit
-import logging
+import signal
 import structlog
 import time
-import transaction
-import signal
 import zope.sqlalchemy
 
 from contextlib import contextmanager
+from dcicutils.log_utils import set_logging
+from dcicutils.misc_utils import ignored
 from functools import partial
-from multiprocessing import (
-    get_context,
-    cpu_count,
-    TimeoutError
-)
+from multiprocessing import get_context, cpu_count
 from multiprocessing.pool import Pool
 from pyramid.request import apply_request_extensions
-from pyramid.threadlocal import (
-    get_current_request,
-    manager
-)
+from pyramid.threadlocal import get_current_request, manager
 from sqlalchemy import orm
 
-from ..interfaces import DBSESSION
-from dcicutils.log_utils import set_logging
 from ..app import configure_engine
-from .indexer import (
-    INDEXER,
-    Indexer,
-)
-from .interfaces import (
-    APP_FACTORY,
-    INDEXER_QUEUE
-)
+from ..interfaces import DBSESSION
 from ..storage import register_storage, RDBStorage
+
+from .indexer import INDEXER, Indexer
+from .interfaces import APP_FACTORY
 
 
 log = structlog.getLogger(__name__)
+
 
 def includeme(config):
     if config.registry.settings.get('indexer_worker'):
@@ -43,9 +31,10 @@ def includeme(config):
     config.registry[INDEXER] = MPIndexer(config.registry)
 
 
-### Running in subprocess
+# ===== Running in subprocess =====
 
 app = None
+
 
 def initializer(app_factory, settings):
     """
@@ -105,13 +94,14 @@ def threadlocal_manager():
 
 
 def clear_manager_and_dispose_engine(signum=None, frame=None):
+    ignored(signum, frame)
     manager.clear()
     # manually dispose of db engine for garbage collection
     if db_engine is not None:
         db_engine.dispose()
 
 
-### These helper functions are needed for multiprocessing
+# ===== These helper functions are needed for multiprocessing =====
 
 def sync_update_helper(uuid):
     """
@@ -137,7 +127,7 @@ def queue_update_helper():
         request = get_current_request()
         indexer = request.registry[INDEXER]
         local_errors, local_deferred = indexer.update_objects_queue(request, local_counter)
-        return (local_errors, local_counter, local_deferred)
+        return local_errors, local_counter, local_deferred
 
 
 def queue_error_callback(cb_args, counter, errors):
@@ -150,7 +140,7 @@ def queue_error_callback(cb_args, counter, errors):
     errors.extend(local_errors)
 
 
-### Running in main process
+# ===== Running in main process =====
 
 class MPIndexer(Indexer):
     def __init__(self, registry):

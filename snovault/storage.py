@@ -5,15 +5,15 @@ from pyramid.httpexceptions import (
 )
 from sqlalchemy import (
     Column,
-    DDL,
+    # DDL,
     ForeignKey,
     bindparam,
-    event,
+    # event,
     func,
-    null,
+    # null,
     orm,
     schema,
-    text,
+    # text,
     types,
 )
 from sqlalchemy.dialects import postgresql
@@ -206,8 +206,9 @@ class PickStorage(object):
         """
         Get write/read model by given key:value
         """
+        ignored(default)  # TODO: Is is right that this should be ignored? -kmp 7-Aug-2022
         storage = self.storage(datastore)
-        model = storage.get_by_json(key, value, item_type)
+        model = storage.get_by_json(key, value, item_type)  # TODO: Should a default not be passed here? -kmp 7-Aug-2022
         # unless forcing ES datastore, check write storage if not found in read
         # if datastore == 'database' and storage is self.read:
         # Old is above - See C4-30
@@ -369,7 +370,8 @@ class RDBStorage(object):
         ignored(item_type)
         return default
 
-    def find_uuids_linked_to_item(self, rid):
+    @classmethod
+    def find_uuids_linked_to_item(cls, rid):
         """
         This method is meant to only work with ES, so return empty list for
         DB implementation. See ElasticSearchStorage.find_uuids_linked_to_item.
@@ -631,10 +633,9 @@ class RDBBlobStorage(object):
 
         Args:
             data: raw attachment data
-            download_meta: metadata associated with 'data', not actually used
-            unless the caller wants to retain the blob_id
-            blob_id: optional arg specifying the id, will be generated if not
-            provided
+            download_meta: metadata associated with 'data',
+                not actually used unless the caller wants to retain the blob_id
+            blob_id: optional arg specifying the id, will be generated if not provided
         """
         if blob_id is None:
             blob_id = uuid.uuid4()
@@ -918,6 +919,7 @@ class Blob(Base):
 
 
 def hash_password(password):
+    ignored(password)
     raise NotImplementedError('Should not be calling this function')
 
 

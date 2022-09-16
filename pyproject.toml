@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "dcicsnovault"
-version = "7.0.0"
+version = "6.0.6.0b1"
 description = "Storage support for 4DN Data Portals."
 authors = ["4DN-DCIC Team <support@4dnucleome.org>"]
 license = "MIT"
@@ -45,7 +45,7 @@ botocore = ">=1.27.36"  # no particular version required, but this speeds up sea
 boto3 = ">=1.24.36"  # no particular version required, but this speeds up search
 elasticsearch = "7.13.4"  # versions >= 7.14.0 lock out AWS ES
 elasticsearch_dsl = "^7.4.0"
-dcicutils = "^5.0.0.1b0"
+dcicutils = "5.0.0.1b1"
 future = ">=0.15.2,<1"
 futures = "^3.1.1"
 # Needed by Moto but not us

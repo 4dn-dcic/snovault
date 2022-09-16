@@ -1,5 +1,3 @@
-import sys
-
 from pyramid.httpexceptions import HTTPForbidden
 from pyramid.view import view_config
 

@@ -1,17 +1,21 @@
 import psutil
-import time
 import pyramid.tweens
+import time
+
+from dcicutils.misc_utils import ignored, get_error_message
+from pyramid.httpexceptions import HTTPBadRequest
 from sqlalchemy import event
 from sqlalchemy.engine import Engine
+from structlog import get_logger
 from urllib.parse import urlencode
+
 from .util import get_root_request
-from uuid import uuid4
 
 
 def includeme(config):
     config.add_tween('snovault.stats.stats_tween_factory', under=pyramid.tweens.INGRESS)
 
-from structlog import get_logger
+
 log = get_logger()
 
 
@@ -20,6 +24,7 @@ def requests_timing_hook(prefix='requests'):
     time_key = prefix + '_time'
 
     def response_hook(r, *args, **kwargs):
+        ignored(args, kwargs)
         request = get_root_request()
         if request is None:
             return
@@ -36,14 +41,14 @@ def requests_timing_hook(prefix='requests'):
 
 # See http://www.sqlalchemy.org/trac/wiki/UsageRecipes/Profiling
 @event.listens_for(Engine, 'before_cursor_execute')
-def before_cursor_execute(
-        conn, cursor, statement, parameters, context, executemany):
+def before_cursor_execute(conn, cursor, statement, parameters, context, executemany):
+    ignored(conn, cursor, statement, parameters, executemany)
     context._query_start_time = int(time.time() * 1e6)
 
 
 @event.listens_for(Engine, 'after_cursor_execute')
-def after_cursor_execute(
-        conn, cursor, statement, parameters, context, executemany):
+def after_cursor_execute(conn, cursor, statement, parameters, context, executemany):
+    ignored(conn, cursor, statement, parameters, executemany)
     end = int(time.time() * 1e6)
 
     request = get_root_request()
@@ -58,23 +63,36 @@ def after_cursor_execute(
 
 # http://docs.pylonsproject.org/projects/pyramid/en/latest/narr/hooks.html#creating-a-tween-factory
 def stats_tween_factory(handler, registry):
+    ignored(registry)
     process = psutil.Process()
 
     def stats_tween(request):
-        stats = request._stats = {}
 
-        # set telemetry_id as logger context if passed in
-        log_keys = {}
-        if 'telemetry_id' in request.params:
-            log_keys['telemetry_id'] = request.params['telemetry_id']
-        if 'log_action' in request.params:
-            log_keys['log_action'] = request.params['log_action']
-        if request.registry.settings.get('env_name'):
-            log_keys['ff_env'] = request.registry.settings.get('env_name')
+        stats: dict = {}
+        request._stats = stats  # noQA - yes, using a protected member
 
-        log_keys['url_path'] = request.path
-        log_keys['url_qs'] = request.query_string
-        log_keys['host'] = request.host.split(":")[0]
+        try:
+
+            # set telemetry_id as logger context if passed in
+            log_keys = {}
+            if 'telemetry_id' in request.params:
+                log_keys['telemetry_id'] = request.params['telemetry_id']
+            if 'log_action' in request.params:
+                log_keys['log_action'] = request.params['log_action']
+            if request.registry.settings.get('env_name'):
+                log_keys['ff_env'] = request.registry.settings.get('env_name')
+
+            # If stray unicode characters are inserted in the query string, for example, it's possible
+            # to get an error such as:
+            #     UnicodeDecodeError: 'utf-8' codec can't decode byte 0xc0 in position 1: invalid start byte
+            # We see this when WhiteHat pelts us with strange requests as part of a pen test.  The error
+            # occurs in the request.path computation.  Ref: https://hms-dbmi.atlassian.net/browse/C4-887
+            log_keys['url_path'] = request.path
+            log_keys['url_qs'] = request.query_string
+            log_keys['host'] = request.host.split(":")[0]
+
+        except Exception as e:
+            raise HTTPBadRequest(get_error_message(e))
 
         log.bind(**log_keys)
         stats.update(log_keys)

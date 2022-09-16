@@ -75,11 +75,13 @@ def main():
     datadir = tempfile.mkdtemp()
 
     print('Starting in dir: %s' % datadir)
+    started_ok = False
     try:
         process = server_process(datadir, echo=True)
-    except:
-        shutil.rmtree(datadir)
-        raise
+        started_ok = True
+    finally:
+        if not started_ok:
+            shutil.rmtree(datadir)
 
     @atexit.register
     def cleanup_process():

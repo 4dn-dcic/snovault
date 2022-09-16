@@ -1,6 +1,6 @@
 from pyramid.httpexceptions import (
     HTTPNotModified,
-    HTTPPreconditionFailed,
+    # HTTPPreconditionFailed,
 )
 
 

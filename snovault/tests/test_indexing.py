@@ -16,7 +16,7 @@ import yaml
 
 from datetime import datetime, timedelta
 from dcicutils.lang_utils import n_of
-from dcicutils.misc_utils import ignored
+from dcicutils.misc_utils import ignored, get_error_message
 from dcicutils.qa_utils import ControlledTime, notice_pytest_fixtures
 from elasticsearch.exceptions import NotFoundError
 from pyramid.traversal import traverse
@@ -24,7 +24,7 @@ from sqlalchemy import MetaData
 from unittest import mock
 from webtest.app import AppError
 from zope.sqlalchemy import mark_changed
-from ..interfaces import DBSESSION, STORAGE, COLLECTIONS
+from ..interfaces import DBSESSION, STORAGE, COLLECTIONS, TYPES
 from .. import util  # The filename util.py, not something in __init__.py
 from .. import main  # Function main actually defined in __init__.py (should maybe be defined elsewhere)
 from ..storage import Base
@@ -38,6 +38,7 @@ from ..elasticsearch.create_mapping import (
     create_mapping_by_type,
     index_settings,
     run,
+    type_mapping
 )
 from ..elasticsearch.indexer import check_sid, SidException
 from ..elasticsearch.indexer_queue import QueueManager
@@ -359,8 +360,8 @@ def test_dlq_to_primary(app, anontestapp, indexer_testapp):
     assert not failed, "Failed. .add_uuids() reported failure during test setup phase."
     n_queued = len(success)
     print(n_queued, "UUIDs queued to DLQ:")
-    for i, uuid in enumerate(success):
-        print("UUID", i, json.dumps(uuid, indent=2, default=str))
+    for i, uuid_i in enumerate(success):
+        print("UUID", i, json.dumps(uuid_i, indent=2, default=str))
     assert n_queued == 2
     print("Done with setup phase. Entering test phase.")
     print("Executing .get('/dlq_to_primary') [authenticated]")
@@ -456,7 +457,7 @@ def test_indexing_logging(app, testapp, indexer_testapp, capfd):
     HOWEVER, logging cannot be reset to NOT use ES (which is what is currently
     desired), so for the time being, the second part of the test is disabled
     """
-    ### PART OF ES LOGGING TEST (DISABLED)
+    # == PART OF ES LOGGING TEST (DISABLED) ==
     # import logging
     # import structlog
     # from dcicutils.log_utils import calculate_log_index, set_logging
@@ -484,9 +485,12 @@ def test_indexing_logging(app, testapp, indexer_testapp, capfd):
     for record in check_logs:
         if not record:
             continue
+        to_load = "(error computing what to load)"
         try:
-            proc_record = yaml.safe_load('{' + record.strip().split('{', 1)[1])
-        except:
+            to_load = '{' + record.strip().split('{', 1)[1]
+            proc_record = yaml.safe_load(to_load)
+        except Exception as e:
+            print(f"Error in yaml.safe_load of {to_load!r}: {get_error_message(e)}")
             continue
         if not isinstance(proc_record, dict):
             continue
@@ -504,7 +508,7 @@ def test_indexing_logging(app, testapp, indexer_testapp, capfd):
     # but on travis it fails
     # assert item_idx_record['url_path'] == '/index'
 
-    ### PART OF ES LOGGING TEST (DISABLED)
+    # == PART OF ES LOGGING TEST (DISABLED) ==
     # # now get the log from ES
     # log_uuid = item_idx_record['log_uuid']
     # log_doc = es.get(index=log_index_name, id=log_uuid)
@@ -527,6 +531,7 @@ def test_indexing_queue_records(app, testapp, indexer_testapp):
     """
     es = app.registry[ELASTIC_SEARCH]
     indexer_queue = app.registry[INDEXER_QUEUE]
+    ignored(indexer_queue)  # TODO: Should this be used? In some tests here, we clear the queue.
     namespaced_indexing = indexer_utils.get_namespaced_index(app, 'indexing')
     # first clear out the indexing records
     es.indices.delete(index=namespaced_indexing)
@@ -535,7 +540,7 @@ def test_indexing_queue_records(app, testapp, indexer_testapp):
     doc_count = es.count(index=namespaced_index).get('count')
     assert doc_count == 0
     # post a document but do not yet index
-    res = testapp.post_json(TEST_COLL, {'required': ''})
+    testapp.post_json(TEST_COLL, {'required': ''})
     doc_count = es.count(index=namespaced_index).get('count')
     assert doc_count == 0
     # indexing record should not yet exist (expect error)
@@ -557,7 +562,7 @@ def test_indexing_queue_records(app, testapp, indexer_testapp):
     indexing_start = indexing_doc_source.get('indexing_started')
     indexing_end = indexing_doc_source.get('indexing_finished')
     assert indexing_start and indexing_end
-    time_start =  datetime.strptime(indexing_start, '%Y-%m-%dT%H:%M:%S.%f')
+    time_start = datetime.strptime(indexing_start, '%Y-%m-%dT%H:%M:%S.%f')
     time_done = datetime.strptime(indexing_end, '%Y-%m-%dT%H:%M:%S.%f')
     assert time_start < time_done
     # get indexing record by start_time
@@ -573,7 +578,7 @@ def test_sync_and_queue_indexing(app, testapp, indexer_testapp):
     # clear queue before starting this one
     indexer_queue.clear_queue()
     # queued on post - total of one item queued
-    res = testapp.post_json(TEST_COLL, {'required': ''})
+    testapp.post_json(TEST_COLL, {'required': ''})
     # synchronously index
     create_mapping.run(app, collections=[TEST_TYPE], sync_index=True)
     # time.sleep(6)
@@ -588,7 +593,7 @@ def test_sync_and_queue_indexing(app, testapp, indexer_testapp):
     assert doc_count == 1
     # post second item to database but do not index (don't load into es)
     # queued on post - total of two items queued
-    res = testapp.post_json(TEST_COLL, {'required': ''})
+    testapp.post_json(TEST_COLL, {'required': ''})
     # time.sleep(2)
     doc_count = es.count(index=namespaced_index).get('count')
     # doc_count has not yet updated
@@ -616,6 +621,7 @@ def test_queue_indexing_with_linked(app, testapp, indexer_testapp, dummy_request
     """
     es = app.registry[ELASTIC_SEARCH]
     indexer_queue = app.registry[INDEXER_QUEUE]
+    ignored(indexer_queue)  # TODO: Should this be used? In some tests here, we clear the queue.
     # first, run create mapping with the indices we will use
     create_mapping.run(
         app,
@@ -633,7 +639,7 @@ def test_queue_indexing_with_linked(app, testapp, indexer_testapp, dummy_request
         'status': 'current',
     }
     target_res = testapp.post_json('/testing-link-targets-sno/', target, status=201)
-    res = indexer_testapp.post_json('/index', {'record': True})
+    indexer_testapp.post_json('/index', {'record': True})
     time.sleep(2)
     # wait for the first item to index
     namespaced_link_target = indexer_utils.get_namespaced_index(app, 'testing_link_target_sno')
@@ -735,13 +741,13 @@ def test_queue_indexing_with_linked(app, testapp, indexer_testapp, dummy_request
 
     # lastly, test purge_uuid and delete functionality
     with pytest.raises(webtest.AppError) as excinfo:
-        del_res0 = testapp.delete_json('/' + source['uuid'] + '/?purge=True')
+        testapp.delete_json('/' + source['uuid'] + '/?purge=True')
     assert 'Item status must equal deleted before purging' in str(excinfo.value)
     del_res1 = testapp.delete_json('/' + source['uuid'])
     assert del_res1.json['status'] == 'success'
     # this item will still have items linking to it indexing occurs
     with pytest.raises(webtest.AppError) as excinfo:
-        del_res2 = testapp.delete_json('/' + source['uuid'] + '/?purge=True')
+        testapp.delete_json('/' + source['uuid'] + '/?purge=True')
     assert 'Cannot purge item as other items still link to it' in str(excinfo.value)
     # the source should fail due to outdated sids
     # must manually update _sid_cache on dummy_request for source
@@ -754,7 +760,7 @@ def test_queue_indexing_with_linked(app, testapp, indexer_testapp, dummy_request
     target_ctxt2 = traverse(dummy_request.root, target_res.json['@graph'][0]['@id'])['context']
     valid3 = util.validate_es_content(target_ctxt2, dummy_request, tar_es_res_obj, 'object')
     assert valid3 is False
-    res = indexer_testapp.post_json('/index', {'record': True})
+    indexer_testapp.post_json('/index', {'record': True})
     del_res3 = testapp.delete_json('/' + source['uuid'] + '/?purge=True')
     assert del_res3.json['status'] == 'success'
     assert del_res3.json['notification'] == 'Permanently deleted ' + source['uuid']
@@ -776,6 +782,7 @@ def test_queue_indexing_with_linked(app, testapp, indexer_testapp, dummy_request
 @pytest.mark.flaky
 def test_indexing_invalid_sid(app, testapp, indexer_testapp):
     indexer_queue = app.registry[INDEXER_QUEUE]
+    ignored(indexer_queue)  # TODO: Should this be used? In some tests here, we clear the queue.
     es = app.registry[ELASTIC_SEARCH]
     # post an item, index, then find version (sid)
     res = testapp.post_json(TEST_COLL, {'required': ''})
@@ -789,7 +796,7 @@ def test_indexing_invalid_sid(app, testapp, indexer_testapp):
     assert es_item['_source']['max_sid'] == initial_version
 
     # now increment the version and check it
-    res = testapp.patch_json(TEST_COLL + test_uuid, {'required': 'meh'})
+    testapp.patch_json(TEST_COLL + test_uuid, {'required': 'meh'})
     res = indexer_testapp.post_json('/index', {'record': True})
     assert res.json['indexing_count'] == 1
     time.sleep(4)
@@ -911,17 +918,22 @@ def test_es_indices(app, elasticsearch):
     Delete an index directly, run again to see if it recovers.
     """
     es = app.registry[ELASTIC_SEARCH]
+    item_types = app.registry[TYPES].by_item_type
+    ignored(item_types)  # TODO: Should this be used?
     test_collections = [TEST_TYPE]
     # run create mapping for all types, but no need to index
     run(app, collections=test_collections, skip_indexing=True)
     # check that mappings and settings are in index
     for item_type in test_collections:
+        item_mapping = type_mapping(app.registry[TYPES], item_type)
+        ignored(item_mapping)  # TODO: Should this be used?
         try:
             namespaced_index = indexer_utils.get_namespaced_index(app, item_type)
             item_index = es.indices.get(index=namespaced_index)
-        except Exception:
-            assert False
-        found_index_mapping = item_index.get(namespaced_index, {}).get('mappings', {}).get('properties', {}).get('embedded')
+        except Exception as e:
+            raise AssertionError(f"Didn't find index mapping. {get_error_message(e)}")
+        found_index_mapping = (item_index.get(namespaced_index, {})
+                               .get('mappings', {}).get('properties', {}).get('embedded'))
         found_index_settings = item_index.get(namespaced_index, {}).get('settings')
         assert found_index_mapping
         assert found_index_settings
@@ -932,14 +944,18 @@ def test_index_settings(app, testapp, indexer_testapp):
     es_settings = index_settings()
     max_result_window = es_settings['index']['max_result_window']
     # preform some initial indexing to build meta
-    res = testapp.post_json(TEST_COLL, {'required': ''})
+    testapp.post_json(TEST_COLL, {'required': ''})
     res = indexer_testapp.post_json('/index', {'record': True})
     # need to make sure an xmin was generated for the following to work
     assert 'indexing_finished' in res.json
     es = app.registry[ELASTIC_SEARCH]
     namespaced_test_type = indexer_utils.get_namespaced_index(app, TEST_TYPE)
     curr_settings = es.indices.get_settings(index=namespaced_test_type)
-    found_max_window = curr_settings.get(namespaced_test_type, {}).get('settings', {}).get('index', {}).get('max_result_window', None)
+    found_max_window = (curr_settings
+                        .get(namespaced_test_type, {})
+                        .get('settings', {})
+                        .get('index', {})
+                        .get('max_result_window', None))
     # test one important setting
     assert int(found_max_window) == max_result_window
 
@@ -1008,7 +1024,7 @@ def test_check_and_reindex_existing(app, testapp):
     # post an item but don't reindex
     # this will cause the testing-ppp index to queue reindexing when we call
     # check_and_reindex_existing
-    res = testapp.post_json(TEST_COLL, {'required': ''})
+    testapp.post_json(TEST_COLL, {'required': ''})
     time.sleep(2)
     namespaced_index = indexer_utils.get_namespaced_index(app, TEST_TYPE)
     doc_count = es.count(index=namespaced_index).get('count')
@@ -1023,7 +1039,7 @@ def test_check_and_reindex_existing(app, testapp):
 def test_es_purge_uuid(app, testapp, indexer_testapp, session):
     indexer_queue = app.registry[INDEXER_QUEUE]
     es = app.registry[ELASTIC_SEARCH]
-    ## Adding new test resource to DB
+    # == Adding new test resource to DB ==
     storage = app.registry[STORAGE]
     test_body = {'required': '', 'simple1': 'foo', 'simple2': 'bar'}
     res = testapp.post_json(TEST_COLL, test_body)
@@ -1041,8 +1057,8 @@ def test_es_purge_uuid(app, testapp, indexer_testapp, session):
     try:
         namespaced_index = indexer_utils.get_namespaced_index(app, TEST_TYPE)
         es_item = es.get(index=namespaced_index, id=test_uuid)
-    except:
-        assert False
+    except Exception as e:
+        raise AssertionError(f"Couldn't find item uuid. {get_error_message(e)}")
     item_uuid = es_item.get('_source', {}).get('uuid')
     assert item_uuid == test_uuid
 
@@ -1090,10 +1106,10 @@ def test_create_mapping_check_first(app, testapp, indexer_testapp):
     time.sleep(2)
     second_count = es.count(index=namespaced_index).get('count')
     counter = 0
-    while (second_count != initial_count and counter < 10):
+    while second_count != initial_count and counter < 10:
         time.sleep(2)
         second_count = es.count(index=namespaced_index).get('count')
-        counter +=1
+        counter += 1
     assert second_count == initial_count
 
     # remove the index manually and do not index
@@ -1109,6 +1125,7 @@ def test_create_mapping_check_first(app, testapp, indexer_testapp):
 
 def delay_rerun(*args):
     """ Rerun function for flaky """
+    ignored(args)
     time.sleep(10)
     return True
 
@@ -1136,10 +1153,10 @@ def test_create_mapping_index_diff(app, testapp, indexer_testapp):
     assert second_count == 1
 
     # patch the item to increment version
-    res = testapp.patch_json(TEST_COLL + test_uuid, {'required': 'meh'})
+    testapp.patch_json(TEST_COLL + test_uuid, {'required': 'meh'})
     # index with index_diff to ensure the item is reindexed
     create_mapping.run(app, collections=[TEST_TYPE], index_diff=True)
-    res = indexer_testapp.post_json('/index', {'record': True})
+    indexer_testapp.post_json('/index', {'record': True})
     time.sleep(4)
     third_count = es.count(index=namespaced_index).get('count')
     assert third_count == initial_count
@@ -1151,6 +1168,7 @@ def test_indexing_esstorage(app, testapp, indexer_testapp):
     Test some esstorage methods (a.k.a. registry[STORAGE].read)
     """
     indexer_queue = app.registry[INDEXER_QUEUE]
+    ignored(indexer_queue)  # TODO: Should we be using this? -kmp 7-Aug-2022
     es = app.registry[ELASTIC_SEARCH]
     esstorage = app.registry[STORAGE].read
     # post an item, index, then find version (sid)
@@ -1245,6 +1263,7 @@ def test_aggregated_items(app, testapp, indexer_testapp):
     """
     es = app.registry[ELASTIC_SEARCH]
     indexer_queue = app.registry[INDEXER_QUEUE]
+    ignored(indexer_queue)  # TODO: Should this be used? In some tests here, we clear the queue.
     # first, run create mapping with the indices we will use
     namespaced_aggregate = indexer_utils.get_namespaced_index(app, 'testing_link_aggregate_sno')
     create_mapping.run(
@@ -1272,9 +1291,10 @@ def test_aggregated_items(app, testapp, indexer_testapp):
         'status': 'current'
     }
     # you can do stuff like this and it will take effect
-    # app.registry['types']['testing_link_aggregate_sno'].aggregated_items['targets'] = ['target.name', 'test_description']
-    target1_res = testapp.post_json('/testing-link-targets-sno/', target1, status=201)
-    target2_res = testapp.post_json('/testing-link-targets-sno/', target2, status=201)
+    # app.registry['types']['testing_link_aggregate_sno'].aggregated_items['targets'] = (
+    #    ['target.name', 'test_description'])
+    testapp.post_json('/testing-link-targets-sno/', target1, status=201)
+    testapp.post_json('/testing-link-targets-sno/', target2, status=201)
     agg_res = testapp.post_json('/testing-link-aggregates-sno/', aggregated, status=201)
     agg_res_atid = agg_res.json['@graph'][0]['@id']
     # ensure that aggregated-items view shows nothing before indexing
@@ -1374,7 +1394,7 @@ def test_indexing_info(app, testapp, indexer_testapp):
     assert 'embedded_view' in src_idx_info.json['indexing_stats']
     # up to date
     assert src_idx_info.json['sid_es'] == src_idx_info.json['sid_db']
-    assert set(src_idx_info.json['uuids_invalidated']) == set([target1['uuid'], source['uuid']])
+    assert set(src_idx_info.json['uuids_invalidated']) == {target1['uuid'], source['uuid']}
     # update without indexing; view should capture the changes but sid_es will not change
     testapp.patch_json('/testing-link-sources-sno/' + source['uuid'], {'target': target2['uuid']})
     src_idx_info2 = testapp.get('/indexing-info?uuid=%s' % source['uuid'])
@@ -1384,7 +1404,7 @@ def test_indexing_info(app, testapp, indexer_testapp):
     # es is now out of date, since not indexed yet
     assert src_idx_info2.json['sid_es'] < src_idx_info2.json['sid_db']
     # target1 will still be in invalidated uuids, since es has not updated
-    assert set(src_idx_info2.json['uuids_invalidated']) == set([target1['uuid'], target2['uuid'], source['uuid']])
+    assert set(src_idx_info2.json['uuids_invalidated']) == {target1['uuid'], target2['uuid'], source['uuid']}
     indexer_testapp.post_json('/index', {'record': True})
     time.sleep(2)
     # after indexing, make sure sid_es is updated
@@ -1706,8 +1726,7 @@ def test_assert_transactions_table_is_gone(app):
     serverfixtures to be established (used for indexing)
     """
     session = app.registry[DBSESSION]
-    connection = session.connection().connect()
-    ignored(connection)
+    session.connection().connect()
     # The reflect=True argument to MetaData was deprecated. Instead, one is supposed to call the .reflect()
     # method after creation. (This comment is transitional and can go away if things seem to work normally.)
     # -kmp 11-May-2020
@@ -1852,11 +1871,13 @@ def test_queue_manager_purge_queue_wait():
                 myenv + '-secondary-indexer-queue': secondary,
                 myenv + '-dlq': dlq,
             }
-            with mock.patch("socket.gethostname") as mock_gethostname:
-                with mock.patch.object(QueueManager, "get_queue_url") as mock_get_queue_url:
+            with mock.patch("socket.gethostname"):  # as mock_gethostname:
+                with mock.patch.object(QueueManager, "get_queue_url"):  # as mock_get_queue_url:
 
                     registry = MockRegistry()
                     manager = QueueManager(registry)
+
+                    assert mock_initialize.call_count == 1  # just to be sure, make sure this got called
 
                     # Make sure things are set up for our test
                     assert isinstance(manager.client, MockSqsClient)

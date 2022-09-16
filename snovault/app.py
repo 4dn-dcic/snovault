@@ -7,6 +7,8 @@ import psycopg2
 import subprocess
 import zope.sqlalchemy
 
+from dcicutils.misc_utils import ignored, ignorable
+from pyramid.config import Configurator
 from pyramid.path import AssetResolver, caller_package
 from pyramid.session import SignedCookieSessionFactory
 from pyramid.settings import asbool
@@ -66,6 +68,7 @@ def set_postgresql_statement_timeout(engine, timeout=20 * 1000):
 
     @event.listens_for(engine, 'connect')
     def connect(dbapi_connection, connection_record):
+        ignored(connection_record)
         cursor = dbapi_connection.cursor()
         try:
             cursor.execute("SET statement_timeout TO %d" % timeout)
@@ -151,7 +154,7 @@ def app_version(config):
         )
         if diff:
             version += '-patch' + hashlib.sha1(diff).hexdigest()[:7]
-    except:
+    except Exception:
         version = os.environ.get("ENCODED_VERSION", "test_version")
     config.registry.settings['snovault.app_version'] = version
 
@@ -208,6 +211,14 @@ def main(global_config, **local_config):
     if docsdir is not None:
         docsdir = [path.strip() for path in docsdir.strip().split('\n')]
     if workbook_filename:
-        load_workbook(app, workbook_filename, docsdir, test=load_test_only)
+        ignorable(docsdir, load_test_only)  # The commented-out reference to load_workbook below would use these vars.
+        raise NotImplementedError("The load_workbook option is not implemented.")
+        # TODO: load_workbook is undefined. where is it supposed to come from? -kmp 7-Aug-2022
+        #       The definition would be in fourfront or cgap in src/encoded/__init__.py, which has a function
+        #       similar to our 'main' here but with more functionality. Need to rethink that modularity so there
+        #       is not code duplication and code that won't work. Could backport load_workbook to here, for example.
+        #       -kmp 15-Sep-2022
+        # load_workbook(app, workbook_filename, docsdir, test=load_test_only)
 
+    # TODO: Maybe we should keep better track of what settings are used and not, and warn about unused options?
     return app

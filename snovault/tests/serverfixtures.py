@@ -16,7 +16,9 @@ from ..app import configure_engine
 from ..storage import Base
 from .elasticsearch_fixture import server_process as elasticsearch_server_process
 from .postgresql_fixture import (
-    initdb, server_process as postgres_server_process, make_snovault_db_test_url,
+    initdb, server_process as postgres_server_process,
+    # SNOVAULT_DB_TEST_PORT,
+    make_snovault_db_test_url,
 )
 
 
@@ -134,6 +136,7 @@ def _DBSession(conn):
 
 @pytest.fixture(scope='session')
 def DBSession(_DBSession, zsa_savepoints, check_constraints):
+    notice_pytest_fixtures(zsa_savepoints, check_constraints)
     return _DBSession
 
 
@@ -252,7 +255,7 @@ def check_constraints(conn, _DBSession):
                 sp = self.conn.begin_nested()
                 try:
                     self.conn.execute('SET CONSTRAINTS ALL IMMEDIATE')
-                except:
+                except BaseException:  # even things like keyboard interrupt
                     sp.rollback()
                     raise
                 else:
@@ -331,10 +334,9 @@ class ExecutionWatcher(object):
                 counted_events += 1
             annotated_events.append({'counted': to_count, 'event': event})
         assert counted_events == expected_count, (
-                "Counter mismatch. Expected %s but got %s:\n%s"
-                % (expected_count, counted_events, "\n".join([
-            "{marker} {event}".format(marker="*" if ae['counted'] else " ", event=ae['event'])
-            for ae in annotated_events])))
+                f"Counter mismatch. Expected {expected_count} but got {counted_events}:\n"
+                + '\n'.join([f"{'*' if ae['counted'] else ' '} {ae['event']}"
+                            for ae in annotated_events]))
         self._active = False
 
 
@@ -398,15 +400,23 @@ def no_deps(conn, DBSession):
 
     @sqlalchemy.event.listens_for(session, 'after_flush')
     def check_dependencies(session, flush_context):
+        ignored(session)
         assert not flush_context.cycles
 
     @sqlalchemy.event.listens_for(conn, "before_execute", retval=True)
     def before_execute(conn, clauseelement, multiparams, params):
+        ignored(conn)
         return clauseelement, multiparams, params
 
     yield
 
+    # TODO: At first glance, this cleanup looks wrong in a variety of ways.
+    #       * Lack of try/finally
+    #       * There are two defined .listens_for, but only one .remove
+    #       * Not sure about what arguments remove takes, but is it supposed to match the .listens_for fns above?
+    #       -kmp 7-Aug-2022
     sqlalchemy.event.remove(session, 'before_flush', check_dependencies)
+
 
 @pytest.fixture(scope='session')
 def wsgi_server_host_port():

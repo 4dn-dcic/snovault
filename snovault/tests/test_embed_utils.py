@@ -1,20 +1,11 @@
 import copy
 import pytest
 
-# from dcicutils.qa_utils import notice_pytest_fixtures
 from ..interfaces import TYPES
 from ..util import (
-    build_embedded_model,
-    build_default_embeds,
-    crawl_schema,
-    expand_embedded_list,
-    find_collection_subtypes,
-    find_default_embeds_for_schema,
+    build_embedded_model, build_default_embeds, crawl_schema, expand_embedded_list,
+    find_collection_subtypes, find_default_embeds_for_schema,
 )
-
-# This is handled in pytest.ini and should not be redundantly here. -kmp 4-Jul-2020
-# from .toolfixtures import registry
-# notice_pytest_fixtures(registry)
 
 
 def test_find_collection_subtypes(app):

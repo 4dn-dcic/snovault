@@ -1,19 +1,15 @@
-import os
 import pytest
 from unittest import mock
 
+from contextlib import contextmanager
+from dcicutils.misc_utils import ignored
+
+from ..elasticsearch.create_mapping import merge_schemas, type_mapping, update_mapping_by_embed, get_items_to_upgrade
 from ..interfaces import TYPES
-from ..elasticsearch.create_mapping import (
-    merge_schemas,
-    type_mapping,
-    update_mapping_by_embed,
-    get_items_to_upgrade,
-)
-from ..elasticsearch.interfaces import ELASTIC_SEARCH
-from .test_views import PARAMETERIZED_NAMES
 from ..settings import Settings
 from ..util import add_default_embeds
-from contextlib import contextmanager
+
+from .test_views import PARAMETERIZED_NAMES
 
 
 unit_test_type = 'EmbeddingTest'
@@ -21,7 +17,9 @@ unit_test_type = 'EmbeddingTest'
 
 @contextmanager
 def mappings_use_nested(value=True):
-    """ Context manager that sets the MAPPINGS_USE_NESTED setting with the given value, default True """
+    """
+    Context manager that sets the MAPPINGS_USE_NESTED setting with the given value, default True
+    """
     old_setting = Settings.MAPPINGS_USE_NESTED
     try:
         Settings.MAPPINGS_USE_NESTED = value
@@ -66,8 +64,8 @@ def test_type_mapping_nested(registry):
 
 
 def test_type_mapping_nested_with_disabled_parameter(registry):
-    """ Tests that mapping a type with an object field with nested enabled correctly maps
-        with nested.
+    """
+    Tests that mapping a type with an object field with nested enabled correctly maps with nested.
     """
     with mappings_use_nested(True):
         mapping = type_mapping(registry[TYPES], 'TestingNestedEnabled')
@@ -80,7 +78,9 @@ def test_type_mapping_nested_with_disabled_parameter(registry):
 
 
 def test_merge_schemas(registry):
-    """ Tests merging schemas with EmbeddingTest """
+    """
+    Tests merging schemas with EmbeddingTest
+    """
     test_schema = registry[TYPES][unit_test_type].schema
     test_subschema = test_schema['properties']['attachment']
     res = merge_schemas(test_subschema, registry[TYPES])
@@ -117,8 +117,8 @@ def test_update_mapping_by_embed(registry):
 
 # types to test
 TEST_TYPES = ['testing_mixins', 'embedding_test', 'nested_embedding_container', 'nested_object_link_target',
-         'testing_download', 'testing_link_source_sno', 'testing_link_aggregate_sno', 'testing_link_target_sno',
-         'testing_post_put_patch_sno', 'testing_dependencies', 'testing_link_target_elastic_search']
+              'testing_download', 'testing_link_source_sno', 'testing_link_aggregate_sno', 'testing_link_target_sno',
+              'testing_post_put_patch_sno', 'testing_dependencies', 'testing_link_target_elastic_search']
 
 
 @pytest.mark.parametrize('item_type', TEST_TYPES)
@@ -154,7 +154,8 @@ def test_create_mapping_correctly_maps_embeds(registry, item_type):
 
 
 def test_create_mapping_drops_unmappable_properties(registry):
-    """Use EmbeddingTest schema to ensure unmappable properties under
+    """
+    Use EmbeddingTest schema to ensure unmappable properties under
     patternProperties and additionalProperties are not mapped.
     """
     test_item_type = "embedding_test"
@@ -182,7 +183,9 @@ def biosample(testapp):
 
 
 def mock_scan(uuids=None):
-    """Mock for ES scan which returns list of dicts."""
+    """
+    Mock for ES scan which returns list of dicts.
+    """
     embedded_item = []
     if uuids:
         for uuid in uuids:
@@ -198,6 +201,7 @@ def test_get_items_to_upgrade(mock_check_index, testapp, biosample):
     Test Elasticsearch items requiring an upgrade are identified for
     indexing.
     """
+    ignored(mock_check_index)  # mocked for side effect
     app = testapp.app
     es = None  # ES component mocked
     item_type = "testing_biosample_sno"
@@ -212,4 +216,4 @@ def test_get_items_to_upgrade(mock_check_index, testapp, biosample):
     ):
         # Mocked scan found the biosample uuid to upgrade
         to_upgrade = get_items_to_upgrade(app, es, item_type)
-        assert to_upgrade == set([biosample_uuid])
+        assert to_upgrade == {biosample_uuid}

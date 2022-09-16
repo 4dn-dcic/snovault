@@ -1,10 +1,11 @@
 import codecs
 import collections
-from datetime import datetime
 import uuid
 import json
 import requests
 
+from datetime import datetime
+from dcicutils.misc_utils import ignored
 from jsonschema_serialize_fork import (
     Draft4Validator,
     FormatChecker,
@@ -91,7 +92,7 @@ class NoRemoteResolver(RefResolverOrdered):
         raise ValueError('Resolution disallowed for: %s' % uri)
 
 
-def mixinSchemas(schema, resolver, key_name = 'properties'):
+def mixinSchemas(schema, resolver, key_name='properties'):
     mixinKeyName = 'mixin' + key_name.capitalize()
     mixins = schema.get(mixinKeyName)
     if mixins is None:
@@ -114,7 +115,7 @@ def mixinSchemas(schema, resolver, key_name = 'properties'):
                 if prop[k] == v:
                     continue
                 if key_name == 'facets':
-                    continue # Allow schema facets to override, as well.
+                    continue  # Allow schema facets to override, as well.
                 raise ValueError('Schema mixin conflict for %s/%s' % (name, k))
     # Allow schema properties to override
     base = schema.get(key_name, {})
@@ -127,13 +128,6 @@ def mixinSchemas(schema, resolver, key_name = 'properties'):
 
 
 def linkTo(validator, linkTo, instance, schema):
-
-    # Hopefully not needed now that I'm importing from ".resources" instead of "." -kmp 9-Jun-2020
-    #
-    # # TODO: Eliminate this circularity issue. -kmp 10-Feb-2020
-    # # avoid circular import
-    # from . import Item, COLLECTIONS
-
     if not validator.is_type(instance, "string"):
         return
 
@@ -146,16 +140,19 @@ def linkTo(validator, linkTo, instance, schema):
         base = request.root
     else:
         raise Exception("Bad schema")  # raise some sort of schema error
+
     try:
         item = find_resource(base, instance.replace(':', '%3A'))
     except KeyError:
         error = "%r not found" % instance
         yield ValidationError(error)
         return
+
     if not isinstance(item, Item):
         error = "%r is not a linkable resource" % instance
         yield ValidationError(error)
         return
+
     if linkTo and not set([item.type_info.name] + item.base_types).intersection(set(linkTo)):
         reprs = (repr(it) for it in linkTo)
         error = "%r is not of type %s" % (instance, ", ".join(reprs))
@@ -166,6 +163,7 @@ def linkTo(validator, linkTo, instance, schema):
     if linkEnum is not None:
         if not validator.is_type(linkEnum, "array"):
             raise Exception("Bad schema")
+
         if not any(UUID(enum_uuid) == item.uuid for enum_uuid in linkEnum):
             reprs = ', '.join(repr(it) for it in linkTo)
             error = "%r is not one of %s" % (instance, reprs)
@@ -178,6 +176,7 @@ def linkTo(validator, linkTo, instance, schema):
             if principal.startswith('userid.'):
                 userid = principal[len('userid.'):]
                 break
+
         if userid is not None:
             user = request.root[userid]
             submits_for = user.upgrade_properties().get('submits_for')
@@ -198,6 +197,7 @@ class IgnoreUnchanged(ValidationError):
 
 
 def requestMethod(validator, requestMethod, instance, schema):
+    ignored(instance, schema)
     if validator.is_type(requestMethod, "string"):
         requestMethod = [requestMethod]
     elif not validator.is_type(requestMethod, "array"):
@@ -211,6 +211,7 @@ def requestMethod(validator, requestMethod, instance, schema):
 
 
 def permission(validator, permission, instance, schema):
+    ignored(instance, schema)
     if not validator.is_type(permission, "string"):
         raise Exception("Bad schema")  # raise some sort of schema error
 
@@ -247,6 +248,8 @@ def calculatedProperty(validator, linkTo, instance, schema):
             2. It is an array of objects ie: calculated property applied across an array of
                sub-embedded objects.
     """
+    ignored(instance)
+
     def schema_is_sub_embedded(schema):
         return schema.get('sub-embedded', False)
 
@@ -256,8 +259,8 @@ def calculatedProperty(validator, linkTo, instance, schema):
     def schema_is_array_of_objects(schema):
         return schema.get('type') == 'array' and schema_is_object(schema.get('items', {}))
 
-    if not schema_is_sub_embedded(schema) or (
-        not schema_is_array_of_objects(schema) and not schema_is_object(schema)):
+    if (not schema_is_sub_embedded(schema)
+            or (not schema_is_array_of_objects(schema) and not schema_is_object(schema))):
         yield ValidationError('submission of calculatedProperty disallowed')
 
 
@@ -287,7 +290,7 @@ def load_schema(filename):
     # use mixinProperties, mixinFacets, mixinAggregations, and mixinColumns (if provided)
     schema = mixinSchemas(
         mixinSchemas(
-            mixinSchemas( mixinSchemas(schema, resolver, 'properties'), resolver, 'facets' ),
+            mixinSchemas(mixinSchemas(schema, resolver, 'properties'), resolver, 'facets'),
             resolver,
             'aggregations'
         ),
@@ -335,6 +338,8 @@ def validate(schema, data, current=None, validate_current=False):
     for error in errors:
         # Possibly ignore validation if it results in no change to data
         if current is not None and isinstance(error, IgnoreUnchanged):
+            # TODO: Should this next assignment be outside the 'for' and should this in loop be testing current_value?
+            #       -kmp 13-Sep-2022
             current_value = current
             try:
                 for key in error.path:
@@ -347,7 +352,9 @@ def validate(schema, data, current=None, validate_current=False):
                     for key in error.path:
                         validated_value = validated_value[key]
                 except Exception:
-                    validate_value = None  # not found
+                    validated_value = None  # not found
+                # TODO: Should this test be indented left by 4 spaces so that the other arms of the 'if' affect it?
+                #       Right now those other arms set seemingly-unused variables. -kmp 7-Aug-2022
                 if validated_value == current_value:
                     continue  # value is unchanged between data/current; ignore
         filtered_errors.append(error)
@@ -409,12 +416,15 @@ def combine_schemas(a, b):
             allValues.update(a[name])
             allValues.update(b[name])
             intersectedKeys = set(a[name].keys()).intersection(set(b[name].keys()))
-            combined[name] = { k:v for k,v in allValues.items() if k in intersectedKeys }
+            combined[name] = {k: v
+                              for k, v in allValues.items()
+                              if k in intersectedKeys}
     for name in set(a.keys()).difference(b.keys()):
         combined[name] = a[name]
     for name in set(b.keys()).difference(a.keys()):
         combined[name] = b[name]
     return combined
+
 
 # for integrated tests
 def utc_now_str():
@@ -424,9 +434,11 @@ def utc_now_str():
 
 @server_default
 def userid(instance, subschema):  # args required by jsonschema-serialize-fork
+    ignored(instance, subschema)
     return str(uuid.uuid4())
 
 
 @server_default
 def now(instance, subschema):  # args required by jsonschema-serialize-fork
+    ignored(instance, subschema)
     return utc_now_str()
