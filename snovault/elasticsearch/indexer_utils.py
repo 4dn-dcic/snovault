@@ -73,7 +73,7 @@ def find_uuids_for_indexing(registry, updated, find_index=None):
         },
         '_source': {  # in ES7 there is no _type included by default, so inspect embedded.@type
             'includes':
-                'embedded.@type'
+                'item_type'
         }
     }
     if not find_index:
@@ -81,7 +81,7 @@ def find_uuids_for_indexing(registry, updated, find_index=None):
     # size param below == # of results per request, too large and can timeout, too small and will make too
     # many requests - 5000 seems to be a reasonable number. - Will 6/7/21
     results = scan(es, index=find_index, query=scan_query, size=SCAN_PAGE_SIZE)
-    invalidated_with_type = {(res['_id'], to_camel_case(res['_source']['embedded']['@type'][0])) for res in results}
+    invalidated_with_type = {(res['_id'], to_camel_case(res['_source']['item_type'])) for res in results}
     invalidated = {uuid for uuid, _type in invalidated_with_type}
 
     return (updated | invalidated), invalidated_with_type
