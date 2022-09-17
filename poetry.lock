@@ -579,7 +579,7 @@ test = ["pytest (>=6.2.0)", "pytest-benchmark", "pytest-cov", "pytest-subtests",
 
 [[package]]
 name = "dcicutils"
-version = "5.1.0"
+version = "5.1.0.1b0"
 description = "Utility package for interacting with the 4DN Data Portal and other 4DN resources"
 category = "main"
 optional = false
@@ -590,7 +590,7 @@ aws-requests-auth = ">=0.4.2,<1"
 boto3 = ">=1.17.39,<2.0.0"
 botocore = ">=1.20.39,<2.0.0"
 docker = ">=4.4.4,<5.0.0"
-elasticsearch = "6.8.1"
+elasticsearch = "7.13.4"
 gitpython = ">=3.1.2,<4.0.0"
 pytz = ">=2020.4"
 PyYAML = ">=5.1,<5.5"
@@ -649,34 +649,37 @@ six = "*"
 
 [[package]]
 name = "elasticsearch"
-version = "6.8.1"
+version = "7.13.4"
 description = "Python client for Elasticsearch"
 category = "main"
 optional = false
-python-versions = ">=2.6, !=3.0.*, !=3.1.*, !=3.2.*, <4"
+python-versions = ">=2.7, !=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*, <4"
 
 [package.dependencies]
-urllib3 = ">=1.21.1"
+certifi = "*"
+urllib3 = ">=1.21.1,<2"
 
 [package.extras]
-develop = ["requests (>=2.0.0,<3.0.0)", "nose", "coverage", "mock", "pyyaml", "nosexcover", "numpy", "pandas", "sphinx (<1.7)", "sphinx-rtd-theme"]
+async = ["aiohttp (>=3,<4)"]
+develop = ["requests (>=2.0.0,<3.0.0)", "coverage", "mock", "pyyaml", "pytest", "pytest-cov", "sphinx (<1.7)", "sphinx-rtd-theme", "black", "jinja2"]
+docs = ["sphinx (<1.7)", "sphinx-rtd-theme"]
 requests = ["requests (>=2.4.0,<3.0.0)"]
 
 [[package]]
 name = "elasticsearch-dsl"
-version = "6.4.0"
+version = "7.4.0"
 description = "Python client for Elasticsearch"
 category = "main"
 optional = false
-python-versions = "*"
+python-versions = ">=2.7, !=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*"
 
 [package.dependencies]
-elasticsearch = ">=6.0.0,<7.0.0"
+elasticsearch = ">=7.0.0,<8.0.0"
 python-dateutil = "*"
 six = "*"
 
 [package.extras]
-develop = ["mock", "pytest (>=3.0.0)", "pytest-cov", "pytz", "coverage (<5.0.0)", "sphinx", "sphinx-rtd-theme"]
+develop = ["mock", "pytest (>=3.0.0)", "pytest-cov", "pytest-mock (<3.0.0)", "pytz", "coverage (<5.0.0)", "sphinx", "sphinx-rtd-theme"]
 
 [[package]]
 name = "flake8"
@@ -1957,14 +1960,14 @@ testing = ["zope.event", "nose", "coverage"]
 
 [[package]]
 name = "zope.sqlalchemy"
-version = "1.3"
+version = "1.6"
 description = "Minimal Zope/SQLAlchemy transaction integration"
 category = "main"
 optional = false
 python-versions = "*"
 
 [package.dependencies]
-SQLAlchemy = ">=0.7"
+SQLAlchemy = ">=0.9,<1.4.0 || >1.4.0,<1.4.1 || >1.4.1,<1.4.2 || >1.4.2,<1.4.3 || >1.4.3,<1.4.4 || >1.4.4,<1.4.5 || >1.4.5,<1.4.6 || >1.4.6"
 transaction = ">=1.6.0"
 "zope.interface" = ">=3.6.0"
 
@@ -1974,7 +1977,7 @@ test = ["zope.testing"]
 [metadata]
 lock-version = "1.1"
 python-versions = ">=3.7.1,<3.9"
-content-hash = "329b32cc21f3d8b86cb0379eeca3e1fb263c6608cf1cfc23877257e0b23bb9b7"
+content-hash = "c7a96a9c5ccaf4a117fec8603a7ff704809cc0f667285f16cb958065a73f09c9"
 
 [metadata.files]
 atomicwrites = [
@@ -2170,8 +2173,8 @@ cryptography = [
     {file = "cryptography-37.0.2.tar.gz", hash = "sha256:f224ad253cc9cea7568f49077007d2263efa57396a2f2f78114066fd54b5c68e"},
 ]
 dcicutils = [
-    {file = "dcicutils-5.1.0-py3-none-any.whl", hash = "sha256:3cc227cc507f0b7c6cd69d554c583992b99606cd4578e3d7c13185145b1dac27"},
-    {file = "dcicutils-5.1.0.tar.gz", hash = "sha256:978d0a5089cdf43557ed5ade305e3291227d8834e717628a08f3382d3110c6be"},
+    {file = "dcicutils-5.1.0.1b0-py3-none-any.whl", hash = "sha256:42d87478be3c95fcfaa1ba3223bcbd0f0e00bed17a26920db45a0bc79d6ddab2"},
+    {file = "dcicutils-5.1.0.1b0.tar.gz", hash = "sha256:3d60d76ae26c4f58831ad45dc102c6d0b34fdfba5d8256d674197dfe306123ae"},
 ]
 docker = [
     {file = "docker-4.4.4-py2.py3-none-any.whl", hash = "sha256:f3607d5695be025fa405a12aca2e5df702a57db63790c73b927eb6a94aac60af"},
@@ -2189,12 +2192,12 @@ ecdsa = [
     {file = "ecdsa-0.14.1.tar.gz", hash = "sha256:64c613005f13efec6541bb0a33290d0d03c27abab5f15fbab20fb0ee162bdd8e"},
 ]
 elasticsearch = [
-    {file = "elasticsearch-6.8.1-py2.py3-none-any.whl", hash = "sha256:540d633afcc0a32972e4b489c4559c9a96e294850853238f7a18b1cbd267c2ed"},
-    {file = "elasticsearch-6.8.1.tar.gz", hash = "sha256:a8062a00b61bc7babeea028530667583a68ecb1a9f59ab0b22ff7feaf70d3564"},
+    {file = "elasticsearch-7.13.4-py2.py3-none-any.whl", hash = "sha256:5920df0ab2630778680376d86bea349dc99860977eec9b6d2bd0860f337313f2"},
+    {file = "elasticsearch-7.13.4.tar.gz", hash = "sha256:52dda85f76eeb85ec873bf9ffe0ba6849e544e591f66d4048a5e48016de268e0"},
 ]
 elasticsearch-dsl = [
-    {file = "elasticsearch-dsl-6.4.0.tar.gz", hash = "sha256:26416f4dd46ceca43d62ef74970d9de4bdd6f4b0f163316f0b432c9e61a08bec"},
-    {file = "elasticsearch_dsl-6.4.0-py2.py3-none-any.whl", hash = "sha256:f60aea7fd756ac1fbe7ce114bbf4949aefbf495dfe8896640e787c67344f12f6"},
+    {file = "elasticsearch-dsl-7.4.0.tar.gz", hash = "sha256:c4a7b93882918a413b63bed54018a1685d7410ffd8facbc860ee7fd57f214a6d"},
+    {file = "elasticsearch_dsl-7.4.0-py2.py3-none-any.whl", hash = "sha256:046ea10820b94c075081b528b4526c5bc776bda4226d702f269a5f203232064b"},
 ]
 flake8 = [
     {file = "flake8-4.0.1-py2.py3-none-any.whl", hash = "sha256:479b1304f72536a55948cb40a32dce8bb0ffe3501e26eaf292c7e60eb5e0428d"},
@@ -3033,6 +3036,6 @@ zipp = [
     {file = "zope.interface-4.7.2.tar.gz", hash = "sha256:fd1101bd3fcb4f4cf3485bb20d6cb0b56909b94d3bd2a53a6cb9d381c3da3365"},
 ]
 "zope.sqlalchemy" = [
-    {file = "zope.sqlalchemy-1.3-py2.py3-none-any.whl", hash = "sha256:607d65c7974b2aa586f0608ca740b03ddb582ad84ceb3545b55ad5a402fd6dff"},
-    {file = "zope.sqlalchemy-1.3.tar.gz", hash = "sha256:b9c689d39d83856b5a81ac45dbd3317762bf6a2b576c5dd13aaa2c56e0168154"},
+    {file = "zope.sqlalchemy-1.6-py2.py3-none-any.whl", hash = "sha256:63c4560fdd2d55c6e5658a22f6835a3c12eac1a3af8140a01400f7367aac91ed"},
+    {file = "zope.sqlalchemy-1.6.tar.gz", hash = "sha256:9c53be9a57275566595ada79bdffcd624a12fcf6435f6e6807416541b912f5ab"},
 ]

@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "dcicsnovault"
-version = "6.0.7"
+version = "6.0.7.1b0"
 description = "Storage support for 4DN Data Portals."
 authors = ["4DN-DCIC Team <support@4dnucleome.org>"]
 license = "MIT"
@@ -43,9 +43,9 @@ aws_requests_auth = "^0.4.1"
 "backports.statistics" = "0.1.0"
 botocore = ">=1.27.36"  # no particular version required, but this speeds up search
 boto3 = ">=1.24.36"  # no particular version required, but this speeds up search
-elasticsearch = "6.8.1"
-elasticsearch_dsl = "^6.4.0"
-dcicutils = "^5.1.0"
+elasticsearch = "7.13.4"
+elasticsearch_dsl = "^7.0.0"
+dcicutils = "5.1.0.1b0" # "^5.1.0"
 future = ">=0.15.2,<1"
 futures = "^3.1.1"
 # Needed by Moto but not us
@@ -97,7 +97,7 @@ xlrd = "^1.0.0"
 # zope = "^4.2.1"
 "zope.deprecation" = "^4.4.0"
 "zope.interface" = "^4.7.2"
-"zope.sqlalchemy" = "1.3"
+"zope.sqlalchemy" = "1.6"
 
 [tool.poetry.dev-dependencies]
 botocore-stubs = ">=1.27.36"  # no particular version required, but this speeds up search
