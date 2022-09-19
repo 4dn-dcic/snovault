@@ -1112,6 +1112,11 @@ def es_safe_execute(function, **kwargs):
         except ConnectionTimeout:
             exec_count += 1
             log.info('ES connection issue! Retrying.')
+        except RequestError as e:
+            if 'snapshot' not in str(e):
+                raise e
+            else:
+                log.info('Snapshot error occurred - retrying')
         else:
             break
     return res
