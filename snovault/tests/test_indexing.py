@@ -113,7 +113,7 @@ def setup_and_teardown(app):
     DB tables after the test
     """
     # BEFORE THE TEST - just run CM for the TEST_TYPE by default
-    create_mapping.run(app, collections=[TEST_TYPE], skip_indexing=True)
+    create_mapping.run(app, collections=[TEST_TYPE], skip_indexing=True, purge_queue=True)
     app.registry[INDEXER_QUEUE].clear_queue()
 
     yield  # run the test
@@ -259,6 +259,22 @@ def test_indexer_queue(app):
         tries_left -= 1
         time.sleep(3)
     assert tries_left > 0
+
+
+def test_skip_indexing_query_parameter(app, testapp):
+    """ Tests that skip_indexing query parameter is respected """
+    indexer_queue = app.registry[INDEXER_QUEUE]
+    indexer_queue.clear_queue()
+    res = testapp.post_json(TEST_COLL + '?skip_indexing=true', {'required': ''}).json
+    time.sleep(5)  # give sqs a second to catch up
+    msg_count = indexer_queue.number_of_messages()
+    if msg_count['primary_waiting'] != 0 or msg_count['secondary_waiting'] != 0:
+        raise AssertionError('post_json did not respect ?skip_indexing')
+    testapp.patch_json('/' + res['@graph'][0]['uuid'] + '?skip_indexing=true', {'required': ''})
+    time.sleep(5)  # give sqs a second to catch up
+    msg_count = indexer_queue.number_of_messages()
+    if msg_count['primary_waiting'] != 0 or msg_count['secondary_waiting'] != 0:
+        raise AssertionError('patch_json did not respect ?skip_indexing')
 
 
 @pytest.mark.flaky

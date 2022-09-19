@@ -111,6 +111,9 @@ def conn(engine_url):
     notice_pytest_fixtures(engine_url)
     engine_settings = {
         'sqlalchemy.url': engine_url,
+        'connect_args': {
+            'connection_timeout': 30
+        }
     }
 
     engine = configure_engine(engine_settings)

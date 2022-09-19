@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "dcicsnovault"
-version = "6.0.6.0b1"
+version = "6.0.6.0b2"
 description = "Storage support for 4DN Data Portals."
 authors = ["4DN-DCIC Team <support@4dnucleome.org>"]
 license = "MIT"
@@ -115,6 +115,7 @@ flaky = ">=3.7.0"
 #
 # We tried 1.3.14 but it adds stuff we don't need (until Python 3.8) and it doesn't work as well.
 # See https://github.com/spulec/moto/blob/master/CHANGELOG.md
+moto = "^4.0.3"
 pip-licenses = "^3.5.3"
 # Not even sure we need an explicit dependence on Pillow, though it might help keep from searching older versions.
 # -kmp 22-Feb-2022
