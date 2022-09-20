@@ -7,6 +7,13 @@ Change Log
 ----------
 
 
+6.0.8
+=====
+
+* Environment variable NO_SERVER_FIXTURES suppresses creation of server
+  fixtures during testing.
+
+
 6.0.7
 =====
 
