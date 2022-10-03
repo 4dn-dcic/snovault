@@ -7,7 +7,7 @@ import webtest.http
 import zope.sqlalchemy
 
 from contextlib import contextmanager
-from dcicutils.misc_utils import ignored
+from dcicutils.misc_utils import ignored, environ_bool
 from dcicutils.qa_utils import notice_pytest_fixtures
 from transaction.interfaces import ISynchronizer
 from zope.interface import implementer
@@ -21,6 +21,8 @@ from .postgresql_fixture import (
     make_snovault_db_test_url,
 )
 
+
+NO_SERVER_FIXTURES = environ_bool("NO_SERVER_FIXTURES")
 
 def pytest_configure():
     logging.basicConfig(format='')
@@ -43,6 +45,10 @@ def pytest_configure():
 @pytest.mark.fixture_cost(10)
 @pytest.yield_fixture(scope='session')
 def engine_url(tmpdir_factory):
+    if NO_SERVER_FIXTURES:
+        yield 'NO_SERVER_FIXTURES'
+        return
+
     notice_pytest_fixtures(tmpdir_factory)
 
     # Ideally this would use a different database on the same postgres server
@@ -61,6 +67,10 @@ def engine_url(tmpdir_factory):
 @pytest.mark.fixture_cost(10)
 @pytest.yield_fixture(scope='session')
 def postgresql_server(tmpdir_factory):
+    if NO_SERVER_FIXTURES:
+        yield 'NO_SERVER_FIXTURES'
+        return
+
     notice_pytest_fixtures(tmpdir_factory)
     tmpdir = tmpdir_factory.mktemp('postgresql', numbered=True)
     tmpdir = str(tmpdir)
@@ -87,6 +97,10 @@ def elasticsearch_server_dir(tmpdir_factory):
 @pytest.mark.fixture_cost(10)
 @pytest.yield_fixture(scope='session')
 def elasticsearch_server(elasticsearch_server_dir, elasticsearch_host_port, remote_es):
+    if NO_SERVER_FIXTURES:
+        yield 'NO_SERVER_FIXTURES'
+        return
+
     notice_pytest_fixtures(elasticsearch_host_port, remote_es)
     if not remote_es:
         # spawn a new one
@@ -108,6 +122,10 @@ def elasticsearch_server(elasticsearch_server_dir, elasticsearch_host_port, remo
 
 @pytest.yield_fixture(scope='session')
 def conn(engine_url):
+    if NO_SERVER_FIXTURES:
+        yield 'NO_SERVER_FIXTURES'
+        return
+
     notice_pytest_fixtures(engine_url)
     engine_settings = {
         'sqlalchemy.url': engine_url,
@@ -130,6 +148,9 @@ def conn(engine_url):
 
 @pytest.fixture(scope='session')
 def _DBSession(conn):
+    if NO_SERVER_FIXTURES:
+        return 'NO_SERVER_FIXTURES'
+
     notice_pytest_fixtures(conn)
     # ``server`` thread must be in same scope
     DBSession = sqlalchemy.orm.scoped_session(sqlalchemy.orm.sessionmaker(bind=conn), scopefunc=lambda: 0)
@@ -139,12 +160,19 @@ def _DBSession(conn):
 
 @pytest.fixture(scope='session')
 def DBSession(_DBSession, zsa_savepoints, check_constraints):
+    if NO_SERVER_FIXTURES:
+        return 'NO_SERVER_FIXTURES'
+
     notice_pytest_fixtures(zsa_savepoints, check_constraints)
     return _DBSession
 
 
 @pytest.yield_fixture
 def external_tx(request, conn):
+    if NO_SERVER_FIXTURES:
+        yield 'NO_SERVER_FIXTURES'
+        return
+
     notice_pytest_fixtures(request)
     # print('BEGIN external_tx')
     tx = conn.begin_nested()
@@ -160,6 +188,9 @@ def external_tx(request, conn):
 
 @pytest.fixture
 def transaction(request, external_tx, zsa_savepoints, check_constraints):
+    if NO_SERVER_FIXTURES:
+        return 'NO_SERVER_FIXTURES'
+
     notice_pytest_fixtures(request, external_tx, zsa_savepoints, check_constraints)
     transaction_management.begin()
     request.addfinalizer(transaction_management.abort)
@@ -174,6 +205,10 @@ def zsa_savepoints(conn):
     than that at the start of the test.
     """
     notice_pytest_fixtures(conn)
+
+    if NO_SERVER_FIXTURES:
+        yield 'NO_SERVER_FIXTURES'
+        return
 
     @implementer(ISynchronizer)
     class Savepoints(object):
@@ -221,6 +256,9 @@ def session(transaction, DBSession):
 
     Depends on transaction as storage relies on some interaction there.
     """
+    if NO_SERVER_FIXTURES:
+        return 'NO_SERVER_FIXTURES'
+
     notice_pytest_fixtures(transaction, DBSession)
     return DBSession()
 
@@ -235,6 +273,10 @@ def check_constraints(conn, _DBSession):
     subtransaction check them manually.
     """
     notice_pytest_fixtures(_DBSession)
+
+    if NO_SERVER_FIXTURES:
+        yield 'NO_SERVER_FIXTURES'
+        return
 
     @implementer(ISynchronizer)
     class CheckConstraints(object):
@@ -374,6 +416,10 @@ def execute_counter(conn, zsa_savepoints, check_constraints, filter=None):
     """
     notice_pytest_fixtures(conn, zsa_savepoints, check_constraints)
 
+    if NO_SERVER_FIXTURES:
+        yield 'NO_SERVER_FIXTURES'
+        return
+
     watcher = ExecutionWatcher(filter=filter)
 
     @sqlalchemy.event.listens_for(conn, 'after_cursor_execute')
@@ -399,6 +445,10 @@ def execute_counter(conn, zsa_savepoints, check_constraints, filter=None):
 def no_deps(conn, DBSession):
     notice_pytest_fixtures(conn, DBSession)
 
+    if NO_SERVER_FIXTURES:
+        yield 'NO_SERVER_FIXTURES'
+        return
+
     session = DBSession()
 
     @sqlalchemy.event.listens_for(session, 'after_flush')
@@ -423,12 +473,20 @@ def no_deps(conn, DBSession):
 
 @pytest.fixture(scope='session')
 def wsgi_server_host_port():
+
+    if NO_SERVER_FIXTURES:
+        return 'NO_SERVER_FIXTURES'
+
     return webtest.http.get_free_port()
 
 
 @pytest.fixture(scope='session')
 def wsgi_server_app(app):
     notice_pytest_fixtures(app)
+
+    if NO_SERVER_FIXTURES:
+        return 'NO_SERVER_FIXTURES'
+
     return app
 
 
@@ -436,6 +494,11 @@ def wsgi_server_app(app):
 @pytest.yield_fixture(scope='session')
 def wsgi_server(request, wsgi_server_app, wsgi_server_host_port):
     notice_pytest_fixtures(request, wsgi_server_app, wsgi_server_host_port)
+
+    if NO_SERVER_FIXTURES:
+        yield 'NO_SERVER_FIXTURES'
+        return
+
     host, port = wsgi_server_host_port
 
     server = webtest.http.StopableWSGIServer.create(
