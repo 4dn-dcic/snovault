@@ -49,11 +49,14 @@ def test_storage_creation(session):
 
 
 def test_transaction_record_rollback(session):
+    """ Tests that committing and rolling back an invalid transactions works as expected """
     rid = uuid.uuid4()
     sp1 = session.begin_nested()
     resource = Resource('test_item', {'': {}}, rid=rid)
     session.add(resource)
     sp1.commit()
+
+    # test rollback
     sp2 = session.begin_nested()
     resource = Resource('test_item', {'': {}}, rid=rid)
     session.add(resource)

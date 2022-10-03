@@ -811,13 +811,15 @@ class PropertySheet(Base):
 
 
 class CurrentPropertySheet(Base):
-    """ Table that optimizes access to most recent version of items
-        Also a triple of rid, name (unique keys) and sid
+    """
+    Table that optimizes access to most recent version of items
+    Also a triple of rid, name (unique keys) and sid
     """
     __tablename__ = 'current_propsheets'
     rid = Column(UUID, ForeignKey('resources.rid'),
                  nullable=False, primary_key=True)
     name = Column(types.String, nullable=False, primary_key=True)
+    # B-tree index on sid should optimize retrieval of max_sid (and all sids)
     sid = Column(types.Integer, ForeignKey('propsheets.sid'), nullable=False, index=True)
     propsheet = orm.relationship(
         'PropertySheet', lazy='joined', innerjoin=True,
