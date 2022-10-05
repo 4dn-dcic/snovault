@@ -23,7 +23,7 @@ jobs:
     runs-on: ubuntu-18.04
     strategy:
       matrix:
-        python_version: [3.7, 3.8]
+        python_version: [3.8]
 
     # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
@@ -73,4 +73,4 @@ jobs:
           # This will be the new environment variable name.
           TEST_JOB_ID: sno-test-${{ github.run_number }}-${{ matrix.python_version }}-
         run: |
-          poetry run wipe-test-indices $TEST_JOB_ID search-fourfront-testing-6-8-kncqa2za2r43563rkcmsvgn2fq.us-east-1.es.amazonaws.com:443
+          poetry run wipe-test-indices $TEST_JOB_ID search-fourfront-testing-opensearch-kqm7pliix4wgiu4druk2indorq.us-east-1.es.amazonaws.com:443
