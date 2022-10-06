@@ -36,7 +36,7 @@ classifiers = [
 ]
 
 [tool.poetry.dependencies]
-python = ">=3.7.1,<3.9"
+python = ">=3.8.1,<3.9"
 aws_requests_auth = "^0.4.1"
 # TODO: This is a backport of Python's statistics library for versions earlier than Python 3.4,
 #       so may no longer be needed. Something to investigate later. -kmp 20-Feb-2020

@@ -13,6 +13,7 @@ Change Log
 * Upgrades ElasticSearch to version 7 (OpenSearch 1.3 in production)
 * Upgrades SQLAlchemy to 1.4.41 (and other associated versions)
 * Adds B-Tree index on max_sid to optimize retrieval of this value in indexing
+* Drop support for Python 3.7
 
 
 6.0.8
