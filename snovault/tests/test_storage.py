@@ -281,9 +281,6 @@ def _test_S3BlobStorage(s3_encrypt_key_id, kms_args_expected):
         assert 'key' in download_meta
         mocked_s3_put_object.assert_called_once()
         call_kwargs = mocked_s3_put_object.call_args.kwargs
-        print(mocked_s3_put_object)
-        print(mocked_s3_put_object.call_args)
-        print(call_kwargs)
         if kms_args_expected:
             assert call_kwargs.get("ServerSideEncryption") == "aws:kms"
             assert call_kwargs.get("SSEKMSKeyId") == s3_encrypt_key_id
