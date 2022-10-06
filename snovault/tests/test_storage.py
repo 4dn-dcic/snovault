@@ -274,14 +274,16 @@ def _test_S3BlobStorage(s3_encrypt_key_id, kms_args_expected):
 
     download_meta = {'download': 'test.txt'}
     with mock.patch.object(
-        storage.s3, "put_object", side_effect=storage.s3.put_object
+        storage.s3, 'put_object', side_effect=storage.s3.put_object
     ) as mocked_s3_put_object:  # To obtain calls while retaining function
         storage.store_blob('data', download_meta)
         assert download_meta['bucket'] == blob_bucket
         assert 'key' in download_meta
         mocked_s3_put_object.assert_called_once()
         call_kwargs = mocked_s3_put_object.call_args.kwargs
-        print(call_kwargs.__dict__)
+        print(mocked_s3_put_object)
+        print(mocked_s3_put_object.call_args)
+        print(call_kwargs)
         if kms_args_expected:
             assert call_kwargs.get("ServerSideEncryption") == "aws:kms"
             assert call_kwargs.get("SSEKMSKeyId") == s3_encrypt_key_id
