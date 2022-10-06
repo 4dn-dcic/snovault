@@ -20,10 +20,7 @@ jobs:
     name: Test Suite for dcicsnovault
 
     # The type of runner that the job will run on
-    runs-on: ubuntu-18.04
-    strategy:
-      matrix:
-        python_version: [3.7, 3.8]
+    runs-on: ubuntu-20.04
 
     # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
@@ -31,7 +28,7 @@ jobs:
       - uses: actions/checkout@v2
       - uses: actions/setup-python@v2
         with:
-          python-version: ${{ matrix.python_version }}
+          python-version: 3.8
 
       - name: Install/Link Postgres
         run: |
@@ -73,4 +70,4 @@ jobs:
           # This will be the new environment variable name.
           TEST_JOB_ID: sno-test-${{ github.run_number }}-${{ matrix.python_version }}-
         run: |
-          poetry run wipe-test-indices $TEST_JOB_ID search-fourfront-testing-6-8-kncqa2za2r43563rkcmsvgn2fq.us-east-1.es.amazonaws.com:443
+          poetry run wipe-test-indices $TEST_JOB_ID search-fourfront-testing-opensearch-kqm7pliix4wgiu4druk2indorq.us-east-1.es.amazonaws.com:443

@@ -1,4 +1,4 @@
-import mock
+from unittest import mock
 import pytest
 import re
 import transaction as transaction_management
@@ -8,7 +8,7 @@ import boto3
 from dcicutils.misc_utils import filtered_warnings
 from pyramid.threadlocal import manager
 from sqlalchemy import func
-from sqlalchemy.orm.exc import FlushError
+from sqlalchemy.exc import IntegrityError
 from ..interfaces import DBSESSION, STORAGE
 from ..storage import (
     Blob,
@@ -27,15 +27,17 @@ from moto import mock_s3
 pytestmark = pytest.mark.storage
 
 
-POSTGRES_MAJOR_VERSION_EXPECTED = 11
+# These 3 versions are known to be compatible, older versions should not be
+# used, odds are 14 can be used as well - Will Sept 13 2022
+POSTGRES_COMPATIBLE_MAJOR_VERSIONS = ['11', '12', '13']
 
 
 def test_postgres_version(session):
-
+    """ Tests that the local postgres is running one of the compatible versions """
     (version_info,) = session.query(func.version()).one()
     print("version_info=", version_info)
     assert isinstance(version_info, str)
-    assert re.match("PostgreSQL %s([.][0-9]+)? " % POSTGRES_MAJOR_VERSION_EXPECTED, version_info)
+    assert re.match("PostgreSQL (%s)([.][0-9]+)? " % '|'.join(POSTGRES_COMPATIBLE_MAJOR_VERSIONS), version_info)
 
 
 def test_storage_creation(session):
@@ -47,20 +49,22 @@ def test_storage_creation(session):
 
 
 def test_transaction_record_rollback(session):
+    """ Tests that committing and rolling back an invalid transactions works as expected """
     rid = uuid.uuid4()
+    sp1 = session.begin_nested()
     resource = Resource('test_item', {'': {}}, rid=rid)
     session.add(resource)
-    transaction_management.commit()
-    transaction_management.begin()
-    sp = session.begin_nested()
+    sp1.commit()
+
+    # test rollback
+    sp2 = session.begin_nested()
     resource = Resource('test_item', {'': {}}, rid=rid)
     session.add(resource)
     with pytest.raises(Exception):
-        sp.commit()
-    sp.rollback()
+        sp2.commit()
+    sp2.rollback()
     resource = Resource('test_item', {'': {}})
     session.add(resource)
-    transaction_management.commit()
 
 
 def test_current_propsheet(session):
@@ -220,7 +224,8 @@ def test_keys(session):
     session.flush()
     key3 = Key(rid=resource2.rid, name=testname, value=props1[testname])
     session.add(key3)
-    with pytest.raises(FlushError):
+    # try to insert a duplicate unique key, previously threw FlushError
+    with pytest.raises(IntegrityError):  # in newer sqlalchemy versions IntegrityError is more accurate
         session.flush()
 
 
@@ -264,10 +269,12 @@ def _test_S3BlobStorage(s3_encrypt_key_id, kms_args_expected):
 
     storage = S3BlobStorage(blob_bucket, kms_key_id=s3_encrypt_key_id)
     assert storage.bucket == blob_bucket
+    if s3_encrypt_key_id:
+        assert storage.kms_key_id == s3_encrypt_key_id
 
     download_meta = {'download': 'test.txt'}
     with mock.patch.object(
-        storage.s3, "put_object", side_effect=storage.s3.put_object
+        storage.s3, 'put_object', side_effect=storage.s3.put_object
     ) as mocked_s3_put_object:  # To obtain calls while retaining function
         storage.store_blob('data', download_meta)
         assert download_meta['bucket'] == blob_bucket

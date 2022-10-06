@@ -594,6 +594,7 @@ class UUID(types.TypeDecorator):
     CHAR(32), storing as stringified hex values.
 
     """
+    cache_ok = True  # allow caching of uuids (avoid repeated string building)
     impl = types.CHAR
 
     def load_dialect_impl(self, dialect):
@@ -786,7 +787,7 @@ class Link(Base):
 
 class PropertySheet(Base):
     """
-    A triple describing a resource
+    A triple describing a resource - sid of time of writing, rid (uuid) and properties (json blob)
     """
     __tablename__ = 'propsheets'
     __table_args__ = (
@@ -810,11 +811,16 @@ class PropertySheet(Base):
 
 
 class CurrentPropertySheet(Base):
+    """
+    Table that optimizes access to most recent version of items
+    Also a triple of rid, name (unique keys) and sid
+    """
     __tablename__ = 'current_propsheets'
     rid = Column(UUID, ForeignKey('resources.rid'),
                  nullable=False, primary_key=True)
     name = Column(types.String, nullable=False, primary_key=True)
-    sid = Column(types.Integer, ForeignKey('propsheets.sid'), nullable=False)
+    # B-tree index on sid should optimize retrieval of max_sid (and all sids)
+    sid = Column(types.Integer, ForeignKey('propsheets.sid'), nullable=False, index=True)
     propsheet = orm.relationship(
         'PropertySheet', lazy='joined', innerjoin=True,
         primaryjoin="CurrentPropertySheet.sid==PropertySheet.sid",

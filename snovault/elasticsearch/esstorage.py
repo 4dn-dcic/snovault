@@ -177,7 +177,7 @@ class ElasticSearchStorage(object):
         """
         index_name = get_namespaced_index(self.registry, item_type)
         try:
-            res = self.es.get(index=index_name, doc_type=item_type, id=uuid,
+            res = self.es.get(index=index_name, id=uuid,
                               _source=True, realtime=True, ignore=404)
         except elasticsearch.exceptions.NotFoundError:
             res = None
@@ -194,7 +194,6 @@ class ElasticSearchStorage(object):
         index = get_namespaced_index(self.registry, item_type)  # TODO: Should default be passed here? -kmp 7-Aug-2022
         search = Search(using=self.es, index=index)
         search = search.filter('term', **{term: value})
-        search = search.filter('type', value=item_type)
         return self._one(search)
 
     def get_by_unique_key(self, unique_key, name, item_type=None):
@@ -263,7 +262,7 @@ class ElasticSearchStorage(object):
         :returns: True if rid does not exist in ES, False if it does (AT THIS TIME)
         """
         try:
-            es.delete(id=rid, index=index_name, doc_type=item_type)
+            es.delete(id=rid, index=index_name)
         except elasticsearch.exceptions.NotFoundError:
             # Case: Not yet indexed
             log.error('PURGE: Could not find %s in ElasticSearch. Continuing.' % rid)
@@ -457,7 +456,7 @@ class ElasticSearchStorage(object):
         index_name = get_namespaced_index(self.registry, document['item_type'])
         # use `refresh='waitfor'` so that the ES model is immediately available
         self.es.index(
-            index=index_name, doc_type=document['item_type'], body=document,
+            index=index_name, body=document,
             id=document['uuid'], version=document['sid'],
             version_type='external_gte', refresh='wait_for'
         )

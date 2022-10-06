@@ -1,5 +1,5 @@
 import pytest
-import mock
+from unittest import mock
 
 from contextlib import contextmanager
 from dcicutils.misc_utils import ignored
@@ -191,7 +191,7 @@ def mock_scan(uuids=None):
         for uuid in uuids:
             embedded_item.append({"_id": uuid})
     mocked_scan = mock.Mock()
-    mocked_scan.return_value = embedded_item 
+    mocked_scan.return_value = embedded_item
     return mocked_scan
 
 

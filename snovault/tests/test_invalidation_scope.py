@@ -1,5 +1,5 @@
 import pytest
-import mock
+from unittest import mock
 import copy
 from contextlib import contextmanager
 from ..elasticsearch.indexer_utils import filter_invalidation_scope, determine_child_types
