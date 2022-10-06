@@ -30,7 +30,7 @@ test:
 	@date
 
 remote-test:
-	poetry run pytest -xvvv --timeout=400 --aws-auth --es search-fourfront-testing-opensearch-kqm7pliix4wgiu4druk2indorq.us-east-1.es.amazonaws.com:443
+	poetry run pytest -xvvv --timeout=400 --durations=100 --aws-auth --es search-fourfront-testing-opensearch-kqm7pliix4wgiu4druk2indorq.us-east-1.es.amazonaws.com:443
 
 update:
 	poetry update
