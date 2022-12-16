@@ -6,6 +6,12 @@ snovault
 Change Log
 ----------
 
+7.1.0
+=====
+
+* Supress log errors from skip_indexing
+* Suppress errors from SQLAlchemy relationship overlap
+
 
 7.0.0
 =====

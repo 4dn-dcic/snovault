@@ -43,7 +43,7 @@ def add_to_indexing_queue(success, request, item, edit_or_add):
             error_msg = repr(e)
     else:
         if request.params.get('skip_indexing'):
-            error_msg = f'skip_indexing param passed - {item} not queued for method {edit_or_add}'
+            log.info(f'skip_indexing param passed - {item} not queued for method {edit_or_add}')
         else:
             error_msg = f'DB transaction not successful! {item} not queued for method {edit_or_add}.'
     if error_msg:

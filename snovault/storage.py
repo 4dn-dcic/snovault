@@ -832,7 +832,7 @@ class CurrentPropertySheet(Base):
                     CurrentPropertySheet.name==PropertySheet.name)""",
         viewonly=True,
     )
-    resource = orm.relationship('Resource')
+    resource = orm.relationship('Resource', back_populates='data')
     __mapper_args__ = {'confirm_deleted_rows': False}
 
 
@@ -848,6 +848,7 @@ class Resource(Base):
         'CurrentPropertySheet', cascade='all, delete-orphan',
         innerjoin=True, lazy='joined',
         collection_class=collections.attribute_mapped_collection('name'),
+        back_populates='resource'
     )
 
     def __init__(self, item_type, data=None, rid=None):
