@@ -1423,10 +1423,9 @@ def main():
     # Use `es_server=app.registry.settings.get('elasticsearch.server')` when ES logging is working
     set_logging(in_prod=app.registry.settings.get('production'), level=logging.INFO)
     if not args.staggered:
-        uuids = run(app, collections=args.item_type, dry_run=args.dry_run, check_first=args.check_first,
-                    skip_indexing=args.skip_indexing, index_diff=args.index_diff, strict=args.strict,
-                    sync_index=args.sync_index, print_count_only=args.print_count_only, purge_queue=args.purge_queue)
-        ignored(uuids)  # TODO: Should this be ignored?
+        run(app, collections=args.item_type, dry_run=args.dry_run, check_first=args.check_first,
+            skip_indexing=args.skip_indexing, index_diff=args.index_diff, strict=args.strict,
+            sync_index=args.sync_index, print_count_only=args.print_count_only, purge_queue=args.purge_queue)
     else:
         reindex_by_type_staggered(app)
 

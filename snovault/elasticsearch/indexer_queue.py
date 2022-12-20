@@ -658,21 +658,13 @@ class QueueManager(object):
         checked for any messages
         """
         message_counts = self.number_of_messages()
-        if message_counts['secondary_waiting'] != 0:
-            return False
-        if secondary_only and not include_inflight:
-            return True
-        if secondary_only and include_inflight:
-            return message_counts['secondary_inflight'] == 0
-        if not secondary_only:
-            result = (
-                message_counts['primary_waiting'] == 0 and
-                message_counts['secondary_waiting'] == 0 and
-                message_counts['dlq_waiting'] == 0
-            )
-            if include_inflight:
-                return result and (
-                        message_counts['primary_inflight'] == 0 and
-                        message_counts['secondary_inflight'] == 0 and
-                        message_counts['dlq_inflight'] == 0
-                )
+
+        # helper from Kent that will compute the count
+        def get_count(kind):
+            return (message_counts[kind + "_waiting"]
+                    + (message_counts[kind + "_inflight"] if include_inflight else 0))
+
+        count = 0 if secondary_only else get_count('primary')
+        count += get_count('secondary')
+        count += 0 if secondary_only else get_count('dlq')
+        return count == 0
