@@ -105,14 +105,16 @@ def test_linked_uuids_unset(content, dummy_request, threadlocals):
     assert dummy_request._sid_cache == {}
 
 
+import time
+
 @DecayingRetry.retry_allowed(retries_allowed=3)
 def test_linked_uuids_object(content, dummy_request, threadlocals):
     notice_pytest_fixtures(content, dummy_request, threadlocals)
     # needed to track _linked_uuids
     dummy_request._indexing_view = True
-    embedder = DecayingRetry.retry_allowed(dummy_request.embed)
-    embedder('/testing-link-sources-sno/', sources[0]['uuid'], '@@object')
+    dummy_request.embed('/testing-link-sources-sno/', sources[0]['uuid'], '@@object')
     assert dummy_request._linked_uuids == {('16157204-8c8f-4672-a1a4-14f4b8021fcd', 'TestingLinkSourceSno')}
+    time.sleep(2)
     assert dummy_request._rev_linked_uuids_by_item == {}
 
 
