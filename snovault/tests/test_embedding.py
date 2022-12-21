@@ -1,4 +1,5 @@
 import pytest
+import time
 
 from dcicutils.misc_utils import ignored
 from dcicutils.qa_utils import notice_pytest_fixtures, Retry
@@ -104,8 +105,6 @@ def test_linked_uuids_unset(content, dummy_request, threadlocals):
     assert dummy_request._linked_uuids == set()
     assert dummy_request._sid_cache == {}
 
-
-import time
 
 @DecayingRetry.retry_allowed(retries_allowed=3)
 def test_linked_uuids_object(content, dummy_request, threadlocals):
