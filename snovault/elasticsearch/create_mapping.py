@@ -1380,7 +1380,7 @@ def reindex_by_type_staggered(app):
         uuids = {}
         build_index(app, es, namespaced_index, i_type, mapping, uuids, False)
         mapping_end = timer()
-        run_indexing(app, indexing_uuids=uuids)
+        run_indexing(app, indexing_uuids=set(uuids.values()))
         log.warning(f'Queued type {i_type} in {mapping_end - current_start}')
         time.sleep(5)
         while not indexer_queue.queue_is_empty():
