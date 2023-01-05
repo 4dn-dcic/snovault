@@ -1384,9 +1384,9 @@ def reindex_by_type_staggered(app):
         indexer_queue.add_uuids(app.registry, to_index_list, strict=True,
                                 target_queue='secondary')
         log.warning(f'Queued type {i_type} in {mapping_end - current_start}')
-        time.sleep(5)
+        time.sleep(10)  # give queue some time to catch up
         while not indexer_queue.queue_is_empty():
-            time.sleep(15)  # check every 15 seconds
+            time.sleep(10)  # check every 10 seconds
         indexing_end = timer()
         log.warning(f'Reindexed type {i_type} in {indexing_end - mapping_end}')
     log.warning(f'Overall time: {timer() - overall_start}')
