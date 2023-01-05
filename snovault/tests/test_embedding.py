@@ -128,6 +128,7 @@ def test_linked_uuids_embedded(content, dummy_request, threadlocals):
         ('775795d3-4410-4114-836b-8eeecf1d0c2f', 'TestingLinkTargetSno')
     }
     # _rev_linked_uuids_by_item is in form {target uuid: set(source uuid)}
+    print(dummy_request.__dict__)
     assert dummy_request._rev_linked_uuids_by_item == {
         '775795d3-4410-4114-836b-8eeecf1d0c2f': {'reverse': ['16157204-8c8f-4672-a1a4-14f4b8021fcd']}
     }
