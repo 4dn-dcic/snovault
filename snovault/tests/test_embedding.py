@@ -11,7 +11,7 @@ from .test_views import PARAMETERIZED_NAMES
 
 class DecayingRetry(Retry):
     DEFAULT_RETRIES_ALLOWED = 3
-    DEFAULT_WAIT_SECONDS = 1
+    DEFAULT_WAIT_SECONDS = 3
     DEFAULT_WAIT_MULTIPLIER = 2
 
 
@@ -113,7 +113,7 @@ def test_linked_uuids_object(content, dummy_request, threadlocals):
     dummy_request._indexing_view = True
     dummy_request.embed('/testing-link-sources-sno/', sources[0]['uuid'], '@@object')
     assert dummy_request._linked_uuids == {('16157204-8c8f-4672-a1a4-14f4b8021fcd', 'TestingLinkSourceSno')}
-    time.sleep(2)
+    time.sleep(5)
     assert dummy_request._rev_linked_uuids_by_item == {}
 
 
