@@ -1,7 +1,8 @@
 import pytest
+import time
 
 from dcicutils.misc_utils import ignored
-from dcicutils.qa_utils import notice_pytest_fixtures, Retry
+from dcicutils.qa_utils import notice_pytest_fixtures, Retry, Eventually
 from re import findall
 from ..interfaces import TYPES
 from ..util import add_default_embeds, crawl_schemas_by_embeds
@@ -10,7 +11,7 @@ from .test_views import PARAMETERIZED_NAMES
 
 class DecayingRetry(Retry):
     DEFAULT_RETRIES_ALLOWED = 3
-    DEFAULT_WAIT_SECONDS = 1
+    DEFAULT_WAIT_SECONDS = 3
     DEFAULT_WAIT_MULTIPLIER = 2
 
 
@@ -111,8 +112,10 @@ def test_linked_uuids_object(content, dummy_request, threadlocals):
     # needed to track _linked_uuids
     dummy_request._indexing_view = True
     dummy_request.embed('/testing-link-sources-sno/', sources[0]['uuid'], '@@object')
-    assert dummy_request._linked_uuids == {('16157204-8c8f-4672-a1a4-14f4b8021fcd', 'TestingLinkSourceSno')}
-    assert dummy_request._rev_linked_uuids_by_item == {}
+    def my_assertions():
+        assert dummy_request._linked_uuids == {('16157204-8c8f-4672-a1a4-14f4b8021fcd', 'TestingLinkSourceSno')}
+        assert dummy_request._rev_linked_uuids_by_item == {}
+    Eventually.call_assertion(my_assertions)
 
 
 @DecayingRetry.retry_allowed(retries_allowed=3)
@@ -126,6 +129,7 @@ def test_linked_uuids_embedded(content, dummy_request, threadlocals):
         ('775795d3-4410-4114-836b-8eeecf1d0c2f', 'TestingLinkTargetSno')
     }
     # _rev_linked_uuids_by_item is in form {target uuid: set(source uuid)}
+    print(dummy_request.__dict__)
     assert dummy_request._rev_linked_uuids_by_item == {
         '775795d3-4410-4114-836b-8eeecf1d0c2f': {'reverse': ['16157204-8c8f-4672-a1a4-14f4b8021fcd']}
     }

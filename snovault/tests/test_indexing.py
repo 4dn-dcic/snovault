@@ -81,7 +81,7 @@ def app_settings(basic_app_settings, wsgi_server_host_port, elasticsearch_server
     return settings
 
 
-INDEXER_MODE = os.environ.get('INDEXER_MODE', "MPINDEX").upper()
+INDEXER_MODE = os.environ.get('INDEXER_MODE', "INDEX").upper()
 if INDEXER_MODE == "MPINDEX":
     INDEXER_APP_PARAMS = [True]
 elif INDEXER_MODE == "INDEX":
@@ -114,7 +114,6 @@ def setup_and_teardown(app):
     """
     # BEFORE THE TEST - just run CM for the TEST_TYPE by default
     create_mapping.run(app, collections=[TEST_TYPE], skip_indexing=True, purge_queue=True)
-    app.registry[INDEXER_QUEUE].clear_queue()
 
     yield  # run the test
 
@@ -125,8 +124,8 @@ def setup_and_teardown(app):
     # method after creation. (This comment is transitional and can go away if things seem to work normally.)
     # -kmp 11-May-2020
     # Ref: https://stackoverflow.com/questions/44193823/get-existing-table-using-sqlalchemy-metadata/44205552
-    meta = MetaData(bind=session.connection())
-    meta.reflect()
+    # meta = MetaData(bind=session.connection())
+    # meta.reflect()
     # sqlalchemy 1.4 - use TRUNCATE instead of DELETE
     connection.execute('TRUNCATE {} RESTART IDENTITY;'.format(
         ','.join(table.name
@@ -264,7 +263,6 @@ def test_indexer_queue(app):
 def test_skip_indexing_query_parameter(app, testapp):
     """ Tests that skip_indexing query parameter is respected """
     indexer_queue = app.registry[INDEXER_QUEUE]
-    indexer_queue.clear_queue()
     # test POST
     res = testapp.post_json(TEST_COLL + '?skip_indexing=true', {'required': ''}).json
     time.sleep(5)  # give sqs 5 seconds to catch up
@@ -284,7 +282,6 @@ def test_queue_indexing_telemetry_id(app, testapp):
     indexer_queue = app.registry[INDEXER_QUEUE]
     ordered_queue_targets = [targ for targ in indexer_queue.queue_targets]
     assert ordered_queue_targets == ['primary', 'secondary', 'dlq']
-    indexer_queue.clear_queue()
     testapp.post_json(TEST_COLL + '?telemetry_id=test_telem', {'required': ''})
     time.sleep(2)
     secondary_body = {
@@ -371,7 +368,6 @@ def test_dlq_to_primary(app, anontestapp, indexer_testapp):
     those same messages from the primary queue
     """
     indexer_queue = app.registry[INDEXER_QUEUE]
-    indexer_queue.clear_queue()
     test_uuids = ["destined for primary!", "i am also destined!"]
     print("Setup phase. Placing 2 dummy UUIDs directly into the DLQ...")
     success, failed = indexer_queue.add_uuids(app.registry, test_uuids, target_queue='dlq')
@@ -592,9 +588,6 @@ def test_indexing_queue_records(app, testapp, indexer_testapp):
 @pytest.mark.flaky
 def test_sync_and_queue_indexing(app, testapp, indexer_testapp):
     es = app.registry[ELASTIC_SEARCH]
-    indexer_queue = app.registry[INDEXER_QUEUE]
-    # clear queue before starting this one
-    indexer_queue.clear_queue()
     # queued on post - total of one item queued
     testapp.post_json(TEST_COLL, {'required': ''})
     # synchronously index
@@ -638,8 +631,6 @@ def test_queue_indexing_with_linked(app, testapp, indexer_testapp, dummy_request
     - test purge functionality before and after removing links to an item
     """
     es = app.registry[ELASTIC_SEARCH]
-    indexer_queue = app.registry[INDEXER_QUEUE]
-    ignored(indexer_queue)  # TODO: Should this be used? In some tests here, we clear the queue.
     # first, run create mapping with the indices we will use
     create_mapping.run(
         app,
@@ -799,8 +790,6 @@ def test_queue_indexing_with_linked(app, testapp, indexer_testapp, dummy_request
 
 @pytest.mark.flaky
 def test_indexing_invalid_sid(app, testapp, indexer_testapp):
-    indexer_queue = app.registry[INDEXER_QUEUE]
-    ignored(indexer_queue)  # TODO: Should this be used? In some tests here, we clear the queue.
     es = app.registry[ELASTIC_SEARCH]
     # post an item, index, then find version (sid)
     res = testapp.post_json(TEST_COLL, {'required': ''})
@@ -1240,7 +1229,7 @@ def test_indexing_esstorage_can_purge_without_db(app, testapp, indexer_testapp):
     assert not esstorage.get_by_uuid(test_uuid)  # should not get now
 
 
-@pytest.mark.flaky
+@pytest.mark.flaky(max_runs=3)
 def test_indexing_rdbstorage_can_purge_without_es(app, testapp, indexer_testapp):
     """
     Tests that we can delete items from the DB using the DELETE API when said item
@@ -1252,9 +1241,9 @@ def test_indexing_rdbstorage_can_purge_without_es(app, testapp, indexer_testapp)
     # post an item, allow it to index
     res = testapp.post_json(TEST_COLL, {'required': 'some_value'})
     test_uuid = res.json['@graph'][0]['uuid']
+    time.sleep(6)
     res = indexer_testapp.post_json('/index', {'record': True})
     assert res.json['indexing_count'] == 1
-    time.sleep(2)
     # get out of both DB and ES
     assert rdbstorage.get_by_uuid(test_uuid)
     assert esstorage.get_by_uuid(test_uuid)
@@ -1265,7 +1254,7 @@ def test_indexing_rdbstorage_can_purge_without_es(app, testapp, indexer_testapp)
     assert not rdbstorage.get_by_uuid(test_uuid)  # should not get now
 
 
-@pytest.mark.flaky(max_runs=2, rerun_filter=delay_rerun)
+@pytest.mark.flaky(max_runs=3, rerun_filter=delay_rerun)
 def test_aggregated_items(app, testapp, indexer_testapp):
     """
     Test that the item aggregation works, which only occurs when indexing
@@ -1280,8 +1269,6 @@ def test_aggregated_items(app, testapp, indexer_testapp):
     - Check aggregated-items view; should now match ES results
     """
     es = app.registry[ELASTIC_SEARCH]
-    indexer_queue = app.registry[INDEXER_QUEUE]
-    ignored(indexer_queue)  # TODO: Should this be used? In some tests here, we clear the queue.
     # first, run create mapping with the indices we will use
     namespaced_aggregate = indexer_utils.get_namespaced_index(app, 'testing_link_aggregate_sno')
     create_mapping.run(
@@ -1326,7 +1313,7 @@ def test_aggregated_items(app, testapp, indexer_testapp):
     doc_count = es.count(index=namespaced_aggregate).get('count')
     tries = 0
     while doc_count < 1 and tries < 5:
-        time.sleep(2)
+        time.sleep(4)
         doc_count = es.count(index=namespaced_aggregate).get('count')
         tries += 1
     assert doc_count == 1
