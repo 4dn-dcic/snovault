@@ -1241,9 +1241,9 @@ def test_indexing_rdbstorage_can_purge_without_es(app, testapp, indexer_testapp)
     # post an item, allow it to index
     res = testapp.post_json(TEST_COLL, {'required': 'some_value'})
     test_uuid = res.json['@graph'][0]['uuid']
+    time.sleep(3)
     res = indexer_testapp.post_json('/index', {'record': True})
     assert res.json['indexing_count'] == 1
-    time.sleep(2)
     # get out of both DB and ES
     assert rdbstorage.get_by_uuid(test_uuid)
     assert esstorage.get_by_uuid(test_uuid)
