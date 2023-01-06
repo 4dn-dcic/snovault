@@ -68,7 +68,7 @@ jobs:
           make remote-test-npm
 
       - name: QA (UNIT)
-        if: ${{ matrix.test_type == 'NPM' }}
+        if: ${{ matrix.test_type == 'UNIT' }}
         env:
           S3_ENCRYPT_KEY: ${{ secrets.S3_ENCRYPT_KEY }}
           # # The need for this old environment variable name will go away soon.
