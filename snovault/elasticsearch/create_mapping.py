@@ -1218,10 +1218,11 @@ def run(app, collections=None, dry_run=False, check_first=False, skip_indexing=F
     log = log.bind(telemetry_id=telemetry_id)
     log.info(f'\n___CREATE-MAPPING___:\ncollections: {collections}'
              f'\ncheck_first {check_first}\n index_diff {index_diff}\n', cat=cat)
-    log.info('\n___ES___:\n %s\n' % (str(es.cat.client)), cat=cat)
-    log.info('\n___ES NODES___:\n %s\n' % (str(es.cat.nodes())), cat=cat)
-    log.info('\n___ES HEALTH___:\n %s\n' % (str(es.cat.health())), cat=cat)
-    log.info('\n___ES INDICES (PRE-MAPPING)___:\n %s\n' % str(es.cat.indices()), cat=cat)
+    # These log statements are not frequently viewed anyway and significantly slow down tests - Will Jan 6 2022
+    # log.info('\n___ES___:\n %s\n' % (str(es.cat.client)), cat=cat)
+    # log.info('\n___ES NODES___:\n %s\n' % (str(es.cat.nodes())), cat=cat)
+    # log.info('\n___ES HEALTH___:\n %s\n' % (str(es.cat.health())), cat=cat)
+    # log.info('\n___ES INDICES (PRE-MAPPING)___:\n %s\n' % str(es.cat.indices()), cat=cat)
 
     if check_first and strict:
         log.warning("In create_mapping.run, check_first=True and strict=True is an unusual combination.")
@@ -1237,9 +1238,10 @@ def run(app, collections=None, dry_run=False, check_first=False, skip_indexing=F
 
     # clear the indexer queue on a total reindex
     namespaced_index = get_namespaced_index(app, 'indexing')
-    if total_reindex or purge_queue:
-        log.info('___PURGING THE QUEUE AND CLEARING INDEXING RECORDS BEFORE MAPPING___\n', cat=cat)
-        indexer_queue.purge_queue()
+    if (total_reindex or purge_queue):
+        log.info('___PURGING THE QUEUE (IF NECESSARY) AND CLEARING INDEXING RECORDS BEFORE MAPPING___\n', cat=cat)
+        if not indexer_queue.queue_is_empty(secondary_only=False, include_inflight=True):
+            indexer_queue.purge_queue()
         # we also want to remove the 'indexing' index, which stores old records
         # it's not guaranteed to be there, though
         es_safe_execute(es.indices.delete, index=namespaced_index, ignore=[404])
@@ -1287,7 +1289,8 @@ def run(app, collections=None, dry_run=False, check_first=False, skip_indexing=F
 
     overall_end = timer()
     cat = 'finished mapping'
-    log.info('\n___ES INDICES (POST-MAPPING)___:\n %s\n' % (str(es.cat.indices())), cat=cat)
+    # another API call we almost never see, commented out to speed up tests - Will Jan 6 2022
+    # log.info('\n___ES INDICES (POST-MAPPING)___:\n %s\n' % (str(es.cat.indices())), cat=cat)
     log.info('\n___FINISHED CREATE-MAPPING___\n', cat=cat)
 
     log.info('\n___GREATEST MAPPING TIME: %s\n' % greatest_mapping_time,
