@@ -1229,7 +1229,7 @@ def test_indexing_esstorage_can_purge_without_db(app, testapp, indexer_testapp):
     assert not esstorage.get_by_uuid(test_uuid)  # should not get now
 
 
-@pytest.mark.flaky
+@pytest.mark.flaky(max_retries=3)
 def test_indexing_rdbstorage_can_purge_without_es(app, testapp, indexer_testapp):
     """
     Tests that we can delete items from the DB using the DELETE API when said item
@@ -1241,7 +1241,7 @@ def test_indexing_rdbstorage_can_purge_without_es(app, testapp, indexer_testapp)
     # post an item, allow it to index
     res = testapp.post_json(TEST_COLL, {'required': 'some_value'})
     test_uuid = res.json['@graph'][0]['uuid']
-    time.sleep(3)
+    time.sleep(6)
     res = indexer_testapp.post_json('/index', {'record': True})
     assert res.json['indexing_count'] == 1
     # get out of both DB and ES
