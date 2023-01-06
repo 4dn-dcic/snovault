@@ -533,7 +533,7 @@ test = ["pytest (>=6.2.0)", "pytest-benchmark", "pytest-cov", "pytest-subtests",
 
 [[package]]
 name = "dcicutils"
-version = "6.3.0.1b0"
+version = "6.4.1.1b1"
 description = "Utility package for interacting with the 4DN Data Portal and other 4DN resources"
 category = "main"
 optional = false
@@ -1731,7 +1731,7 @@ test = ["zope.testing"]
 [metadata]
 lock-version = "1.1"
 python-versions = ">=3.8.1,<3.9"
-content-hash = "0a849c5063a44c5ae9c29244c979bf7d99ebf8c3e1ec7e7d161ce8f8c5b03da8"
+content-hash = "f50366d7f985aa86751485e5f04f8ed01d330a5a108938780112be9bbd45017e"
 
 [metadata.files]
 atomicwrites = [
@@ -1936,8 +1936,8 @@ cryptography = [
     {file = "cryptography-38.0.1.tar.gz", hash = "sha256:1db3d807a14931fa317f96435695d9ec386be7b84b618cc61cfa5d08b0ae33d7"},
 ]
 dcicutils = [
-    {file = "dcicutils-6.3.0.1b0-py3-none-any.whl", hash = "sha256:fc4198437b506ffcd736a90f42115bf3f5733cbc17034f18eb4d54f994e80679"},
-    {file = "dcicutils-6.3.0.1b0.tar.gz", hash = "sha256:a1a3a482cb23ee36c6cae2f453b8c7118a89a3964cd19ed14d84c0ec66df9332"},
+    {file = "dcicutils-6.4.1.1b1-py3-none-any.whl", hash = "sha256:13741a501faeaa1ccdca7df2a82cce2656138faa7d196b38f42602ec8d5485e2"},
+    {file = "dcicutils-6.4.1.1b1.tar.gz", hash = "sha256:7169cdd776ecd4e21d8e64f28bd2a1c9580fac848c4cd22e393197b461880856"},
 ]
 docker = [
     {file = "docker-4.4.4-py2.py3-none-any.whl", hash = "sha256:f3607d5695be025fa405a12aca2e5df702a57db63790c73b927eb6a94aac60af"},
