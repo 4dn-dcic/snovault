@@ -1254,7 +1254,7 @@ def test_indexing_rdbstorage_can_purge_without_es(app, testapp, indexer_testapp)
     assert not rdbstorage.get_by_uuid(test_uuid)  # should not get now
 
 
-@pytest.mark.flaky(max_runs=2, rerun_filter=delay_rerun)
+@pytest.mark.flaky(max_runs=3, rerun_filter=delay_rerun)
 def test_aggregated_items(app, testapp, indexer_testapp):
     """
     Test that the item aggregation works, which only occurs when indexing
@@ -1313,7 +1313,7 @@ def test_aggregated_items(app, testapp, indexer_testapp):
     doc_count = es.count(index=namespaced_aggregate).get('count')
     tries = 0
     while doc_count < 1 and tries < 5:
-        time.sleep(2)
+        time.sleep(4)
         doc_count = es.count(index=namespaced_aggregate).get('count')
         tries += 1
     assert doc_count == 1
