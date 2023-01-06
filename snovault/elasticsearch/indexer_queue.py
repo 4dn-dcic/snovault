@@ -651,3 +651,20 @@ class QueueManager(object):
             except ValueError:
                 formatted[entry] = None
         return formatted
+
+    def queue_is_empty(self, secondary_only=True, include_inflight=False):
+        """
+        Returns True if the queue is empty - by default will only inspect secondary queue, otherwise all will be
+        checked for any messages
+        """
+        message_counts = self.number_of_messages()
+
+        # helper from Kent that will compute the count
+        def get_count(kind):
+            return (message_counts[kind + "_waiting"]
+                    + (message_counts[kind + "_inflight"] if include_inflight else 0))
+
+        count = 0 if secondary_only else get_count('primary')
+        count += get_count('secondary')
+        count += 0 if secondary_only else get_count('dlq')
+        return count == 0

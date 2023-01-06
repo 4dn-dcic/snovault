@@ -1355,6 +1355,43 @@ def run(app, collections=None, dry_run=False, check_first=False, skip_indexing=F
     return timings
 
 
+def reindex_by_type_staggered(app):
+    """ Performs a full reindexing of the database, but waits for reindexing to complete of the current type
+        before proceeding to the next one.
+
+        The point of this is to minimize downtime of the server overall. Some types take longer than others
+        and this process may run for some significant time, but at most only one type on the system will be
+        unavailable while this process goes, which has some significant advantages.
+    """
+    overall_start = timer()
+    registry = app.registry
+    es = registry[ELASTIC_SEARCH]
+    indexer_queue = registry[INDEXER_QUEUE]
+    all_types = registry[COLLECTIONS].by_item_type
+
+    log.warning('Running staggered create_mapping command - wiping and reindexing indices sequentially'
+                ' to minimize downtime.')
+    log.warning(f'Types to reindex: {all_types}')
+    for i_type in all_types:
+        log.warning(f'Reindexing {i_type}')
+        current_start = timer()
+        mapping = create_mapping_by_type(i_type, registry)
+        namespaced_index = get_namespaced_index(app, i_type)
+        uuids = {}
+        build_index(app, es, namespaced_index, i_type, mapping, uuids, False)
+        mapping_end = timer()
+        to_index_list = flatten_and_sort_uuids(app.registry, uuids, None)
+        indexer_queue.add_uuids(app.registry, to_index_list, strict=True,
+                                target_queue='secondary')
+        log.warning(f'Queued type {i_type} in {mapping_end - current_start}')
+        time.sleep(10)  # give queue some time to catch up
+        while not indexer_queue.queue_is_empty():
+            time.sleep(10)  # check every 10 seconds
+        indexing_end = timer()
+        log.warning(f'Reindexed type {i_type} in {indexing_end - mapping_end}')
+    log.warning(f'Overall time: {timer() - overall_start}')
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Create Elasticsearch mapping", epilog=EPILOG,
@@ -1380,6 +1417,8 @@ def main():
                         help="use with check_first to only print counts")
     parser.add_argument('--purge-queue', action='store_true',
                         help="purge the contents of all queues, regardless of run mode")
+    parser.add_argument('--staggered', action='store_true', default=False,
+                        help='Pass to trigger staggered reindexing, a new mode that will go type-by-type')
 
     args = parser.parse_args()
 
@@ -1388,12 +1427,12 @@ def main():
     # Loading app will have configured from config file. Reconfigure here:
     # Use `es_server=app.registry.settings.get('elasticsearch.server')` when ES logging is working
     set_logging(in_prod=app.registry.settings.get('production'), level=logging.INFO)
-
-    uuids = run(app, collections=args.item_type, dry_run=args.dry_run, check_first=args.check_first,
-                skip_indexing=args.skip_indexing, index_diff=args.index_diff, strict=args.strict,
-                sync_index=args.sync_index, print_count_only=args.print_count_only, purge_queue=args.purge_queue)
-    ignored(uuids)  # TODO: Should this be ignored?
-    return
+    if not args.staggered:
+        run(app, collections=args.item_type, dry_run=args.dry_run, check_first=args.check_first,
+            skip_indexing=args.skip_indexing, index_diff=args.index_diff, strict=args.strict,
+            sync_index=args.sync_index, print_count_only=args.print_count_only, purge_queue=args.purge_queue)
+    else:
+        reindex_by_type_staggered(app)
 
 
 if __name__ == '__main__':
