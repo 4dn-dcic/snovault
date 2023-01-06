@@ -11,6 +11,8 @@ Change Log
 
 * Supress log errors from skip_indexing
 * Suppress errors from SQLAlchemy relationship overlap
+* Add reindex_by_type capabilities 
+* Small changes to indexing tests to speed them up
 
 
 7.0.0
