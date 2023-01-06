@@ -1229,7 +1229,7 @@ def test_indexing_esstorage_can_purge_without_db(app, testapp, indexer_testapp):
     assert not esstorage.get_by_uuid(test_uuid)  # should not get now
 
 
-@pytest.mark.flaky(max_retries=3)
+@pytest.mark.flaky(max_runs=3)
 def test_indexing_rdbstorage_can_purge_without_es(app, testapp, indexer_testapp):
     """
     Tests that we can delete items from the DB using the DELETE API when said item
