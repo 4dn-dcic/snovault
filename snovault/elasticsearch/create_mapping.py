@@ -833,9 +833,9 @@ def build_index(app, es, index_name, in_type, mapping, uuids_to_index, dry_run,
     # note that sometimes we can encounter error because the index we are trying to delete
     # is being snapshot - wait for it to complete then try again
     if this_index_exists:
-        allowed_time = as_seconds(minutes=2)
+        allowed_time = as_seconds(minutes=10)  # snapshots can be very slow
         retry_wait = 10  # seconds
-        for _ in range(allowed_time // retry_wait):  # recover from snapshot related errors, 2 mins max
+        for _ in range(allowed_time // retry_wait):  # recover from snapshot related errors, 10 mins max
             res = es_safe_execute(es.indices.delete, index=index_name, ignore=[404])
             if res is not None:
                 if res.get('status') == 404:
@@ -1117,6 +1117,7 @@ def es_safe_execute(function, **kwargs):
                 raise e
             else:
                 log.info('Snapshot error occurred - retrying')
+                exec_count += 1
         else:
             break
     return res
@@ -1429,6 +1430,7 @@ def main():
 
     # Loading app will have configured from config file. Reconfigure here:
     # Use `es_server=app.registry.settings.get('elasticsearch.server')` when ES logging is working
+    # TODO: fix set_logging call so it functions correctly, right now only warning logs (default) are sent - Will Jan 13 2022
     set_logging(in_prod=app.registry.settings.get('production'), level=logging.INFO)
     if not args.staggered:
         run(app, collections=args.item_type, dry_run=args.dry_run, check_first=args.check_first,
