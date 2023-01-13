@@ -6,6 +6,12 @@ snovault
 Change Log
 ----------
 
+7.1.1
+=====
+
+* Small fix/adjustment to snapshot related error handling when re-mapping
+
+
 7.1.0
 =====
 
