@@ -834,7 +834,7 @@ def build_index(app, es, index_name, in_type, mapping, uuids_to_index, dry_run,
     # is being snapshot - wait for it to complete then try again
     if this_index_exists:
         allowed_time = as_seconds(minutes=10)  # snapshots can be very slow
-        retry_wait = 10  # seconds
+        retry_wait = 20  # seconds
         for _ in range(allowed_time // retry_wait):  # recover from snapshot related errors, 10 mins max
             res = es_safe_execute(es.indices.delete, index=index_name, ignore=[404])
             if res is not None:
