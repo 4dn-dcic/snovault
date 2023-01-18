@@ -127,7 +127,7 @@ def setup_and_teardown(app):
     # meta = MetaData(bind=session.connection())
     # meta.reflect()
     # sqlalchemy 1.4 - use TRUNCATE instead of DELETE
-    connection.execute('TRUNCATE {} RESTART IDENTITY;'.format(
+    connection.execute('TRUNCATE {} RESTART IDENTITY CASCADE;'.format(
         ','.join(table.name
                  for table in reversed(Base.metadata.sorted_tables))))
     session.flush()
