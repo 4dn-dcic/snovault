@@ -6,6 +6,15 @@ snovault
 Change Log
 ----------
 
+7.1.2
+=====
+
+* In ``RDBStorage.update``:
+  * Use session.begin_nested for better stack hygiene.
+  * Better error message on integrity error to acknowledge possibility
+    of both UUID conflit *and* undefined UUID.
+
+
 7.1.1
 =====
 

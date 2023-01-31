@@ -475,19 +475,18 @@ class RDBStorage(object):
 
     def update(self, model, properties=None, sheets=None, unique_keys=None, links=None):
         session = self.DBSession()
-        sp = session.begin_nested()
-        try:
-            session.add(model)
-            self._update_properties(model, properties, sheets)
-            if links is not None:
-                self._update_rels(model, links)
-            if unique_keys is not None:
-                keys_add, keys_remove = self._update_keys(model, unique_keys)
-            sp.commit()
-        except (IntegrityError, FlushError):
-            sp.rollback()
-        else:
-            return
+        with session.begin_nested() as sp:
+            try:
+                session.add(model)
+                self._update_properties(model, properties, sheets)
+                if links is not None:
+                    self._update_rels(model, links)
+                if unique_keys is not None:
+                    keys_add, keys_remove = self._update_keys(model, unique_keys)
+                sp.commit()
+                return
+            except (IntegrityError, FlushError):
+                sp.rollback()
 
         # Try again more carefully
         try:
@@ -497,7 +496,7 @@ class RDBStorage(object):
                 self._update_rels(model, links)
             session.flush()
         except (IntegrityError, FlushError):
-            msg = 'UUID conflict'
+            msg = 'Cannot update because of one or more conflicting (or undefined) UUIDs'
             raise HTTPConflict(msg)
         assert unique_keys is not None
         conflicts = [pk for pk in keys_add if session.query(Key).get(pk) is not None]
