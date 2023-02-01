@@ -459,10 +459,9 @@ class RDBStorage(object):
             if unique_keys is not None:
                 keys_add, keys_remove = self._update_keys(model, unique_keys)
             sp.commit()
+            return
         except (IntegrityError, FlushError):
             sp.rollback()
-        else:
-            return
 
         # Try again more carefully
         try:
