@@ -23,11 +23,11 @@ from pyramid.traversal import traverse
 from sqlalchemy import MetaData
 from unittest import mock
 from webtest.app import AppError
-from zope.sqlalchemy import mark_changed
+# from zope.sqlalchemy import mark_changed
 from ..interfaces import DBSESSION, STORAGE, COLLECTIONS, TYPES
 from .. import util  # The filename util.py, not something in __init__.py
 from .. import main  # Function main actually defined in __init__.py (should maybe be defined elsewhere)
-from ..storage import Base
+# from ..storage import Base
 from ..elasticsearch import create_mapping, indexer_utils
 from ..elasticsearch.create_mapping import (
     build_index_record,
@@ -44,6 +44,7 @@ from ..elasticsearch.indexer import check_sid, SidException
 from ..elasticsearch.indexer_queue import QueueManager
 from ..elasticsearch.indexer_utils import compute_invalidation_scope
 from ..elasticsearch.interfaces import ELASTIC_SEARCH, INDEXER_QUEUE, INDEXER_QUEUE_MIRROR
+from ..tools import local_collections
 from ..util import INDEXER_NAMESPACE_FOR_TESTING
 from dcicutils.misc_utils import Retry
 from .testing_views import TestingLinkSourceSno
@@ -104,35 +105,40 @@ def app(app_settings, request):
     DBSession.bind.pool.dispose()
 
 
-# XXX C4-312: refactor tests so this can be module scope.
-# Having to have to drop DB tables and re-run create_mapping for every test is slow.
+# # XXX C4-312: refactor tests so this can be module scope.
+# # Having to have to drop DB tables and re-run create_mapping for every test is slow.
+# @pytest.yield_fixture(scope='function', autouse=True)
+# def setup_and_teardown(app):
+#     """
+#     Run create mapping and purge queue before tests and clear out the
+#     DB tables after the test
+#     """
+#     # BEFORE THE TEST - just run CM for the TEST_TYPE by default
+#     create_mapping.run(app, collections=[TEST_TYPE], skip_indexing=True, purge_queue=True)
+#
+#     yield  # run the test
+#
+#     # AFTER THE TEST
+#     session = app.registry[DBSESSION]
+#     connection = session.connection().connect()
+#     # The reflect=True argument to MetaData was deprecated. Instead, one is supposed to call the .reflect()
+#     # method after creation. (This comment is transitional and can go away if things seem to work normally.)
+#     # -kmp 11-May-2020
+#     # Ref: https://stackoverflow.com/questions/44193823/get-existing-table-using-sqlalchemy-metadata/44205552
+#     # meta = MetaData(bind=session.connection())
+#     # meta.reflect()
+#     # sqlalchemy 1.4 - use TRUNCATE instead of DELETE
+#     connection.execute('TRUNCATE {} RESTART IDENTITY CASCADE;'.format(
+#         ','.join(table.name
+#                  for table in reversed(Base.metadata.sorted_tables))))
+#     session.flush()
+#     mark_changed(session())
+#     transaction_management.commit()
+
 @pytest.yield_fixture(scope='function', autouse=True)
 def setup_and_teardown(app):
-    """
-    Run create mapping and purge queue before tests and clear out the
-    DB tables after the test
-    """
-    # BEFORE THE TEST - just run CM for the TEST_TYPE by default
-    create_mapping.run(app, collections=[TEST_TYPE], skip_indexing=True, purge_queue=True)
-
-    yield  # run the test
-
-    # AFTER THE TEST
-    session = app.registry[DBSESSION]
-    connection = session.connection().connect()
-    # The reflect=True argument to MetaData was deprecated. Instead, one is supposed to call the .reflect()
-    # method after creation. (This comment is transitional and can go away if things seem to work normally.)
-    # -kmp 11-May-2020
-    # Ref: https://stackoverflow.com/questions/44193823/get-existing-table-using-sqlalchemy-metadata/44205552
-    # meta = MetaData(bind=session.connection())
-    # meta.reflect()
-    # sqlalchemy 1.4 - use TRUNCATE instead of DELETE
-    connection.execute('TRUNCATE {} RESTART IDENTITY CASCADE;'.format(
-        ','.join(table.name
-                 for table in reversed(Base.metadata.sorted_tables))))
-    session.flush()
-    mark_changed(session())
-    transaction_management.commit()
+    with local_collections(app=app, collections=[TEST_TYPE]):
+        yield
 
 
 @pytest.yield_fixture(scope='function')
