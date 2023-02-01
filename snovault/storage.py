@@ -459,9 +459,10 @@ class RDBStorage(object):
             if unique_keys is not None:
                 keys_add, keys_remove = self._update_keys(model, unique_keys)
             sp.commit()
-            return
         except (IntegrityError, FlushError):
             sp.rollback()
+        else:
+            return
 
         # Try again more carefully
         try:
@@ -471,8 +472,8 @@ class RDBStorage(object):
                 self._update_rels(model, links)
             session.flush()
         except (IntegrityError, FlushError) as e:
-            raw_error_msg = get_error_message(e)
-            log.error(raw_error_msg)
+            # raw_error_msg = get_error_message(e)
+            # log.error(raw_error_msg)
             msg = 'Cannot update because of one or more conflicting (or undefined) UUIDs'
             raise HTTPConflict(msg)
         assert unique_keys is not None
