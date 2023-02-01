@@ -1,6 +1,9 @@
 import contextlib
+import json
+import time
 import webtest
 
+from dcicutils.lang_utils import n_of
 from .interfaces import DBSESSION
 from .elasticsearch import create_mapping
 
@@ -73,3 +76,17 @@ def local_collections(*, app, collections):
     with begin_nested(app=app, commit=False):
         create_mapping.run(app, collections=collections, skip_indexing=True, purge_queue=True)
         yield
+
+
+def index_n_items_for_testing(testapp, n, *, max_tries=10):
+    tries_so_far = 0
+    total_items_seen = 0
+    while total_items_seen < n:
+        indexing_record = testapp.post_json('/index', {'record': True}).json
+        items_this_time = indexing_record.get('indexing_count')
+        assert items_this_time is not None, f"Expected an indexing_record, but got {json.dumps(indexing_record)}."
+        total_items_seen += items_this_time
+        assert tries_so_far < max_tries, (
+            f"Attempt to index {n_of(n, 'item')}. Tried {max_tries} times, but saw only {total_items_seen}.")
+        tries_so_far += 1
+        time.sleep(1)

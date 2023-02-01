@@ -17,7 +17,7 @@ import yaml
 from datetime import datetime, timedelta
 from dcicutils.lang_utils import n_of
 from dcicutils.misc_utils import ignored, get_error_message
-from dcicutils.qa_utils import ControlledTime, notice_pytest_fixtures
+from dcicutils.qa_utils import ControlledTime, Eventually, notice_pytest_fixtures
 from elasticsearch.exceptions import NotFoundError
 from pyramid.traversal import traverse
 from sqlalchemy import MetaData
@@ -44,6 +44,7 @@ from ..elasticsearch.indexer import check_sid, SidException
 from ..elasticsearch.indexer_queue import QueueManager
 from ..elasticsearch.indexer_utils import compute_invalidation_scope
 from ..elasticsearch.interfaces import ELASTIC_SEARCH, INDEXER_QUEUE, INDEXER_QUEUE_MIRROR
+from ..tools import index_n_items_for_testing
 from ..util import INDEXER_NAMESPACE_FOR_TESTING
 from dcicutils.misc_utils import Retry
 from .testing_views import TestingLinkSourceSno
@@ -1137,36 +1138,43 @@ def delay_rerun(*args):
     return True
 
 
+def make_es_count_checker(n, *, es, namespaced_index):
+    def es_count_checker():
+        indexed_count = es.count(index=namespaced_index).get('count')
+        assert indexed_count == n
+        return n
+    return es_count_checker
+
+
 @pytest.mark.flaky(max_runs=2, rerun_filter=delay_rerun)
 def test_create_mapping_index_diff(app, testapp, indexer_testapp):
+    namespaced_index = indexer_utils.get_namespaced_index(app, TEST_TYPE)
+
+    create_mapping.run(app, collections=[TEST_TYPE])
+
     es = app.registry[ELASTIC_SEARCH]
     # post a couple items, index, then remove one
     res = testapp.post_json(TEST_COLL, {'required': ''})
     test_uuid = res.json['@graph'][0]['uuid']
     testapp.post_json(TEST_COLL, {'required': ''})  # second item
-    create_mapping.run(app, collections=[TEST_TYPE])
-    indexer_queue = app.registry[INDEXER_QUEUE]
-    indexer_testapp.post_json('/index', {'record': True})
-    indexer_queue.clear_queue()
-    time.sleep(4)
-    namespaced_index = indexer_utils.get_namespaced_index(app, TEST_TYPE)
-    initial_count = es.count(index=namespaced_index).get('count')
-    assert initial_count == 2
+
+    index_n_items_for_testing(indexer_testapp, 2)
+
+    initial_count = Eventually.call_assertion(make_es_count_checker(2, es=es, namespaced_index=namespaced_index))
 
     # remove one item
     es.delete(index=namespaced_index, id=test_uuid)
-    time.sleep(8)
-    second_count = es.count(index=namespaced_index).get('count')
-    assert second_count == 1
+
+    Eventually.call_assertion(make_es_count_checker(1, es=es, namespaced_index=namespaced_index))
 
     # patch the item to increment version
     testapp.patch_json(TEST_COLL + test_uuid, {'required': 'meh'})
     # index with index_diff to ensure the item is reindexed
     create_mapping.run(app, collections=[TEST_TYPE], index_diff=True)
-    indexer_testapp.post_json('/index', {'record': True})
-    time.sleep(4)
-    third_count = es.count(index=namespaced_index).get('count')
-    assert third_count == initial_count
+
+    index_n_items_for_testing(indexer_testapp, initial_count)
+
+    Eventually.call_assertion(make_es_count_checker(initial_count, es=es, namespaced_index=namespaced_index))
 
 
 @pytest.mark.flaky(max_runs=2, rerun_filter=delay_rerun)
