@@ -1,9 +1,20 @@
 import venusian
 
 from .interfaces import TYPES, UPGRADER
-from pkg_resources import parse_version
+from pkg_resources import parse_version as raw_parse_version
 from pyramid.interfaces import PHASE1_CONFIG
 from .interfaces import PHASE2_5_CONFIG
+
+
+def parse_version(version_string):
+    # In older versions of pkg_resources.parse_version, passing '' would return LegacyVersion(''),
+    # which was an object that was always less than any other version than itself.
+    # We don't care about negative versions, so let's just say that parse_version
+    # for our purposes can return version 0.
+    return raw_parse_version(version_string or '0')
+
+
+NO_VERSION = parse_version('')
 
 
 def includeme(config):
@@ -96,7 +107,7 @@ class SchemaUpgrader(object):
         # If no entry exists for the current_version, fallback to ''
         if parse_version(version) not in self.upgrade_steps:
             try:
-                step = self.upgrade_steps[parse_version('')]
+                step = self.upgrade_steps[NO_VERSION]
             except KeyError:
                 pass
             else:

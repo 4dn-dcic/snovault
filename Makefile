@@ -5,6 +5,7 @@ configure:  # does any pre-requisite installs
 	@#pip install --upgrade pip==21.0.1
 	pip install --upgrade pip
 	@#pip install poetry==1.1.9  # this version is known to work. -kmp 5-Oct-2021
+	pip install wheel
 	pip install poetry
 
 macpoetry-install:
@@ -26,6 +27,13 @@ test:
 	@git log -1 --decorate | head -1
 	@date
 	pytest -xvv --instafail --timeout=200
+	@git log -1 --decorate | head -1
+	@date
+
+test-full:
+	@git log -1 --decorate | head -1
+	@date
+	pytest -vv --timeout=200
 	@git log -1 --decorate | head -1
 	@date
 
