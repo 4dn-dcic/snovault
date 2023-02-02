@@ -293,7 +293,7 @@ def test_skip_indexing_query_parameter(app, testapp):
 
 from dcicutils.lang_utils import n_of
 
-def receive_n_messages(*, queue, target, n, tries=10, wait_seconds=1):
+def receive_n_messages(*, queue, target='primary', n, tries=10, wait_seconds=1):
     print(f"receiving {n} messages")
     received = []
     for try_n in range(tries):
@@ -421,27 +421,34 @@ def test_dlq_to_primary(app, anontestapp, indexer_testapp):
     print("Got back result JSON:", json.dumps(res, indent=2, default=str))
     assert res['number_migrated'] == 2
     assert res['number_failed'] == 0
-    deadline = datetime.now() + timedelta(seconds=10)
-    n_received = 0
-    attempt_number = 0
-    while n_received < n_queued and datetime.now() < deadline:
-        attempt_number += 1
-        print("Attempt #%d to receive messages from Primary indexer_queue." % attempt_number)
-        msgs = indexer_queue.receive_messages()  # receive from primary
-        n = len(msgs)  # We'll test the length after we examine the content..
-        n_received += n
-        punctuation = "." if n_received == 0 else ":"
-        print("On receipt attempt #{attempt_number}, {things} received from Primary indexer_queue{punctuation}"
-              .format(attempt_number=attempt_number, things=n_of(n, "new message"), punctuation=punctuation))
-        for i, msg in enumerate(msgs):
-            print("Attempt #%d Msg %d" % (attempt_number, i), json.dumps(msg, indent=2, default=str))
-            msg_uuid = json.loads(msg['Body'])['uuid']
-            # They might be in either order, or one might be missing, but at this point just make sure they're ours
-            assert msg_uuid in test_uuids
-        if n_received < n_queued:
-            time.sleep(1)  # Leave time between retrying
-    assert n_received == n_queued, ("Expected {things} from primary, but got {count}."
-                                    .format(things=n_of(n_queued, "message"), count=n_received))
+
+    for msg in receive_n_messages(queue=indexer_queue, n=2):
+        msg_uuid = json.loads(msg['Body'])['uuid']
+        assert msg_uuid in test_uuids
+
+
+    # deadline = datetime.now() + timedelta(seconds=10)
+    # n_received = 0
+    # attempt_number = 0
+    # while n_received < n_queued and datetime.now() < deadline:
+    #     attempt_number += 1
+    #     print("Attempt #%d to receive messages from Primary indexer_queue." % attempt_number)
+    #     msgs = indexer_queue.receive_messages()  # receive from primary
+    #     n = len(msgs)  # We'll test the length after we examine the content..
+    #     n_received += n
+    #     punctuation = "." if n_received == 0 else ":"
+    #     print("On receipt attempt #{attempt_number}, {things} received from Primary indexer_queue{punctuation}"
+    #           .format(attempt_number=attempt_number, things=n_of(n, "new message"), punctuation=punctuation))
+    #     for i, msg in enumerate(msgs):
+    #         print("Attempt #%d Msg %d" % (attempt_number, i), json.dumps(msg, indent=2, default=str))
+    #         msg_uuid = json.loads(msg['Body'])['uuid']
+    #         # They might be in either order, or one might be missing, but at this point just make sure they're ours
+    #         assert msg_uuid in test_uuids
+    #     if n_received < n_queued:
+    #         time.sleep(1)  # Leave time between retrying
+
+    # assert n_received == n_queued, ("Expected {things} from primary, but got {count}."
+    #                                 .format(things=n_of(n_queued, "message"), count=n_received))
     # If we didn't fail on the prior assert, we should be good (other than some pro forma checks that follow)
     print("Got all the messages we expected.")
     print("Executing .get('dlq_to_primary') [authenticated] hoping it's empty")
@@ -460,18 +467,25 @@ def test_dlq_to_primary(app, anontestapp, indexer_testapp):
     # assert False, "PASSED"
 
 
-@pytest.mark.flaky
+# @pytest.mark.flaky
 def test_indexing_simple(app, testapp, indexer_testapp):
     # First post a single item so that subsequent indexing is incremental
     testapp.post_json(TEST_COLL, {'required': ''})
-    res = indexer_testapp.post_json('/index', {'record': True})
-    assert res.json['indexing_count'] == 1
-    assert res.json['indexing_status'] == 'finished'
-    assert res.json['errors'] == []
+
+    index_n_items_for_testing(indexer_testapp, 1)
+
+    # res = indexer_testapp.post_json('/index', {'record': True})
+    # assert res.json['indexing_count'] == 1
+    # assert res.json['indexing_status'] == 'finished'
+    # assert res.json['errors'] == []
+
     res = testapp.post_json(TEST_COLL, {'required': ''})
     uuid = res.json['@graph'][0]['uuid']
-    res = indexer_testapp.post_json('/index', {'record': True})
-    assert res.json['indexing_count'] == 1
+
+    # res = indexer_testapp.post_json('/index', {'record': True})
+    # assert res.json['indexing_count'] == 1
+    index_n_items_for_testing(indexer_testapp, 1)
+
     res = Retry.retrying(testapp.get, retries_allowed=2)('/search/?type=%s' % TEST_TYPE).follow()
     uuids = [indv_res['uuid'] for indv_res in res.json['@graph']]
     count = 0
