@@ -22,7 +22,6 @@ from elasticsearch.exceptions import NotFoundError
 from pyramid.traversal import traverse
 from sqlalchemy import MetaData
 from unittest import mock
-from webtest.app import AppError
 from zope.sqlalchemy import mark_changed
 from ..interfaces import DBSESSION, STORAGE, COLLECTIONS, TYPES
 from .. import util  # The filename util.py, not something in __init__.py
@@ -54,6 +53,21 @@ notice_pytest_fixtures(TestingLinkSourceSno)
 
 
 pytestmark = [pytest.mark.indexing]
+
+
+def delay_rerun(*args):
+    """ Rerun function for flaky """
+    ignored(args)
+    time.sleep(10)
+    return True
+
+
+def make_es_count_checker(n, *, es, namespaced_index):
+    def es_count_checker():
+        indexed_count = es.count(index=namespaced_index).get('count')
+        assert indexed_count == n
+        return n
+    return es_count_checker
 
 
 TEST_COLL = '/testing-post-put-patch-sno/'
@@ -1131,31 +1145,18 @@ def test_create_mapping_check_first(app, testapp, indexer_testapp):
     assert compare_against_existing_mapping(es, namespaced_index, TEST_TYPE, index_record, True) is True
 
 
-def delay_rerun(*args):
-    """ Rerun function for flaky """
-    ignored(args)
-    time.sleep(10)
-    return True
-
-
-def make_es_count_checker(n, *, es, namespaced_index):
-    def es_count_checker():
-        indexed_count = es.count(index=namespaced_index).get('count')
-        assert indexed_count == n
-        return n
-    return es_count_checker
-
-
 @pytest.mark.flaky(max_runs=2, rerun_filter=delay_rerun)
 def test_create_mapping_index_diff(app, testapp, indexer_testapp):
+
     namespaced_index = indexer_utils.get_namespaced_index(app, TEST_TYPE)
+    es = app.registry[ELASTIC_SEARCH]
 
     create_mapping.run(app, collections=[TEST_TYPE])
 
-    es = app.registry[ELASTIC_SEARCH]
     # post a couple items, index, then remove one
     res = testapp.post_json(TEST_COLL, {'required': ''})
     test_uuid = res.json['@graph'][0]['uuid']
+
     testapp.post_json(TEST_COLL, {'required': ''})  # second item
 
     index_n_items_for_testing(indexer_testapp, 2)
@@ -1729,7 +1730,7 @@ class TestInvalidationScopeViewSno:
     ])
     def test_invalidation_scope_view_error(self, indexer_testapp, req):
         """ Test failure cases """
-        with pytest.raises(AppError):
+        with pytest.raises(webtest.AppError):
             indexer_testapp.post_json('/compute_invalidation_scope', req)
 
 
