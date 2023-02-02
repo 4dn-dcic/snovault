@@ -291,51 +291,74 @@ def test_skip_indexing_query_parameter(app, testapp):
     if msg_count['primary_waiting'] != 0 or msg_count['secondary_waiting'] != 0:
         raise AssertionError('patch_json did not respect ?skip_indexing')
 
+from dcicutils.lang_utils import n_of
 
-@pytest.mark.flaky
+def receive_n_messages(*, queue, target, n, tries=10, wait_seconds=1):
+    print(f"receiving {n} messages")
+    received = []
+    for try_n in range(tries):
+        received_this_time = queue.receive_messages(target_queue=target)
+        assert isinstance(received_this_time, list)
+        received += received_this_time
+        if len(received) == n:
+            return received
+        print(f" try #{try_n}, received {len(received_this_time)}")
+        time.sleep(wait_seconds)
+    raise AssertionError(f"Only received {n_of(received, 'message')}, but wanted {n}.")
+
+# @pytest.mark.flaky
 def test_queue_indexing_telemetry_id(app, testapp):
     indexer_queue = app.registry[INDEXER_QUEUE]
     ordered_queue_targets = [targ for targ in indexer_queue.queue_targets]
     assert ordered_queue_targets == ['primary', 'secondary', 'dlq']
     testapp.post_json(TEST_COLL + '?telemetry_id=test_telem', {'required': ''})
-    time.sleep(2)
+    # time.sleep(2)
     secondary_body = {
         'uuids': ['12345', '23456'],
         'strict': True,
         'target_queue': 'secondary',
     }
     testapp.post_json('/queue_indexing?telemetry_id=test_telem', secondary_body)
-    time.sleep(2)
-    # make sure the queue eventually sorts itself out
-    tries_left = 5
-    while tries_left > 0:
-        msg_count = indexer_queue.number_of_messages()
-        if msg_count['primary_waiting'] == 1 and msg_count['secondary_waiting'] == 2:
-            break
-        tries_left -= 1
-        time.sleep(3)
-    assert tries_left > 0
-    # delete the messages
+    time.sleep(2)  # wait for 2 messages to be in the queue - there may be a better way. -kmp 2-Feb-2023
+    # # make sure the queue eventually sorts itself out
+    # tries_left = 5
+    # while tries_left > 0:
+    #     msg_count = indexer_queue.number_of_messages()
+    #     if msg_count['primary_waiting'] == 1 and msg_count['secondary_waiting'] == 2:
+    #         break
+    #     tries_left -= 1
+    #     time.sleep(3)
+    # assert tries_left > 0  # complain if we timed out (maybe a better way. does 'while' have an 'else'?)
+    # # delete the messages
     for target in indexer_queue.queue_targets:
         if 'dlq' in target:  # skip if dlq
             continue
-        received = indexer_queue.receive_messages(target_queue=target)
+        received = receive_n_messages(queue=indexer_queue, target=target, n=1 if 'primary' in target else 2)
+        # received = indexer_queue.receive_messages(target_queue=target)
         assert len(received) > 0
         for msg in received:
             # ensure we are passing telemetry_id through queue_indexing
             print(msg)
             msg_body = json.loads(msg['Body'])
             assert msg_body['telemetry_id'] == 'test_telem'
-        indexer_queue.delete_messages(received, target_queue=target)
-    # make sure the queue eventually sorts itself out
-    tries_left = 5
-    while tries_left > 0:
+        indexer_queue.delete_messages(received, target_queue=target)  # maybe needs wait time?
+
+    @Eventually.consistent()
+    def check_queue_empty():
         msg_count = indexer_queue.number_of_messages()
-        if msg_count['primary_waiting'] == 0 and msg_count['secondary_waiting'] == 0:
-            break
-        tries_left -= 1
-        time.sleep(3)
-    assert tries_left > 0
+        assert msg_count['primary_waiting'] == 0 and msg_count['secondary_waiting'] == 0
+
+    check_queue_empty()
+
+    # # make sure the queue eventually sorts itself out
+    # tries_left = 5
+    # while tries_left > 0:
+    #     msg_count = indexer_queue.number_of_messages()
+    #     if msg_count['primary_waiting'] == 0 and msg_count['secondary_waiting'] == 0:
+    #         break
+    #     tries_left -= 1
+    #     time.sleep(3)
+    # assert tries_left > 0
 
 
 @pytest.mark.flaky
