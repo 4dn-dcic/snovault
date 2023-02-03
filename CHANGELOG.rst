@@ -19,7 +19,11 @@ Change Log
 * Fix C4-985:
 
   * Make a wrapper for ``pkg_resources.parse_version`` in ``upgrader.py``
-    that parses the empty string as if `'1'` had been supplied.
+    that parses the empty string as if ``'1'`` had been supplied.
+
+* Fix C4-987:
+
+  * Use ``in str(exc.value)`` rather than ``in str(exc)`` after ``with pytest.raises(....) as exc:``
 
 
 7.1.1
