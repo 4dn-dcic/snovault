@@ -99,19 +99,19 @@ def test_crawl_schema(registry):
     with pytest.raises(Exception) as exec_info:
         crawl_schema(registry[TYPES], field_path, 'not_a_schema')
     # different error, since it attempts to find the file locally
-    assert 'Invalid starting schema' in str(exec_info)
+    assert 'Invalid starting schema' in str(exec_info.value)
 
     field_path2 = 'attachment.@id.title'
     with pytest.raises(Exception) as exec_info2:
         crawl_schema(registry[TYPES], field_path2, embedding_schema)
     # different error, since it attempts to find the file locally
-    assert 'Non-dictionary schema' in str(exec_info2)
+    assert 'Non-dictionary schema' in str(exec_info2.value)
 
     field_path3 = 'attachment.@types.blah'
     with pytest.raises(Exception) as exec_info3:
         crawl_schema(registry[TYPES], field_path3, embedding_schema)
     # different error, since it attempts to find the file locally
-    assert 'Field not found' in str(exec_info3)
+    assert 'Field not found' in str(exec_info3.value)
 
     # screw with the schema to create an invalid linkTo
     embedding_schema = registry[TYPES].by_item_type['embedding_test'].schema
@@ -120,7 +120,7 @@ def test_crawl_schema(registry):
     with pytest.raises(Exception) as exec_info4:
         crawl_schema(registry[TYPES], field_path, schema_copy)
     # different error, since it attempts to find the file locally
-    assert 'Invalid linkTo' in str(exec_info4)
+    assert 'Invalid linkTo' in str(exec_info4.value)
 
 
 def test_build_embedded_model():
