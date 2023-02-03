@@ -328,7 +328,7 @@ def test_pick_storage(registry, dummy_request):
     assert storage.storage('elasticsearch') == 'dummy_es'
     with pytest.raises(Exception) as exec_info:
         storage.storage('not_a_db')
-    assert 'Invalid forced datastore not_a_db' in str(exec_info)
+    assert 'Invalid forced datastore not_a_db' in str(exec_info.value)
     assert storage.storage() is storage.write
 
     dummy_request.datastore = 'elasticsearch'
