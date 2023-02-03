@@ -124,7 +124,7 @@ Pillow = ">=6.2.2"  # later version known to work - Will 11/17/20
 # -kmp 11-May-2020
 pytest = ">=7.2.1"  # "4.5.0"
 pytest-cov = ">=2.2.1"
-pytest_exact_fixtures = "^0.3"
+# pytest_exact_fixtures = "^0.3"
 pytest-instafail = ">=0.3.0"
 # TODO: Investigate whether a major version upgrade is allowable for 'pytest-mock'.
 pytest-mock = ">=0.11.0"
