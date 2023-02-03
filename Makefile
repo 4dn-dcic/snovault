@@ -5,6 +5,7 @@ configure:  # does any pre-requisite installs
 	@#pip install --upgrade pip==21.0.1
 	pip install --upgrade pip
 	@#pip install poetry==1.1.9  # this version is known to work. -kmp 5-Oct-2021
+	pip install wheel
 	pip install poetry
 
 macpoetry-install:
