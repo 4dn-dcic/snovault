@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "dcicsnovault"
-version = "7.1.1"
+version = "7.1.2"
 description = "Storage support for 4DN Data Portals."
 authors = ["4DN-DCIC Team <support@4dnucleome.org>"]
 license = "MIT"
@@ -47,7 +47,7 @@ elasticsearch = "7.13.4"  # versions >= 7.14.0 lock out AWS ES
 elasticsearch_dsl = "^7.4.0"
 dcicutils = "^6.5.0"
 future = ">=0.15.2,<1"
-futures = "^3.1.1"
+# futures = "^3.1.1"
 # Needed by Moto but not us
 # Version 1.0b8 is the same as 0.9999999.
 # html5lib = "0.9999999"
@@ -124,7 +124,7 @@ Pillow = ">=6.2.2"  # later version known to work - Will 11/17/20
 # -kmp 11-May-2020
 pytest = "4.5.0"
 pytest-cov = ">=2.2.1"
-pytest_exact_fixtures = "^0.3"
+# pytest_exact_fixtures = "^0.3"
 pytest-instafail = ">=0.3.0"
 # TODO: Investigate whether a major version upgrade is allowable for 'pytest-mock'.
 pytest-mock = ">=0.11.0"
