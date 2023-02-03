@@ -6,6 +6,23 @@ snovault
 Change Log
 ----------
 
+7.2.0
+=====
+
+* Fix C4-984:
+
+  * Add ``pip install wheel`` in ``make configure``.
+
+  * Remove dependency in ``pyproject.toml`` on ``futures`` library.
+
+* Fix C4-985:
+
+  * Make a wrapper for ``pkg_resources.parse_version`` in ``upgrader.py``
+    that parses the empty string as if `'1'` had been supplied.
+
+* In ``Makefile``, add ``make test-full``.
+
+
 7.1.1
 =====
 

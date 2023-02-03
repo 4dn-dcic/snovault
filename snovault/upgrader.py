@@ -1,20 +1,19 @@
 import venusian
 
 from .interfaces import TYPES, UPGRADER
-from pkg_resources import parse_version as raw_parse_version
+from pkg_resources import parse_version as parse_pkg_version
 from pyramid.interfaces import PHASE1_CONFIG
 from .interfaces import PHASE2_5_CONFIG
 
 
+DEFAULT_VERSION_STRING = '1'
+
+
 def parse_version(version_string):
-    # In older versions of pkg_resources.parse_version, passing '' would return LegacyVersion(''),
-    # which was an object that was always less than any other version than itself.
-    # We don't care about negative versions, so let's just say that parse_version
-    # for our purposes can return version 0.
-    return raw_parse_version(version_string or '0')
+    return parse_pkg_version(version_string or DEFAULT_VERSION_STRING)
 
 
-NO_VERSION = parse_version('')
+DEFAULT_VERSION = parse_version(DEFAULT_VERSION_STRING)
 
 
 def includeme(config):
@@ -84,7 +83,7 @@ class SchemaUpgrader(object):
         self.upgrade_steps = {}
         self.finalizer = finalizer
 
-    def add_upgrade_step(self, step, source='', dest=None):
+    def add_upgrade_step(self, step, source=DEFAULT_VERSION_STRING, dest=None):
         if dest is None:
             dest = self.version
         if parse_version(dest) <= parse_version(source):
@@ -104,10 +103,10 @@ class SchemaUpgrader(object):
         steps = []
         version = current_version
 
-        # If no entry exists for the current_version, fallback to ''
+        # If no entry exists for the current_version, fallback to DEFAULT_VERSION_STRING
         if parse_version(version) not in self.upgrade_steps:
             try:
-                step = self.upgrade_steps[NO_VERSION]
+                step = self.upgrade_steps[DEFAULT_VERSION_STRING]
             except KeyError:
                 pass
             else:
@@ -172,7 +171,7 @@ def add_upgrade(config, type_, version, finalizer=None):
         callback, order=PHASE2_5_CONFIG)
 
 
-def add_upgrade_step(config, type_, step, source='', dest=None):
+def add_upgrade_step(config, type_, step, source=DEFAULT_VERSION_STRING, dest=None):
 
     def callback():
         types = config.registry[TYPES]
@@ -211,7 +210,7 @@ def set_default_upgrade_finalizer(config, finalizer):
 
 # Declarative configuration
 
-def upgrade_step(schema_name, source='', dest=None):
+def upgrade_step(schema_name, source=DEFAULT_VERSION_STRING, dest=None):
     """ Register an upgrade step
     """
 
