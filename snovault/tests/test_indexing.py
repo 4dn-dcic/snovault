@@ -16,17 +16,18 @@ import yaml
 
 from datetime import datetime, timedelta
 from dcicutils.lang_utils import n_of
-from dcicutils.misc_utils import ignored, get_error_message
+from dcicutils.misc_utils import ignored, get_error_message, Retry
 from dcicutils.qa_utils import ControlledTime, Eventually, notice_pytest_fixtures
 from elasticsearch.exceptions import NotFoundError
 from pyramid.traversal import traverse
 from sqlalchemy import MetaData
 from unittest import mock
 from zope.sqlalchemy import mark_changed
+
 from ..interfaces import DBSESSION, STORAGE, COLLECTIONS, TYPES
 from .. import util  # The filename util.py, not something in __init__.py
 from .. import main  # Function main actually defined in __init__.py (should maybe be defined elsewhere)
-from ..storage import Base
+
 from ..elasticsearch import create_mapping, indexer_utils
 from ..elasticsearch.create_mapping import (
     build_index_record,
@@ -43,9 +44,10 @@ from ..elasticsearch.indexer import check_sid, SidException
 from ..elasticsearch.indexer_queue import QueueManager
 from ..elasticsearch.indexer_utils import compute_invalidation_scope
 from ..elasticsearch.interfaces import ELASTIC_SEARCH, INDEXER_QUEUE, INDEXER_QUEUE_MIRROR
+from ..storage import Base
 from ..tools import index_n_items_for_testing
 from ..util import INDEXER_NAMESPACE_FOR_TESTING
-from dcicutils.misc_utils import Retry
+
 from .testing_views import TestingLinkSourceSno
 
 
@@ -291,7 +293,6 @@ def test_skip_indexing_query_parameter(app, testapp):
     if msg_count['primary_waiting'] != 0 or msg_count['secondary_waiting'] != 0:
         raise AssertionError('patch_json did not respect ?skip_indexing')
 
-from dcicutils.lang_utils import n_of
 
 def receive_n_messages(*, queue, target='primary', n, tries=10, wait_seconds=1):
     print(f"receiving {n} messages")

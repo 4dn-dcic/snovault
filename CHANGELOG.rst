@@ -6,7 +6,48 @@ snovault
 Change Log
 ----------
 
+
 7.2.0
+=====
+
+* In ``Makefile``, add ``make test-full``.
+
+* In ``pyproject.toml``:
+
+  * Use ``pytest 7.2.1`` (and ``poetry.lock``):
+
+  * Require ``dcicutils 6,7`` for fixes to ``Eventually``.
+
+  * Include ``pipdeptree`` as a dev dependency for debugging.
+
+* In ``snovault/updater.py``:
+
+  * Better error message for UUID integrity errors, noting they might not be conflits but just maybe also UUID missing.
+
+  * Rearrange imports for clarity.
+
+* In new file ``snovault/tools.py``:
+
+  * New functions ``make_testapp``, ``make_htmltestapp``, ``make_authenticated_testapp``,
+    ``make_submitter_testapp``, ``make_indexer_testapp``, and ``make_embed_testapp``.
+
+  * New context managers ``being_nested`` and ``local_collections``.
+
+  * New function ``index_n_items_for_testing``.
+
+  These functions are potentially useful in the portal repos, so are not part of the test files.
+
+* In file ``snovault/tests/test_indexing.py``:
+
+  * Material changes to testing to use better storage synchronization (semaphor-style rather than sleep-style),
+    hopefully achieving fewer intermittent errors in testing both locally and in GA.
+
+* In files ``snovault/util.py``, ``snovault/tests/test_embedding.py``, ``snovault/tests/test_storage.py``:
+
+  * Various changes for PEP8 or other readability reasons, including to satisfy ``PyCharm`` linters.
+
+
+7.1.2
 =====
 
 * Fix C4-984:
@@ -18,9 +59,11 @@ Change Log
 * Fix C4-985:
 
   * Make a wrapper for ``pkg_resources.parse_version`` in ``upgrader.py``
-    that parses the empty string as if `'1'` had been supplied.
+    that parses the empty string as if ``'1'`` had been supplied.
 
-* In ``Makefile``, add ``make test-full``.
+* Fix C4-987:
+
+  * Use ``in str(exc.value)`` rather than ``in str(exc)`` after ``with pytest.raises(....) as exc:``
 
 
 7.1.1
