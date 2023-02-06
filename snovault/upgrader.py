@@ -17,6 +17,9 @@ def parse_version(version_string: str):
     return parse_pkg_version(version_string or IMPOSSIBLY_LOW_VERSION_STRING)
 
 
+DEFAULT_VERSION = parse_version(DEFAULT_VERSION_STRING)
+
+
 def includeme(config):
     config.include('.typeinfo')
     config.registry[UPGRADER] = Upgrader(config.registry)
@@ -107,7 +110,7 @@ class SchemaUpgrader(object):
         # If no entry exists for the current_version, fallback to DEFAULT_VERSION_STRING
         if parse_version(version) not in self.upgrade_steps:
             try:
-                step = self.upgrade_steps[DEFAULT_VERSION_STRING]
+                step = self.upgrade_steps[DEFAULT_VERSION]
             except KeyError:
                 pass
             else:
