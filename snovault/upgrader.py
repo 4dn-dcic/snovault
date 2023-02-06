@@ -6,6 +6,7 @@ from pyramid.interfaces import PHASE1_CONFIG
 from .interfaces import PHASE2_5_CONFIG
 
 
+# These are weird values for defaults, but they are backward-compatible and this code is very tricky. -kmp 6-Feb-2023
 DEFAULT_VERSION_STRING = ''
 IMPOSSIBLY_LOW_VERSION_STRING = '0'
 
