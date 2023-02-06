@@ -13,6 +13,10 @@ Change Log
 * In ``upgrader.py``, default ``parse_version`` argument to ``'0'``, rather than ``'1'``
   when ``None`` or the empty string is given.
 
+* Remove the Python 3.7 classifier in ``pyproject.toml``.
+
+* Add ``make clear-poetry-cache`` in ``Makefile``.
+
 
 7.1.2
 =====
