@@ -17,6 +17,8 @@ Change Log
 
 * Add ``make clear-poetry-cache`` in ``Makefile``.
 
+* Misc PEP8.
+
 
 7.1.2
 =====
