@@ -1,9 +1,9 @@
-import os
-import time
-import tempfile
+# import os
+# import time
+# import tempfile
 import pytest
 import logging
-import subprocess
+# import subprocess
 
 from ..elasticsearch.indexer_queue import QueueManager
 

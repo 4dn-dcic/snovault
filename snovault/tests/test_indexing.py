@@ -22,7 +22,6 @@ from elasticsearch.exceptions import NotFoundError
 from pyramid.traversal import traverse
 from sqlalchemy import MetaData
 from unittest import mock
-from webtest.app import AppError
 from zope.sqlalchemy import mark_changed
 from ..interfaces import DBSESSION, STORAGE, COLLECTIONS, TYPES
 from .. import util  # The filename util.py, not something in __init__.py
@@ -1039,7 +1038,7 @@ def test_check_and_reindex_existing(app, testapp):
     assert doc_count == 0
     test_uuids = {TEST_TYPE: set()}
     check_and_reindex_existing(app, es, TEST_TYPE, test_uuids)
-    assert(len(test_uuids)) == 1
+    assert len(test_uuids) == 1
 
 
 @pytest.mark.flaky
@@ -1721,7 +1720,7 @@ class TestInvalidationScopeViewSno:
     ])
     def test_invalidation_scope_view_error(self, indexer_testapp, req):
         """ Test failure cases """
-        with pytest.raises(AppError):
+        with pytest.raises(webtest.AppError):
             indexer_testapp.post_json('/compute_invalidation_scope', req)
 
 

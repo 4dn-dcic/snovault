@@ -29,7 +29,7 @@ def test_build_default_embeds():
         'obj1.*',
         'obj1.obj3.*'
     ]
-    assert(set(final_embeds) == set(expected_embeds))
+    assert set(final_embeds) == set(expected_embeds)
 
 
 def test_find_default_embeds_and_expand_emb_list(registry):
@@ -52,7 +52,7 @@ def test_find_default_embeds_and_expand_emb_list(registry):
         "pattern_property_no_embed",
         "additional_property_no_embed",
     ]
-    assert(set(default_embeds) == set(expected_embeds))
+    assert set(default_embeds) == set(expected_embeds)
     for expected_not_embed in expected_not_embeds:
         assert expected_not_embed in schema_props
 
@@ -69,13 +69,13 @@ def test_find_default_embeds_and_expand_emb_list(registry):
         'attachment.attachment2.*',
         'attachment.principals_allowed.*'
     ]
-    assert(set(embs_to_add) == set(expected_to_add))
+    assert set(embs_to_add) == set(expected_to_add)
 
     # add default embeds for all items 'attachment'
     test_embed = ['attachment.attachment.*']
     embs_to_add2, _ = expand_embedded_list('EmbeddingTest', registry[TYPES], test_embed, schema_props, set())
     expected_to_add2 = ['attachment']
-    assert(set(embs_to_add2) == set(expected_to_add2))
+    assert set(embs_to_add2) == set(expected_to_add2)
     # lastly check the built embeds
     expected_built = [
         'attachment.display_title',
