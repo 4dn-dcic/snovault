@@ -7,6 +7,13 @@ Change Log
 ----------
 
 
+7.1.3
+=====
+
+* In ``upgrader.py``, default ``parse_version`` argument to ``'0'``, rather than ``'1'``
+  when ``None`` or the empty string is given.
+
+
 7.1.2
 =====
 

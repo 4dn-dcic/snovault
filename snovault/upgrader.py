@@ -6,10 +6,10 @@ from pyramid.interfaces import PHASE1_CONFIG
 from .interfaces import PHASE2_5_CONFIG
 
 
-DEFAULT_VERSION_STRING = '1'
+DEFAULT_VERSION_STRING = '0'
 
 
-def parse_version(version_string):
+def parse_version(version_string: str):
     return parse_pkg_version(version_string or DEFAULT_VERSION_STRING)
 
 
