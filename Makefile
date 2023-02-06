@@ -8,6 +8,9 @@ configure:  # does any pre-requisite installs
 	pip install wheel
 	pip install poetry
 
+clear-poetry-cache:  # clear poetry/pypi cache. for user to do explicitly, never automatic
+	poetry cache clear pypi --all
+
 macpoetry-install:
 	scripts/macpoetry-install
 

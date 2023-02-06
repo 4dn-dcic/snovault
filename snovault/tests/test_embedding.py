@@ -1,5 +1,5 @@
 import pytest
-import time
+# import time
 
 from dcicutils.misc_utils import ignored
 from dcicutils.qa_utils import notice_pytest_fixtures, Retry, Eventually
@@ -112,9 +112,11 @@ def test_linked_uuids_object(content, dummy_request, threadlocals):
     # needed to track _linked_uuids
     dummy_request._indexing_view = True
     dummy_request.embed('/testing-link-sources-sno/', sources[0]['uuid'], '@@object')
+
     def my_assertions():
         assert dummy_request._linked_uuids == {('16157204-8c8f-4672-a1a4-14f4b8021fcd', 'TestingLinkSourceSno')}
         assert dummy_request._rev_linked_uuids_by_item == {}
+
     Eventually.call_assertion(my_assertions)
 
 
@@ -186,7 +188,8 @@ def test_linked_uuids_index_data(content, dummy_request, threadlocals):
     assert res['rev_link_names'] == {}
     assert res['rev_linked_to_me'] == [targets[0]['uuid']]
     # object view linked uuids are contained within the embedded linked uuids
-    assert set((linked['uuid'], linked['item_type']) for linked in res['linked_uuids_object']) <= dummy_request._linked_uuids
+    assert set((linked['uuid'], linked['item_type'])
+               for linked in res['linked_uuids_object']) <= dummy_request._linked_uuids
 
     # now test the target. this will reset all attributes on dummy_request
     res2 = dummy_request.embed('/testing-link-targets-sno/', targets[0]['uuid'], '@@index-data', as_user='INDEXER')
