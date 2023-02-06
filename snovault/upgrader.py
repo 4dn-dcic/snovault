@@ -6,14 +6,15 @@ from pyramid.interfaces import PHASE1_CONFIG
 from .interfaces import PHASE2_5_CONFIG
 
 
-DEFAULT_VERSION_STRING = '0'
+DEFAULT_VERSION_STRING = ''
+IMPOSSIBLY_LOW_VERSION_STRING = '0'
 
 
 def parse_version(version_string: str):
-    return parse_pkg_version(version_string or DEFAULT_VERSION_STRING)
-
-
-DEFAULT_VERSION = parse_version(DEFAULT_VERSION_STRING)
+    # The expectation is that version_string will represent a version equal to or greater than '1',
+    # except that if the default version string ('') is given, it will represent a version
+    # that is less than all other version strings, IMPOSSIBLY_LOW_VERSION_STRING ('0').
+    return parse_pkg_version(version_string or IMPOSSIBLY_LOW_VERSION_STRING)
 
 
 def includeme(config):
@@ -87,9 +88,9 @@ class SchemaUpgrader(object):
         if dest is None:
             dest = self.version
         if parse_version(dest) <= parse_version(source):
-            raise ValueError("dest is less than source", dest, source)
+            raise ValueError(f"In add_upgrade_step, the dest {dest!r} is not greater than source {source!r}.")
         if parse_version(source) in self.upgrade_steps:
-            raise ConfigurationError('duplicate step for source', source)
+            raise ConfigurationError(f"In add_upgrade_step, a duplicate step was given for source {source!r}.")
         self.upgrade_steps[parse_version(source)] = UpgradeStep(step, source, dest)
 
     def upgrade(self, value, current_version='1', target_version=None, **kw):
