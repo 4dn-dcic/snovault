@@ -154,4 +154,7 @@ class TestRedisSession:
         session_token_local.store_session_token(redis_handler=rd)
         session_token_remote = RedisSessionToken.from_redis(redis_handler=rd, namespace=self.NAMESPACE,
                                                             email=self.DUMMY_EMAIL)
+        assert rd._dbsize() == 1
         assert session_token_remote == session_token_local
+        session_token_remote.delete_session_token(redis_handler=rd)
+        assert rd._dbsize() == 0

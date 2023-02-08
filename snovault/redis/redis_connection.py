@@ -138,6 +138,10 @@ class RedisSessionToken:
         self.session_hset = self._build_session_hset(jwt, self.session_token)
         return self.store_session_token(redis_handler=redis_handler)
 
+    def delete_session_token(self, *, redis_handler) -> bool:
+        """ Deletes the session token from redis, effectively logging out """
+        return redis_handler._delete(self.redis_key)
+
 
 class RedisModel(object):
     """
