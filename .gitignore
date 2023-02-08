@@ -42,6 +42,8 @@
 
 # PyEnv
 .python-version
+# KMP's env tools
+.python-cmd
 
 # Microsoft Office lock and backup files
 ~$*
@@ -58,3 +60,6 @@
 .elasticbeanstalk/*
 !.elasticbeanstalk/*.cfg.yml
 !.elasticbeanstalk/*.global.yml
+
+# Vim
+*.swp

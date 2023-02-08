@@ -6,17 +6,15 @@ from base64 import b64encode
 from jsonschema_serialize_fork import Draft4Validator
 from pyramid.compat import ascii_native_
 from uuid import uuid4
+
 from ..interfaces import TYPES
 from ..util import mappings_use_nested
+
 from .testing_views import (
-    NESTED_OBJECT_LINK_TARGET_GUID_1, NESTED_OBJECT_LINK_TARGET_GUID_2,
-    NESTED_EMBEDDING_CONTAINER_GUID, NESTED_OBJECT_LINK_TARGET_GUIDS,
+    NESTED_EMBEDDING_CONTAINER_GUID,
+    NESTED_OBJECT_LINK_TARGET_GUID_1,
+    NESTED_OBJECT_LINK_TARGET_GUIDS,
 )
-
-
-# These are taken care of by pytest.ini and should not be explicitly repeated.
-# -kmp 4-Jul-2020
-#from .toolfixtures import registry, root
 
 
 TYPE_NAMES = ['TestingPostPutPatchSno', 'TestingDownload']
@@ -417,3 +415,21 @@ def test_item_revision_history(testapp, registry):
     # they should be ordered by sid, recall the patch order above
     for patched_metadata, revision in zip([objv1, objv2, objv3, objv2, objv1], revisions):
         assert revision['title'] == patched_metadata['title']
+
+
+def _test_auth_config(testapp, registry):
+    cfg = testapp.get('/auth0_config').json
+    assert cfg['title'] == 'Auth0 Config'
+    assert cfg['auth0Client'] == registry.settings['auth0.client']
+    assert cfg['auth0Domain'] == registry.settings['auth0.domain']
+    assert cfg['auth0Options'] == registry.settings['auth0.options']
+
+
+def test_auth0_config_admin(testapp, registry):
+    """ Tests that acquiring auth0 config gives the expected values from settings for admins. """
+    _test_auth_config(testapp, registry)
+
+
+def test_auth0_config_anon(anontestapp, registry):
+    """ Tests that acquiring auth0 config gives the expected values from settings for anonymous users. """
+    _test_auth_config(anontestapp, registry)

@@ -20,15 +20,20 @@ jobs:
     name: Test Suite for dcicsnovault
 
     # The type of runner that the job will run on
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-20.04
+
+    # Build matrix
+    strategy:
+      matrix:
+        test_type: ['UNIT', 'NPM']
 
     # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
-      - uses: actions/checkout@v2
-      - uses: actions/setup-python@v2
+      - uses: actions/checkout@v3
+      - uses: actions/setup-python@v4
         with:
-          python-version: '3.6'
+          python-version: 3.8
 
       - name: Install/Link Postgres
         run: |
@@ -51,23 +56,46 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: us-east-1
 
-      - name: QA
+      - name: QA (NPM)
+        if: ${{ matrix.test_type == 'NPM' }}
         env:
           S3_ENCRYPT_KEY: ${{ secrets.S3_ENCRYPT_KEY }}
-          # The need for this old environment variable name will go away soon.
-          TRAVIS_JOB_ID: sno-x-test-${{ github.run_number }}-
+          # # The need for this old environment variable name will go away soon.
+          # TRAVIS_JOB_ID: sno-x-test-${{ github.run_number }}-
           # This will be the new environment variable name.
-          TEST_JOB_ID: sno-test-${{ github.run_number }}-
+          TEST_JOB_ID: sno-test-npm-${{ github.run_number }}-${{ matrix.python_version }}-
         run: |
-          make travis-test
+          make remote-test-npm
 
-      - name: Cleanup
-        if: ${{ always() }}
+      - name: QA (UNIT)
+        if: ${{ matrix.test_type == 'UNIT' }}
+        env:
+          S3_ENCRYPT_KEY: ${{ secrets.S3_ENCRYPT_KEY }}
+          # # The need for this old environment variable name will go away soon.
+          # TRAVIS_JOB_ID: sno-x-test-${{ github.run_number }}-
+          # This will be the new environment variable name.
+          TEST_JOB_ID: sno-test-unit-${{ github.run_number }}-${{ matrix.python_version }}-
+        run: |
+          make remote-test-unit
+
+      - name: Cleanup (NPM)
+        if: ${{ always() && matrix.test_type == 'NPM' }}
         env:
           S3_ENCRYPT_KEY: ${{ secrets.S3_ENCRYPT_KEY }}
           # The need for this old environment variable name will go away soon.
-          TRAVIS_JOB_ID: sno-x-test-${{ github.run_number }}-
+          # TRAVIS_JOB_ID: sno-x-test-${{ github.run_number }}-
           # This will be the new environment variable name.
-          TEST_JOB_ID: sno-test-${{ github.run_number }}-
+          TEST_JOB_ID: sno-test-npm-${{ github.run_number }}-${{ matrix.python_version }}-
         run: |
-          poetry run wipe-test-indices $TEST_JOB_ID search-fourfront-testing-6-8-kncqa2za2r43563rkcmsvgn2fq.us-east-1.es.amazonaws.com:443
+          poetry run wipe-test-indices $TEST_JOB_ID search-fourfront-testing-opensearch-kqm7pliix4wgiu4druk2indorq.us-east-1.es.amazonaws.com:443
+
+      - name: Cleanup (UNIT)
+        if: ${{ always() && matrix.test_type == 'UNIT' }}
+        env:
+          S3_ENCRYPT_KEY: ${{ secrets.S3_ENCRYPT_KEY }}
+          # The need for this old environment variable name will go away soon.
+          # TRAVIS_JOB_ID: sno-x-test-${{ github.run_number }}-
+          # This will be the new environment variable name.
+          TEST_JOB_ID: sno-test-unit-${{ github.run_number }}-${{ matrix.python_version }}-
+        run: |
+          poetry run wipe-test-indices $TEST_JOB_ID search-fourfront-testing-opensearch-kqm7pliix4wgiu4druk2indorq.us-east-1.es.amazonaws.com:443

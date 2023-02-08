@@ -16,13 +16,14 @@ import psycopg2
 import signal
 import sqlalchemy.exc
 import structlog
-import sys
 import threading
 import time
 import webtest
 
-from pyramid import paster
 from dcicutils.log_utils import set_logging
+from dcicutils.misc_utils import ignored
+from pyramid import paster
+
 from .interfaces import ELASTIC_SEARCH, INDEXER_QUEUE
 
 
@@ -56,7 +57,7 @@ def run(testapp, interval=DEFAULT_INTERVAL, dry_run=False, path='/index', update
     while True:
         # if not messages to index, skip the /index call. Counts are approximate
         queue_counts = queue.number_of_messages()
-        if (not queue_counts['primary_waiting'] and not queue_counts['secondary_waiting']):
+        if not queue_counts['primary_waiting'] and not queue_counts['secondary_waiting']:
             time.sleep(interval)
             continue
 
@@ -96,9 +97,11 @@ class ErrorHandlingThread(threading.Thread):
         while True:
             try:
                 self._target(*self._args, **self._kwargs)
-            except (psycopg2.OperationalError, sqlalchemy.exc.OperationalError, elasticsearch.exceptions.ConnectionError) as e:
+            except (psycopg2.OperationalError,
+                    sqlalchemy.exc.OperationalError,
+                    elasticsearch.exceptions.ConnectionError) as e:
                 # Handle database restart
-                log.warning('Database not there, maybe starting up: %r', e)
+                log.warning(f'Database not there, maybe starting up: {e!r}')
                 timestamp = datetime.datetime.now().isoformat()
                 update_status(
                     timestamp=timestamp,
@@ -137,7 +140,6 @@ def composite(loader, global_conf, **settings):
     }
     testapp = webtest.TestApp(app, environ)
 
-
     timestamp = datetime.datetime.now().isoformat()
     status_holder = {
         'status': {
@@ -149,6 +151,7 @@ def composite(loader, global_conf, **settings):
     }
 
     def update_status(error=None, result=None, indexed=None, **kw):
+        ignored(indexed)  # TODO: What is this argument doing? Should we be using it?
         # Setting a value in a dictionary is atomic
         status = status_holder['status'].copy()
         status.update(**kw)
@@ -178,6 +181,7 @@ def composite(loader, global_conf, **settings):
         log.debug('shutting down listening thread')
 
     def status_app(environ, start_response):
+        ignored(environ)
         status = '200 OK'
         response_headers = [('Content-type', 'application/json')]
         start_response(status, response_headers)
@@ -222,7 +226,6 @@ def main():
     # logging.basicConfig()
     testapp = internal_app(args.config_uri, args.app_name, args.username)
 
-
     # Loading app will have configured from config file. Reconfigure here:
     level = logging.INFO
     if args.verbose or args.dry_run:
@@ -230,7 +233,7 @@ def main():
 
     # Loading app will have configured from config file. Reconfigure here:
     # Use `es_server=app.registry.settings.get('elasticsearch.server')` when ES logging is working
-    set_logging(in_prod=testapp.app.registry.settings.get('production'), level=logging.INFO)
+    set_logging(in_prod=testapp.app.registry.settings.get('production'), level=level)
     return run(testapp, args.poll_interval, args.dry_run, args.path)
 
 

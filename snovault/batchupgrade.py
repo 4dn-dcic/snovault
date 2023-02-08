@@ -9,6 +9,7 @@ Example:
 
 import argparse
 import itertools
+import logging
 import transaction as transaction_management
 import webtest
 
@@ -20,6 +21,7 @@ from pyramid import paster
 from pyramid.traversal import find_resource
 from pyramid.view import view_config
 from structlog import getLogger
+from typing import Optional
 
 from .interfaces import CONNECTION, STORAGE, UPGRADER
 
@@ -39,12 +41,12 @@ def includeme(config):
 
 
 def batched(iterable, n=1):
-    l = len(iterable)
-    for ndx in range(0, l, n):
-        yield iterable[ndx:min(ndx+n, l)]
+    iter_len = len(iterable)
+    for ndx in range(0, iter_len, n):
+        yield iterable[ndx:min(ndx + n, iter_len)]
 
 
-def internal_app(configfile, app_name=None, username=None):
+def internal_app(configfile, app_name=None, username=None) -> webtest.TestApp:
     app = paster.get_app(configfile, app_name)
     if not username:
         username = 'UPGRADE'
@@ -56,7 +58,7 @@ def internal_app(configfile, app_name=None, username=None):
 
 
 # Running in subprocess
-testapp = None
+testapp: Optional[webtest.TestApp] = None
 
 
 def initializer(*args, **kw):
@@ -71,7 +73,7 @@ def worker(batch):
 
 def update_item(storage, context):
     target_version = context.type_info.schema_version
-    current_version = context.properties.get('schema_version', '')
+    current_version = context.properties.get('schema_version', '1')
     update = False
     errors = []
     properties = context.properties

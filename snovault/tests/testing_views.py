@@ -1,4 +1,6 @@
 import copy
+
+from dcicutils.misc_utils import ignorable
 from pyramid.security import (
     # ALL_PERMISSIONS,
     Allow,
@@ -22,7 +24,7 @@ from ..config import collection, abstract_collection
 from ..schema_utils import load_schema
 from ..attachment import ItemWithAttachment
 from ..interfaces import CONNECTION
-# from .root import TestRoot
+from ..util import IndexSettings
 
 
 def includeme(config):
@@ -218,10 +220,12 @@ class Item(BaseItem):
             # TODO: This will fail. There is no function _award_viewing_group anywhere in snovault.
             #       Maybe we should create a hook that Fourfront but not CGAP can set that knows about awards.
             #       Probably 'lab' above has the same issues. -kmp 4-Jul-2020
-            viewing_group = _award_viewing_group(properties['award'], find_root(self))
-            if viewing_group is not None:
-                viewing_group_members = 'viewing_group.%s' % viewing_group
-                roles[viewing_group_members] = 'role.viewing_group_member'
+            ignorable(find_root)  # this would get used in commented-out code below
+            raise NotImplementedError('_award_viewing_group is not implemented in snovault.')
+            # viewing_group = _award_viewing_group(properties['award'], find_root(self))
+            # if viewing_group is not None:
+            #     viewing_group_members = 'viewing_group.%s' % viewing_group
+            #     roles[viewing_group_members] = 'role.viewing_group_member'
         return roles
 
     def unique_keys(self, properties):
@@ -255,9 +259,7 @@ class Item(BaseItem):
                 return display_title
         # if none of the existing terms are available, use @type + date_created
         try:
-            # TODO: PyCharm thinks self.__class__.__name__ will return 'property' not 'string'.
-            #       That's probably a bug in PyCharm I should report. -kmp 4-Jul-2020
-            type_date = self.__class__.__name__ + " from " + self.properties.get("date_created", None)[:10]
+            type_date = f"{self.__class__.__name__} from {self.properties.get('date_created', None)[:10]}"
             return type_date
         # last resort, use uuid
         except Exception:
@@ -350,6 +352,7 @@ class EmbeddingTest(Item):
     embedded_list = [
         'attachment.*'
     ]
+
 
 # Formerly b58bc82f-249e-418f-bbcd-8a80af2e58d3
 NESTED_OBJECT_LINK_TARGET_GUID_1 = 'f738e192-85f4-4886-bdc4-e099a2e2102a'
@@ -483,6 +486,11 @@ class TestingPostPutPatchSno(Item):
     item_type = 'testing_post_put_patch_sno'
     embedded_list = ['protected_link.*']
     schema = load_schema('snovault:test_schemas/TestingPostPutPatchSno.json')
+
+    class Collection(Item.Collection):
+        """ Overwrite the parent index settings. """
+        def index_settings(self):
+            return IndexSettings(replica_count=2)
 
 
 @collection('testing-server-defaults')
@@ -731,6 +739,17 @@ class TestingIndividualSno(Item):
         return full_name.split()[1]
 
 
+@collection(name='testing-note-sno', unique_key='testing_note_sno:identifier')
+class TestingNoteSno(Item):
+    """ Note integrated testing type. """
+    item_type = 'testing_note_sno'
+    name_key = 'identifier'
+    schema = load_schema('snovault:test_schemas/TestingNoteSno.json')
+    embedded_list = [
+        'superseding_note.assessment.call'
+    ]
+
+
 @collection(name='testing-biosample-sno', unique_key='testing_biosample_sno:identifier')
 class TestingBiosampleSno(Item):
     """ Biosample integrated testing type. """
@@ -738,7 +757,9 @@ class TestingBiosampleSno(Item):
     name_key = 'identifier'
     schema = load_schema('snovault:test_schemas/TestingBiosampleSno.json')
     embedded_list = [
-        'contributor.specimen'
+        'contributor.specimen',
+        'technical_reviews.assessment.call',
+        'technical_reviews.review.*'
     ]
 
 

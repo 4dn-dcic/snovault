@@ -1,8 +1,9 @@
 import os
-import pytest
 import subprocess
-from .postgresql_fixture import SNOVAULT_DB_TEST_PORT, DEFAULT_SNOVAULT_DB_TEST_PORT
-from dcicutils.qa_utils import override_environ
+
+from dcicutils.misc_utils import override_environ
+
+from .postgresql_fixture import DEFAULT_SNOVAULT_DB_TEST_PORT
 
 
 def test_snovault_db_test_port():
@@ -12,7 +13,8 @@ def test_snovault_db_test_port():
     #  Maybe that's something we want to do, but wanted to point it out
     #  just in case.
     command1 = "source %s/bin/activate" % os.environ['VIRTUAL_ENV']
-    command2 = "python -c 'from snovault.tests.postgresql_fixture import SNOVAULT_DB_TEST_PORT; print(SNOVAULT_DB_TEST_PORT)'"
+    command2 = ("python -c 'from snovault.tests.postgresql_fixture import SNOVAULT_DB_TEST_PORT;"
+                " print(SNOVAULT_DB_TEST_PORT)'")
 
     print("os.environ.get('SNOVAULT_DB_TEST_PORT') = %r" % os.environ.get('SNOVAULT_DB_TEST_PORT'))
 

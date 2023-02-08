@@ -1,22 +1,16 @@
 import logging
-import os
-import psutil
-import time
 
-# from pkg_resources import resource_filename
+from dcicutils.misc_utils import ignorable, ignored
 from pyramid.events import BeforeRender, subscriber
 from pyramid.httpexceptions import (
-    HTTPMovedPermanently,
-    HTTPPreconditionFailed,
-    HTTPUnauthorized,
-    HTTPUnsupportedMediaType,
+    HTTPMovedPermanently, HTTPPreconditionFailed, HTTPUnauthorized, HTTPUnsupportedMediaType,
 )
 from pyramid.security import forget
 from pyramid.settings import asbool
 from pyramid.threadlocal import manager
 from pyramid.traversal import split_path_info, _join_path_tuple
-from subprocess_middleware.tween import SubprocessTween
 from webob.cookies import Cookie
+
 from .validation import CSRFTokenError
 
 
@@ -43,6 +37,7 @@ def fix_request_method_tween_factory(handler, registry):
     Apache config:
         SetEnvIf Request_Method HEAD X_REQUEST_METHOD=HEAD
     """
+    ignored(registry)
 
     def fix_request_method_tween(request):
         environ = request.environ
@@ -54,9 +49,11 @@ def fix_request_method_tween_factory(handler, registry):
 
 
 def security_tween_factory(handler, registry):
+    ignored(registry)
 
     def security_tween(request):
         login = None
+        ignorable(login)  # The value of this assignment will long be used if there's an error in the 'if'-logic below.
         expected_user = request.headers.get('X-If-Match-User')
         if expected_user is not None:
             login = request.authenticated_userid
@@ -93,6 +90,8 @@ def security_tween_factory(handler, registry):
         # but of course that sounds a lot like JWT...
         return handler(request)
 
+        # TODO: Code beyond here is unreachable? Is that right? Should we keep the code? -kmp 7-Aug-2022
+
         if login is None:
             login = request.authenticated_userid
         if login is not None:
@@ -105,6 +104,7 @@ def security_tween_factory(handler, registry):
 
 
 def normalize_cookie_tween_factory(handler, registry):
+    ignored(registry)
 
     ignore = {
         '/favicon.ico',
@@ -139,6 +139,7 @@ def normalize_cookie_tween_factory(handler, registry):
 
 
 def set_x_request_url_tween_factory(handler, registry):
+    ignored(registry)
 
     def set_x_request_url_tween(request):
         response = handler(request)

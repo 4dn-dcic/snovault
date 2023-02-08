@@ -1,20 +1,11 @@
 import copy
 import pytest
 
-# from dcicutils.qa_utils import notice_pytest_fixtures
 from ..interfaces import TYPES
 from ..util import (
-    build_embedded_model,
-    build_default_embeds,
-    crawl_schema,
-    expand_embedded_list,
-    find_collection_subtypes,
-    find_default_embeds_for_schema,
+    build_embedded_model, build_default_embeds, crawl_schema, expand_embedded_list,
+    find_collection_subtypes, find_default_embeds_for_schema,
 )
-
-# This is handled in pytest.ini and should not be redundantly here. -kmp 4-Jul-2020
-# from .toolfixtures import registry
-# notice_pytest_fixtures(registry)
 
 
 def test_find_collection_subtypes(app):
@@ -38,17 +29,32 @@ def test_build_default_embeds():
         'obj1.*',
         'obj1.obj3.*'
     ]
-    assert(set(final_embeds) == set(expected_embeds))
+    assert set(final_embeds) == set(expected_embeds)
 
 
 def test_find_default_embeds_and_expand_emb_list(registry):
-    # use EmbeddingTest as test case
-    # 'attachment' -> linkTo TestingDownload
+    """Use EmbeddingTest schema as test case.
+
+    Ensure objects with patternProperties or additionalProperties
+    sub-objects are only embedded if parent objects also include
+    other properties.
+    """
     type_info = registry[TYPES].by_item_type['embedding_test']
     schema_props = type_info.schema.get('properties')
     default_embeds = find_default_embeds_for_schema('', schema_props)
-    expected_embeds = ['attachment', 'principals_allowed.*']
-    assert(set(default_embeds) == set(expected_embeds))
+    expected_embeds = [
+        'attachment',  # 'attachment' -> linkTo TestingDownload
+        'principals_allowed.*',
+        'pattern_property_embed.*',
+        'additional_property_embed.*',
+    ]
+    expected_not_embeds = [  # In props but not default embeds == success
+        "pattern_property_no_embed",
+        "additional_property_no_embed",
+    ]
+    assert set(default_embeds) == set(expected_embeds)
+    for expected_not_embed in expected_not_embeds:
+        assert expected_not_embed in schema_props
 
     # get expansions from 'attachment'
     dummy_emb_list = [
@@ -63,13 +69,13 @@ def test_find_default_embeds_and_expand_emb_list(registry):
         'attachment.attachment2.*',
         'attachment.principals_allowed.*'
     ]
-    assert(set(embs_to_add) == set(expected_to_add))
+    assert set(embs_to_add) == set(expected_to_add)
 
     # add default embeds for all items 'attachment'
     test_embed = ['attachment.attachment.*']
     embs_to_add2, _ = expand_embedded_list('EmbeddingTest', registry[TYPES], test_embed, schema_props, set())
     expected_to_add2 = ['attachment']
-    assert(set(embs_to_add2) == set(expected_to_add2))
+    assert set(embs_to_add2) == set(expected_to_add2)
     # lastly check the built embeds
     expected_built = [
         'attachment.display_title',
@@ -93,19 +99,19 @@ def test_crawl_schema(registry):
     with pytest.raises(Exception) as exec_info:
         crawl_schema(registry[TYPES], field_path, 'not_a_schema')
     # different error, since it attempts to find the file locally
-    assert 'Invalid starting schema' in str(exec_info)
+    assert 'Invalid starting schema' in str(exec_info.value)
 
     field_path2 = 'attachment.@id.title'
     with pytest.raises(Exception) as exec_info2:
         crawl_schema(registry[TYPES], field_path2, embedding_schema)
     # different error, since it attempts to find the file locally
-    assert 'Non-dictionary schema' in str(exec_info2)
+    assert 'Non-dictionary schema' in str(exec_info2.value)
 
     field_path3 = 'attachment.@types.blah'
     with pytest.raises(Exception) as exec_info3:
         crawl_schema(registry[TYPES], field_path3, embedding_schema)
     # different error, since it attempts to find the file locally
-    assert 'Field not found' in str(exec_info3)
+    assert 'Field not found' in str(exec_info3.value)
 
     # screw with the schema to create an invalid linkTo
     embedding_schema = registry[TYPES].by_item_type['embedding_test'].schema
@@ -114,7 +120,7 @@ def test_crawl_schema(registry):
     with pytest.raises(Exception) as exec_info4:
         crawl_schema(registry[TYPES], field_path, schema_copy)
     # different error, since it attempts to find the file locally
-    assert 'Invalid linkTo' in str(exec_info4)
+    assert 'Invalid linkTo' in str(exec_info4.value)
 
 
 def test_build_embedded_model():

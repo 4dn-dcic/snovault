@@ -1,20 +1,25 @@
+import os
 import elasticsearch.exceptions
-from elasticsearch.helpers import scan
+import structlog
+
+from dcicutils import es_utils, ff_utils
+from dcicutils.misc_utils import override_environ, ignored
+from dcicutils.secrets_utils import assume_identity
 from elasticsearch_dsl import Search, Q
-from zope.interface import alsoProvides
+from elasticsearch.helpers import scan
 from uuid import UUID
+from zope.interface import alsoProvides
+from .create_mapping import SEARCH_MAX
+from .indexer_utils import get_namespaced_index, namespace_index_from_health, find_uuids_for_indexing
 from .interfaces import (
     ELASTIC_SEARCH,
-    INDEXER_QUEUE_MIRROR,
+    # INDEXER_QUEUE_MIRROR,
     INDEXER,
     ICachedItem,
 )
-from .indexer_utils import get_namespaced_index, namespace_index_from_health, find_uuids_for_indexing
-from .create_mapping import SEARCH_MAX
 from ..storage import register_storage
 from ..util import CachedField
-from dcicutils import es_utils, ff_utils
-import structlog
+
 
 log = structlog.getLogger(__name__)
 
@@ -77,7 +82,8 @@ class CachedModel(object):
     def max_sid(self):
         return self.source['max_sid']
 
-    def used_for(self, item):
+    @classmethod
+    def used_for(cls, item):
         alsoProvides(item, ICachedItem)
 
 
@@ -98,7 +104,8 @@ class ElasticSearchStorage(object):
         self.mappings = CachedField('mappings',
                                     lambda: self.es.indices.get_mapping(index=self.index))
 
-    def _one(self, search):
+    @classmethod
+    def _one(cls, search):
         # execute search and return a model if there is one hit
         hits = search.execute()
         if len(hits) != 1:
@@ -170,7 +177,7 @@ class ElasticSearchStorage(object):
         """
         index_name = get_namespaced_index(self.registry, item_type)
         try:
-            res = self.es.get(index=index_name, doc_type=item_type, id=uuid,
+            res = self.es.get(index=index_name, id=uuid,
                               _source=True, realtime=True, ignore=404)
         except elasticsearch.exceptions.NotFoundError:
             res = None
@@ -181,12 +188,12 @@ class ElasticSearchStorage(object):
         Perform a search with an given key and value.
         Returns CachedModel if found, otherwise None
         """
+        ignored(default)  # TODO: Is that right? Should it not be used somewhere below? -kmp 7-Aug-2022
         # find the term with the specific type
         term = 'embedded.' + key + '.raw'
-        index = get_namespaced_index(self.registry, item_type)
+        index = get_namespaced_index(self.registry, item_type)  # TODO: Should default be passed here? -kmp 7-Aug-2022
         search = Search(using=self.es, index=index)
         search = search.filter('term', **{term: value})
-        search = search.filter('type', value=item_type)
         return self._one(search)
 
     def get_by_unique_key(self, unique_key, name, item_type=None):
@@ -232,12 +239,14 @@ class ElasticSearchStorage(object):
         Returns:
             dict keyed by rid with integer sid values
         """
+        ignored(self, rids)
         return {}
 
     def get_max_sid(self):
         """
         Currently not implemented for ES. Just return None
         """
+        ignored(self)
         return None
 
     @staticmethod
@@ -253,7 +262,7 @@ class ElasticSearchStorage(object):
         :returns: True if rid does not exist in ES, False if it does (AT THIS TIME)
         """
         try:
-            es.delete(id=rid, index=index_name, doc_type=item_type)
+            es.delete(id=rid, index=index_name)
         except elasticsearch.exceptions.NotFoundError:
             # Case: Not yet indexed
             log.error('PURGE: Could not find %s in ElasticSearch. Continuing.' % rid)
@@ -265,20 +274,27 @@ class ElasticSearchStorage(object):
             log.info('PURGE: successfully deleted %s in ElasticSearch' % rid)
         return True
 
-    def _get_cached_mirror_health(self, mirror_env):
-
+    def _get_cached_mirror_health(self):
+        """ Helper function that resolves the health page, configured to handle
+            both legacy and GAC setups.
+        """
         cached_mirror_health = self.registry.settings['mirror_health']
         if 'error' not in cached_mirror_health:
             return cached_mirror_health
 
         mirror_env = self.registry.settings['mirror.env.name']
-        mirror_health_now = ff_utils.get_health_page(ff_env=mirror_env)
+        if 'IDENTITY' in os.environ:  # GAC behavior, must pull secret
+            with override_environ(**assume_identity()):
+                mirror_health_now = ff_utils.get_health_page(ff_env=mirror_env)
+        else:  # legacy behavior, s3 key is already sourced in env
+            mirror_health_now = ff_utils.get_health_page(ff_env=mirror_env)
         if 'error' not in mirror_health_now:
             return mirror_health_now
 
         raise RuntimeError('PURGE: Could not resolve mirror health on retry with error: %s' % mirror_health_now)
 
     def _assure_mirror_client(self, es_mirror_server_and_port):
+        """ Helper method that creates the ES client that connects to the  mirror ES """
         if not self.mirror:
             raise RuntimeError("Attempt to call ._assure_mirror_client() when there is no self.mirror.")
 
@@ -308,7 +324,7 @@ class ElasticSearchStorage(object):
         log.info('PURGE: attempting to purge %s from mirror storage %s' % (rid, mirror_env))
 
         try:
-            mirror_health = self._get_cached_mirror_health(mirror_env)
+            mirror_health = self._get_cached_mirror_health()
         except RuntimeError:
             log.error("PURGE: Tried to purge %s from mirror storage but couldn't get health page. Is staging up?" % rid)
             raise
@@ -383,9 +399,9 @@ class ElasticSearchStorage(object):
         linked_info = []
         # we only care about linkTos the item and not reverse links here
         # we also do not care about invalidation scope
-        uuids_linking_to_item, _ = find_uuids_for_indexing(self.registry, set([rid]))
+        uuids_linking_to_item, _ = find_uuids_for_indexing(self.registry, {rid})
         # remove the item itself from the list
-        uuids_linking_to_item = uuids_linking_to_item - set([rid])
+        uuids_linking_to_item = uuids_linking_to_item - {rid}
         if 0 < len(uuids_linking_to_item) < 1000:  # more than 1000 can trigger 504
             # Return list of { '@id', 'display_title', 'uuid' } in 'comment'
             # property of HTTPException response to assist with any manual unlinking.
@@ -393,10 +409,10 @@ class ElasticSearchStorage(object):
                 linking_dict = self.get_by_uuid(linking_uuid).source.get('embedded')
                 linking_property = self.find_linking_property(linking_dict, rid)
                 linked_info.append({
-                    '@id' : linking_dict.get('@id', linking_dict['uuid']),
-                    'display_title' : linking_dict.get('display_title', linking_dict['uuid']),
-                    'uuid' : linking_uuid,
-                    'field' : linking_property or "Not Embedded"
+                    '@id': linking_dict.get('@id', linking_dict['uuid']),
+                    'display_title': linking_dict.get('display_title', linking_dict['uuid']),
+                    'uuid': linking_uuid,
+                    'field': linking_property or "Not Embedded"
                 })
         return linked_info
 
@@ -440,7 +456,7 @@ class ElasticSearchStorage(object):
         index_name = get_namespaced_index(self.registry, document['item_type'])
         # use `refresh='waitfor'` so that the ES model is immediately available
         self.es.index(
-            index=index_name, doc_type=document['item_type'], body=document,
+            index=index_name, body=document,
             id=document['uuid'], version=document['sid'],
             version_type='external_gte', refresh='wait_for'
         )

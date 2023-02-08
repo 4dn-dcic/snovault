@@ -26,7 +26,7 @@ def server_process(datadir, host='localhost', port=9200, prefix='', echo=False):
     #     '-XX:MaxDirectMemorySize=4096m',
     # ]
     args = [
-        os.path.join(prefix, 'elasticsearch'),
+        os.path.join(prefix, 'opensearch'),
         '-Enetwork.host=%s' % host,
         '-Ehttp.port=%d' % port,
         '-Epath.data=%s' % os.path.join(datadir, 'data'),
@@ -75,11 +75,13 @@ def main():
     datadir = tempfile.mkdtemp()
 
     print('Starting in dir: %s' % datadir)
+    started_ok = False
     try:
         process = server_process(datadir, echo=True)
-    except:
-        shutil.rmtree(datadir)
-        raise
+        started_ok = True
+    finally:
+        if not started_ok:
+            shutil.rmtree(datadir)
 
     @atexit.register
     def cleanup_process():

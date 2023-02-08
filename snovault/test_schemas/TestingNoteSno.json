@@ -1,0 +1,111 @@
+{
+    "title": "TestingNote",
+    "description": "TestingNote, based on schema for technical review of variants from CGAP.",
+    "id": "/profiles/testing_note.json",
+    "$schema": "http://json-schema.org/draft-04/schema#",
+    "type": "object",
+    "identifyingProperties": [
+        "identifier"
+    ],
+    "additionalProperties": false,
+    "mixinProperties": [
+        {
+            "$ref": "mixins.json#/status"
+        }
+    ],
+    "properties": {
+        "schema_version": {
+            "default": "1",
+            "type": "string"
+        },
+        "uuid": {
+            "type": "string"
+        },
+        "identifier": {
+            "type": "string",
+            "uniqueKey": true
+        },
+        "assessment": {
+            "title": "Call Assessment",
+            "additionalProperties": false,
+            "type": "object",
+            "properties": {
+                "call": {
+                    "title": "Technical Review Call",
+                    "type": "boolean",
+                    "description": "True if Call or False if No Call"
+                },
+                "classification": {
+                    "title": "Classification",
+                    "description": "Reason for the given call choice",
+                    "type": "string",
+                    "enum": [
+                        "Present",
+                        "Recurrent Artifact",
+                        "Low Coverage",
+                        "Low Allelic Fraction",
+                        "Low Mapping Quality",
+                        "Repeat Region",
+                        "Strand Bias",
+                        "Mendelian Error",
+                        "No Depth Change",
+                        "No Split Reads",
+                        "No Spanning Reads",
+                        "Other"
+                    ]
+                },
+                "date_call_made": {
+                    "title": "Date Call Made",
+                    "exclude_from": ["FFedit-create"],
+                    "type": "string",
+                    "anyOf": [
+                        {"format": "date-time"},
+                        {"format": "date"}
+                    ],
+                    "serverDefault": "now",
+                    "permission": "restricted_fields"
+                },
+                "call_made_by": {
+                    "title": "Call Made By",
+                    "exclude_from": ["FFedit-create"],
+                    "type": "string",
+                    "serverDefault": "userid",
+                    "permission": "restricted_fields"
+                }
+            }
+        },
+        "review": {
+            "title": "Review",
+            "additionalProperties": false,
+            "type": "object",
+            "properties": {
+                "date_reviewed": {
+                    "title": "Date Reviewed",
+                    "exclude_from": ["FFedit-create"],
+                    "type": "string",
+                    "anyOf": [
+                        {"format": "date-time"},
+                        {"format": "date"}
+                    ],
+                    "serverDefault": "now",
+                    "permission": "restricted_fields"
+                },
+                "reviewed_by": {
+                    "title": "Reviewed By",
+                    "exclude_from": ["FFedit-create"],
+                    "type": "string",
+                    "serverDefault": "userid",
+                    "permission": "restricted_fields"
+                }
+            }
+        },
+        "previous_note": {
+            "type": "string",
+            "linkTo": "TestingNoteSno"
+        },
+        "superseding_note": {
+            "type": "string",
+            "linkTo": "TestingNoteSno"
+        }
+    }
+}

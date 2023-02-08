@@ -6,8 +6,7 @@ from Elasticsearch. See esstorage.CachedModel and the following docs:
 https://zopeinterface.readthedocs.io/en/stable/api.html#zope.interface.declarations.alsoProvides
 """
 
-import sys
-
+from dcicutils.misc_utils import ignored
 from pyramid.httpexceptions import HTTPForbidden
 from pyramid.view import view_config
 
@@ -26,19 +25,23 @@ def includeme(config):
     config.scan(__name__)
 
 
-@view_config(context=ICachedItem, request_method='GET', name='embedded')
-@debug_log
-def cached_view_embedded(context, request):
-    source = context.model.source
-    allowed = set(source['principals_allowed']['view'])
-    if allowed.isdisjoint(request.effective_principals):
-        raise HTTPForbidden()
-    return filter_embedded(source['embedded'], request.effective_principals)
+# As discussed in code review, we THINK this was unused (is redefined by the subsequent definition of same name).
+#
+# @view_config(context=ICachedItem, request_method='GET',
+#              name='embedded')
+# @debug_log
+# def cached_view_embedded(context, request):  # This name duplicates the next definition.
+#     source = context.model.source
+#     allowed = set(source['principals_allowed']['view'])
+#     if allowed.isdisjoint(request.effective_principals):
+#         raise HTTPForbidden()
+#     return filter_embedded(source['embedded'], request.effective_principals)
 
 
 @view_config(context=ICachedItem, permission='view', request_method='GET',
              name='embedded')
-def cached_view_embedded(context, request):
+@debug_log
+def cached_view_embedded(context, request):  # This name duplicates the previous definition.
     """
     Use the 'embedded' view that is stored the ElasticSearch unless we
     are using an Item with 'elasticsearch' properties_datastore, in which case
@@ -47,8 +50,8 @@ def cached_view_embedded(context, request):
     """
     source = context.model.source
     # generate view if this item uses ES as primary datastore or indexing
-    if (context.properties_datastore == 'elasticsearch' and
-        ('embedded' not in source or request._indexing_view is True)):
+    if (context.properties_datastore == 'elasticsearch'
+            and ('embedded' not in source or request._indexing_view is True)):
         embedded = item_view_embedded(context, request)
     else:
         embedded = source['embedded']
@@ -72,8 +75,8 @@ def cached_view_object(context, request):
     """
     source = context.model.source
     # generate view if this item uses ES as primary datastore or indexing
-    if (context.properties_datastore == 'elasticsearch' and
-        ('object' not in source or request._indexing_view is True)):
+    if (context.properties_datastore == 'elasticsearch'
+            and ('object' not in source or request._indexing_view is True)):
         object = item_view_object(context, request)
     else:
         object = source['object']
@@ -92,6 +95,7 @@ def cached_view_raw(context, request):
     Must generate this view because it's not stored in ES source. Add 'uuid'
     to the item properties to be consistent with the regular 'raw' view
     """
+    ignored(request)
     source = context.model.source
     props = source['properties']
     # add uuid to raw view

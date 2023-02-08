@@ -1,11 +1,14 @@
+from unittest import mock
 import pytest
 import re
-import transaction as transaction_management
+# import transaction as transaction_management
 import uuid
+import boto3
 
+from dcicutils.misc_utils import filtered_warnings
 from pyramid.threadlocal import manager
 from sqlalchemy import func
-from sqlalchemy.orm.exc import FlushError
+from sqlalchemy.exc import IntegrityError
 from ..interfaces import DBSESSION, STORAGE
 from ..storage import (
     Blob,
@@ -19,19 +22,22 @@ from ..storage import (
     Resource,
     S3BlobStorage,
 )
-
+from moto import mock_s3
 
 pytestmark = pytest.mark.storage
 
 
-POSTGRES_MAJOR_VERSION_EXPECTED = 11
+# These 3 versions are known to be compatible, older versions should not be
+# used, odds are 14 can be used as well - Will Sept 13 2022
+POSTGRES_COMPATIBLE_MAJOR_VERSIONS = ['11', '12', '13']
+
 
 def test_postgres_version(session):
-
+    """ Tests that the local postgres is running one of the compatible versions """
     (version_info,) = session.query(func.version()).one()
     print("version_info=", version_info)
     assert isinstance(version_info, str)
-    assert re.match("PostgreSQL %s([.][0-9]+)? " % POSTGRES_MAJOR_VERSION_EXPECTED, version_info)
+    assert re.match("PostgreSQL (%s)([.][0-9]+)? " % '|'.join(POSTGRES_COMPATIBLE_MAJOR_VERSIONS), version_info)
 
 
 def test_storage_creation(session):
@@ -43,20 +49,22 @@ def test_storage_creation(session):
 
 
 def test_transaction_record_rollback(session):
+    """ Tests that committing and rolling back an invalid transactions works as expected """
     rid = uuid.uuid4()
+    sp1 = session.begin_nested()
     resource = Resource('test_item', {'': {}}, rid=rid)
     session.add(resource)
-    transaction_management.commit()
-    transaction_management.begin()
-    sp = session.begin_nested()
+    sp1.commit()
+
+    # test rollback
+    sp2 = session.begin_nested()
     resource = Resource('test_item', {'': {}}, rid=rid)
     session.add(resource)
     with pytest.raises(Exception):
-        sp.commit()
-    sp.rollback()
+        sp2.commit()
+    sp2.rollback()
     resource = Resource('test_item', {'': {}})
     session.add(resource)
-    transaction_management.commit()
 
 
 def test_current_propsheet(session):
@@ -216,7 +224,8 @@ def test_keys(session):
     session.flush()
     key3 = Key(rid=resource2.rid, name=testname, value=props1[testname])
     session.add(key3)
-    with pytest.raises(FlushError):
+    # try to insert a duplicate unique key, previously threw FlushError
+    with pytest.raises(IntegrityError):  # in newer sqlalchemy versions IntegrityError is more accurate
         session.flush()
 
 
@@ -230,15 +239,54 @@ def test_get_sids_by_uuids(session, storage):
     assert set(sids) == {str(resource.rid)}
 
 
-def test_S3BlobStorage():
-    blob_bucket = 'encoded-4dn-blobs'
-    storage = S3BlobStorage(blob_bucket)
+@pytest.mark.parametrize(
+    's3_encrypt_key_id,kms_args_expected',
+    [(None, False), ("", False), (str(uuid.uuid4()), True)],
+)
+def test_S3BlobStorage(s3_encrypt_key_id, kms_args_expected):
+    # NOTE: I have separated the call to _test_S3BlobStorage into a separate function so I can wrap it with
+    #       @mock_s3 after establishing this context manager to suppress a warning. (It could have been an
+    #       internal function, but it shows up better in the patch diffs if I do it this way, and will be
+    #       easier to simplify later. The warning is due to a call made by moto 1.3.x that uses deprecated
+    #       support complained about in responses 0.17.0. Hopefully if we ever get higher than that version
+    #       of moto, we can reconsider this. However, moto 2.0 requires some change in configuration that we'd
+    #       have to take time to learn about. -kmp 5-Feb-2022
+    with filtered_warnings('ignore', category=DeprecationWarning):
+        # The warning being suppressed (which comes from moto 1.3.x) looks like:
+        #   ...env/lib/python3.6/site-packages/responses/__init__.py:484:
+        #   DeprecationWarning: stream argument is deprecated. Use stream parameter in request directly
+        # HOPEFULLY that's the only deprecation warning that would come from this test, which is why it
+        # would be good to remove these warnings when we are able. -kmp 5-Feb-2022
+        _test_S3BlobStorage(s3_encrypt_key_id, kms_args_expected)
+
+
+@mock_s3
+def _test_S3BlobStorage(s3_encrypt_key_id, kms_args_expected):
+
+    blob_bucket = 'encoded-4dn-blobs'  # note that this bucket exists but is mocked out here
+    conn = boto3.resource('s3', region_name='us-east-1')
+    conn.create_bucket(Bucket=blob_bucket)
+
+    storage = S3BlobStorage(blob_bucket, kms_key_id=s3_encrypt_key_id)
     assert storage.bucket == blob_bucket
+    if s3_encrypt_key_id:
+        assert storage.kms_key_id == s3_encrypt_key_id
 
     download_meta = {'download': 'test.txt'}
-    storage.store_blob('data', download_meta)
-    assert download_meta['bucket'] == blob_bucket
-    assert 'key' in download_meta
+    with mock.patch.object(
+        storage.s3, 'put_object', side_effect=storage.s3.put_object
+    ) as mocked_s3_put_object:  # To obtain calls while retaining function
+        storage.store_blob('data', download_meta)
+        assert download_meta['bucket'] == blob_bucket
+        assert 'key' in download_meta
+        mocked_s3_put_object.assert_called_once()
+        call_kwargs = mocked_s3_put_object.call_args.kwargs
+        if kms_args_expected:
+            assert call_kwargs.get("ServerSideEncryption") == "aws:kms"
+            assert call_kwargs.get("SSEKMSKeyId") == s3_encrypt_key_id
+        else:
+            assert "ServerSideEncryption" not in call_kwargs
+            assert "SSEKMSKeyId" not in call_kwargs
 
     data = storage.get_blob(download_meta)
     assert data == 'data'
@@ -250,6 +298,18 @@ def test_S3BlobStorage():
 
 
 def test_S3BlobStorage_get_blob_url_for_non_s3_file():
+    # NOTE: See test_S3BlobStorage for note explaining this filtering of warning and when/how it can go away.
+    #       -kmp 5-Feb-2022
+    with filtered_warnings('ignore', category=DeprecationWarning):
+        # The warning being suppressed (which comes from moto 1.3.x) looks like:
+        #   ...env/lib/python3.6/site-packages/responses/__init__.py:484:
+        #   DeprecationWarning: stream argument is deprecated. Use stream parameter in request directly
+        _test_S3BlobStorage_get_blob_url_for_non_s3_file()
+
+
+@mock_s3
+def _test_S3BlobStorage_get_blob_url_for_non_s3_file():
+
     blob_bucket = 'encoded-4dn-blobs'
     storage = S3BlobStorage(blob_bucket)
     assert storage.bucket == blob_bucket
@@ -268,7 +328,7 @@ def test_pick_storage(registry, dummy_request):
     assert storage.storage('elasticsearch') == 'dummy_es'
     with pytest.raises(Exception) as exec_info:
         storage.storage('not_a_db')
-    assert 'Invalid forced datastore not_a_db' in str(exec_info)
+    assert 'Invalid forced datastore not_a_db' in str(exec_info.value)
     assert storage.storage() is storage.write
 
     dummy_request.datastore = 'elasticsearch'

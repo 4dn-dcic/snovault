@@ -17,9 +17,14 @@ else
 fi
 
 
-if [ "${TRAVIS_JOB_ID}" = "" -o "${TRAVIS_JOB_ID:0:4}" = "4dn-" ]; then
-    export TRAVIS_JOB_ID=4dn-`date "+%m%d%H%M%Y%S"`
-    echo "NOTE: Simulating TRAVIS_JOB_ID=$TRAVIS_JOB_ID"
+if [ "${TEST_JOB_ID}" = "" -a "${TRAVIS_JOB_ID}" != "" ]; then
+    export TEST_JOB_ID=${TRAVIS_JOB_ID}
+    unset TRAVIS_JOB_ID
+fi
+
+if [ "${TEST_JOB_ID}" = "" -o "${TEST_JOB_ID:0:4}" = "4dn-" ]; then
+    export TEST_JOB_ID=4dn-`date "+%m%d%H%M%Y%S"`
+    echo "NOTE: Simulating TEST_JOB_ID=$TEST_JOB_ID"
 fi
 
 python $(dirname $0)/test.py "$@"

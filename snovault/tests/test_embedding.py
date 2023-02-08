@@ -1,10 +1,18 @@
 import pytest
+# import time
 
-from dcicutils.qa_utils import ignored, notice_pytest_fixtures
+from dcicutils.misc_utils import ignored
+from dcicutils.qa_utils import notice_pytest_fixtures, Retry, Eventually
 from re import findall
 from ..interfaces import TYPES
 from ..util import add_default_embeds, crawl_schemas_by_embeds
 from .test_views import PARAMETERIZED_NAMES
+
+
+class DecayingRetry(Retry):
+    DEFAULT_RETRIES_ALLOWED = 3
+    DEFAULT_WAIT_SECONDS = 3
+    DEFAULT_WAIT_MULTIPLIER = 2
 
 
 targets = [
@@ -88,6 +96,7 @@ def test_manual_embeds(registry, item_type):
         assert error is None
 
 
+@DecayingRetry.retry_allowed(retries_allowed=3)
 def test_linked_uuids_unset(content, dummy_request, threadlocals):
     notice_pytest_fixtures(content, dummy_request, threadlocals)
     # without setting _indexing_view = True on the request,
@@ -97,15 +106,21 @@ def test_linked_uuids_unset(content, dummy_request, threadlocals):
     assert dummy_request._sid_cache == {}
 
 
+@DecayingRetry.retry_allowed(retries_allowed=3)
 def test_linked_uuids_object(content, dummy_request, threadlocals):
     notice_pytest_fixtures(content, dummy_request, threadlocals)
     # needed to track _linked_uuids
     dummy_request._indexing_view = True
     dummy_request.embed('/testing-link-sources-sno/', sources[0]['uuid'], '@@object')
-    assert dummy_request._linked_uuids == {('16157204-8c8f-4672-a1a4-14f4b8021fcd', 'TestingLinkSourceSno')}
-    assert dummy_request._rev_linked_uuids_by_item == {}
+
+    def my_assertions():
+        assert dummy_request._linked_uuids == {('16157204-8c8f-4672-a1a4-14f4b8021fcd', 'TestingLinkSourceSno')}
+        assert dummy_request._rev_linked_uuids_by_item == {}
+
+    Eventually.call_assertion(my_assertions)
 
 
+@DecayingRetry.retry_allowed(retries_allowed=3)
 def test_linked_uuids_embedded(content, dummy_request, threadlocals):
     notice_pytest_fixtures(content, dummy_request, threadlocals)
     # needed to track _linked_uuids
@@ -116,11 +131,13 @@ def test_linked_uuids_embedded(content, dummy_request, threadlocals):
         ('775795d3-4410-4114-836b-8eeecf1d0c2f', 'TestingLinkTargetSno')
     }
     # _rev_linked_uuids_by_item is in form {target uuid: set(source uuid)}
+    print(dummy_request.__dict__)
     assert dummy_request._rev_linked_uuids_by_item == {
         '775795d3-4410-4114-836b-8eeecf1d0c2f': {'reverse': ['16157204-8c8f-4672-a1a4-14f4b8021fcd']}
     }
 
 
+@DecayingRetry.retry_allowed(retries_allowed=3)
 def test_linked_uuids_page(content, dummy_request, threadlocals):
     notice_pytest_fixtures(content, dummy_request, threadlocals)
     # needed to track _linked_uuids
@@ -135,6 +152,7 @@ def test_linked_uuids_page(content, dummy_request, threadlocals):
     }
 
 
+@DecayingRetry.retry_allowed(retries_allowed=3)
 def test_linked_uuids_expand_target(content, dummy_request, threadlocals):
     notice_pytest_fixtures(content, dummy_request, threadlocals)
     # needed to track _linked_uuids
@@ -150,6 +168,7 @@ def test_linked_uuids_expand_target(content, dummy_request, threadlocals):
     }
 
 
+@DecayingRetry.retry_allowed(retries_allowed=3)
 def test_linked_uuids_index_data(content, dummy_request, threadlocals):
     notice_pytest_fixtures(content, dummy_request, threadlocals)
     # this is the main view use to create data model for indexing
@@ -169,7 +188,8 @@ def test_linked_uuids_index_data(content, dummy_request, threadlocals):
     assert res['rev_link_names'] == {}
     assert res['rev_linked_to_me'] == [targets[0]['uuid']]
     # object view linked uuids are contained within the embedded linked uuids
-    assert set((linked['uuid'], linked['item_type']) for linked in res['linked_uuids_object']) <= dummy_request._linked_uuids
+    assert set((linked['uuid'], linked['item_type'])
+               for linked in res['linked_uuids_object']) <= dummy_request._linked_uuids
 
     # now test the target. this will reset all attributes on dummy_request
     res2 = dummy_request.embed('/testing-link-targets-sno/', targets[0]['uuid'], '@@index-data', as_user='INDEXER')

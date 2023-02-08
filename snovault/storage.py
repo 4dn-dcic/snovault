@@ -5,15 +5,15 @@ from pyramid.httpexceptions import (
 )
 from sqlalchemy import (
     Column,
-    DDL,
+    # DDL,
     ForeignKey,
     bindparam,
-    event,
+    # event,
     func,
-    null,
+    # null,
     orm,
     schema,
-    text,
+    # text,
     types,
 )
 from sqlalchemy.dialects import postgresql
@@ -38,8 +38,8 @@ from .interfaces import (
 from dcicutils.misc_utils import ignored
 from pyramid.threadlocal import get_current_request
 import boto3
+from botocore.client import Config
 import uuid
-import time
 import structlog
 
 log = structlog.getLogger(__name__)
@@ -100,9 +100,10 @@ def register_storage(registry, write_override=None, read_override=None):
 
     # set up blob storage if not configured already
     blob_bucket = registry.settings.get('blob_bucket', None)
-    registry[BLOBS] = (S3BlobStorage(blob_bucket)
-                   if blob_bucket
-                   else RDBBlobStorage(registry[DBSESSION]))
+    s3_encrypt_key_id = registry.settings.get('s3_encrypt_key_id', None)  # TODO: refactor SettingsKey
+    registry[BLOBS] = (S3BlobStorage(blob_bucket, kms_key_id=s3_encrypt_key_id)
+                       if blob_bucket
+                       else RDBBlobStorage(registry[DBSESSION]))
 
 
 Base = declarative_base()
@@ -205,8 +206,9 @@ class PickStorage(object):
         """
         Get write/read model by given key:value
         """
+        ignored(default)  # TODO: Is is right that this should be ignored? -kmp 7-Aug-2022
         storage = self.storage(datastore)
-        model = storage.get_by_json(key, value, item_type)
+        model = storage.get_by_json(key, value, item_type)  # TODO: Should a default not be passed here? -kmp 7-Aug-2022
         # unless forcing ES datastore, check write storage if not found in read
         # if datastore == 'database' and storage is self.read:
         # Old is above - See C4-30
@@ -368,7 +370,8 @@ class RDBStorage(object):
         ignored(item_type)
         return default
 
-    def find_uuids_linked_to_item(self, rid):
+    @classmethod
+    def find_uuids_linked_to_item(cls, rid):
         """
         This method is meant to only work with ES, so return empty list for
         DB implementation. See ElasticSearchStorage.find_uuids_linked_to_item.
@@ -591,6 +594,7 @@ class UUID(types.TypeDecorator):
     CHAR(32), storing as stringified hex values.
 
     """
+    cache_ok = True  # allow caching of uuids (avoid repeated string building)
     impl = types.CHAR
 
     def load_dialect_impl(self, dialect):
@@ -617,6 +621,8 @@ class UUID(types.TypeDecorator):
             return uuid.UUID(value)
 
 
+# TODO: refactor to wrap blob storage in common API, so we do not need
+# to pass args like kms_key_id in this class
 class RDBBlobStorage(object):
     """ Handlers to blobs we store in RDB """
     def __init__(self, DBSession):
@@ -627,10 +633,9 @@ class RDBBlobStorage(object):
 
         Args:
             data: raw attachment data
-            download_meta: metadata associated with 'data', not actually used
-            unless the caller wants to retain the blob_id
-            blob_id: optional arg specifying the id, will be generated if not
-            provided
+            download_meta: metadata associated with 'data',
+                not actually used unless the caller wants to retain the blob_id
+            blob_id: optional arg specifying the id, will be generated if not provided
         """
         if blob_id is None:
             blob_id = uuid.uuid4()
@@ -661,10 +666,11 @@ class RDBBlobStorage(object):
 
 class S3BlobStorage(object):
     """ Handler to blobs we store in S3 """
-    def __init__(self, bucket):
+    def __init__(self, bucket, kms_key_id=None):
         self.bucket = bucket
+        self.kms_key_id = kms_key_id
         session = boto3.session.Session(region_name='us-east-1')
-        self.s3 = session.client('s3')
+        self.s3 = session.client('s3', config=Config(signature_version='s3v4'))
 
     def store_blob(self, data, download_meta, blob_id=None):
         """
@@ -679,12 +685,19 @@ class S3BlobStorage(object):
         if blob_id is None:
             blob_id = str(uuid.uuid4())
 
-        content_type = download_meta.get('type','binary/octet-stream')
-        self.s3.put_object(Bucket=self.bucket,
-                           Key=blob_id,
-                           Body=data,
-                           ContentType=content_type
-                           )
+        content_type = download_meta.get('type', 'binary/octet-stream')
+        put_kwargs = dict(
+            Bucket=self.bucket,
+            Key=blob_id,
+            Body=data,
+            ContentType=content_type
+        )
+        if self.kms_key_id:
+            put_kwargs.update({
+                'ServerSideEncryption': 'aws:kms',
+                'SSEKMSKeyId': self.kms_key_id
+            })
+        self.s3.put_object(**put_kwargs)
         download_meta['bucket'] = self.bucket
         download_meta['key'] = blob_id
         download_meta['blob_id'] = str(blob_id)
@@ -692,7 +705,11 @@ class S3BlobStorage(object):
     def _get_bucket_key(self, download_meta):
         """ Helper for the below two methods """
         if 'bucket' in download_meta:
-            return download_meta['bucket'], download_meta['key']
+            resolved_bucket = download_meta['bucket']
+            if resolved_bucket != self.bucket:
+                log.error(f'Bucket mismatch found with blobs, overriding metadata and using bucket {self.bucket}')
+                resolved_bucket = self.bucket
+            return resolved_bucket, download_meta['key']
         else:
             return self.bucket, download_meta['blob_id']
 
@@ -725,7 +742,7 @@ class S3BlobStorage(object):
         """
         bucket_name, key = self._get_bucket_key(download_meta)
         response = self.s3.get_object(Bucket=bucket_name,
-                                 Key=key)
+                                      Key=key)
         return response['Body'].read().decode()
 
 
@@ -770,7 +787,7 @@ class Link(Base):
 
 class PropertySheet(Base):
     """
-    A triple describing a resource
+    A triple describing a resource - sid of time of writing, rid (uuid) and properties (json blob)
     """
     __tablename__ = 'propsheets'
     __table_args__ = (
@@ -794,11 +811,16 @@ class PropertySheet(Base):
 
 
 class CurrentPropertySheet(Base):
+    """
+    Table that optimizes access to most recent version of items
+    Also a triple of rid, name (unique keys) and sid
+    """
     __tablename__ = 'current_propsheets'
     rid = Column(UUID, ForeignKey('resources.rid'),
                  nullable=False, primary_key=True)
     name = Column(types.String, nullable=False, primary_key=True)
-    sid = Column(types.Integer, ForeignKey('propsheets.sid'), nullable=False)
+    # B-tree index on sid should optimize retrieval of max_sid (and all sids)
+    sid = Column(types.Integer, ForeignKey('propsheets.sid'), nullable=False, index=True)
     propsheet = orm.relationship(
         'PropertySheet', lazy='joined', innerjoin=True,
         primaryjoin="CurrentPropertySheet.sid==PropertySheet.sid",
@@ -810,7 +832,7 @@ class CurrentPropertySheet(Base):
                     CurrentPropertySheet.name==PropertySheet.name)""",
         viewonly=True,
     )
-    resource = orm.relationship('Resource')
+    resource = orm.relationship('Resource', back_populates='data')
     __mapper_args__ = {'confirm_deleted_rows': False}
 
 
@@ -826,6 +848,7 @@ class Resource(Base):
         'CurrentPropertySheet', cascade='all, delete-orphan',
         innerjoin=True, lazy='joined',
         collection_class=collections.attribute_mapped_collection('name'),
+        back_populates='resource'
     )
 
     def __init__(self, item_type, data=None, rid=None):
@@ -899,6 +922,7 @@ class Blob(Base):
 
 
 def hash_password(password):
+    ignored(password)
     raise NotImplementedError('Should not be calling this function')
 
 

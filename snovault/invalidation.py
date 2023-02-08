@@ -20,7 +20,8 @@ def add_to_indexing_queue(success, request, item, edit_or_add):
     are also indexed
     """
     error_msg = None
-    if success:  # only queue if the transaction is successful
+    # only queue if the transaction is successful and we do no explicitly skip indexing (loadxl phase 1)
+    if success and not request.params.get('skip_indexing'):
         try:
             item['strict'] = False
             item['method'] = 'POST' if edit_or_add == 'add' else 'PATCH'
@@ -36,10 +37,14 @@ def add_to_indexing_queue(success, request, item, edit_or_add):
                 # if the indexer queue is not configured but ES is, log an error
                 es = request.registry.get(ELASTIC_SEARCH)
                 if es:
-                    raise Exception("Indexer queue not configured! Attempted to queue %s for method %s." % (str(item), edit_or_add))
+                    raise Exception(f'Indexer queue not configured!'
+                                    f' Attempted to queue {item} for method {edit_or_add}.')
         except Exception as e:
             error_msg = repr(e)
     else:
-        error_msg = 'DB transaction not successful! %s not queued for method %s.' % (str(item), edit_or_add)
+        if request.params.get('skip_indexing'):
+            log.info(f'skip_indexing param passed - {item} not queued for method {edit_or_add}')
+        else:
+            error_msg = f'DB transaction not successful! {item} not queued for method {edit_or_add}.'
     if error_msg:
-        log.error('___Error queueing %s for indexing. Error: %s' % (str(item), error_msg))
+        log.error(f'___Error queueing {item} for indexing. Error: {error_msg}')

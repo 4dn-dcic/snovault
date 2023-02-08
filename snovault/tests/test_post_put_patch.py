@@ -1,5 +1,8 @@
 import pytest
 
+from dcicutils.misc_utils import ignored
+from dcicutils.qa_utils import notice_pytest_fixtures
+
 
 targets = [
     {'name': 'one', 'uuid': '775795d3-4410-4114-836b-8eeecf1d0c2f'},
@@ -57,6 +60,7 @@ def link_targets(testapp):
 
 @pytest.fixture
 def content(testapp, external_tx):
+    notice_pytest_fixtures(external_tx)
     res = testapp.post_json(COLLECTION_URL, item_with_uuid[0], status=201)
     return {'@id': res.location}
 
@@ -71,6 +75,7 @@ def content_with_child(testapp):
 
 
 def test_admin_post(testapp, external_tx):
+    notice_pytest_fixtures(external_tx)
     testapp.post_json(COLLECTION_URL, item, status=201)
     testapp.post_json(COLLECTION_URL, item_with_uuid[0], status=201)
 
@@ -160,6 +165,7 @@ def test_patch_delete_fields_enum(content, testapp):
 def test_patch_delete_fields_non_string(content, testapp):
     url = content['@id']
     res = testapp.get(url)
+    ignored(res)  # Should this be tested?
 
     # delete fields with defaults resets to default, while deleting non default field
     # completely removes them
@@ -200,11 +206,13 @@ def test_patch_delete_fields_import_items_admin(link_targets, testapp):
     url = res.location
     assert res.json['@graph'][0]['protected_link']
     res = testapp.patch_json(url + "?delete_fields=protected_link", {}, status=200)
+    ignored(res)  # Should this be tested?
 
 
 def test_patch_delete_fields_required(content, testapp):
     url = content['@id']
     res = testapp.get(url)
+    ignored(res)  # Should this be tested?
 
     # with validate=false, then defaults are not populated so default fields are also deleted
     res = testapp.patch_json(url + "?delete_fields=required", {}, status=422)
@@ -310,7 +318,7 @@ def test_check_only(content, testapp):
     # PUT
     altered_item = item_with_uuid[0].copy()
     altered_item['simple1'] = 'supplied simple1'
-    res = testapp.put_json(url+ '?check_only=True', item_with_uuid[0], status=200)
+    res = testapp.put_json(url + '?check_only=True', item_with_uuid[0], status=200)
     assert res.json['status'] == 'success'
     assert res.json['@type'] == ['result']
     # item did not change

@@ -3,17 +3,17 @@ import datetime
 import json
 import time
 import os
-from timeit import default_timer as timer
-
 import structlog
+
+from dcicutils.misc_utils import ignorable, ignored
 from elasticsearch.exceptions import (
     ConflictError,
     ConnectionError,
     TransportError,
 )
 from pyramid.view import view_config
+from timeit import default_timer as timer
 from urllib3.exceptions import ReadTimeoutError
-
 from ..interfaces import (
     DBSESSION,
     STORAGE
@@ -72,6 +72,7 @@ def check_sid(sid, max_sid):
 @view_config(route_name='index', request_method='POST', permission="index")
 @debug_log
 def index(context, request):
+    ignored(context)
     # Setting request.datastore here only works because routed views are not traversed.
     request.datastore = 'database'
     record = request.json.get('record', False)  # if True, make a record in es
@@ -139,14 +140,14 @@ def index(context, request):
 
         if record:
             try:
-                es.index(index=namespaced_index, doc_type='indexing', body=indexing_record, id=index_start_str)
-                es.index(index=namespaced_index, doc_type='indexing', body=indexing_record, id='latest_indexing')
+                es.index(index=namespaced_index, body=indexing_record, id=index_start_str)
+                es.index(index=namespaced_index, body=indexing_record, id='latest_indexing')
             except Exception:
                 indexing_record['indexing_status'] = 'errored'
                 error_messages = copy.deepcopy(indexing_record['errors'])
                 del indexing_record['errors']
-                es.index(index=namespaced_index, doc_type='indexing', body=indexing_record, id=index_start_str)
-                es.index(index=namespaced_index, doc_type='indexing', body=indexing_record, id='latest_indexing')
+                es.index(index=namespaced_index, body=indexing_record, id=index_start_str)
+                es.index(index=namespaced_index, body=indexing_record, id='latest_indexing')
                 for item in error_messages:
                     if 'error_message' in item:
                         log.error('Indexing error', **item)
@@ -250,7 +251,17 @@ class Indexer(object):
         rev_linked_uuids = set()
         to_delete = []  # hold messages that will be deleted
         to_defer = []  # hold messages once we need to restart the worker
-        # max_sid does not change of the lifetime of request
+
+        # A note for the record of history: the idea behind this check is to store in
+        # ES the max_sid acquired at this time alongside the documents indexed into ES, so we have
+        # an "approximate" database time when the indexing occurred.
+        # What's going on here is when you make a DB edit that is successful, the sid assigned to that edit
+        # is passed to the indexing queue, and when that message is pulled down the indexer workers ask the
+        # DB what the current max_sid is, and if the msg sid is greater than the max_sid acquired at the start of
+        # the indexing run, it will re-drive the message to get processed by a worker who pulls down a "newer" sid.
+        # This is necessary because that indexer worker could have stale data in the embed cache. By having the message
+        # retrieved by a "newer" worker you are guaranteeing an up-to-date embed cache. A rare case indeed but still a
+        # possibility. - Will Sept 13 2022
         max_sid = request.registry[STORAGE].write.get_max_sid()
         deferred = False  # if true, we need to restart the worker
         messages, target_queue = self.get_messages_from_queue()
@@ -275,7 +286,10 @@ class Indexer(object):
                 msg_uuid = dictionary_lookup(msg_body, 'uuid')
                 msg_sid = msg_body['sid']
                 msg_curr_time = msg_body['timestamp']
-                msg_detail = msg_body.get('detail')
+                # This variable was unused, and Will thinks it's never passed.
+                # Just commented out during transition, but can be deleted soon. -kmp 15-Sep-2022
+                # msg_detail = msg_body.get('detail')
+
                 msg_telemetry = msg_body.get('telemetry_id')
                 msg_diff = msg_body.get('diff', None)
 
@@ -326,7 +340,7 @@ class Indexer(object):
                 # CHANGE - this needs to happen PER MESSAGE now
                 # add to secondary queue, if applicable
                 # search for all items that linkTo the non-strict items or contain
-                # a rev_link to to them
+                # a rev_link to them
                 if non_strict_uuids or rev_linked_uuids:
                     queued, failed = self.find_and_queue_secondary_items(non_strict_uuids,  # THIS IS NOW A SINGLE UUID
                                                                          rev_linked_uuids,
@@ -418,6 +432,7 @@ class Indexer(object):
             log.bind(collection=result.get('item_type'))
             # log.info("Time for index-data", duration=duration, cat="indexing view")
         except SidException as e:
+            ignored(e)
             duration = timer() - start
             log.warning('Invalid max sid. Resending...', duration=duration, cat=cat)
             # causes the item to be deferred by restarting worker
@@ -449,13 +464,14 @@ class Indexer(object):
         if add_to_secondary is not None:
             add_to_secondary.update(result['rev_linked_to_me'])
 
-        last_exc = None
+        last_exc = None  # We intend to set it to something else later, but this is just in case we goof
+        ignorable(last_exc)
         for backoff in [0, 1, 2]:
             time.sleep(backoff)
             try:
                 namespaced_index = get_namespaced_index(request, result['item_type'])
                 self.es.index(
-                    index=namespaced_index, doc_type=result['item_type'], body=result,
+                    index=namespaced_index, body=result,
                     id=str(uuid), version=result['sid'], version_type='external_gte',
                     request_timeout=30
                 )

@@ -1,42 +1,21 @@
-import sys
-import netaddr
-from pyramid.config import Configurator
-from pyramid.settings import (
-    asbool,
-)
-from .calculated import calculated_property  # noqa
-from .config import (  # noqa
-    abstract_collection,
-    collection,
-    root,
-)
-from .interfaces import *  # noqa
-from .resources import (  # noqa
-    AbstractCollection,
-    Collection,
-    Item,
-    Resource,
-    Root,
-    display_title_schema
-)
-from .schema_utils import load_schema  # noqa
-from .upgrader import upgrade_step  # noqa
-from .app import (
-    app_version,
-    session,
-    configure_dbsession,
-    changelogs,
-    json_from_path,
-    )
 import logging
-import os
-from dcicutils.log_utils import set_logging
-from dcicutils.ff_utils import get_health_page
+import netaddr
 
-# Moved from definition internals
+from dcicutils.ff_utils import get_health_page
+from dcicutils.log_utils import set_logging
+from pyramid.config import Configurator
+from pyramid.settings import asbool
+from pyramid_localroles import LocalRolesAuthorizationPolicy
+
+from .app import app_version, session, configure_dbsession, changelogs, json_from_path
+from .calculated import calculated_property  # noqa
+from .config import abstract_collection, collection, root  # noqa
 from .elasticsearch import APP_FACTORY
 from .elasticsearch.interfaces import INVALIDATION_SCOPE_ENABLED
-from pyramid_localroles import LocalRolesAuthorizationPolicy
+from .interfaces import *  # noqa
+from .resources import AbstractCollection, Collection, Item, Resource, Root, display_title_schema  # noqa
+from .schema_utils import load_schema  # noqa
+from .upgrader import upgrade_step  # noqa
 
 
 def includeme(config):
@@ -69,7 +48,8 @@ def includeme(config):
 
 
 def main(global_config, **local_config):
-    """ This function returns a Pyramid WSGI application.
+    """
+    This function returns a Pyramid WSGI application.
     """
     settings = global_config
     settings.update(local_config)

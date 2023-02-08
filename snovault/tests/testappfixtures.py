@@ -1,4 +1,4 @@
-import os
+import uuid
 import pytest
 import webtest
 
@@ -16,6 +16,22 @@ _app_settings = {
     'retry.attempts': 3,
     'production': True,
     'structlog.dir': '/tmp/',
+    'auth0.client': 'dummy-client',
+    'auth0.domain': 'dummy.domain',
+    'auth0.options': {
+        'auth': {
+            'sso': False,
+            'redirect': False,
+            'responseType': 'token',
+            'params': {
+                'scope': 'openid email',
+                'prompt': 'select_account'
+            }
+        },
+        'allowedConnections': [
+            'github', 'google-oauth2', 'partners'
+        ]
+    },
     'multiauth.policies': 'session remoteuser accesskey webuser',
     'multiauth.groupfinder': 'snovault.tests.authorization.groupfinder',
     'multiauth.policy.session.use': 'snovault.tests.authentication.NamespacedAuthenticationPolicy',
@@ -49,16 +65,37 @@ def app_settings(request, wsgi_server_host_port, conn, DBSession, basic_app_sett
 
 @pytest.fixture(scope='session')
 def app(app_settings):
-    '''WSGI application level functional testing.
-       will have to make snovault dummy main app
-    '''
+    """ WSGI application level functional testing.
+        will have to make snovault dummy main app """
     return main({}, **app_settings)
+
+
+@pytest.fixture(scope='session')
+def encrypted_app(app_settings):
+    """ WSGI application level functional testing with encrypted buckets.
+        Note that this also forced use of s3 blob storage.
+        Setting blob_bucket in registry.settings == enabling S3blobstorage (and disable DB blobs)
+    """
+    app_settings_copy = dict(app_settings, **{
+        's3_encrypt_key_id': str(uuid.uuid4()),  # moto does not check this is valid
+        'blob_bucket': 'encoded-4dn-blobs'  # note that this bucket exists but is mocked out
+    })
+    return main({}, **app_settings_copy)
+
+
+@pytest.fixture
+def encrypted_testapp(encrypted_app):
+    """ TestApp with S3_ENCRYPT_KEY_ID set (encrypted buckets) """
+    environ = {
+        'HTTP_ACCEPT': 'application/json',
+        'REMOTE_USER': 'TEST',
+    }
+    return webtest.TestApp(encrypted_app, environ)
 
 
 @pytest.fixture
 def testapp(app):
-    '''TestApp with JSON accept header.
-    '''
+    """ TestApp with JSON accept header. """
     environ = {
         'HTTP_ACCEPT': 'application/json',
         'REMOTE_USER': 'TEST',
@@ -68,8 +105,7 @@ def testapp(app):
 
 @pytest.fixture
 def anontestapp(app):
-    '''TestApp with JSON accept header.
-    '''
+    """ TestApp with JSON accept header. """
     environ = {
         'HTTP_ACCEPT': 'application/json',
     }
@@ -78,8 +114,7 @@ def anontestapp(app):
 
 @pytest.fixture
 def authenticated_testapp(app):
-    '''TestApp with JSON accept header for non-admin user.
-    '''
+    """ TestApp with JSON accept header for non-admin user. """
     environ = {
         'HTTP_ACCEPT': 'application/json',
         'REMOTE_USER': 'TEST_AUTHENTICATED',
