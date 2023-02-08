@@ -98,8 +98,8 @@ def main(global_config, **local_config):
         config.include('snovault.elasticsearch')
 
     # configure redis server in production.ini
-    # if 'redis.server' in config.registry.settings:
-    #     config.include('snovault.redis')
+    if 'redis.server' in config.registry.settings:
+        config.include('snovault.redis')
 
     config.include(changelogs)
 

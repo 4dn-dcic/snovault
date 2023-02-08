@@ -6,6 +6,11 @@ snovault
 Change Log
 ----------
 
+8.0.0
+=====
+
+* Redis
+
 
 7.1.3
 =====
