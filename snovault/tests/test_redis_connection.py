@@ -140,6 +140,15 @@ class TestRedisSession:
                 assert not session.validate_session_token(redis_handler=rd, token=token)
             else:
                 assert session.validate_session_token(redis_handler=rd, token=token)
+        # invalidate some tokens, check that they don't work while others still do
+        for idx, session in enumerate(sessions):
+            if idx % 2:
+                session.delete_session_token(redis_handler=rd)
+        for idx, session in enumerate(sessions):
+            if idx % 2:
+                assert not session.validate_session_token(redis_handler=rd, token=session.session_token)
+            else:
+                assert session.validate_session_token(redis_handler=rd, token=session.session_token)
 
     def test_redis_session_from_redis_equality(self, redisdb):
         """ Tests generating a session then grabbing that same session from Redis, assuring

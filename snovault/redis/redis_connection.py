@@ -127,6 +127,8 @@ class RedisSessionToken:
     def validate_session_token(self, *, redis_handler: RedisBase, token) -> bool:
         """ Validates the given session token against that stored in redis """
         redis_token = redis_handler._hgetall(self.redis_key)
+        if not redis_token:
+            return False
         token_is_valid = (redis_token[self.SESSION].decode('utf-8') == token)
         timestamp_is_valid = (datetime.datetime.fromisoformat(redis_token[self.EXPIRATION].decode('utf-8')) > datetime.datetime.utcnow())
         return token_is_valid and timestamp_is_valid
