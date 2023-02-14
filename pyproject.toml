@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "dcicsnovault"
-version = "7.1.3"
+version = "7.2.0"
 description = "Storage support for 4DN Data Portals."
 authors = ["4DN-DCIC Team <support@4dnucleome.org>"]
 license = "MIT"
@@ -144,6 +144,7 @@ PyYAML = ">=5.1,<5.5"
 wheel = ">=0.29.0"
 
 [tool.poetry.scripts]
+check-local-portal-creds = "snovault.commands.check_local_portal_creds:main"
 wipe-test-indices = "snovault.commands.wipe_test_indices:main"
 
 [build-system]

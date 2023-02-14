@@ -7,6 +7,15 @@ Change Log
 ----------
 
 
+7.2.0
+=====
+
+* Add command ``check-local-portal-creds``.
+* In ``Makefile``:
+  * Add ``test-full`` (like ``test``, but not instafail)
+  * Enable compatibility warnings about SQLAlchemy 2.0 transition.
+
+
 7.1.3
 =====
 
