@@ -564,7 +564,7 @@ tox = ["tox"]
 
 [[package]]
 name = "dcicutils"
-version = "6.8.0"
+version = "6.9.9.0b0"
 description = "Utility package for interacting with the 4DN Data Portal and other 4DN resources"
 category = "main"
 optional = false
@@ -580,6 +580,7 @@ gitpython = ">=3.1.2,<4.0.0"
 opensearch-py = ">=2.0.1,<3.0.0"
 pytz = ">=2020.4"
 PyYAML = ">=5.1,<5.5"
+redis = ">=4.5.1,<5.0.0"
 requests = ">=2.21.0,<3.0.0"
 rfc3986 = ">=1.4.0,<2.0.0"
 structlog = ">=19.2.0,<20.0.0"
@@ -1814,7 +1815,7 @@ test = ["zope.testing"]
 [metadata]
 lock-version = "1.1"
 python-versions = ">=3.8.1,<3.9"
-content-hash = "6f50dd723d1d1e5100ee93107ff93060c83a45bab464b00a642c78b64e7bf13b"
+content-hash = "f72886433884a1051f0e2212d5aca51d41c19d5fa7316cc56b885912efbd71f0"
 
 [metadata.files]
 async-timeout = []
