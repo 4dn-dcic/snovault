@@ -31,6 +31,9 @@ AWS_PORTAL_CREDENTIALS_NEEDED = {
     'AWS_SESSION_TOKEN': False,
 }
 
+UNWANTED_PORTAL_ENV_VARS = ['CHECK_RUNNER', 'ACCOUNT_NUMBER', 'ENV_NAME']
+NEEDED_PORTAL_ENV_VARS = ['Auth0Client', 'Auth0Secret']
+
 
 def check_local_creds(appname):
 
@@ -68,6 +71,12 @@ def check_local_creds(appname):
         if expected_val and val != expected_val:
             warn(f"{var} is {val!r}, but should be {expected_val!r}.")
 
+    def needs_value(var):
+        warn(f"The variable {var} has no value but should be set.")
+
+    def has_unwanted_value(var):
+        warn(f"The variable {var} has a non-null value but should be unset.")
+
     check_global_env_bucket('GLOBAL_ENV_BUCKET', global_env_bucket)
     global_bucket_env = os.environ.get('GLOBAL_BUCKET_ENV')
     if global_bucket_env:
@@ -77,19 +86,21 @@ def check_local_creds(appname):
         elif not global_env_bucket:
             warn("You need to set GLOBAL_ENV_BUCKET, not GLOBAL_BUCKET_ENV.")
             check_global_env_bucket('GLOBAL_BUCKET_ENV', global_bucket_env)
-    for var in ['CHECK_RUNNER', 'ACCOUNT_NUMBER', 'ENV_NAME']:
-        if os.environ.get(var):
-            warn(f"The variable {var} has a non-null value but should be unset.")
+
     for aws_var, expected in AWS_PORTAL_CREDENTIALS_NEEDED.items():
         value = os.environ.get(aws_var)
         if expected and not value:
-            warn(f"The variable {aws_var} needs a value.")
+            needs_value(aws_var)
         elif not expected and value:
-            warn(f"The variable {aws_var} has a value, but it should not.")
+            has_unwanted_value(aws_var)
 
-    for var in ['Auth0Client', 'Auth0Secret']:
+    for var in NEEDED_PORTAL_ENV_VARS:
         if not os.environ.get(var):
-            warn(f"The variable {var} has no value but should be set.")
+            needs_value(var)
+    for var in UNWANTED_PORTAL_ENV_VARS:
+        if os.environ.get(var):
+            has_unwanted_value(var)
+
     if WarningMaker.count == 0:
         PRINT("Things look good.")
 
