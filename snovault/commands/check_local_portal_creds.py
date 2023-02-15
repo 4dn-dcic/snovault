@@ -1,22 +1,50 @@
 import os
 import argparse
 
+from dcicutils.lang_utils import disjoined_list
 from dcicutils.misc_utils import PRINT
 from dcicutils.command_utils import script_catch_errors
+from dcicutils.common import APP_CGAP, APP_FOURFRONT
 
 
 REPO_NAME = os.path.basename(os.path.abspath(os.curdir))
+
+PSEUDO_APP_SNOVAULT = 'snovault'
+
+CGAP_ENV_BUCKET = 'cgap-devtest-main-foursight-envs',
+FOURFRONT_ENV_BUCKET = 'foursight-prod-envs'
+
+APP_NAMES = [APP_CGAP, APP_FOURFRONT]
+
+APP_BUCKET_MAPPINGS = {
+    APP_CGAP: CGAP_ENV_BUCKET,
+    APP_FOURFRONT: FOURFRONT_ENV_BUCKET,
+    PSEUDO_APP_SNOVAULT: FOURFRONT_ENV_BUCKET,  # doesn't have a bucket of its own
+}
+
+AWS_PORTAL_CREDENTIALS_NEEDED = {
+    # These are Needed for IAM credentials
+    'AWS_ACCESS_KEY_ID': True,
+    'AWS_SECRET_ACCESS_KEY': True,   # Needed for IAM credentials
+    # These are needed only for federated temporary credentials, which we disallow in local portal deployments
+    # bevcause there's too much risk they are holdovers of more powerful credentials than we want, even if temporary.
+    'AWS_SESSION_TOKEN': False,
+}
 
 
 def check_local_creds(appname):
 
     if not appname:
-        if 'cgap' in REPO_NAME:
-            appname = 'cgap'
-        elif 'ff' in REPO_NAME or 'ffourfront' in REPO_NAME:
-            appname = 'fourfront'
+        for appname_key, env_bucket in APP_BUCKET_MAPPINGS.items():
+            if appname_key in REPO_NAME:
+                appname = appname_key
+                qualifier = "App" if appname in APP_NAMES else "Pseudo-app"
+                PRINT(f"No --appname given. {qualifier} {appname}, with global env bucket {env_bucket},"
+                      f" is being assumed.")
+                break
         else:
-            PRINT("Can't figure out if this is cgap or fourfront.")
+            PRINT(f"No --appname given and can't figure out"
+                  f" if repo {REPO_NAME} is {disjoined_list(APP_BUCKET_MAPPINGS)}.")
             exit(1)
 
     class WarningMaker:
@@ -30,18 +58,15 @@ def check_local_creds(appname):
 
     warn = WarningMaker.warn
 
-    if appname not in ['fourfront', 'ff', 'cgap']:
-        raise RuntimeError(f"Unknown appname {appname!r}. Expected 'cgap' or 'fourfront' (or 'ff').")
-            
+    if appname not in APP_BUCKET_MAPPINGS:
+        raise RuntimeError(f"Unknown appname {appname!r}. Expected {disjoined_list(APP_BUCKET_MAPPINGS)}.")
+
     global_env_bucket = os.environ.get('GLOBAL_ENV_BUCKET')
-    cgap_env_bucket = 'cgap-devtest-main-foursight-envs'
-    fourfront_env_bucket = 'foursight-prod-envs'
 
     def check_global_env_bucket(var, val):
-        if appname == 'cgap' and val != cgap_env_bucket:
-            warn(f"{var} is {val!r}, but should be {cgap_env_bucket}.")
-        elif appname == 'fourfront' and val != fourfront_env_bucket:
-            warn(f"{var} is {val!r}, but should be {fourfront_env_bucket}.")
+        expected_val = APP_BUCKET_MAPPINGS.get(appname)
+        if expected_val and val != expected_val:
+            warn(f"{var} is {val!r}, but should be {expected_val!r}.")
 
     check_global_env_bucket('GLOBAL_ENV_BUCKET', global_env_bucket)
     global_bucket_env = os.environ.get('GLOBAL_BUCKET_ENV')
@@ -55,6 +80,13 @@ def check_local_creds(appname):
     for var in ['CHECK_RUNNER', 'ACCOUNT_NUMBER', 'ENV_NAME']:
         if os.environ.get(var):
             warn(f"The variable {var} has a non-null value but should be unset.")
+    for aws_var, expected in AWS_PORTAL_CREDENTIALS_NEEDED.items():
+        value = os.environ.get(aws_var)
+        if expected and not value:
+            warn(f"The variable {aws_var} needs a value.")
+        elif not expected and value:
+            warn(f"The variable {aws_var} has a value, but it should not.")
+
     for var in ['Auth0Client', 'Auth0Secret']:
         if not os.environ.get(var):
             warn(f"The variable {var} has no value but should be set.")
