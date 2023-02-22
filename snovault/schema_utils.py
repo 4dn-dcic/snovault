@@ -11,6 +11,7 @@ from jsonschema_serialize_fork import (
     FormatChecker,
     RefResolver,
 )
+from jsonschema_serialize_fork import NO_DEFAULT
 # TODO (C4-177): remove these imports (urlsplit, urlopen) when RefResolverOrdered is removed
 from jsonschema_serialize_fork.compat import urlsplit, urlopen
 from jsonschema_serialize_fork.exceptions import ValidationError
@@ -28,6 +29,14 @@ from .resources import Item, COLLECTIONS
 SERVER_DEFAULTS = {}
 
 
+# TODO: Shouldn't this return func? Otherwise this:
+#           @server_default
+#           def foo(instance, subschema):
+#               return ...something...
+#       does (approximately):
+#           SERVER_DEFAULTS['foo'] = lambda(instance, subschema): ...something...
+#           server_default = None
+#       It feels like the function should still get defined. -kmp 17-Feb-2023
 def server_default(func):
     SERVER_DEFAULTS[func.__name__] = func
 

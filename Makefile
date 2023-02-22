@@ -25,6 +25,15 @@ macbuild:
 build:
 	make configure
 	poetry install
+	make build-after-poetry
+
+build-after-poetry:
+	poetry run python setup_eb.py develop
+	make fix-dist-info
+	poetry run prepare-local-dev
+
+fix-dist-info:
+	@scripts/fix-dist-info
 
 test:
 	@git log -1 --decorate | head -1
@@ -38,6 +47,24 @@ remote-test-npm:
 
 remote-test-unit:
 	poetry run pytest -xvvv --timeout=400 --durations=100 --aws-auth --es search-fourfront-testing-opensearch-kqm7pliix4wgiu4druk2indorq.us-east-1.es.amazonaws.com:443 -m "not indexing"
+
+deploy1:  # starts postgres/ES locally and loads inserts, and also starts ingestion engine
+	@DEBUGLOG=`pwd` SNOVAULT_DB_TEST_PORT=`grep 'sqlalchemy[.]url =' development.ini | sed -E 's|.*:([0-9]+)/.*|\1|'` dev-servers development.ini --app-name app --clear --init --load
+
+psql-dev:  # starts psql with the url after 'sqlalchemy.url =' in development.ini
+	@scripts/psql-start dev
+
+psql-test:  # starts psql with a url constructed from data in 'ps aux'.
+	@scripts/psql-start test
+
+#kibana-start:  # starts a dev version of kibana (default port)
+#	scripts/kibana-start
+#
+#kibana-start-test:  # starts a test version of kibana (port chosen for active tests)
+#	scripts/kibana-start test
+#
+#kibana-stop:
+#	scripts/kibana-stop
 
 update:
 	poetry update

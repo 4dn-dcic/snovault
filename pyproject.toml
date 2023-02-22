@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "dcicsnovault"
-version = "7.1.3"
+version = "7.1.3.3b0"  # to become 7.2.0
 description = "Storage support for 4DN Data Portals."
 authors = ["4DN-DCIC Team <support@4dnucleome.org>"]
 license = "MIT"
@@ -56,6 +56,9 @@ jsonschema_serialize_fork = "^2.1.1"
 # 2.0.1 is current. This is needed by Moto but not us.
 # MarkupSafe = ">=0.23,<1"
 netaddr = ">=0.8.0,<1"
+PasteDeploy = "1.5.2"
+plaster = "1.0"
+plaster-pastedeploy = "0.6"
 passlib = "^1.7.4"
 psutil = "^5.9.0"
 psycopg2-binary = "^2.9.1"
@@ -144,7 +147,19 @@ PyYAML = ">=5.1,<5.5"
 wheel = ">=0.29.0"
 
 [tool.poetry.scripts]
+dev-servers = "snovault.dev_servers:main"
+prepare-local-dev = "snovault.commands.prepare_template:prepare_local_dev_main"
 wipe-test-indices = "snovault.commands.wipe_test_indices:main"
+
+[paste.app_factory]
+main = "snovault:main"
+
+[paste.composite_factory]
+indexer = "snovault.elasticsearch.es_index_listener:composite"
+# ingester = "encoded.ingestion_listener:composite"
+
+# [paste.filter_app_factory]
+# memlimit = "encoded.memlimit:filter_app"
 
 [build-system]
 requires = ["poetry_core>=1.0.0"]
