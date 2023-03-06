@@ -31,7 +31,7 @@ build-configured:
 
 build-for-ga:
 	make configure
-	poetry configure --local virtualenvs.create true
+	poetry config --local virtualenvs.create true
 	make build-configured
 
 test:
