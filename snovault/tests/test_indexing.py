@@ -16,7 +16,7 @@ import yaml
 
 from datetime import datetime, timedelta
 from dcicutils.lang_utils import n_of
-from dcicutils.misc_utils import ignored, get_error_message, Retry
+from dcicutils.misc_utils import ignored, get_error_message
 from dcicutils.qa_utils import ControlledTime, Eventually, notice_pytest_fixtures
 from elasticsearch.exceptions import NotFoundError
 from pyramid.traversal import traverse
@@ -45,7 +45,7 @@ from ..elasticsearch.indexer_utils import compute_invalidation_scope
 from ..elasticsearch.interfaces import ELASTIC_SEARCH, INDEXER_QUEUE, INDEXER_QUEUE_MIRROR
 from ..interfaces import DBSESSION, STORAGE, COLLECTIONS, TYPES
 from ..storage import Base
-from ..tools import index_n_items_for_testing, local_collections
+from ..tools import index_n_items_for_testing
 from ..util import INDEXER_NAMESPACE_FOR_TESTING
 
 from .testing_views import TestingLinkSourceSno
