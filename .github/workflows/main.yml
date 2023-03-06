@@ -47,8 +47,7 @@ jobs:
 
       - name: Install Deps
         run: |
-          python -m venv venv
-          make build
+          make build-for-ga
 
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v1

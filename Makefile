@@ -24,7 +24,15 @@ macbuild:
 
 build:
 	make configure
+	make build-configured
+
+build-configured:
 	poetry install
+
+build-for-ga:
+	make configure
+	poetry configure --local virtualenvs.create true
+	make build-configured
 
 test:
 	@git log -1 --decorate | head -1
