@@ -7,6 +7,53 @@ Change Log
 ----------
 
 
+7.2.0
+=====
+
+* In ``Makefile``:
+
+  * Add ``make test-full``
+
+  * Add ``make test-static``
+
+* In ``pyproject.toml``:
+  * Require ``dcicutils 6,7`` for fixes to ``Eventually``.
+
+  * Include ``pipdeptree`` as a dev dependency for debugging.
+
+  * Remove "backports.statistics", needed for Python 3.3 support and earlier.
+  
+  * Bump python_magic foothold (no effective change, just faster locking)
+  
+  * Update some comments.
+
+* In ``snovault/updater.py``:
+
+  * Better error message for UUID integrity errors, noting they might not be conflits but just maybe also UUID missing.
+
+  * Rearrange imports for clarity.
+
+* In new file ``snovault/tools.py``:
+
+  * New functions ``make_testapp``, ``make_htmltestapp``, ``make_authenticated_testapp``,
+    ``make_submitter_testapp``, ``make_indexer_testapp``, and ``make_embed_testapp``.
+
+  * New context managers ``being_nested`` and ``local_collections``.
+
+  * New function ``index_n_items_for_testing``.
+
+  These functions are potentially useful in the portal repos, so are not part of the test files.
+
+* In file ``snovault/tests/test_indexing.py``:
+
+  * Material changes to testing to use better storage synchronization (semaphor-style rather than sleep-style),
+    hopefully achieving fewer intermittent errors in testing both locally and in GA.
+
+* In files ``snovault/util.py``, ``snovault/tests/test_embedding.py``, ``snovault/tests/test_storage.py``:
+
+  * Various changes for PEP8 or other readability reasons, including to satisfy ``PyCharm`` linters.
+
+
 7.1.3
 =====
 

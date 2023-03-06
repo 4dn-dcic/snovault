@@ -29,15 +29,26 @@ build:
 test:
 	@git log -1 --decorate | head -1
 	@date
-	pytest -xvv --instafail --timeout=200
+	SQLALCHEMY_WARN_20=1 pytest -xvv --instafail --timeout=200
 	@git log -1 --decorate | head -1
 	@date
 
+test-full:
+	@git log -1 --decorate | head -1
+	@date
+	SQLALCHEMY_WARN_20=1 pytest -vv --timeout=200
+	@git log -1 --decorate | head -1
+	@date
+
+test-static:
+	NO_SERVER_FIXTURES=TRUE USE_SAMPLE_ENVUTILS=TRUE poetry run python -m pytest -vv -m static
+	make lint
+
 remote-test-npm:
-	poetry run pytest -xvvv --timeout=400 --durations=100 --aws-auth --es search-fourfront-testing-opensearch-kqm7pliix4wgiu4druk2indorq.us-east-1.es.amazonaws.com:443 -m "indexing"
+	SQLALCHEMY_WARN_20=1 poetry run pytest -xvvv --timeout=400 --durations=100 --aws-auth --es search-fourfront-testing-opensearch-kqm7pliix4wgiu4druk2indorq.us-east-1.es.amazonaws.com:443 -m "indexing"
 
 remote-test-unit:
-	poetry run pytest -xvvv --timeout=400 --durations=100 --aws-auth --es search-fourfront-testing-opensearch-kqm7pliix4wgiu4druk2indorq.us-east-1.es.amazonaws.com:443 -m "not indexing"
+	SQLALCHEMY_WARN_20=1 poetry run pytest -xvvv --timeout=400 --durations=100 --aws-auth --es search-fourfront-testing-opensearch-kqm7pliix4wgiu4druk2indorq.us-east-1.es.amazonaws.com:443 -m "not indexing"
 
 update:
 	poetry update

@@ -1,5 +1,4 @@
 import pytest
-# import time
 
 from dcicutils.misc_utils import ignored
 from dcicutils.qa_utils import notice_pytest_fixtures, Retry, Eventually
