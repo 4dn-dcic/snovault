@@ -47,6 +47,7 @@ jobs:
 
       - name: Install Deps
         run: |
+          python -m venv venv
           make build
 
       - name: Configure AWS Credentials
