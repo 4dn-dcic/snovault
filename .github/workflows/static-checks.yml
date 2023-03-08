@@ -30,8 +30,7 @@ jobs:
           python-version: 3.8
       - name: Python Package Setup
         run: |
-          make configure
-          poetry install
+          make build-for-ga
       - name: Static Checks
         run: |
           make test-static
