@@ -1319,48 +1319,81 @@ def test_indexing_esstorage_can_purge_without_db(app, testapp, indexer_testapp):
     Tests that we can delete items from ES using the DELETE API when said item does
     not exist in the DB
     """
+    print("Starting test")
+    es = app.registry[ELASTIC_SEARCH]
     esstorage = app.registry[STORAGE].read
     rdbstorage = app.registry[STORAGE].write
+    namespaced_index = indexer_utils.get_namespaced_index(app, TEST_TYPE)
     # post an item, allow it to index
+    print("Posting test item")
     res = testapp.post_json(TEST_COLL, {'required': 'some_value'})
     test_uuid = res.json['@graph'][0]['uuid']
-    res = indexer_testapp.post_json('/index', {'record': True})
-    assert res.json['indexing_count'] == 1
-    time.sleep(2)
-    # get out of DB, purge it manually
+    print(f"Posted test item has uuid {test_uuid}")
+    print("Indexing 1 item")
+    index_n_items_for_testing(indexer_testapp, 1)
+    print("Assuring test item is in both ES and DB")
+    assert esstorage.get_by_uuid(test_uuid)
     assert rdbstorage.get_by_uuid(test_uuid)
-    rdbstorage.purge_uuid(test_uuid)  # delete from DB
+    print("Purging test item manually from DB, leaving it in ES")
+    rdbstorage.purge_uuid(test_uuid)
+    print("Assuring that test item went away from DB but not ES")
+    # Assure it went away from DB but not ES
     assert esstorage.get_by_uuid(test_uuid)  # can still get from es
     assert not rdbstorage.get_by_uuid(test_uuid)  # but not db
+    print("Deleting test item via testapp (without purge)")
     testapp.delete_json('/' + test_uuid)  # set status to deleted
+    print("Deleting test item via testapp (with purge)")
     testapp.delete_json('/' + test_uuid + '?purge=True')  # purge fully
-    time.sleep(1)  # give es a second to catch up
+    time.sleep(0.5)  # give es a second to catch up
+    Eventually.call_assertion(make_es_count_checker(0, es=es, namespaced_index=namespaced_index))
+    print("Checking test item gone from ES.")
     assert not esstorage.get_by_uuid(test_uuid)  # should not get now
 
 
-@pytest.mark.flaky(max_runs=3)
+# @pytest.mark.flaky(max_runs=3)
 def test_indexing_rdbstorage_can_purge_without_es(app, testapp, indexer_testapp):
     """
     Tests that we can delete items from the DB using the DELETE API when said item
     does not exist in ES
     """
+    print("Starting test")
+    es = app.registry[ELASTIC_SEARCH]
     esstorage = app.registry[STORAGE].read
     rdbstorage = app.registry[STORAGE].write
-    namespaced_test_type = indexer_utils.get_namespaced_index(app, TEST_TYPE)
+    namespaced_index = indexer_utils.get_namespaced_index(app, TEST_TYPE)
     # post an item, allow it to index
+    print("Posting test item")
     res = testapp.post_json(TEST_COLL, {'required': 'some_value'})
     test_uuid = res.json['@graph'][0]['uuid']
-    time.sleep(6)
-    res = indexer_testapp.post_json('/index', {'record': True})
-    assert res.json['indexing_count'] == 1
+    print(f"Posted test item has uuid {test_uuid}")
+    print("Indexing 1 item")
+    index_n_items_for_testing(indexer_testapp, 1)
+    # Assure we have one indexed item
+    print("Assuring ES count is 1")
+    Eventually.call_assertion(make_es_count_checker(1, es=es, namespaced_index=namespaced_index))
     # get out of both DB and ES
+
+    print("Checking that item is in DB")
     assert rdbstorage.get_by_uuid(test_uuid)
+    print("Checking that item is in ES")
     assert esstorage.get_by_uuid(test_uuid)
-    esstorage.purge_uuid(test_uuid, namespaced_test_type)  # purge from ES
-    time.sleep(1)  # give es a second to catch up
+
+    print("Checking ES count")
+    n = es.count(index=namespaced_index).get('count')
+    print(f"Starting purge with initial ES count {n}...")
+    esstorage.purge_uuid(rid=test_uuid, item_type=TEST_TYPE)  # purge from ES
+
+    # Assure we have zero indexed items
+    print(f"Waiting for item count {n - 1}")
+    Eventually.call_assertion(make_es_count_checker(n - 1, es=es, namespaced_index=namespaced_index))
+
+    print("Deleting test item via testapp (without purge)")
     testapp.delete_json('/' + test_uuid)  # set status to deleted
+    print("Deleting test item via testapp (with purge)")
     testapp.delete_json('/' + test_uuid + '?purge=True')  # purge fully
+    print("Checking test item gone from DB.")
     assert not rdbstorage.get_by_uuid(test_uuid)  # should not get now
+    print("All done.")
 
 
 @pytest.mark.flaky(max_runs=3, rerun_filter=delay_rerun)

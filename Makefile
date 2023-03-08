@@ -34,6 +34,12 @@ build-for-ga:
 	poetry config --local virtualenvs.create true
 	make build-configured
 
+TEST_NAME ?= missing_TEST_NAME
+
+test-one:
+
+	SQLALCHEMY_WARN_20=1 pytest -vv --timeout=200 -k ${TEST_NAME}
+
 test:
 	@git log -1 --decorate | head -1
 	@date
