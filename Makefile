@@ -15,7 +15,7 @@ macpoetry-install:
 	scripts/macpoetry-install
 
 lint:
-	flake8 snovault
+	poetry run flake8 snovault
 
 macbuild:
 	make configure
