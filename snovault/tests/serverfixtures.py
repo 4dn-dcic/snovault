@@ -141,6 +141,11 @@ def engine(engine_url):
 
 @pytest.yield_fixture(scope='session')
 def conn(engine):
+    if NO_SERVER_FIXTURES:
+        yield 'NO_SERVER_FIXTURES'
+        return
+
+    notice_pytest_fixtures(engine)
     conn = engine.connect()
     tx = conn.begin()
     try:
