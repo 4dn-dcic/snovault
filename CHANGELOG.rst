@@ -12,9 +12,15 @@ Change Log
 
 * In ``Makefile``:
 
-  * Add ``make test-full``
+  * Add ``make test-full`` to test like ``make test`` but without the ``instafail`` option.
 
-  * Add ``make test-static``
+  * Add ``make test-static`` to run static checks.
+
+  * Add ``make test-one TEST_NAME=<test_name_or_filename_base>`` so you can test a single file or test from ``make``.
+    This is not so important in ``snovault`` as in ``cgap-portal`` but I want the interface to be uniform.
+
+  * In all testing, added ``SQLALCHEMY_WARN_20=1`` at start of command line to enable SQLAlchemy 2.0
+    compatibility warnings, since we're using ``SQLAlchemy 1.4``, which has those warnings.
 
 * In ``pyproject.toml``:
   * Require ``dcicutils 6,7`` for fixes to ``Eventually``.
@@ -44,14 +50,23 @@ Change Log
 
   These functions are potentially useful in the portal repos, so are not part of the test files.
 
+* In file ``snovault/tests/serverfixtures.py``:
+
+  * New fixture ``engine``
+
 * In file ``snovault/tests/test_indexing.py``:
 
   * Material changes to testing to use better storage synchronization (semaphor-style rather than sleep-style),
     hopefully achieving fewer intermittent errors in testing both locally and in GA.
 
+  * Bug fixes in a few tests that were assigning settings or other dictionary structures but not assuring an
+    undo was done if the test failed.
+
 * In files ``snovault/util.py``, ``snovault/tests/test_embedding.py``, ``snovault/tests/test_storage.py``:
 
   * Various changes for PEP8 or other readability reasons, including to satisfy ``PyCharm`` linters.
+
+  * Allow Postgres 14 to be used.
 
 
 7.1.3
