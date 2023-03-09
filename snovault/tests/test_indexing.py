@@ -120,7 +120,6 @@ def app(app_settings, request):
     # Dispose connections so postgres can tear down.
     DBSession.bind.pool.dispose()
 
-
 # XXX C4-312: refactor tests so this can be module scope.
 # Having to have to drop DB tables and re-run create_mapping for every test is slow.
 @pytest.yield_fixture(scope='function', autouse=True)
@@ -1873,13 +1872,17 @@ def test_assert_transactions_table_is_gone(app):
     serverfixtures to be established (used for indexing)
     """
     session = app.registry[DBSESSION]
-    session.connection().connect()
+    conn = session.connection()
+    conn.connect()
     # The reflect=True argument to MetaData was deprecated. Instead, one is supposed to call the .reflect()
     # method after creation. (This comment is transitional and can go away if things seem to work normally.)
     # -kmp 11-May-2020
     # Ref: https://stackoverflow.com/questions/44193823/get-existing-table-using-sqlalchemy-metadata/44205552
-    meta = MetaData(bind=session.connection())
-    meta.reflect()
+    # In SQLAlchemy 1.x, the bind= argument sets a default connectable so that later calls to things like .reflect()
+    # don't have to specify it. In SQLAlchemy 2.x, that goes away, and the argument must instead be given explicitly
+    # in the .reflect() call. -kmp 8-Mar-2023
+    meta = MetaData()
+    meta.reflect(conn)
     assert 'transactions' not in meta.tables
     # make sure tid column is removed
     assert not any(column.name == 'tid' for column in meta.tables['propsheets'].columns)
