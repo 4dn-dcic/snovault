@@ -48,6 +48,7 @@ def configure_engine(settings):
         else:
             application_name = 'app'
         engine_opts = dict(
+            pool_size=10,
             isolation_level='REPEATABLE READ',
             json_serializer=json_renderer.dumps,
             connect_args={'application_name': application_name}
