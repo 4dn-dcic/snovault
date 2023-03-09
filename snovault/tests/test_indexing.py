@@ -16,7 +16,7 @@ import yaml
 
 from datetime import datetime, timedelta
 from dcicutils.lang_utils import n_of
-from dcicutils.misc_utils import ignored, get_error_message
+from dcicutils.misc_utils import ignored, get_error_message, override_dict
 from dcicutils.qa_utils import ControlledTime, Eventually, notice_pytest_fixtures
 from elasticsearch.exceptions import NotFoundError
 from pyramid.traversal import traverse
@@ -82,7 +82,7 @@ create_mapping.NUM_SHARDS = 1
 
 @pytest.fixture(scope='session')
 def app_settings(basic_app_settings, wsgi_server_host_port, elasticsearch_server, postgresql_server, aws_auth):
-    settings = basic_app_settings
+    settings = basic_app_settings.copy()
     settings['create_tables'] = True
     settings['elasticsearch.server'] = elasticsearch_server
     settings['sqlalchemy.url'] = postgresql_server
@@ -111,14 +111,16 @@ else:
 
 @pytest.yield_fixture(scope='module', params=INDEXER_APP_PARAMS)  # must happen AFTER scope='session' moto setup
 def app(app_settings, request):
-    if request.param:  # run tests both with and without mpindexer
-        app_settings['mpindexer'] = True
-    app = main({}, **app_settings)
-    yield app
+    old_mpindexer = app_settings['mpindexer']
+    with override_dict(app_settings, mpindexer=old_mpindexer):  # we plan to set it inside here
+        if request.param:  # run tests both with and without mpindexer
+            app_settings['mpindexer'] = True  # This will get cleaned up by the override_dict
+        app = main({}, **app_settings)
+        yield app
 
-    DBSession = app.registry[DBSESSION]
-    # Dispose connections so postgres can tear down.
-    DBSession.bind.pool.dispose()
+        DBSession = app.registry[DBSESSION]
+        # Dispose connections so postgres can tear down.
+        DBSession.bind.pool.dispose()
 
 # XXX C4-312: refactor tests so this can be module scope.
 # Having to have to drop DB tables and re-run create_mapping for every test is slow.
@@ -200,20 +202,21 @@ def test_indexer_namespacing(app, testapp, indexer_testapp):
     Tests that namespacing indexes works as expected. This test has no real
     effect on local but does on Travis
     """
-    jid = INDEXER_NAMESPACE_FOR_TESTING
+    indexer_namespace = INDEXER_NAMESPACE_FOR_TESTING
     idx = indexer_utils.get_namespaced_index(app, TEST_TYPE)
     testapp.post_json(TEST_COLL, {'required': ''})
-    indexer_testapp.post_json('/index', {'record': True})
+    # indexer_testapp.post_json('/index', {'record': True})
+    index_n_items_for_testing(indexer_testapp, 1)
     es = app.registry[ELASTIC_SEARCH]
     assert idx in es.indices.get(index=idx)
-    if jid:
-        assert jid in idx
-    app.registry.settings['indexer.namespace'] = ''  # unset namespace, check raw is given
-    raw_idx = indexer_utils.get_namespaced_index(app, TEST_TYPE)
-    star_idx = indexer_utils.get_namespaced_index(app.registry, '*')  # registry should work as well
-    assert raw_idx == TEST_TYPE
-    assert star_idx == '*'
-    app.registry.settings['indexer.namespace'] = jid  # reset jid
+    if indexer_namespace:
+        assert indexer_namespace in idx
+    with override_dict(app.registry.settings, **{'indexer.namespace': ''}):  # locally unset namespace, check raw is given
+        raw_idx = indexer_utils.get_namespaced_index(app, TEST_TYPE)
+        star_idx = indexer_utils.get_namespaced_index(app.registry, '*')  # registry should work as well
+        assert raw_idx == TEST_TYPE
+        assert star_idx == '*'
+        # app.registry.settings['indexer.namespace'] = indexer_namespace  # reset indexer_namespace
 
 
 @pytest.mark.es
