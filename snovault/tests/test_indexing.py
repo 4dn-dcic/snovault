@@ -16,17 +16,17 @@ import yaml
 
 from datetime import datetime, timedelta
 from dcicutils.lang_utils import n_of
-from dcicutils.misc_utils import ignored, get_error_message
-from dcicutils.qa_utils import ControlledTime, notice_pytest_fixtures
+from dcicutils.misc_utils import ignored, get_error_message, override_dict
+from dcicutils.qa_utils import ControlledTime, Eventually, notice_pytest_fixtures
 from elasticsearch.exceptions import NotFoundError
 from pyramid.traversal import traverse
 from sqlalchemy import MetaData
 from unittest import mock
 from zope.sqlalchemy import mark_changed
-from ..interfaces import DBSESSION, STORAGE, COLLECTIONS, TYPES
+
 from .. import util  # The filename util.py, not something in __init__.py
 from .. import main  # Function main actually defined in __init__.py (should maybe be defined elsewhere)
-from ..storage import Base
+
 from ..elasticsearch import create_mapping, indexer_utils
 from ..elasticsearch.create_mapping import (
     build_index_record,
@@ -43,8 +43,11 @@ from ..elasticsearch.indexer import check_sid, SidException
 from ..elasticsearch.indexer_queue import QueueManager
 from ..elasticsearch.indexer_utils import compute_invalidation_scope
 from ..elasticsearch.interfaces import ELASTIC_SEARCH, INDEXER_QUEUE, INDEXER_QUEUE_MIRROR
+from ..interfaces import DBSESSION, STORAGE, COLLECTIONS, TYPES
+from ..storage import Base
+from ..tools import index_n_items_for_testing
 from ..util import INDEXER_NAMESPACE_FOR_TESTING
-from dcicutils.misc_utils import Retry
+
 from .testing_views import TestingLinkSourceSno
 
 
@@ -52,6 +55,21 @@ notice_pytest_fixtures(TestingLinkSourceSno)
 
 
 pytestmark = [pytest.mark.indexing]
+
+
+def delay_rerun(*args):
+    """ Rerun function for flaky """
+    ignored(args)
+    time.sleep(10)
+    return True
+
+
+def make_es_count_checker(n, *, es, namespaced_index):
+    def es_count_checker():
+        indexed_count = es.count(index=namespaced_index).get('count')
+        assert indexed_count == n
+        return n
+    return es_count_checker
 
 
 TEST_COLL = '/testing-post-put-patch-sno/'
@@ -64,7 +82,7 @@ create_mapping.NUM_SHARDS = 1
 
 @pytest.fixture(scope='session')
 def app_settings(basic_app_settings, wsgi_server_host_port, elasticsearch_server, postgresql_server, aws_auth):
-    settings = basic_app_settings
+    settings = basic_app_settings.copy()
     settings['create_tables'] = True
     settings['elasticsearch.server'] = elasticsearch_server
     settings['sqlalchemy.url'] = postgresql_server
@@ -93,15 +111,22 @@ else:
 
 @pytest.yield_fixture(scope='module', params=INDEXER_APP_PARAMS)  # must happen AFTER scope='session' moto setup
 def app(app_settings, request):
-    if request.param:  # run tests both with and without mpindexer
-        app_settings['mpindexer'] = True
-    app = main({}, **app_settings)
-    yield app
+    old_mpindexer = app_settings['mpindexer']
+    with override_dict(app_settings, mpindexer=old_mpindexer):  # we plan to set it inside here
+        if request.param:  # run tests both with and without mpindexer
+            print("TEMPORARILY SETTING mpindexer=True in app_settings")
+            app_settings['mpindexer'] = True  # This will get cleaned up by the override_dict
+        app = main({}, **app_settings)
+        yield app
 
-    DBSession = app.registry[DBSESSION]
-    # Dispose connections so postgres can tear down.
-    DBSession.bind.pool.dispose()
-
+        DBSession = app.registry[DBSESSION]
+        # Dispose connections so postgres can tear down.
+        try:
+            DBSession.bind.pool.dispose()
+        except AttributeError:
+            # TODO: The .bind may be a connection, which doesn't have a .pool, so maybe sometime try this instead?
+            #       DBSession.bind.engine.pool.dispose()
+            pass
 
 # XXX C4-312: refactor tests so this can be module scope.
 # Having to have to drop DB tables and re-run create_mapping for every test is slow.
@@ -160,12 +185,19 @@ def test_indexing_post_then_get_immediately(testapp, indexer_testapp):
     """
     Tests that we can post then immediately get an object
     """
-    res = testapp.post_json(TEST_COLL, {'required': 'some_value'})
-    test_uuid = res.json['@graph'][0]['uuid']
-    testapp.get('/' + test_uuid, status=[301, 200])
-    res = indexer_testapp.post_json('/index', {'record': True})
-    assert res.json['indexing_count'] == 1
-    testapp.get('/' + test_uuid, status=[301, 200])
+
+    res = testapp.post_json(TEST_COLL, {'required': 'some_value'}).json
+    test_uuid = res['@graph'][0]['uuid']
+
+    testapp.get(f'/{test_uuid}', status=[301, 200])
+
+    index_n_items_for_testing(indexer_testapp, 1)
+
+    # res = indexer_testapp.post_json('/index', {'record': True})
+    # assert res.json['indexing_count'] == 1
+
+    testapp.get(f'/{test_uuid}', status=[301, 200])
+
     # check our collection specific index settings propagated
     index_settings = indexer_testapp.app.registry[COLLECTIONS][TEST_TYPE].index_settings()
     assert index_settings.settings['index']['number_of_replicas'] == 2  # should match value in testing_views.py
@@ -176,20 +208,21 @@ def test_indexer_namespacing(app, testapp, indexer_testapp):
     Tests that namespacing indexes works as expected. This test has no real
     effect on local but does on Travis
     """
-    jid = INDEXER_NAMESPACE_FOR_TESTING
+    indexer_namespace = INDEXER_NAMESPACE_FOR_TESTING
     idx = indexer_utils.get_namespaced_index(app, TEST_TYPE)
     testapp.post_json(TEST_COLL, {'required': ''})
-    indexer_testapp.post_json('/index', {'record': True})
+    # indexer_testapp.post_json('/index', {'record': True})
+    index_n_items_for_testing(indexer_testapp, 1)
     es = app.registry[ELASTIC_SEARCH]
     assert idx in es.indices.get(index=idx)
-    if jid:
-        assert jid in idx
-    app.registry.settings['indexer.namespace'] = ''  # unset namespace, check raw is given
-    raw_idx = indexer_utils.get_namespaced_index(app, TEST_TYPE)
-    star_idx = indexer_utils.get_namespaced_index(app.registry, '*')  # registry should work as well
-    assert raw_idx == TEST_TYPE
-    assert star_idx == '*'
-    app.registry.settings['indexer.namespace'] = jid  # reset jid
+    if indexer_namespace:
+        assert indexer_namespace in idx
+    with override_dict(app.registry.settings, **{'indexer.namespace': ''}):  # locally unset namespace, check raw is given
+        raw_idx = indexer_utils.get_namespaced_index(app, TEST_TYPE)
+        star_idx = indexer_utils.get_namespaced_index(app.registry, '*')  # registry should work as well
+        assert raw_idx == TEST_TYPE
+        assert star_idx == '*'
+        # app.registry.settings['indexer.namespace'] = indexer_namespace  # reset indexer_namespace
 
 
 @pytest.mark.es
@@ -261,65 +294,115 @@ def test_indexer_queue(app):
 
 def test_skip_indexing_query_parameter(app, testapp):
     """ Tests that skip_indexing query parameter is respected """
-    indexer_queue = app.registry[INDEXER_QUEUE]
-    # test POST
-    res = testapp.post_json(TEST_COLL + '?skip_indexing=true', {'required': ''}).json
-    time.sleep(5)  # give sqs 5 seconds to catch up
-    msg_count = indexer_queue.number_of_messages()
-    if msg_count['primary_waiting'] != 0 or msg_count['secondary_waiting'] != 0:
-        raise AssertionError('post_json did not respect ?skip_indexing')
-    # test PATCH
-    testapp.patch_json('/' + res['@graph'][0]['uuid'] + '?skip_indexing=true', {'required': ''})
-    time.sleep(5)  # give sqs 5 seconds to catch up
-    msg_count = indexer_queue.number_of_messages()
-    if msg_count['primary_waiting'] != 0 or msg_count['secondary_waiting'] != 0:
-        raise AssertionError('patch_json did not respect ?skip_indexing')
+
+    with mock.patch.object(QueueManager, "send_messages") as mock_send_messages:
+
+        # test POST
+
+        res1a = testapp.post_json(TEST_COLL, {'required': ''}).json
+        uuid1a = res1a['@graph'][0]['uuid']
+        assert mock_send_messages.call_count == 1
+        assert [item['uuid'] for item in mock_send_messages.call_args.args[0]] == [uuid1a]
+
+        mock_send_messages.reset_mock()
+
+        res1b = testapp.post_json(TEST_COLL + '?skip_indexing=true', {'required': ''}).json
+        uuid1b = res1b['@graph'][0]['uuid']
+        assert mock_send_messages.call_count == 0
+
+        mock_send_messages.reset_mock()
+
+        res1c = testapp.post_json(TEST_COLL, {'required': ''}).json
+        uuid1c = res1c['@graph'][0]['uuid']
+        assert mock_send_messages.call_count == 1
+        assert [item['uuid'] for item in mock_send_messages.call_args.args[0]] == [uuid1c]
+
+        mock_send_messages.reset_mock()
+
+        # test PATCH
+
+        testapp.patch_json('/' + uuid1b, {'required': ''})
+        assert mock_send_messages.call_count == 1
+        assert [item['uuid'] for item in mock_send_messages.call_args.args[0]] == [uuid1b]
+
+        mock_send_messages.reset_mock()
+
+        testapp.patch_json('/' + uuid1a + '?skip_indexing=true', {'required': ''})
+        assert mock_send_messages.call_count == 0
+
+        mock_send_messages.reset_mock()
+
+        testapp.patch_json('/' + uuid1a, {'required': ''})
+        assert mock_send_messages.call_count == 1
+        assert [item['uuid'] for item in mock_send_messages.call_args.args[0]] == [uuid1a]
 
 
-@pytest.mark.flaky
+def receive_n_messages(*, queue, target='primary', n, tries=10, wait_seconds=1):
+    print(f"receiving {n} messages")
+    received = []
+    for try_n in range(tries):
+        received_this_time = queue.receive_messages(target_queue=target)
+        assert isinstance(received_this_time, list)
+        received += received_this_time
+        if len(received) == n:
+            return received
+        print(f" try #{try_n}, received {len(received_this_time)}")
+        time.sleep(wait_seconds)
+    raise AssertionError(f"Only received {n_of(received, 'message')}, but wanted {n}.")
+
+# @pytest.mark.flaky
 def test_queue_indexing_telemetry_id(app, testapp):
     indexer_queue = app.registry[INDEXER_QUEUE]
     ordered_queue_targets = [targ for targ in indexer_queue.queue_targets]
     assert ordered_queue_targets == ['primary', 'secondary', 'dlq']
     testapp.post_json(TEST_COLL + '?telemetry_id=test_telem', {'required': ''})
-    time.sleep(2)
+    # time.sleep(2)
     secondary_body = {
         'uuids': ['12345', '23456'],
         'strict': True,
         'target_queue': 'secondary',
     }
     testapp.post_json('/queue_indexing?telemetry_id=test_telem', secondary_body)
-    time.sleep(2)
-    # make sure the queue eventually sorts itself out
-    tries_left = 5
-    while tries_left > 0:
-        msg_count = indexer_queue.number_of_messages()
-        if msg_count['primary_waiting'] == 1 and msg_count['secondary_waiting'] == 2:
-            break
-        tries_left -= 1
-        time.sleep(3)
-    assert tries_left > 0
-    # delete the messages
+    time.sleep(2)  # wait for 2 messages to be in the queue - there may be a better way. -kmp 2-Feb-2023
+    # # make sure the queue eventually sorts itself out
+    # tries_left = 5
+    # while tries_left > 0:
+    #     msg_count = indexer_queue.number_of_messages()
+    #     if msg_count['primary_waiting'] == 1 and msg_count['secondary_waiting'] == 2:
+    #         break
+    #     tries_left -= 1
+    #     time.sleep(3)
+    # assert tries_left > 0  # complain if we timed out (maybe a better way. does 'while' have an 'else'?)
+    # # delete the messages
     for target in indexer_queue.queue_targets:
         if 'dlq' in target:  # skip if dlq
             continue
-        received = indexer_queue.receive_messages(target_queue=target)
+        received = receive_n_messages(queue=indexer_queue, target=target, n=1 if 'primary' in target else 2)
+        # received = indexer_queue.receive_messages(target_queue=target)
         assert len(received) > 0
         for msg in received:
             # ensure we are passing telemetry_id through queue_indexing
             print(msg)
             msg_body = json.loads(msg['Body'])
             assert msg_body['telemetry_id'] == 'test_telem'
-        indexer_queue.delete_messages(received, target_queue=target)
-    # make sure the queue eventually sorts itself out
-    tries_left = 5
-    while tries_left > 0:
+        indexer_queue.delete_messages(received, target_queue=target)  # maybe needs wait time?
+
+    @Eventually.consistent()
+    def check_queue_empty():
         msg_count = indexer_queue.number_of_messages()
-        if msg_count['primary_waiting'] == 0 and msg_count['secondary_waiting'] == 0:
-            break
-        tries_left -= 1
-        time.sleep(3)
-    assert tries_left > 0
+        assert msg_count['primary_waiting'] == 0 and msg_count['secondary_waiting'] == 0
+
+    check_queue_empty()
+
+    # # make sure the queue eventually sorts itself out
+    # tries_left = 5
+    # while tries_left > 0:
+    #     msg_count = indexer_queue.number_of_messages()
+    #     if msg_count['primary_waiting'] == 0 and msg_count['secondary_waiting'] == 0:
+    #         break
+    #     tries_left -= 1
+    #     time.sleep(3)
+    # assert tries_left > 0
 
 
 @pytest.mark.flaky
@@ -382,27 +465,34 @@ def test_dlq_to_primary(app, anontestapp, indexer_testapp):
     print("Got back result JSON:", json.dumps(res, indent=2, default=str))
     assert res['number_migrated'] == 2
     assert res['number_failed'] == 0
-    deadline = datetime.now() + timedelta(seconds=10)
-    n_received = 0
-    attempt_number = 0
-    while n_received < n_queued and datetime.now() < deadline:
-        attempt_number += 1
-        print("Attempt #%d to receive messages from Primary indexer_queue." % attempt_number)
-        msgs = indexer_queue.receive_messages()  # receive from primary
-        n = len(msgs)  # We'll test the length after we examine the content..
-        n_received += n
-        punctuation = "." if n_received == 0 else ":"
-        print("On receipt attempt #{attempt_number}, {things} received from Primary indexer_queue{punctuation}"
-              .format(attempt_number=attempt_number, things=n_of(n, "new message"), punctuation=punctuation))
-        for i, msg in enumerate(msgs):
-            print("Attempt #%d Msg %d" % (attempt_number, i), json.dumps(msg, indent=2, default=str))
-            msg_uuid = json.loads(msg['Body'])['uuid']
-            # They might be in either order, or one might be missing, but at this point just make sure they're ours
-            assert msg_uuid in test_uuids
-        if n_received < n_queued:
-            time.sleep(1)  # Leave time between retrying
-    assert n_received == n_queued, ("Expected {things} from primary, but got {count}."
-                                    .format(things=n_of(n_queued, "message"), count=n_received))
+
+    for msg in receive_n_messages(queue=indexer_queue, n=2):
+        msg_uuid = json.loads(msg['Body'])['uuid']
+        assert msg_uuid in test_uuids
+
+
+    # deadline = datetime.now() + timedelta(seconds=10)
+    # n_received = 0
+    # attempt_number = 0
+    # while n_received < n_queued and datetime.now() < deadline:
+    #     attempt_number += 1
+    #     print("Attempt #%d to receive messages from Primary indexer_queue." % attempt_number)
+    #     msgs = indexer_queue.receive_messages()  # receive from primary
+    #     n = len(msgs)  # We'll test the length after we examine the content..
+    #     n_received += n
+    #     punctuation = "." if n_received == 0 else ":"
+    #     print("On receipt attempt #{attempt_number}, {things} received from Primary indexer_queue{punctuation}"
+    #           .format(attempt_number=attempt_number, things=n_of(n, "new message"), punctuation=punctuation))
+    #     for i, msg in enumerate(msgs):
+    #         print("Attempt #%d Msg %d" % (attempt_number, i), json.dumps(msg, indent=2, default=str))
+    #         msg_uuid = json.loads(msg['Body'])['uuid']
+    #         # They might be in either order, or one might be missing, but at this point just make sure they're ours
+    #         assert msg_uuid in test_uuids
+    #     if n_received < n_queued:
+    #         time.sleep(1)  # Leave time between retrying
+
+    # assert n_received == n_queued, ("Expected {things} from primary, but got {count}."
+    #                                 .format(things=n_of(n_queued, "message"), count=n_received))
     # If we didn't fail on the prior assert, we should be good (other than some pro forma checks that follow)
     print("Got all the messages we expected.")
     print("Executing .get('dlq_to_primary') [authenticated] hoping it's empty")
@@ -421,28 +511,43 @@ def test_dlq_to_primary(app, anontestapp, indexer_testapp):
     # assert False, "PASSED"
 
 
-@pytest.mark.flaky
+# @pytest.mark.flaky
 def test_indexing_simple(app, testapp, indexer_testapp):
     # First post a single item so that subsequent indexing is incremental
     testapp.post_json(TEST_COLL, {'required': ''})
-    res = indexer_testapp.post_json('/index', {'record': True})
-    assert res.json['indexing_count'] == 1
-    assert res.json['indexing_status'] == 'finished'
-    assert res.json['errors'] == []
+
+    index_n_items_for_testing(indexer_testapp, 1)
+
+    # res = indexer_testapp.post_json('/index', {'record': True})
+    # assert res.json['indexing_count'] == 1
+    # assert res.json['indexing_status'] == 'finished'
+    # assert res.json['errors'] == []
+
     res = testapp.post_json(TEST_COLL, {'required': ''})
     uuid = res.json['@graph'][0]['uuid']
-    res = indexer_testapp.post_json('/index', {'record': True})
-    assert res.json['indexing_count'] == 1
-    res = Retry.retrying(testapp.get, retries_allowed=2)('/search/?type=%s' % TEST_TYPE).follow()
-    uuids = [indv_res['uuid'] for indv_res in res.json['@graph']]
-    count = 0
-    while uuid not in uuids and count < 20:
-        time.sleep(1)
-        res = testapp.get('/search/?type=%s' % TEST_TYPE)
+
+    # res = indexer_testapp.post_json('/index', {'record': True})
+    # assert res.json['indexing_count'] == 1
+    index_n_items_for_testing(indexer_testapp, 1)
+
+    # res = Retry.retrying(testapp.get, retries_allowed=2)('/search/?type=%s' % TEST_TYPE).follow()
+    # uuids = [indv_res['uuid'] for indv_res in res.json['@graph']]
+    # count = 0
+    # while uuid not in uuids and count < 20:
+    #     time.sleep(1)
+    #     res = testapp.get('/search/?type=%s' % TEST_TYPE)
+    #     uuids = [indv_res['uuid'] for indv_res in res.json['@graph']]
+    #     count += 1
+    # assert res.json['total'] >= 2
+    # assert uuid in uuids
+
+    @Eventually.consistent()
+    def check_uuid_in_uuids():
+        res = testapp.get('/search/?type=%s' % TEST_TYPE).follow()
         uuids = [indv_res['uuid'] for indv_res in res.json['@graph']]
-        count += 1
-    assert res.json['total'] >= 2
-    assert uuid in uuids
+        assert uuid in uuids
+
+    check_uuid_in_uuids()
 
     es = app.registry[ELASTIC_SEARCH]
     namespaced_index = indexer_utils.get_namespaced_index(app, 'indexing')
@@ -1057,16 +1162,21 @@ def test_es_purge_uuid(app, testapp, indexer_testapp, session):
     # Then index it:
     create_mapping.run(app, collections=[TEST_TYPE], sync_index=True)
     indexer_queue.clear_queue()
-    time.sleep(4)
+    # time.sleep(4)
 
-    # Now ensure that we do have it in ES:
-    try:
-        namespaced_index = indexer_utils.get_namespaced_index(app, TEST_TYPE)
-        es_item = es.get(index=namespaced_index, id=test_uuid)
-    except Exception as e:
-        raise AssertionError(f"Couldn't find item uuid. {get_error_message(e)}")
-    item_uuid = es_item.get('_source', {}).get('uuid')
-    assert item_uuid == test_uuid
+    @Eventually.consistent()
+    def ensure_uuid_not_in_es():
+        # Now ensure that we do have it in ES:
+        try:
+            namespaced_index = indexer_utils.get_namespaced_index(app, TEST_TYPE)
+            es_item = es.get(index=namespaced_index, id=test_uuid)
+        except Exception as e:
+            raise AssertionError(f"Couldn't find item uuid. {get_error_message(e)}")
+        item_uuid = es_item.get('_source', {}).get('uuid')
+        assert item_uuid == test_uuid
+        return namespaced_index, es_item, item_uuid
+
+    namespaced_index, es_item, item_uuid = ensure_uuid_not_in_es()
 
     check_post_from_rdb = storage.write.get_by_uuid(test_uuid)
     assert check_post_from_rdb is not None
@@ -1078,17 +1188,31 @@ def test_es_purge_uuid(app, testapp, indexer_testapp, session):
     revisions = testapp.get('/' + test_uuid + '/@@revision-history').json['revisions']
     assert len(revisions) == 1
     storage.purge_uuid(test_uuid, TEST_TYPE)
+
     # Riddle me this: above^ delete supposedly fails if the below is not commented out? - Will 04/23/21
     # revisions = testapp.get('/' + test_uuid + '/@@revision-history').json['revisions']
     # assert len(revisions) == 1  # es_items have no revision history
 
-    check_post_from_rdb_2 = storage.write.get_by_uuid(test_uuid)
+    @Eventually.consistent()
+    def check_rdb_2():
 
-    assert check_post_from_rdb_2 is None
+        check_post_from_rdb_2 = storage.write.get_by_uuid(test_uuid)
+        assert check_post_from_rdb_2 is None
 
-    time.sleep(5)  # Allow time for ES API to send network request to ES server to perform delete.
-    check_post_from_es_2 = es.get(index=namespaced_index, id=test_uuid, ignore=[404])
-    assert check_post_from_es_2['found'] is False
+    check_rdb_2()
+
+    @Eventually.consistent()
+    def check_es_2():
+        # time.sleep(5)  # Allow time for ES API to send network request to ES server to perform delete.
+        check_post_from_es_2 = es.get(index=namespaced_index, id=test_uuid, ignore=[404])
+        assert check_post_from_es_2['found'] is False
+
+    check_es_2()
+
+    # Now that all the es work is done, test es item revision history
+
+    revisions = testapp.get('/' + test_uuid + '/@@revision-history').json['revisions']
+    assert len(revisions) == 1  # es_items have no revision history
 
 
 @pytest.mark.flaky
@@ -1129,43 +1253,37 @@ def test_create_mapping_check_first(app, testapp, indexer_testapp):
     assert compare_against_existing_mapping(es, namespaced_index, TEST_TYPE, index_record, True) is True
 
 
-def delay_rerun(*args):
-    """ Rerun function for flaky """
-    ignored(args)
-    time.sleep(10)
-    return True
-
-
 @pytest.mark.flaky(max_runs=2, rerun_filter=delay_rerun)
 def test_create_mapping_index_diff(app, testapp, indexer_testapp):
+
+    namespaced_index = indexer_utils.get_namespaced_index(app, TEST_TYPE)
     es = app.registry[ELASTIC_SEARCH]
+
+    create_mapping.run(app, collections=[TEST_TYPE])
+
     # post a couple items, index, then remove one
     res = testapp.post_json(TEST_COLL, {'required': ''})
     test_uuid = res.json['@graph'][0]['uuid']
+
     testapp.post_json(TEST_COLL, {'required': ''})  # second item
-    create_mapping.run(app, collections=[TEST_TYPE])
-    indexer_queue = app.registry[INDEXER_QUEUE]
-    indexer_testapp.post_json('/index', {'record': True})
-    indexer_queue.clear_queue()
-    time.sleep(4)
-    namespaced_index = indexer_utils.get_namespaced_index(app, TEST_TYPE)
-    initial_count = es.count(index=namespaced_index).get('count')
-    assert initial_count == 2
+
+    index_n_items_for_testing(indexer_testapp, 2)
+
+    initial_count = Eventually.call_assertion(make_es_count_checker(2, es=es, namespaced_index=namespaced_index))
 
     # remove one item
     es.delete(index=namespaced_index, id=test_uuid)
-    time.sleep(8)
-    second_count = es.count(index=namespaced_index).get('count')
-    assert second_count == 1
+
+    Eventually.call_assertion(make_es_count_checker(1, es=es, namespaced_index=namespaced_index))
 
     # patch the item to increment version
     testapp.patch_json(TEST_COLL + test_uuid, {'required': 'meh'})
     # index with index_diff to ensure the item is reindexed
     create_mapping.run(app, collections=[TEST_TYPE], index_diff=True)
-    indexer_testapp.post_json('/index', {'record': True})
-    time.sleep(4)
-    third_count = es.count(index=namespaced_index).get('count')
-    assert third_count == initial_count
+
+    index_n_items_for_testing(indexer_testapp, initial_count)
+
+    Eventually.call_assertion(make_es_count_checker(initial_count, es=es, namespaced_index=namespaced_index))
 
 
 @pytest.mark.flaky(max_runs=2, rerun_filter=delay_rerun)
@@ -1209,48 +1327,81 @@ def test_indexing_esstorage_can_purge_without_db(app, testapp, indexer_testapp):
     Tests that we can delete items from ES using the DELETE API when said item does
     not exist in the DB
     """
+    print("Starting test")
+    es = app.registry[ELASTIC_SEARCH]
     esstorage = app.registry[STORAGE].read
     rdbstorage = app.registry[STORAGE].write
+    namespaced_index = indexer_utils.get_namespaced_index(app, TEST_TYPE)
     # post an item, allow it to index
+    print("Posting test item")
     res = testapp.post_json(TEST_COLL, {'required': 'some_value'})
     test_uuid = res.json['@graph'][0]['uuid']
-    res = indexer_testapp.post_json('/index', {'record': True})
-    assert res.json['indexing_count'] == 1
-    time.sleep(2)
-    # get out of DB, purge it manually
+    print(f"Posted test item has uuid {test_uuid}")
+    print("Indexing 1 item")
+    index_n_items_for_testing(indexer_testapp, 1)
+    print("Assuring test item is in both ES and DB")
+    assert esstorage.get_by_uuid(test_uuid)
     assert rdbstorage.get_by_uuid(test_uuid)
-    rdbstorage.purge_uuid(test_uuid)  # delete from DB
+    print("Purging test item manually from DB, leaving it in ES")
+    rdbstorage.purge_uuid(test_uuid)
+    print("Assuring that test item went away from DB but not ES")
+    # Assure it went away from DB but not ES
     assert esstorage.get_by_uuid(test_uuid)  # can still get from es
     assert not rdbstorage.get_by_uuid(test_uuid)  # but not db
+    print("Deleting test item via testapp (without purge)")
     testapp.delete_json('/' + test_uuid)  # set status to deleted
+    print("Deleting test item via testapp (with purge)")
     testapp.delete_json('/' + test_uuid + '?purge=True')  # purge fully
-    time.sleep(1)  # give es a second to catch up
+    time.sleep(0.5)  # give es a second to catch up
+    Eventually.call_assertion(make_es_count_checker(0, es=es, namespaced_index=namespaced_index))
+    print("Checking test item gone from ES.")
     assert not esstorage.get_by_uuid(test_uuid)  # should not get now
 
 
-@pytest.mark.flaky(max_runs=3)
+# @pytest.mark.flaky(max_runs=3)
 def test_indexing_rdbstorage_can_purge_without_es(app, testapp, indexer_testapp):
     """
     Tests that we can delete items from the DB using the DELETE API when said item
     does not exist in ES
     """
+    print("Starting test")
+    es = app.registry[ELASTIC_SEARCH]
     esstorage = app.registry[STORAGE].read
     rdbstorage = app.registry[STORAGE].write
-    namespaced_test_type = indexer_utils.get_namespaced_index(app, TEST_TYPE)
+    namespaced_index = indexer_utils.get_namespaced_index(app, TEST_TYPE)
     # post an item, allow it to index
+    print("Posting test item")
     res = testapp.post_json(TEST_COLL, {'required': 'some_value'})
     test_uuid = res.json['@graph'][0]['uuid']
-    time.sleep(6)
-    res = indexer_testapp.post_json('/index', {'record': True})
-    assert res.json['indexing_count'] == 1
+    print(f"Posted test item has uuid {test_uuid}")
+    print("Indexing 1 item")
+    index_n_items_for_testing(indexer_testapp, 1)
+    # Assure we have one indexed item
+    print("Assuring ES count is 1")
+    Eventually.call_assertion(make_es_count_checker(1, es=es, namespaced_index=namespaced_index))
     # get out of both DB and ES
+
+    print("Checking that item is in DB")
     assert rdbstorage.get_by_uuid(test_uuid)
+    print("Checking that item is in ES")
     assert esstorage.get_by_uuid(test_uuid)
-    esstorage.purge_uuid(test_uuid, namespaced_test_type)  # purge from ES
-    time.sleep(1)  # give es a second to catch up
+
+    print("Checking ES count")
+    n = es.count(index=namespaced_index).get('count')
+    print(f"Starting purge with initial ES count {n}...")
+    esstorage.purge_uuid(rid=test_uuid, item_type=TEST_TYPE)  # purge from ES
+
+    # Assure we have zero indexed items
+    print(f"Waiting for item count {n - 1}")
+    Eventually.call_assertion(make_es_count_checker(n - 1, es=es, namespaced_index=namespaced_index))
+
+    print("Deleting test item via testapp (without purge)")
     testapp.delete_json('/' + test_uuid)  # set status to deleted
+    print("Deleting test item via testapp (with purge)")
     testapp.delete_json('/' + test_uuid + '?purge=True')  # purge fully
+    print("Checking test item gone from DB.")
     assert not rdbstorage.get_by_uuid(test_uuid)  # should not get now
+    print("All done.")
 
 
 @pytest.mark.flaky(max_runs=3, rerun_filter=delay_rerun)
@@ -1730,13 +1881,17 @@ def test_assert_transactions_table_is_gone(app):
     serverfixtures to be established (used for indexing)
     """
     session = app.registry[DBSESSION]
-    session.connection().connect()
+    conn = session.connection()
+    conn.connect()
     # The reflect=True argument to MetaData was deprecated. Instead, one is supposed to call the .reflect()
     # method after creation. (This comment is transitional and can go away if things seem to work normally.)
     # -kmp 11-May-2020
     # Ref: https://stackoverflow.com/questions/44193823/get-existing-table-using-sqlalchemy-metadata/44205552
-    meta = MetaData(bind=session.connection())
-    meta.reflect()
+    # In SQLAlchemy 1.x, the bind= argument sets a default connectable so that later calls to things like .reflect()
+    # don't have to specify it. In SQLAlchemy 2.x, that goes away, and the argument must instead be given explicitly
+    # in the .reflect() call. -kmp 8-Mar-2023
+    meta = MetaData()
+    meta.reflect(conn)
     assert 'transactions' not in meta.tables
     # make sure tid column is removed
     assert not any(column.name == 'tid' for column in meta.tables['propsheets'].columns)

@@ -1194,7 +1194,7 @@ def run(app, collections=None, dry_run=False, check_first=False, skip_indexing=F
         that exist in db but not in es or that need upgrading and reindex those.
         Takes precedence over check_first
     strict: if True, do not include associated items when considering what
-        items to reindex. Only takes affect with index_diff or when specific
+        items to reindex. Only takes effect with index_diff or when specific
         item_types are specified, since otherwise a complete reindex will
         occur anyways.
     sync_index: if True, synchronously run reindexing rather than queueing.

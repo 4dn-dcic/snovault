@@ -47,7 +47,7 @@ jobs:
 
       - name: Install Deps
         run: |
-          make build
+          make build-for-ga
 
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v1
