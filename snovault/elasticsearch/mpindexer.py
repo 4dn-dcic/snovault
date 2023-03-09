@@ -64,6 +64,7 @@ def threadlocal_manager():
     Set registry and request attributes using the global app within the
     subprocess
     """
+    global db_engine
 
     # clear threadlocal manager to get a clean stack
     manager.clear()
@@ -94,6 +95,7 @@ def threadlocal_manager():
 
 
 def clear_manager_and_dispose_engine(signum=None, frame=None):
+    global db_engine
     ignored(signum, frame)
     manager.clear()
     # manually dispose of db engine for garbage collection
