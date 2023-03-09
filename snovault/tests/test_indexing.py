@@ -114,13 +114,19 @@ def app(app_settings, request):
     old_mpindexer = app_settings['mpindexer']
     with override_dict(app_settings, mpindexer=old_mpindexer):  # we plan to set it inside here
         if request.param:  # run tests both with and without mpindexer
+            print("TEMPORARILY SETTING mpindexer=True in app_settings")
             app_settings['mpindexer'] = True  # This will get cleaned up by the override_dict
         app = main({}, **app_settings)
         yield app
 
         DBSession = app.registry[DBSESSION]
         # Dispose connections so postgres can tear down.
-        DBSession.bind.pool.dispose()
+        try:
+            DBSession.bind.pool.dispose()
+        except AttributeError:
+            # TODO: The .bind may be a connection, which doesn't have a .pool, so maybe sometime try this instead?
+            #       DBSession.bind.engine.pool.dispose()
+            pass
 
 # XXX C4-312: refactor tests so this can be module scope.
 # Having to have to drop DB tables and re-run create_mapping for every test is slow.
