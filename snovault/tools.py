@@ -81,15 +81,19 @@ def local_collections(*, app, collections):
         yield
 
 
-def index_n_items_for_testing(indexer_testapp, n, *, max_tries=10):
+def index_n_items_for_testing(indexer_testapp, n, *, max_tries=10, wait_seconds=1, initial_wait_seconds=None):
     tries_so_far = 0
     total_items_seen = 0
-    while total_items_seen < n:
+    current_wait_seconds = 0.5 * wait_seconds if initial_wait_seconds is None else initial_wait_seconds
+    while True:
+        time.sleep(current_wait_seconds)
         indexing_record = indexer_testapp.post_json('/index', {'record': True}).json
         items_this_time = indexing_record.get('indexing_count')
         assert items_this_time is not None, f"Expected an indexing_record, but got {json.dumps(indexing_record)}."
         total_items_seen += items_this_time
+        if total_items_seen >= n:
+            break
         assert tries_so_far < max_tries, (
             f"Attempt to index {n_of(n, 'item')}. Tried {max_tries} times, but saw only {total_items_seen}.")
         tries_so_far += 1
-        time.sleep(1)
+        current_wait_seconds = wait_seconds
