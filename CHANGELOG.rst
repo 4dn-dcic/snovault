@@ -7,6 +7,12 @@ Change Log
 ----------
 
 
+7.2.1
+=====
+
+* A ``Makefile`` that will pass tests locally.
+
+
 7.2.0
 =====
 

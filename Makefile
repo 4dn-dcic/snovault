@@ -40,19 +40,35 @@ test-one:
 
 	SQLALCHEMY_WARN_20=1 pytest -vv --timeout=200 -k ${TEST_NAME}
 
+INSTAFAIL_OPTIONS = --timeout=200 -xvv --instafail
+MULTIFAIL_OPTIONS = --timeout=200 -vv
+
 test:
 	@git log -1 --decorate | head -1
 	@date
-	SQLALCHEMY_WARN_20=1 pytest -xvv --instafail --timeout=200
+	make test-not-indexing && make test-indexing
 	@git log -1 --decorate | head -1
 	@date
 
 test-full:
 	@git log -1 --decorate | head -1
 	@date
-	SQLALCHEMY_WARN_20=1 pytest -vv --timeout=200
+	make test-not-indexing-full
+	make test-indexing-full
 	@git log -1 --decorate | head -1
 	@date
+
+test-not-indexing:
+	SQLALCHEMY_WARN_20=1 pytest ${INSTAFAIL_OPTIONS} -m "not indexing"
+
+test-indexing:
+	SQLALCHEMY_WARN_20=1 pytest ${INSTAFAIL_OPTIONS} -m "indexing"
+
+test-not-indexing-full:
+	SQLALCHEMY_WARN_20=1 pytest ${MULTIFAIL_OPTIONS} -m "not indexing"
+
+test-indexing-full:
+	SQLALCHEMY_WARN_20=1 pytest ${MULTIFAIL_OPTIONS} -m "indexing"
 
 test-static:
 	NO_SERVER_FIXTURES=TRUE USE_SAMPLE_ENVUTILS=TRUE poetry run python -m pytest -vv -m static
