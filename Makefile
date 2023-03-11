@@ -34,35 +34,55 @@ build-for-ga:
 	poetry config --local virtualenvs.create true
 	make build-configured
 
+ES_URL = search-fourfront-testing-opensearch-kqm7pliix4wgiu4druk2indorq.us-east-1.es.amazonaws.com:443
+
+LOCAL_INSTAFAIL_OPTIONS = --timeout=200 -xvv --instafail
+LOCAL_MULTIFAIL_OPTIONS = --timeout=200 -vv
+GA_CICD_TESTING_OPTIONS = --timeout=400 -xvvv --durations=100 --aws-auth --es ${ES_URL}
+STATIC_ANALYSIS_OPTIONS =  -vv
+
 TEST_NAME ?= missing_TEST_NAME
 
 test-one:
 
-	SQLALCHEMY_WARN_20=1 pytest -vv --timeout=200 -k ${TEST_NAME}
+	SQLALCHEMY_WARN_20=1 pytest ${LOCAL_MULTIFAIL_OPTIONS} -k ${TEST_NAME}
 
 test:
 	@git log -1 --decorate | head -1
 	@date
-	SQLALCHEMY_WARN_20=1 pytest -xvv --instafail --timeout=200
+	make test-unit && make test-indexing
 	@git log -1 --decorate | head -1
 	@date
 
 test-full:
 	@git log -1 --decorate | head -1
 	@date
-	SQLALCHEMY_WARN_20=1 pytest -vv --timeout=200
+	make test-unit-full
+	make test-indexing-full
 	@git log -1 --decorate | head -1
 	@date
+
+test-indexing:
+	SQLALCHEMY_WARN_20=1 poetry run pytest ${LOCAL_INSTAFAIL_OPTIONS} -m "indexing"
+
+test-unit:
+	SQLALCHEMY_WARN_20=1 poetry run pytest ${LOCAL_INSTAFAIL_OPTIONS} -m "not indexing"
+
+test-indexing-full:
+	SQLALCHEMY_WARN_20=1 poetry run pytest ${LOCAL_MULTIFAIL_OPTIONS} -m "indexing"
+
+test-unit-full:
+	SQLALCHEMY_WARN_20=1 poetry run pytest ${LOCAL_MULTIFAIL_OPTIONS} -m "not indexing"
 
 test-static:
 	NO_SERVER_FIXTURES=TRUE USE_SAMPLE_ENVUTILS=TRUE poetry run python -m pytest -vv -m static
 	make lint
 
-remote-test-npm:
-	SQLALCHEMY_WARN_20=1 poetry run pytest -xvvv --timeout=400 --durations=100 --aws-auth --es search-fourfront-testing-opensearch-kqm7pliix4wgiu4druk2indorq.us-east-1.es.amazonaws.com:443 -m "indexing"
+remote-test-indexing:
+	SQLALCHEMY_WARN_20=1 poetry run pytest ${GA_CICD_TESTING_OPTIONS} -m "indexing"
 
 remote-test-unit:
-	SQLALCHEMY_WARN_20=1 poetry run pytest -xvvv --timeout=400 --durations=100 --aws-auth --es search-fourfront-testing-opensearch-kqm7pliix4wgiu4druk2indorq.us-east-1.es.amazonaws.com:443 -m "not indexing"
+	SQLALCHEMY_WARN_20=1 poetry run pytest ${GA_CICD_TESTING_OPTIONS} -m "not indexing"
 
 update:
 	poetry update
