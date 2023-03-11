@@ -11,6 +11,7 @@ Change Log
 =====
 
 * A ``Makefile`` that will pass tests locally.
+  Rename the "npm" tests to "indexing" tests.
 
 
 7.2.0

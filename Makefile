@@ -84,15 +84,6 @@ remote-test-indexing:
 remote-test-unit:
 	SQLALCHEMY_WARN_20=1 poetry run pytest ${GA_CICD_TESTING_OPTIONS} -m "not indexing"
 
-# These next two items (remote-test-npm and remote-test-unit) are here for compatibility,
-# but you should prefer remote-test-indexing or remote-test-unit, respectively. -kmp 10-Mar-2023
-
-remote-test-npm:
-	make remote-test-indexing
-
-remote-test-unit:
-	make remote-test-unit
-
 update:
 	poetry update
 
