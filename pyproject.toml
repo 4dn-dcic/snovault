@@ -108,7 +108,7 @@ pip-licenses = "^3.5.3"
 Pillow = ">=6.2.2"  # later version known to work - Will 11/17/20
 # Experimental upgrade to PyTest 4.5. It may be possible to upgrade further, but I think this is an improvement.
 # -kmp 11-May-2020
-pytest = "4.5.0"
+pytest = "^7.2.2"
 pytest-cov = ">=2.2.1"
 # pytest_exact_fixtures = "^0.3"
 pytest-instafail = ">=0.3.0"
