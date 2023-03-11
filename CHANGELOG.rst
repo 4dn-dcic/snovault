@@ -7,6 +7,24 @@ Change Log
 ----------
 
 
+7.2.1
+=====
+
+* In ``Makefile``:
+
+  * New ``make`` target ``test-one``.
+
+
+  * Separate testing of indexing tests from other unit tests,
+    renaming the "npm" tests to "indexing" tests.
+
+* Make github workflow ``main.yml`` consistent with ``Makefile`` changes.
+
+* In ``pyproject.toml``:
+
+  * Use ``pytest 7.2.2``.
+
+
 7.2.0
 =====
 
