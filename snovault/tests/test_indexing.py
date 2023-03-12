@@ -1457,7 +1457,7 @@ def test_indexing_rdbstorage_can_purge_without_es(app, testapp, indexer_testapp)
     print("All done.")
 
 
-@pytest.mark.flaky(max_runs=3, rerun_filter=delay_rerun)
+# @pytest.mark.flaky(max_runs=3, rerun_filter=delay_rerun)
 def test_aggregated_items(app, testapp, indexer_testapp):
     """
     Test that the item aggregation works, which only occurs when indexing
@@ -1471,101 +1471,136 @@ def test_aggregated_items(app, testapp, indexer_testapp):
     - Ensure that duplicate aggregated_items are deduplicated
     - Check aggregated-items view; should now match ES results
     """
+
     es = app.registry[ELASTIC_SEARCH]
     # first, run create mapping with the indices we will use
     namespaced_aggregate = indexer_utils.get_namespaced_index(app, 'testing_link_aggregate_sno')
-    create_mapping.run(
-        app,
-        collections=['testing_link_target_sno', 'testing_link_aggregate_sno'],
-        skip_indexing=True
-    )
+
     # generate a uuid for the aggregate item
     agg_res_uuid = str(uuid.uuid4())
-    target1 = {'name': 'one', 'uuid': '775795d3-4410-4114-836b-8eeecf1d0c2f'}
-    target2 = {'name': 'two', 'uuid': '775795d3-4410-4114-836b-8eeecf1daabc'}
+    target_uuid1 = '775795d3-4410-4114-836b-8eeecf1d0c2f'
+    target_uuid2 = '775795d3-4410-4114-836b-8eeecf1daabc'
+    target1 = {'name': 'one', 'uuid': target_uuid1}
+    target2 = {'name': 'two', 'uuid': target_uuid2}
     aggregated = {
         'name': 'A',
         'targets': [
             {
                 'test_description': 'target one',
-                'target': '775795d3-4410-4114-836b-8eeecf1d0c2f'
+                'target': target_uuid1,
             },
             {
                 'test_description': 'target two',
-                'target': '775795d3-4410-4114-836b-8eeecf1daabc'
+                'target': target_uuid2,
             }
         ],
         'uuid': agg_res_uuid,
         'status': 'current'
     }
-    # you can do stuff like this and it will take effect
-    # app.registry['types']['testing_link_aggregate_sno'].aggregated_items['targets'] = (
-    #    ['target.name', 'test_description'])
-    testapp.post_json('/testing-link-targets-sno/', target1, status=201)
-    testapp.post_json('/testing-link-targets-sno/', target2, status=201)
-    agg_res = testapp.post_json('/testing-link-aggregates-sno/', aggregated, status=201)
-    agg_res_atid = agg_res.json['@graph'][0]['@id']
-    # ensure that aggregated-items view shows nothing before indexing
-    pre_agg_view = testapp.get(agg_res_atid + '@@aggregated-items', status=200).json
-    assert pre_agg_view['@id'] == agg_res_atid
-    assert pre_agg_view['aggregated_items'] == {}
-    # wait for the items to index
-    indexer_testapp.post_json('/index', {'record': True})
-    time.sleep(2)
-    # wait for test-link-aggregated item to index
-    doc_count = es.count(index=namespaced_aggregate).get('count')
-    tries = 0
-    while doc_count < 1 and tries < 5:
-        time.sleep(4)
-        doc_count = es.count(index=namespaced_aggregate).get('count')
-        tries += 1
-    assert doc_count == 1
-    es_agg_res = es.get(index=namespaced_aggregate, id=agg_res_uuid)
-    assert 'aggregated_items' in es_agg_res['_source']
-    es_agg_items = es_agg_res['_source']['aggregated_items']
-    assert 'targets' in es_agg_items
-    assert len(es_agg_items['targets']) == 2
-    for idx, target_agg in enumerate(es_agg_items['targets']):
-        # order of targets should be maintained
-        assert target_agg['parent'] == agg_res.json['@graph'][0]['@id']
-        assert target_agg['embedded_path'] == 'targets'
-        if idx == 0:
-            assert target_agg['item']['test_description'] == 'target one'
-            assert target_agg['item']['target']['uuid'] == target1['uuid']
-        else:
-            assert target_agg['item']['test_description'] == 'target two'
-            assert target_agg['item']['target']['uuid'] == target2['uuid']
-    # now make sure they get updated on a patch
-    # use duplicate items, which should be deduplicated if all aggregated
-    # content (including parent) is exactly the same
-    testapp.patch_json(
-        '/testing-link-aggregates-sno/' + aggregated['uuid'],
-        {'targets': [
-            {'test_description': 'target one revised',
-             'target': '775795d3-4410-4114-836b-8eeecf1d0c2f'},
-            {'test_description': 'target one revised',
-             'target': '775795d3-4410-4114-836b-8eeecf1d0c2f'},
-            {'test_description': 'target one revised2',
-             'target': '775795d3-4410-4114-836b-8eeecf1d0c2f'}
-        ]}
-    )
-    indexer_testapp.post_json('/index', {'record': True})
-    time.sleep(10)  # be lazy and just wait a bit
-    es_agg_res = es.get(index=namespaced_aggregate, id=agg_res_uuid)
-    assert 'aggregated_items' in es_agg_res['_source']
-    es_agg_items = es_agg_res['_source']['aggregated_items']
-    assert 'targets' in es_agg_items
-    assert len(es_agg_items['targets']) == 2
-    assert es_agg_items['targets'][0]['item']['test_description'] == 'target one revised'
-    assert es_agg_items['targets'][1]['item']['test_description'] == 'target one revised2'
-    # check that the aggregated-items view now works
-    post_agg_view = testapp.get(agg_res_atid + '@@aggregated-items', status=200).json
-    assert post_agg_view['@id'] == agg_res_atid
-    assert post_agg_view['aggregated_items'] == es_agg_res['_source']['aggregated_items']
-    # clean up the test items
-    testapp.patch_json('/testing-link-aggregates-sno/' + aggregated['uuid'],
-                       {'targets': []})
-    indexer_testapp.post_json('/index', {'record': True})
+
+    try:
+
+        create_mapping.run(
+            app,
+            collections=['testing_link_target_sno', 'testing_link_aggregate_sno'],
+            skip_indexing=True
+        )
+
+        time.sleep(2)
+        # you can do stuff like this and it will take effect
+        # app.registry['types']['testing_link_aggregate_sno'].aggregated_items['targets'] = (
+        #    ['target.name', 'test_description'])
+
+        testapp.post_json('/testing-link-targets-sno/', target1, status=201)
+        testapp.post_json('/testing-link-targets-sno/', target2, status=201)
+        agg_res = testapp.post_json('/testing-link-aggregates-sno/', aggregated, status=201)
+        agg_res_atid = agg_res.json['@graph'][0]['@id']
+
+        # ensure that aggregated-items view shows nothing before indexing
+        pre_agg_view = testapp.get(agg_res_atid + '@@aggregated-items', status=200).json
+        assert pre_agg_view['@id'] == agg_res_atid
+        assert pre_agg_view['aggregated_items'] == {}
+
+        index_n_items_for_testing(indexer_testapp, 3)
+        # wait for the items to index
+        # indexer_testapp.post_json('/index', {'record': True})
+        time.sleep(2)
+
+        # wait for test-link-aggregated item to index
+        # doc_count = es.count(index=namespaced_aggregate).get('count')
+        # tries = 0
+        # while doc_count < 1 and tries < 5:
+        #     time.sleep(4)
+        #     doc_count = es.count(index=namespaced_aggregate).get('count')
+        #     tries += 1
+        # assert doc_count == 1
+        Eventually.call_assertion(make_es_count_checker(1, es=es, namespaced_index=namespaced_aggregate),
+                                  wait_seconds=4)
+
+        @Eventually.consistent()
+        def check_links():
+            es_agg_res = es.get(index=namespaced_aggregate, id=agg_res_uuid)
+            assert 'aggregated_items' in es_agg_res['_source']
+            es_agg_items = es_agg_res['_source']['aggregated_items']
+            assert 'targets' in es_agg_items
+            assert len(es_agg_items['targets']) == 2
+            for idx, target_agg in enumerate(es_agg_items['targets']):
+                # order of targets should be maintained
+                assert target_agg['parent'] == agg_res.json['@graph'][0]['@id']
+                assert target_agg['embedded_path'] == 'targets'
+                if idx == 0:
+                    assert target_agg['item']['test_description'] == 'target one'
+                    assert target_agg['item']['target']['uuid'] == target1['uuid']
+                else:
+                    assert target_agg['item']['test_description'] == 'target two'
+                    assert target_agg['item']['target']['uuid'] == target2['uuid']
+
+        check_links()
+
+        # now make sure they get updated on a patch
+        # use duplicate items, which should be deduplicated if all aggregated
+        # content (including parent) is exactly the same
+        testapp.patch_json(
+            '/testing-link-aggregates-sno/' + aggregated['uuid'],
+            {'targets': [
+                {'test_description': 'target one revised',
+                 'target': target_uuid1},
+                {'test_description': 'target one revised',
+                 'target': target_uuid1},
+                {'test_description': 'target one revised2',
+                 'target': target_uuid1}
+            ]}
+        )
+
+        index_n_items_for_testing(indexer_testapp, 1)
+
+        # indexer_testapp.post_json('/index', {'record': True})
+        # time.sleep(10)  # be lazy and just wait a bit
+
+        @Eventually.consistent()
+        def check_updated_links():
+            es_agg_res = es.get(index=namespaced_aggregate, id=agg_res_uuid)
+            assert 'aggregated_items' in es_agg_res['_source']
+            es_agg_items = es_agg_res['_source']['aggregated_items']
+            assert 'targets' in es_agg_items
+            assert len(es_agg_items['targets']) == 2
+            assert es_agg_items['targets'][0]['item']['test_description'] == 'target one revised'
+            assert es_agg_items['targets'][1]['item']['test_description'] == 'target one revised2'
+            # check that the aggregated-items view now works
+            post_agg_view = testapp.get(agg_res_atid + '@@aggregated-items', status=200).json
+            assert post_agg_view['@id'] == agg_res_atid
+            assert post_agg_view['aggregated_items'] == es_agg_res['_source']['aggregated_items']
+
+        check_updated_links()
+
+    finally:
+
+        # clean up the test items
+        testapp.patch_json('/testing-link-aggregates-sno/' + aggregated['uuid'],
+                           {'targets': []})
+        # indexer_testapp.post_json('/index', {'record': True})
+        index_n_items_for_testing(indexer_testapp, 1)
+        time.sleep(2)  # allow some settling out
 
 
 @pytest.mark.flaky(max_runs=2, rerun_filter=delay_rerun)
