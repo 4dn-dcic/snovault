@@ -7,7 +7,6 @@ Does not include data dependent tests
 
 import json
 import os
-import platform
 import pytest
 import time
 import transaction as transaction_management
@@ -40,7 +39,7 @@ from ..elasticsearch.create_mapping import (
     run,
     type_mapping
 )
-from ..elasticsearch.indexer import check_sid, SidException, Indexer
+from ..elasticsearch.indexer import check_sid, SidException
 from ..elasticsearch.indexer_queue import QueueManager
 from ..elasticsearch.indexer_utils import compute_invalidation_scope
 from ..elasticsearch.interfaces import ELASTIC_SEARCH, INDEXER_QUEUE, INDEXER_QUEUE_MIRROR
@@ -56,12 +55,6 @@ notice_pytest_fixtures(TestingLinkSourceSno)
 
 
 pytestmark = [pytest.mark.indexing]
-
-
-def is_running_locally():
-    # MacOS would return 'Darwin', which is what our developers use.
-    # AWS would return 'Linux'
-    return platform.system() != 'Linux'
 
 
 def delay_rerun(*args):
@@ -147,13 +140,6 @@ def setup_and_teardown(app):
     create_mapping.run(app, collections=[TEST_TYPE], skip_indexing=True, purge_queue=True)
 
     yield  # run the test
-
-    try:
-        transaction_management.abort()
-    except Exception:
-        pass
-
-    transaction_management.begin()
 
     # AFTER THE TEST
     session = app.registry[DBSESSION]
@@ -703,78 +689,23 @@ def test_indexing_queue_records(app, testapp, indexer_testapp):
     assert indexing_record.get('_source') == indexing_doc_source
 
 
-# @pytest.mark.flaky
-# def test_sync_and_queue_indexing(app, testapp, indexer_testapp):
-#     es = app.registry[ELASTIC_SEARCH]
-#     # queued on post - total of one item queued
-#     result = testapp.post_json(TEST_COLL, {'required': ''}).json
-#     test_uuid = result['@graph'][0]['uuid']
-#     storage = app.registry[STORAGE]
-#     def wait_for_it():
-#         storage.write.get_by_uuid(test_uuid)
-#     Eventually.call_assertion(wait_for_it)
-#     # synchronously index
-#     create_mapping.run(app, collections=[TEST_TYPE], sync_index=True)
-#     # time.sleep(6)
-#     namespaced_index = indexer_utils.get_namespaced_index(app, TEST_TYPE)
-#     doc_count = tries = 0
-#     while tries < 6:
-#         doc_count = es.count(index=namespaced_index).get('count')
-#         if doc_count != 0:
-#             break
-#         time.sleep(1)
-#         tries += 1
-#     assert doc_count == 1
-#     # post second item to database but do not index (don't load into es)
-#     # queued on post - total of two items queued
-#     testapp.post_json(TEST_COLL, {'required': ''})
-#     # time.sleep(2)
-#     doc_count = es.count(index=namespaced_index).get('count')
-#     # doc_count has not yet updated
-#     assert doc_count == 1
-#     # clear the queue by indexing and then run create mapping to queue the all items
-#     res = indexer_testapp.post_json('/index', {'record': True})
-#     assert res.json['indexing_count'] == 2
-#     create_mapping.run(app, collections=[TEST_TYPE])
-#     res = indexer_testapp.post_json('/index', {'record': True})
-#     assert res.json['indexing_count'] == 2
-#     time.sleep(4)
-#     doc_count = es.count(index=namespaced_index).get('count')
-#     assert doc_count == 2
-
-# @pytest.mark.flaky
-@pytest.mark.skip("problematic test of unused functionality")
-def test_sync_and_queue_indexing2(app, testapp, indexer_testapp):
-    namespaced_index = indexer_utils.get_namespaced_index(app, TEST_TYPE)
+@pytest.mark.flaky
+def test_sync_and_queue_indexing(app, testapp, indexer_testapp):
     es = app.registry[ELASTIC_SEARCH]
     # queued on post - total of one item queued
-    assure_es_is_empty = make_es_count_checker(0, es=es, namespaced_index=namespaced_index)
-    assure_es_is_empty()
-    result = testapp.post_json(TEST_COLL, {'required': ''}).json
-    test_uuid = result['@graph'][0]['uuid']
-    storage = app.registry[STORAGE]
-    def wait_for_it():
-        assert storage.write.get_by_uuid(test_uuid)
-    Eventually.call_assertion(wait_for_it)
+    testapp.post_json(TEST_COLL, {'required': ''})
     # synchronously index
     create_mapping.run(app, collections=[TEST_TYPE], sync_index=True)
-    Eventually.call_assertion(wait_for_it)
     # time.sleep(6)
-    try:
-        Eventually.call_assertion(make_es_count_checker(1, es=es, namespaced_index=namespaced_index))
-    except Exception as e:
-        # import pdb; pdb.set_trace()
-        # print(e)
-        raise
-    # doc_count = tries = 0
-    # while tries < 6:
-    #     doc_count = es.count(index=namespaced_index).get('count')
-    #     if doc_count != 0:
-    #         break
-    #     time.sleep(1)
-    #     tries += 1
-    # assert doc_count == 1
-
+    namespaced_index = indexer_utils.get_namespaced_index(app, TEST_TYPE)
+    doc_count = tries = 0
+    while tries < 6:
+        doc_count = es.count(index=namespaced_index).get('count')
+        if doc_count != 0:
+            break
+        time.sleep(1)
+        tries += 1
+    assert doc_count == 1
     # post second item to database but do not index (don't load into es)
     # queued on post - total of two items queued
     testapp.post_json(TEST_COLL, {'required': ''})
@@ -782,27 +713,18 @@ def test_sync_and_queue_indexing2(app, testapp, indexer_testapp):
     doc_count = es.count(index=namespaced_index).get('count')
     # doc_count has not yet updated
     assert doc_count == 1
-
     # clear the queue by indexing and then run create mapping to queue the all items
-
-    index_n_items_for_testing(indexer_testapp, 2)
-    # res = indexer_testapp.post_json('/index', {'record': True})
-    # assert res.json['indexing_count'] == 2
-
+    res = indexer_testapp.post_json('/index', {'record': True})
+    assert res.json['indexing_count'] == 2
     create_mapping.run(app, collections=[TEST_TYPE])
-
-    index_n_items_for_testing(indexer_testapp, 2)
-    # res = indexer_testapp.post_json('/index', {'record': True})
-    # assert res.json['indexing_count'] == 2
-
-    Eventually.call_assertion(make_es_count_checker(2, es=es, namespaced_index=namespaced_index))
-    # time.sleep(4)
-    # doc_count = es.count(index=namespaced_index).get('count')
-    # assert doc_count == 2
+    res = indexer_testapp.post_json('/index', {'record': True})
+    assert res.json['indexing_count'] == 2
+    time.sleep(4)
+    doc_count = es.count(index=namespaced_index).get('count')
+    assert doc_count == 2
 
 
-# @pytest.mark.flaky
-@pytest.mark.skip(reason="faulty test needs work")
+@pytest.mark.flaky
 def test_queue_indexing_with_linked(app, testapp, indexer_testapp, dummy_request):
     """
     Test a whole bunch of things here:
@@ -819,7 +741,6 @@ def test_queue_indexing_with_linked(app, testapp, indexer_testapp, dummy_request
         collections=[TEST_TYPE, 'testing_link_target_sno', 'testing_link_source_sno'],
         skip_indexing=True
     )
-    time.sleep(2)
     ppp_res = testapp.post_json(TEST_COLL, {'required': ''})
     ppp_uuid = ppp_res.json['@graph'][0]['uuid']
     target = {'name': 'one', 'uuid': '775795d3-4410-4114-836b-8eeecf1d0c2f'}
@@ -831,67 +752,45 @@ def test_queue_indexing_with_linked(app, testapp, indexer_testapp, dummy_request
         'status': 'current',
     }
     target_res = testapp.post_json('/testing-link-targets-sno/', target, status=201)
-
-    index_n_items_for_testing(indexer_testapp, 2)
-    # indexer_testapp.post_json('/index', {'record': True})
-    # time.sleep(2)
-
+    indexer_testapp.post_json('/index', {'record': True})
+    time.sleep(2)
     # wait for the first item to index
     namespaced_link_target = indexer_utils.get_namespaced_index(app, 'testing_link_target_sno')
     namespaced_link_source = indexer_utils.get_namespaced_index(app, 'testing_link_source_sno')
     namespaced_test_type = indexer_utils.get_namespaced_index(app, TEST_TYPE)
-    # doc_count_target = es.count(index=namespaced_link_target).get('count')
-    # doc_count_ppp = es.count(index=namespaced_test_type).get('count')
-
-    @Eventually.consistent()
-    def await_link_and_target():
-        assert es.count(index=namespaced_link_target).get('count') == 1
-        assert es.count(index=namespaced_test_type).get('count') == 1
-
-    await_link_and_target()
-
-    # tries = 0
-    # while (doc_count_target < 1 or doc_count_ppp < 1) and tries < 5:
-    #     time.sleep(4)
-    #     doc_count_target = es.count(index=namespaced_link_target).get('count')
-    #     doc_count_ppp = es.count(index=namespaced_test_type).get('count')
-    #     tries += 1
-    # assert doc_count_target == 1
-    # assert doc_count_ppp == 1
-
+    doc_count_target = es.count(index=namespaced_link_target).get('count')
+    doc_count_ppp = es.count(index=namespaced_test_type).get('count')
+    tries = 0
+    while (doc_count_target < 1 or doc_count_ppp < 1) and tries < 5:
+        time.sleep(4)
+        doc_count_target = es.count(index=namespaced_link_target).get('count')
+        doc_count_ppp = es.count(index=namespaced_test_type).get('count')
+        tries += 1
+    assert doc_count_target == 1
+    assert doc_count_ppp == 1
     # indexing the source will also reindex the target and ppp, due to rev links
     source_res = testapp.post_json('/testing-link-sources-sno/', source, status=201)
     source_uuid = source_res.json['@graph'][0]['uuid']
-
-    # time.sleep(2)
-    # res = indexer_testapp.post_json('/index', {'record': True})
-    # assert res.json['indexing_count'] == 2
-    # time.sleep(2)
-    index_n_items_for_testing(indexer_testapp, 2, max_tries=15, wait_seconds=1, initial_wait_seconds=5)
-
-    # namespaced_source_index = indexer_utils.get_namespaced_index(app, 'testing-link-sources-sno')
-
-    Eventually.call_assertion(make_es_count_checker(1, es=es, namespaced_index=namespaced_link_source))
-    # # wait for them to index
-    # doc_count = es.count(index=namespaced_link_source).get('count')
-    # tries = 0
-    # while doc_count < 1 and tries < 5:
-    #     time.sleep(4)
-    #     doc_count = es.count(index=namespaced_link_source).get('count')
-    # assert doc_count == 1
-
+    time.sleep(2)
+    res = indexer_testapp.post_json('/index', {'record': True})
+    assert res.json['indexing_count'] == 2
+    time.sleep(2)
+    # wait for them to index
+    doc_count = es.count(index=namespaced_link_source).get('count')
+    tries = 0
+    while doc_count < 1 and tries < 5:
+        time.sleep(4)
+        doc_count = es.count(index=namespaced_link_source).get('count')
+    assert doc_count == 1
     # patching json will not queue the embedded ppp
     # the target will be indexed though, since it has a *rev-link* back to the source
     patch_source_name = 'ABC'
     testapp.patch_json('/testing-link-sources-sno/' + source_uuid, {'name': patch_source_name})
+    time.sleep(2)
+    res = indexer_testapp.post_json('/index', {'record': True})
+    assert res.json['indexing_count'] == 2
 
-    index_n_items_for_testing(indexer_testapp, 2)
-
-    # time.sleep(2)
-    # res = indexer_testapp.post_json('/index', {'record': True})
-    # assert res.json['indexing_count'] == 2
-    # time.sleep(3)
-
+    time.sleep(3)
     # check some stuff on the es results for source and target
     es_source = es.get(index=namespaced_link_source, id=source['uuid'])
     uuids_linked_emb = [link['uuid'] for link in es_source['_source']['linked_uuids_embedded']]
@@ -1272,7 +1171,6 @@ def test_check_and_reindex_existing(app, testapp):
     assert len(test_uuids) == 1
 
 
-@pytest.mark.skipif(condition=is_running_locally(), reason="this test is skipped for local testing")
 @pytest.mark.flaky
 def _test_es_purge_uuid2(app, testapp, indexer_testapp, session):
     indexer_queue = app.registry[INDEXER_QUEUE]
@@ -1282,7 +1180,7 @@ def _test_es_purge_uuid2(app, testapp, indexer_testapp, session):
 
     test_body = {'required': '', 'simple1': 'foo', 'simple2': 'bar'}
     result = testapp.post_json(TEST_COLL, test_body).json
-    print(json.dumps(result, indent=2))
+    #  print(json.dumps(result, indent=2))
 
     test_uuid = result['@graph'][0]['uuid']
     print(f"test_uuid={test_uuid}")
@@ -1295,7 +1193,7 @@ def _test_es_purge_uuid2(app, testapp, indexer_testapp, session):
     # TODO: Maybe instead do this? -kmp 10-Mar-2023
     # index_n_items_for_testing(indexer_testapp, 1, initial_wait_seconds=2)
 
-    create_mapping.run(app, collections=[TEST_TYPE], sync_index=True, strict=True)
+    create_mapping.run(app, collections=[TEST_TYPE], sync_index=True)
     indexer_queue.clear_queue()
     time.sleep(4)
 
