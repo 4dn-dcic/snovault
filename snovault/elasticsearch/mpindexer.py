@@ -34,6 +34,7 @@ def includeme(config):
 # ===== Running in subprocess =====
 
 app = None
+db_engine = None
 
 
 def initializer(app_factory, settings):
@@ -44,12 +45,11 @@ def initializer(app_factory, settings):
     signal.signal(signal.SIGINT, signal.SIG_IGN)
 
     # set up global variables to use throughout subprocess
-    global db_engine
-    db_engine = None
     atexit.register(clear_manager_and_dispose_engine)
 
     global app
     app = app_factory(settings, indexer_worker=True, create_tables=False)
+    global db_engine
     db_engine = configure_engine(settings)
 
     # Use `es_server=app.registry.settings.get('elasticsearch.server')` when ES logging is working
@@ -64,7 +64,6 @@ def threadlocal_manager():
     Set registry and request attributes using the global app within the
     subprocess
     """
-    global db_engine
 
     # clear threadlocal manager to get a clean stack
     manager.clear()
@@ -95,7 +94,6 @@ def threadlocal_manager():
 
 
 def clear_manager_and_dispose_engine(signum=None, frame=None):
-    global db_engine
     ignored(signum, frame)
     manager.clear()
     # manually dispose of db engine for garbage collection
