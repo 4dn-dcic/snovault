@@ -25,7 +25,7 @@ jobs:
     # Build matrix
     strategy:
       matrix:
-        test_type: ['UNIT', 'NPM']
+        test_type: ['UNIT', 'INDEXING']
 
     # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
@@ -47,7 +47,7 @@ jobs:
 
       - name: Install Deps
         run: |
-          make build
+          make build-for-ga
 
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v1
@@ -56,16 +56,16 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: us-east-1
 
-      - name: QA (NPM)
-        if: ${{ matrix.test_type == 'NPM' }}
+      - name: QA (INDEXING)
+        if: ${{ matrix.test_type == 'INDEXING' }}
         env:
           S3_ENCRYPT_KEY: ${{ secrets.S3_ENCRYPT_KEY }}
           # # The need for this old environment variable name will go away soon.
           # TRAVIS_JOB_ID: sno-x-test-${{ github.run_number }}-
           # This will be the new environment variable name.
-          TEST_JOB_ID: sno-test-npm-${{ github.run_number }}-${{ matrix.python_version }}-
+          TEST_JOB_ID: sno-test-indexing-${{ github.run_number }}-${{ matrix.python_version }}-
         run: |
-          make remote-test-npm
+          make remote-test-indexing
 
       - name: QA (UNIT)
         if: ${{ matrix.test_type == 'UNIT' }}
@@ -78,14 +78,14 @@ jobs:
         run: |
           make remote-test-unit
 
-      - name: Cleanup (NPM)
-        if: ${{ always() && matrix.test_type == 'NPM' }}
+      - name: Cleanup (INDEXING)
+        if: ${{ always() && matrix.test_type == 'INDEXING' }}
         env:
           S3_ENCRYPT_KEY: ${{ secrets.S3_ENCRYPT_KEY }}
           # The need for this old environment variable name will go away soon.
           # TRAVIS_JOB_ID: sno-x-test-${{ github.run_number }}-
           # This will be the new environment variable name.
-          TEST_JOB_ID: sno-test-npm-${{ github.run_number }}-${{ matrix.python_version }}-
+          TEST_JOB_ID: sno-test-indexing-${{ github.run_number }}-${{ matrix.python_version }}-
         run: |
           poetry run wipe-test-indices $TEST_JOB_ID search-fourfront-testing-opensearch-kqm7pliix4wgiu4druk2indorq.us-east-1.es.amazonaws.com:443
 

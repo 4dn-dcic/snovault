@@ -1,6 +1,7 @@
 import logging
 import pytest
 import sqlalchemy
+import sqlalchemy.orm
 import transaction as transaction_management
 import webtest
 import webtest.http
@@ -121,7 +122,7 @@ def elasticsearch_server(elasticsearch_server_dir, elasticsearch_host_port, remo
 # requests can be rolled back at the end of the test.
 
 @pytest.yield_fixture(scope='session')
-def conn(engine_url):
+def engine(engine_url):
     if NO_SERVER_FIXTURES:
         yield 'NO_SERVER_FIXTURES'
         return
@@ -135,6 +136,16 @@ def conn(engine_url):
     }
 
     engine = configure_engine(engine_settings)
+    yield engine
+
+
+@pytest.yield_fixture(scope='session')
+def conn(engine):
+    if NO_SERVER_FIXTURES:
+        yield 'NO_SERVER_FIXTURES'
+        return
+
+    notice_pytest_fixtures(engine)
     conn = engine.connect()
     tx = conn.begin()
     try:
