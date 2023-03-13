@@ -145,6 +145,11 @@ def auth0_config(config):
         for config_key, result_key in auth0_config_values.items():
             if config_key in settings:
                 response_dict[result_key] = settings[config_key]
+
+        # If Redis enabled, set the callback value in Auth0Config
+        if 'redis.server' in request.registry.settings:
+            callback = f'{request.scheme}://{request.domain}/callback'
+            response_dict['callback'] = callback
         return response_dict
 
     config.add_view(auth0_config_view, route_name='auth0-config')
