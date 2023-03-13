@@ -13,10 +13,6 @@ Change Log
 
   * Add ``POSTGRES_COMPATIBLE_MAJOR_VERSIONS`` (moved from ``snovault/tests/test_storage.py``)
 
-* In ``snovault/app.py``:
-
-  * Bump pool size from 5 to 10 (disabled).
-
 * In ``snovault/elasticsearch/create_mapping.py``:
 
   * Per Will's direction, replace a call to ``run_index_data`` with a ``vapp`` creation and
