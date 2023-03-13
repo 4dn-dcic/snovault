@@ -15,7 +15,7 @@ import structlog
 import time
 
 from collections import OrderedDict
-from dcicutils.misc_utils import ignored, VirtualApp
+from dcicutils.misc_utils import ignored  # , VirtualApp
 from elasticsearch.exceptions import (
     TransportError,
     RequestError,
