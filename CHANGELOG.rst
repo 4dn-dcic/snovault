@@ -10,6 +10,10 @@ Change Log
 7.3.0
 =====
 
+* In ``Makefile``:
+
+  * Make sure ``make test`` and ``make test-full`` also run ``make test-static``.
+
 * In ``snovault/storage.py``:
 
   * Add ``POSTGRES_COMPATIBLE_MAJOR_VERSIONS`` (moved from ``snovault/tests/test_storage.py``)
