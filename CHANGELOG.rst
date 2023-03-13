@@ -6,6 +6,7 @@ snovault
 Change Log
 ----------
 
+
 7.3.0
 =====
 
@@ -22,9 +23,14 @@ Change Log
 
   * Very minor syntactic refactor to make a use of ``global`` more clear.
 
-* In ``snovault/tests/``
+* In ``snovault/tools.py``:
 
-  * Various test optimizations for robustness.
+  * Reimplement ``index_n_items_for_testing`` for better clarity and to fix a potential bug.
+
+* In ``snovault/tests/test_indexing.py``
+
+  * Various test optimizations using better synchronization for robustness.
+
 
 7.2.1
 =====
