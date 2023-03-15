@@ -8,7 +8,7 @@ log = structlog.getLogger(__name__)
 
 def includeme(config):
     registry = config.registry
-    registry[REDIS] = create_redis_client(url=registry.settings['redis.server'])
+    registry[REDIS] = RedisBase(create_redis_client(url=registry.settings['redis.server']))
 
 
 class RedisModel(object):
