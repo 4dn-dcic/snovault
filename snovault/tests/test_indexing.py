@@ -45,7 +45,7 @@ from ..elasticsearch.indexer_utils import compute_invalidation_scope
 from ..elasticsearch.interfaces import ELASTIC_SEARCH, INDEXER_QUEUE, INDEXER_QUEUE_MIRROR
 from ..interfaces import DBSESSION, STORAGE, COLLECTIONS, TYPES
 from ..storage import Base
-from ..tools import index_n_items_for_testing
+from ..tools import index_n_items_for_testing, delay_rerun, make_es_count_checker
 from ..util import INDEXER_NAMESPACE_FOR_TESTING
 
 from .testing_views import TestingLinkSourceSno
@@ -55,21 +55,6 @@ notice_pytest_fixtures(TestingLinkSourceSno)
 
 
 pytestmark = [pytest.mark.indexing]
-
-
-def delay_rerun(*args):
-    """ Rerun function for flaky """
-    ignored(args)
-    time.sleep(10)
-    return True
-
-
-def make_es_count_checker(n, *, es, namespaced_index):
-    def es_count_checker():
-        indexed_count = es.count(index=namespaced_index).get('count')
-        assert indexed_count == n
-        return n
-    return es_count_checker
 
 
 TEST_COLL = '/testing-post-put-patch-sno/'
