@@ -7,6 +7,35 @@ Change Log
 ----------
 
 
+7.3.0
+=====
+
+* In ``Makefile``:
+
+  * Make sure ``make test`` and ``make test-full`` also run ``make test-static``.
+
+* In ``snovault/storage.py``:
+
+  * Add ``POSTGRES_COMPATIBLE_MAJOR_VERSIONS`` (moved from ``snovault/tests/test_storage.py``)
+
+* In ``snovault/elasticsearch/create_mapping.py``:
+
+  * Per Will's direction, replace a call to ``run_index_data`` with a ``vapp`` creation and
+    a call to an index post with given uuids.
+
+* In ``snovault/elasticsearch/mpindexer.py``:
+
+  * Very minor syntactic refactor to make a use of ``global`` more clear.
+
+* In ``snovault/tools.py``:
+
+  * Reimplement ``index_n_items_for_testing`` for better clarity and to fix a potential bug.
+
+* In ``snovault/tests/test_indexing.py``
+
+  * Various test optimizations using better synchronization for robustness.
+
+
 7.2.1
 =====
 

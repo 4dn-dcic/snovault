@@ -15,7 +15,7 @@ import structlog
 import time
 
 from collections import OrderedDict
-from dcicutils.misc_utils import ignored
+from dcicutils.misc_utils import ignored  # , VirtualApp
 from elasticsearch.exceptions import (
     TransportError,
     RequestError,
@@ -30,8 +30,9 @@ from timeit import default_timer as timer
 from ..interfaces import COLLECTIONS, TYPES
 from dcicutils.log_utils import set_logging
 from dcicutils.misc_utils import as_seconds
-from ..commands.es_index_data import run as run_index_data
+# from ..commands.es_index_data import run as run_index_data
 from ..schema_utils import combine_schemas
+from ..tools import make_indexer_testapp
 from ..util import (
     add_default_embeds, IndexSettings,
     NUM_SHARDS, NUM_REPLICAS, SEARCH_MAX, KW_IGNORE_ABOVE, MIN_NGRAM,
@@ -1169,14 +1170,15 @@ def flatten_and_sort_uuids(registry, uuids_to_index, item_order):
         to_index_list.extend(uuids_to_index[itype])
     return to_index_list
 
-
-def run_indexing(app, indexing_uuids):
-    """
-    indexing_uuids is a set of uuids that should be reindexed. If global args
-    are available, then this will spawn a new process to run indexing with.
-    Otherwise, run with the current INDEXER
-    """
-    run_index_data(app, uuids=indexing_uuids)
+# Will thinks this is no longer needed. -kmp 11-Mar-2023
+#
+# def run_indexing(app, indexing_uuids):
+#     """
+#     indexing_uuids is a set of uuids that should be reindexed. If global args
+#     are available, then this will spawn a new process to run indexing with.
+#     Otherwise, run with the current INDEXER
+#     """
+#     run_index_data(app, uuids=indexing_uuids)
 
 
 def run(app, collections=None, dry_run=False, check_first=False, skip_indexing=False,
@@ -1337,9 +1339,14 @@ def run(app, collections=None, dry_run=False, check_first=False, skip_indexing=F
                 log.error('___SYNC INDEXING WITH STRICT=FALSE MAY CAUSE REV_LINK INCONSISTENCY___')
             # sort by-type uuids into one list and index synchronously
             to_index_list = flatten_and_sort_uuids(app.registry, uuids_to_index, item_order)
-            log.info('\n___UUIDS TO INDEX (SYNC)___: %s\n' % len(to_index_list),
+            log.info(f'\n___UUIDS TO INDEX (SYNC)___: {to_index_list}\n',
                      cat='uuids to index', count=len(to_index_list))
-            run_indexing(app, to_index_list)
+
+            # Will suggested this substitute way to implement this indexing action. -kmp 11-Mar-2023
+            vapp = make_indexer_testapp(app)
+            vapp.post_json('/index', {'record': True, 'uuids': to_index_list})
+            # run_indexing(app, to_index_list)
+
         else:
             # if non-strict and attempting to reindex a ton, it is faster
             # just to strictly reindex all items
