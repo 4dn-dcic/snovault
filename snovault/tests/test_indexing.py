@@ -866,6 +866,8 @@ def test_queue_indexing_with_linked(app, testapp, indexer_testapp, dummy_request
 
     @Eventually.consistent()
     def await_not_found():
+        # TODO: Will asks "Should a version of this be available generally?" -kmp 29-Mar-2023
+
         # make sure everything has updated on ES
         check_es_source = es.get(index=namespaced_link_source, id=source['uuid'], ignore=[404])
         assert check_es_source['found'] is False
@@ -1157,7 +1159,7 @@ def test_check_and_reindex_existing(app, testapp):
 
 
 @pytest.mark.flaky
-def _test_es_purge_uuid2(app, testapp, indexer_testapp, session):
+def test_es_purge_uuid(app, testapp, indexer_testapp, session):
     indexer_queue = app.registry[INDEXER_QUEUE]
     es = app.registry[ELASTIC_SEARCH]
     # == Adding new test resource to DB ==
@@ -1579,6 +1581,9 @@ def test_aggregated_items(app, testapp, indexer_testapp):
         check_updated_links()
 
     finally:
+
+        # TODO: Will thinks this is not needed and that setup_and_teardown's call to create_mapping is
+        #       enough to assure this will ultimately be reset. I'll leave that to debug another day. -kmp 29-Mar-2023
 
         # clean up the test items
         testapp.patch_json('/testing-link-aggregates-sno/' + aggregated['uuid'],
