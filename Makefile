@@ -108,7 +108,7 @@ test-static:
 remote-test:  # Actually, we don't normally use this. Instead the GA workflow sets up two parallel tests.
 	make remote-test-indexing && make remote-test-unit
 
-remote-test_unit:
+remote-test-unit:
 	make remote-test-indexing-not-es
 
 remote-test-not-indexing:
