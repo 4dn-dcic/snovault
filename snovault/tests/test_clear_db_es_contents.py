@@ -1,7 +1,6 @@
 import contextlib
 import pytest
 
-from dcicutils.env_utils import EnvUtils
 from dcicutils.lang_utils import disjoined_list
 from dcicutils.qa_utils import logged_messages, input_mocked
 from unittest import mock
@@ -18,7 +17,7 @@ pytestmark = [pytest.mark.setone, pytest.mark.working, pytest.mark.indexing]
 
 def test_clear_db_tables(app, testapp):
     # post an item and make sure it's there
-    post_res = testapp.post_json('/testing-post-put-patch/', {'required': 'abc'},
+    post_res = testapp.post_json('/testing-post-put-patch-sno/', {'required': 'abc'},
                                  status=201)
     testapp.get(post_res.location, status=200)
     clear_res = clear_db_tables(app)
@@ -33,11 +32,11 @@ _FOURFRONT_PRODUCTION_ENVS = ['fourfront-production-blue', 'fourfront-production
 # skipping any such names. -kmp 4-Jun-2022
 _CGAP_PRODUCTION_ENVS = ['fourfront-cgap', 'fourfront-cgap-green', 'cgap-green', 'fourfront-cgap-blue', 'cgap-blue']
 
-_PRODUCTION_ENVS = EnvUtils.app_case(if_fourfront=_FOURFRONT_PRODUCTION_ENVS, if_cgap=_CGAP_PRODUCTION_ENVS)
+_PRODUCTION_ENVS = [_FOURFRONT_PRODUCTION_ENVS] + [_CGAP_PRODUCTION_ENVS]
 
-TEST_ENV = EnvUtils.app_case(if_fourfront='fourfront-mastertest', if_cgap='cgap-devtest')
+TEST_ENV = 'cgap-devtest'
 
-OTHER_ENV = EnvUtils.app_case(if_fourfront='fourfront-foo', if_cgap='cgap-foo')
+OTHER_ENV = 'fourfront-foo'
 
 DECOY_ENV_1 = TEST_ENV + '-decoy-1'
 DECOY_ENV_2 = TEST_ENV + '-decoy-2'

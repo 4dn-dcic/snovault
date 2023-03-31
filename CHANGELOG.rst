@@ -6,6 +6,12 @@ snovault
 Change Log
 ----------
 
+7.4.0
+=====
+
+* Add several modules/commands from upstream portals that are generic enough to live in
+  this repository (to reduce code/library maintenace overhead)
+
 
 7.3.0
 =====
@@ -75,9 +81,9 @@ Change Log
   * Include ``pipdeptree`` as a dev dependency for debugging.
 
   * Remove "backports.statistics", needed for Python 3.3 support and earlier.
-  
+
   * Bump python_magic foothold (no effective change, just faster locking)
-  
+
   * Update some comments.
 
 * In ``snovault/updater.py``:
