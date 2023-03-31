@@ -77,8 +77,8 @@ test-unit-full:
 	SQLALCHEMY_WARN_20=1 poetry run pytest ${LOCAL_MULTIFAIL_OPTIONS} -m "not indexing"
 
 test-indexing-full:
-	make test-indexing-es-full
 	make test-indexing-not-es-full
+	make test-indexing-es-full
 
 test-indexing-es-full:
 	SQLALCHEMY_WARN_20=1 poetry run pytest ${LOCAL_MULTIFAIL_OPTIONS} -m "indexing and es"
@@ -87,7 +87,7 @@ test-indexing-not-es-full:
 	SQLALCHEMY_WARN_20=1 poetry run pytest ${LOCAL_MULTIFAIL_OPTIONS} -m "indexing and not es"
 
 test-indexing:
-	make test-indexing-es && make test-indexing-not-es
+	make test-indexing-not-es && make test-indexing-es
 
 test-indexing-es:
 	SQLALCHEMY_WARN_20=1 poetry run pytest ${LOCAL_INSTAFAIL_OPTIONS} -m "indexing and es"
@@ -109,13 +109,13 @@ remote-test:  # Actually, we don't normally use this. Instead the GA workflow se
 	make remote-test-indexing && make remote-test-unit
 
 remote-test-unit:
-	make remote-test-indexing-not-es
+	make remote-test-not-indexing
 
 remote-test-not-indexing:
 	SQLALCHEMY_WARN_20=1 poetry run pytest ${GA_CICD_TESTING_OPTIONS} -m "not indexing"
 
 remote-test-indexing:
-	make remote-test-indexing-es && make remote-test-not-indexing
+	 make remote-test-indexing-not-es && make remote-test-indexing-es
 
 remote-test-indexing-es:
 	SQLALCHEMY_WARN_20=1 poetry run pytest ${GA_CICD_TESTING_OPTIONS} -m "indexing and es"
