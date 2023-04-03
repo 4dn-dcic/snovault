@@ -54,7 +54,7 @@ from .testing_views import TestingLinkSourceSno
 notice_pytest_fixtures(TestingLinkSourceSno)
 
 
-pytestmark = [pytest.mark.indexing]
+pytestmark = [pytest.mark.indexing, pytest.mark.es]
 
 
 TEST_COLL = '/testing-post-put-patch-sno/'
@@ -210,7 +210,7 @@ def test_indexer_namespacing(app, testapp, indexer_testapp):
         # app.registry.settings['indexer.namespace'] = indexer_namespace  # reset indexer_namespace
 
 
-@pytest.mark.es
+# @pytest.mark.es - Specified at top of file for whole file
 def test_indexer_queue_adds_telemetry_id(app):
     indexer_queue = app.registry[INDEXER_QUEUE]
     indexer_queue.clear_queue()
@@ -232,7 +232,7 @@ def test_indexer_queue_adds_telemetry_id(app):
     indexer_queue.delete_messages(received)
 
 
-@pytest.mark.es
+# @pytest.mark.es - Specified at top of file for whole file
 @pytest.mark.flaky
 def test_indexer_queue(app):
     indexer_queue_mirror = app.registry[INDEXER_QUEUE_MIRROR]
