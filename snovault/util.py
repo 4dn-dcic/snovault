@@ -1064,3 +1064,52 @@ def generate_indexer_namespace_for_testing(prefix='sno'):
 
 
 INDEXER_NAMESPACE_FOR_TESTING = generate_indexer_namespace_for_testing()
+
+
+def is_admin_request(request):
+    """ Checks for 'group.admin' in effective_principals on request - if present we know this
+        request was submitted by an admin
+    """
+    return 'group.admin' in request.effective_principals
+
+
+def get_item_or_none(request, value, itype=None, frame='object'):
+    """
+    Return the view of an item with given frame. Can specify different types
+    of `value` for item lookup
+
+    Args:
+        request: the current Request
+        value (str): String item identifier or a dict containing @id/uuid
+        itype (str): Optional string collection name for the item (e.g. /file-formats/)
+        frame (str): Optional frame to return. Defaults to 'object'
+
+    Returns:
+        dict: given view of the item or None on failure
+    """
+    item = None
+
+    if isinstance(value, dict):
+        if 'uuid' in value:
+            value = value['uuid']
+        elif '@id' in value:
+            value = value['@id']
+
+    svalue = str(value)
+
+    # Below case is for UUIDs & unique_keys such as accessions, but not @ids
+    if not svalue.startswith('/') and not svalue.endswith('/'):
+        svalue = '/' + svalue + '/'
+        if itype is not None:
+            svalue = '/' + itype + svalue
+
+    # Request.embed will attempt to get from ES for frame=object/embedded
+    # If that fails, get from DB. Use '@@' syntax instead of 'frame=' because
+    # these paths are cached in indexing
+    try:
+        item = request.embed(svalue, '@@' + frame)
+    except Exception:
+        pass
+
+    # could lead to unexpected errors if == None
+    return item
