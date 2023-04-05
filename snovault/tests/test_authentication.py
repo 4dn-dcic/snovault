@@ -1,10 +1,14 @@
+import pytest
 import unittest
 
 from pyramid.interfaces import IAuthenticationPolicy
 from pyramid.security import Authenticated, Everyone
 from pyramid.testing import DummyRequest
 from zope.interface.verify import verifyObject, verifyClass
-from .authentication import NamespacedAuthenticationPolicy
+from ..authentication import NamespacedAuthenticationPolicy
+
+
+pytestmark = [pytest.mark.working]
 
 
 class TestNamespacedAuthenticationPolicy(unittest.TestCase):
@@ -31,7 +35,7 @@ class TestNamespacedAuthenticationPolicy(unittest.TestCase):
         self.assertEqual(policy.unauthenticated_userid(request), None)
 
     def test_unauthenticated_userid(self):
-        request = DummyRequest(environ={'REMOTE_USER':'fred'})
+        request = DummyRequest(environ={'REMOTE_USER': 'fred'})
         policy = self._makeOne()
         self.assertEqual(policy.unauthenticated_userid(request), 'user.fred')
 
@@ -41,7 +45,7 @@ class TestNamespacedAuthenticationPolicy(unittest.TestCase):
         self.assertEqual(policy.authenticated_userid(request), None)
 
     def test_authenticated_userid(self):
-        request = DummyRequest(environ={'REMOTE_USER':'fred'})
+        request = DummyRequest(environ={'REMOTE_USER': 'fred'})
         policy = self._makeOne()
         self.assertEqual(policy.authenticated_userid(request), 'user.fred')
 
@@ -51,7 +55,7 @@ class TestNamespacedAuthenticationPolicy(unittest.TestCase):
         self.assertEqual(policy.effective_principals(request), [Everyone])
 
     def test_effective_principals(self):
-        request = DummyRequest(environ={'REMOTE_USER':'fred'})
+        request = DummyRequest(environ={'REMOTE_USER': 'fred'})
         policy = self._makeOne()
         self.assertEqual(policy.effective_principals(request),
                          [Everyone, Authenticated, 'user.fred'])
@@ -63,7 +67,7 @@ class TestNamespacedAuthenticationPolicy(unittest.TestCase):
         self.assertEqual(result, [])
 
     def test_forget(self):
-        request = DummyRequest(environ={'REMOTE_USER':'fred'})
+        request = DummyRequest(environ={'REMOTE_USER': 'fred'})
         policy = self._makeOne()
         result = policy.forget(request)
         self.assertEqual(result, [])

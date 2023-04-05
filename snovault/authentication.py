@@ -18,13 +18,13 @@ from pyramid.httpexceptions import HTTPForbidden, HTTPUnauthorized
 from pyramid.path import DottedNameResolver, caller_package
 from pyramid.security import NO_PERMISSION_REQUIRED
 from pyramid.view import view_config
-from . import ROOT, COLLECTIONS
-from .calculated import calculate_properties
-from .crud_views import collection_add as sno_collection_add
-from .schema_utils import validate_request
-from .util import debug_log
-from .validation import ValidationFailure
-from .validators import no_validate_item_content_post
+from snovault import ROOT, COLLECTIONS
+from snovault.calculated import calculate_properties
+from snovault.crud_views import collection_add as sno_collection_add
+from snovault.schema_utils import validate_request
+from snovault.util import debug_log
+from snovault.validation import ValidationFailure
+from snovault.validators import no_validate_item_content_post
 from urllib.parse import urlencode
 
 

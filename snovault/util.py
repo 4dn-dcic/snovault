@@ -5,6 +5,7 @@ import json
 import os
 import structlog
 import sys
+import re
 
 from copy import copy
 from datetime import datetime, timedelta
@@ -133,6 +134,20 @@ def dictionary_lookup(dictionary, key):
         # raise DictionaryKeyError(dictionary=dictionary, key=key)  this causes MPIndexer exception - will 3/10/2020
     else:
         return dictionary[key]
+
+
+def deduplicate_list(lst):
+    """ De-duplicates the given list by converting it to a set then back to a list.
+
+    NOTES:
+    * The list must contain 'hashable' type elements that can be used in sets.
+    * The result list might not be ordered the same as the input list.
+    * This will also take tuples as input, though the result will be a list.
+
+    :param lst: list to de-duplicate
+    :return: de-duplicated list
+    """
+    return list(set(lst))
 
 
 _skip_fields = ['@type', 'principals_allowed']  # globally accessible if need be in the future
@@ -1113,3 +1128,58 @@ def get_item_or_none(request, value, itype=None, frame='object'):
 
     # could lead to unexpected errors if == None
     return item
+
+
+CONTENT_TYPE_SPECIAL_CASES = {
+    'application/x-www-form-urlencoded': [
+        # Single legacy special case to allow us to POST to metadata TSV requests via form submission.
+        # All other special case values should be added using register_path_content_type.
+        '/metadata/',
+        '/variant-sample-search-spreadsheet/',
+        re.compile(r'/variant-sample-lists/[\da-z-]+/@@spreadsheet/'),
+    ]
+}
+
+
+def register_path_content_type(*, path, content_type):
+    """
+    Registers that endpoints that begin with the specified path use the indicated content_type.
+
+    This is part of an inelegant workaround for an issue in renderers.py that maybe we can make go away in the future.
+    See the 'implementation note' in ingestion/common.py for more details.
+    """
+    exceptions = CONTENT_TYPE_SPECIAL_CASES.get(content_type, None)
+    if exceptions is None:
+        CONTENT_TYPE_SPECIAL_CASES[content_type] = exceptions = []
+    if path not in exceptions:
+        exceptions.append(path)
+
+
+compiled_regexp_class = type(re.compile("foo.bar"))  # Hides that it's _sre.SRE_Pattern in 3.6, but re.Pattern in 3.7
+
+
+def content_type_allowed(request):
+    """
+    Returns True if the current request allows the requested content type.
+
+    This is part of an inelegant workaround for an issue in renderers.py that maybe we can make go away in the future.
+    See the 'implementation note' in ingestion/common.py for more details.
+    """
+    if request.content_type == "application/json":
+        # For better or worse, we always allow this.
+        return True
+
+    exceptions = CONTENT_TYPE_SPECIAL_CASES.get(request.content_type)
+
+    if exceptions:
+        for path_condition in exceptions:
+            if isinstance(path_condition, str):
+                if path_condition in request.path:
+                    return True
+            elif isinstance(path_condition, compiled_regexp_class):
+                if path_condition.match(request.path):
+                    return True
+            else:
+                raise NotImplementedError(f"Unrecognized path_condition: {path_condition}")
+
+    return False

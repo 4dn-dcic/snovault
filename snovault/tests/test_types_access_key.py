@@ -19,6 +19,7 @@ def auth_header(access_key):
 
 @pytest.fixture
 def no_login_submitter(external_tx, testapp):
+    """ This is a user who has deleted status, so auth'd requests should be rejected """
     item = {
         'first_name': 'ENCODE',
         'last_name': 'Submitter',
@@ -32,6 +33,7 @@ def no_login_submitter(external_tx, testapp):
 
 @pytest.fixture
 def submitter(testapp):
+    """ This is a legit submitter with current status where auth'd requests should succeed"""
     item = {
         'first_name': 'ENCODE',
         'last_name': 'Submitter',
@@ -44,10 +46,10 @@ def submitter(testapp):
 
 
 @pytest.fixture
-def access_key(testapp, no_login_submitter):
+def access_key(testapp, submitter):
     description = 'My programmatic key'
     item = {
-        'user': no_login_submitter['@id'],
+        'user': submitter['@id'],
         'description': description,
     }
     res = testapp.post_json('/access_key', item)
@@ -84,7 +86,7 @@ def test_access_key_get_bad_password(anontestapp, access_key):
     anontestapp.get('/', headers=headers, status=401)
 
 
-def test_access_key_principals(anontestapp, execute_counter, access_key, bgm_user, bgm_project, institution):
+def test_access_key_principals(anontestapp, execute_counter, access_key, submitter):
     # TO DO - needs to be reviewed in context of what prinicipals do we want on access keys
     headers = {'Authorization': auth_header(access_key)}
     with execute_counter.expect(2):
@@ -92,30 +94,13 @@ def test_access_key_principals(anontestapp, execute_counter, access_key, bgm_use
     assert res.json['authenticated_userid'] == 'accesskey.' + access_key['access_key_id']
     assert sorted(res.json['effective_principals']) == [
         'accesskey.%s' % access_key['access_key_id'],
-        'editor_for.%s' % bgm_project['uuid'],
-        'group.project_editor',
         'system.Authenticated',
         'system.Everyone',
-        'userid.%s' % bgm_user['uuid'],
+        'userid.%s' % submitter['uuid'],
     ]
 
 
-@pytest.fixture
-def proj_member(testapp, project):
-    item = {
-        'first_name': 'Project',
-        'last_name': 'Member',
-        'email': 'project_member@example.org',
-        'project': project['@id'],
-        'status': 'current'
-    }
-    # User @@object view has keys omitted.
-    res = testapp.post_json('/user', item)
-    return testapp.get(res.location).json
-
-
-def test_access_key_self_create_no_submits_for(anontestapp, access_key, proj_member):
-    submitter = proj_member
+def test_access_key_self_create_no_submits_for(anontestapp, access_key, submitter):
     extra_environ = {'REMOTE_USER': str(submitter['email'])}
     res = anontestapp.post_json(
         '/access_key/', {}, extra_environ=extra_environ

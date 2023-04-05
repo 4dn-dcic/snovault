@@ -8,7 +8,6 @@ import string
 from pyramid.security import (
     # ALL_PERMISSIONS,
     Allow,
-    Authenticated,
     Deny,
     # DENY_ALL,
     Everyone,
@@ -234,7 +233,7 @@ class Item(Item):
     # Items of these statuses are filtered out from rev links
     filtered_rev_statuses = ('deleted')
 
-    # Default embed list for all CGAP Items
+    # Default embed list for all encoded Items
     embedded_list = static_content_embed_list
 
     def __init__(self, registry, models):

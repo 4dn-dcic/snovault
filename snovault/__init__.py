@@ -87,12 +87,12 @@ def main(global_config, **local_config):
     config.include('.renderers')
 
     if settings.get('elasticsearch.server'):
-        config.include('snovault.search')
+        config.include('snovault.search.search')
+        config.include('snovault.search.compound_search')
 
     # only include this stuff if we're testing
     if asbool(settings.get('testing', False)):
         config.include('snovault.tests.testing_views')
-        config.include('snovault.tests.authentication')
         config.include('snovault.tests.root')
 
         # in addition, enable invalidation scope for testing - but NOT by default
