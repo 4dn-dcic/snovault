@@ -59,6 +59,8 @@ pytestmark = [pytest.mark.indexing, pytest.mark.es]
 
 TEST_COLL = '/testing-post-put-patch-sno/'
 TEST_TYPE = 'testing_post_put_patch_sno'  # use one collection for testing
+TEST_TYPE_HIDDEN_FACETS = 'testing_hidden_facets'
+TEST_TYPE_BUCKET_RANGE = 'testing_bucket_range_facets'
 
 # we just need single shard for these tests
 # XXX: use new type
@@ -94,7 +96,7 @@ else:
     raise Exception("Bad value of INDEXER_MODE: %s. Possible values are MPINDEX, INDEX, and BOTH." % INDEXER_MODE)
 
 
-@pytest.yield_fixture(scope='module', params=INDEXER_APP_PARAMS)  # must happen AFTER scope='session' moto setup
+@pytest.yield_fixture(scope='session', params=INDEXER_APP_PARAMS)  # must happen AFTER scope='session' moto setup
 def app(app_settings, request):
     old_mpindexer = app_settings['mpindexer']
     with override_dict(app_settings, mpindexer=old_mpindexer):  # we plan to set it inside here
@@ -113,6 +115,7 @@ def app(app_settings, request):
             #       DBSession.bind.engine.pool.dispose()
             pass
 
+
 # XXX C4-312: refactor tests so this can be module scope.
 # Having to have to drop DB tables and re-run create_mapping for every test is slow.
 @pytest.yield_fixture(scope='function', autouse=True)
@@ -121,8 +124,9 @@ def setup_and_teardown(app):
     Run create mapping and purge queue before tests and clear out the
     DB tables after the test
     """
-    # BEFORE THE TEST - just run CM for the TEST_TYPE by default
-    create_mapping.run(app, collections=[TEST_TYPE], skip_indexing=True, purge_queue=True)
+    # BEFORE THE TEST - just run CM for the TEST_TYPEs above by default
+    create_mapping.run(app, collections=[TEST_TYPE, TEST_TYPE_HIDDEN_FACETS, TEST_TYPE_BUCKET_RANGE],
+                       skip_indexing=True, purge_queue=True)
 
     yield  # run the test
 
@@ -1960,6 +1964,7 @@ def hidden_facet_data_one():
         'first_name': 'John',
         'last_name': 'Doe',
         'sid': 1,
+        'status': 'current',
         'unfaceted_string': 'hello',
         'unfaceted_integer': 123,
         'disabled_string': 'orange',
@@ -1990,6 +1995,7 @@ def hidden_facet_data_two():
         'first_name': 'Boston',
         'last_name': 'Bruins',
         'sid': 2,
+        'status': 'current',
         'unfaceted_string': 'world',
         'unfaceted_integer': 456,
         'disabled_string': 'apple',
@@ -2013,11 +2019,11 @@ def hidden_facet_data_two():
     }
 
 
-@pytest.fixture(scope='function')  # XXX: consider scope further - Will 11/5/2020
+@pytest.fixture(scope='session')  # XXX: consider scope further - Will 11/5/2020
 def hidden_facet_test_data(testapp, hidden_facet_data_one, hidden_facet_data_two):
     testapp.post_json('/TestingHiddenFacets', hidden_facet_data_one, status=201)
     testapp.post_json('/TestingHiddenFacets', hidden_facet_data_two, status=201)
-    testapp.post_json('/index', {'record': False})
+    index_n_items_for_testing(testapp, 2)
 
 
 class TestSearchHiddenAndAdditionalFacets:
@@ -2208,11 +2214,11 @@ def bucket_range_data_raw():
     return entries
 
 
-@pytest.fixture(scope='function')
+@pytest.fixture(scope='session')
 def bucket_range_data(testapp, bucket_range_data_raw):
     for entry in bucket_range_data_raw:
         testapp.post_json('/TestingBucketRangeFacets', entry, status=201)
-    testapp.post_json('/index', {'record': False})
+    index_n_items_for_testing(testapp, 10)
 
 
 class TestSearchBucketRangeFacets:

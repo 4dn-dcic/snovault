@@ -93,7 +93,7 @@ def encrypted_testapp(encrypted_app):
     return webtest.TestApp(encrypted_app, environ)
 
 
-@pytest.fixture
+@pytest.fixture(scope='session')
 def testapp(app):
     """ TestApp with JSON accept header. """
     environ = {

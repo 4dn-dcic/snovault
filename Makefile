@@ -40,7 +40,7 @@ build-for-ga:
 
 kill:
 	pkill -f postgres &
-	pkill -f elasticsearch &
+	pkill -f opensearch &
 
 test:
 	@git log -1 --decorate | head -1
