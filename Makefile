@@ -50,7 +50,7 @@ test-one:
 test:
 	@git log -1 --decorate | head -1
 	@date
-	make test-static && make test-unit && make test-indexing
+	make test-unit && make test-indexing && make test-static
 	@git log -1 --decorate | head -1
 	@date
 

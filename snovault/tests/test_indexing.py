@@ -20,7 +20,7 @@ from dcicutils.misc_utils import ignored, get_error_message, override_dict
 from dcicutils.qa_utils import ControlledTime, Eventually, notice_pytest_fixtures
 from elasticsearch.exceptions import NotFoundError
 from pyramid.traversal import traverse
-from sqlalchemy import MetaData
+from sqlalchemy import MetaData, text as psql_text
 from unittest import mock
 from zope.sqlalchemy import mark_changed
 
@@ -138,7 +138,7 @@ def setup_and_teardown(app):
     # sqlalchemy 1.4 - use TRUNCATE instead of DELETE
     table_names = [table.name for table in reversed(Base.metadata.sorted_tables)]
     table_names_spec = ','.join(table_names)
-    connection.execute(f"TRUNCATE {table_names_spec} RESTART IDENTITY CASCADE;")
+    connection.execute(psql_text(f"TRUNCATE {table_names_spec} RESTART IDENTITY CASCADE;"))
     session.flush()
     mark_changed(session())
     transaction_management.commit()

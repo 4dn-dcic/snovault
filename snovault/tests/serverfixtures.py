@@ -10,6 +10,7 @@ import zope.sqlalchemy
 from contextlib import contextmanager
 from dcicutils.misc_utils import ignored, environ_bool
 from dcicutils.qa_utils import notice_pytest_fixtures
+from sqlalchemy import text as psql_text
 from transaction.interfaces import ISynchronizer
 from zope.interface import implementer
 
@@ -310,12 +311,12 @@ def check_constraints(conn, _DBSession):
                 session.flush()
                 sp = self.conn.begin_nested()
                 try:
-                    self.conn.execute('SET CONSTRAINTS ALL IMMEDIATE')
+                    self.conn.execute(psql_text('SET CONSTRAINTS ALL IMMEDIATE'))
                 except BaseException:  # even things like keyboard interrupt
                     sp.rollback()
                     raise
                 else:
-                    self.conn.execute('SET CONSTRAINTS ALL DEFERRED')
+                    self.conn.execute(psql_text('SET CONSTRAINTS ALL DEFERRED'))
                 finally:
                     sp.commit()
                     self.state = None

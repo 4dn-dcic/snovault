@@ -11,7 +11,7 @@ Change Log
 =====
 
 * Change ``pytest.yield_fixture`` to ``pytest.yield``. This is techinically incompatible since it would break downstream portals if they were below ``pytest`` 6, but they are both at ``pytest 7`` now, so they should be unaffected.
-
+* Address some places involving ``.execute(raw_string)`` that should be ``.execute(text(raw_string))``.
 
 7.3.0
 =====
