@@ -451,7 +451,20 @@ def session_properties(context, request):
         if principal.startswith('userid.'):
             break
     else:
-        raise LoginDenied(domain=request.domain)
+        # NOTE: returning details below allows internal remoteuser (TEST for example) to run DELETE requests
+        # previously in downstream portal applications, the LoginDenied error was raised, preventing such
+        # DELETE requests from occurring within unit testing. This can be re-enabled if desired in downstream
+        # applications, but for now should stay like this so we can unit test DELETEs - Will April 6 2023
+        if 'group.admin' in request.effective_principals:
+            return {
+                'details': {
+                    'groups': [
+                        'admin'
+                    ]
+                }
+            }
+        else:
+            raise LoginDenied(domain=request.domain)
 
     namespace, userid = principal.split('.', 1)
     properties = get_basic_properties_for_user(request, userid)

@@ -267,8 +267,8 @@ def get_linking_items(context, request, render=None):
     result = {
         'status': 'success',
         '@type': ['result'],
-        'display_title': 'Links to %s' % item_uuid,
-        'notification' : '%s has %s items linking to it. This may include rev_links if status != deleted' % (item_uuid, len(links)),
+        'display_title': f'Links to {item_uuid}',
+        'notification': f'{item_uuid} has {len(links)} items linking to it. This may include rev_links if status != deleted',
         'uuids_linking_to': links
     }
     return result
@@ -289,10 +289,8 @@ def item_delete_full(context, request, render=None):
     if hasattr(request, 'user_info'):
         user_details = request.user_info.get('details', {})
     else:
-        if 'group.admin' in request.effective_principals:
-            user_details = {'groups': 'admin'}  # you can do it
-        else:
-            user_details = {}  # you cannot
+        # used to check for admin here, now done in user_info above
+        user_details = {}
     if 'admin' not in user_details.get('groups', []):
         msg = u'Must be admin to fully delete items.'
         raise ValidationFailure('body', ['userid'], msg)
@@ -307,7 +305,7 @@ def item_delete_full(context, request, render=None):
             return {
                 'status': 'success',
                 '@type': ['result'],
-                'notification' : 'Permanently deleted ' + uuid,
+                'notification': f'Permanently deleted {uuid}',
                 '@graph': [uuid]
             }
     else:
@@ -316,14 +314,14 @@ def item_delete_full(context, request, render=None):
             return {
                 'status': 'success',
                 '@type': ['result'],
-                'notification' : 'Set status of ' + uuid + ' to deleted',
-                '@graph': [ render_item(request, context, render) ]
+                'notification': f'Set status of {uuid} to deleted',
+                '@graph': [render_item(request, context, render)]
             }
 
     return {
         'status': 'failure',
         '@type': ['result'],
-        'notification' : 'Deletion failed',
+        'notification': 'Deletion failed',
         '@graph': [uuid]
     }
 

@@ -1953,12 +1953,6 @@ class TestInvalidationScopeViewSno:
             indexer_testapp.post_json('/compute_invalidation_scope', req)
 
 
-import pytest
-
-
-pytestmark = [pytest.mark.working, pytest.mark.indexing]
-
-
 @pytest.fixture(scope='session')
 def hidden_facet_data_one():
     """ Sample TestingHiddenFacets object we are going to facet on """
@@ -2019,7 +2013,7 @@ def hidden_facet_data_two():
     }
 
 
-@pytest.fixture(scope='session')  # XXX: consider scope further - Will 11/5/2020
+@pytest.fixture(scope='function')  # XXX: consider scope further - Will 11/5/2020
 def hidden_facet_test_data(testapp, hidden_facet_data_one, hidden_facet_data_two):
     testapp.post_json('/TestingHiddenFacets', hidden_facet_data_one, status=201)
     testapp.post_json('/TestingHiddenFacets', hidden_facet_data_two, status=201)
@@ -2182,7 +2176,7 @@ class TestSearchHiddenAndAdditionalFacets:
         self.check_and_verify_result(many_non_nested_facets, _facet, n_expected)
 
 
-@pytest.fixture(scope='session')
+@pytest.fixture(scope='function')
 def bucket_range_data_raw():
     """ 9 objects with a numerical field we will bucket on.
             'special_integer' has i in it.
@@ -2214,7 +2208,7 @@ def bucket_range_data_raw():
     return entries
 
 
-@pytest.fixture(scope='session')
+@pytest.fixture(scope='function')
 def bucket_range_data(testapp, bucket_range_data_raw):
     for entry in bucket_range_data_raw:
         testapp.post_json('/TestingBucketRangeFacets', entry, status=201)
