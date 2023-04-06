@@ -83,6 +83,7 @@ xlrd = "^1.0.0"
 "zope.deprecation" = "^4.4.0"
 "zope.interface" = ">=4.7.2,<6"
 "zope.sqlalchemy" = "1.6"
+pyjwt = "^2.6.0"
 
 [tool.poetry.dev-dependencies]
 botocore-stubs = ">=1.27.36"  # no particular version required, but this speeds up search
