@@ -2,7 +2,6 @@ import codecs
 import collections
 import uuid
 import json
-import requests
 
 from datetime import datetime
 from dcicutils.misc_utils import ignored
@@ -11,8 +10,6 @@ from jsonschema_serialize_fork import (
     FormatChecker,
     RefResolver,
 )
-# TODO (C4-177): remove these imports (urlsplit, urlopen) when RefResolverOrdered is removed
-from jsonschema_serialize_fork.compat import urlsplit, urlopen
 from jsonschema_serialize_fork.exceptions import ValidationError
 from pyramid.path import AssetResolver, caller_package
 from pyramid.threadlocal import get_current_request
@@ -32,62 +29,7 @@ def server_default(func):
     SERVER_DEFAULTS[func.__name__] = func
 
 
-class RefResolverOrdered(RefResolver):
-    """
-    Overwrite the resolve_remote method in the RefResolver class, written
-    by lrowe. See:
-    https://github.com/lrowe/jsonschema_serialize_fork/blob/master/jsonschema_serialize_fork/validators.py
-    With python <3.6, json.loads was losing schema order for properties, facets,
-    and columns. Pass in the object_pairs_hook=collections.OrderedDict
-    argument to fix this.
-    WHEN ELASTICBEANSTALK IS RUNNING PY 3.6 WE CAN REMOVE THIS
-    """
-    # TODO (C4-177): The stated condition is now met. We are reliably in Python 3.6, so this code should be removed.
-
-    def resolve_remote(self, uri):
-        """
-        Resolve a remote ``uri``.
-        Does not check the store first, but stores the retrieved document in
-        the store if :attr:`RefResolver.cache_remote` is True.
-        .. note::
-            If the requests_ library is present, ``jsonschema`` will use it to
-            request the remote ``uri``, so that the correct encoding is
-            detected and used.
-            If it isn't, or if the scheme of the ``uri`` is not ``http`` or
-            ``https``, UTF-8 is assumed.
-        :argument str uri: the URI to resolve
-        :returns: the retrieved document
-        .. _requests: http://pypi.python.org/pypi/requests/
-        """
-        scheme = urlsplit(uri).scheme
-
-        if scheme in self.handlers:
-            result = self.handlers[scheme](uri)
-        elif (
-            scheme in ["http", "https"] and
-            # TODO (C4-177): PyCharm flagged free references to 'requests' in this file as undefined,
-            #                so I've added an import at top of file. However, that suggests this 'elif'
-            #                branch is never entered. When this tangled code is removed, I'll be happier.
-            #                Meanwhile having a definition seems safer than not. -kmp 9-Jun-2020
-            requests and
-            getattr(requests.Response, "json", None) is not None
-        ):
-            # Requests has support for detecting the correct encoding of
-            # json over http
-            if callable(requests.Response.json):
-                result = collections.OrderedDict(requests.get(uri).json())
-            else:
-                result = collections.OrderedDict(requests.get(uri).json)
-        else:
-            # Otherwise, pass off to urllib and assume utf-8
-            result = json.loads(urlopen(uri).read().decode("utf-8"), object_pairs_hook=collections.OrderedDict)
-
-        if self.cache_remote:
-            self.store[uri] = result
-        return result
-
-
-class NoRemoteResolver(RefResolverOrdered):
+class NoRemoteResolver(RefResolver):
     def resolve_remote(self, uri):
         raise ValueError('Resolution disallowed for: %s' % uri)
 
@@ -286,7 +228,7 @@ def load_schema(filename):
         asset = AssetResolver(caller_package()).resolve(filename)
         schema = json.load(utf8(asset.stream()),
                            object_pairs_hook=collections.OrderedDict)
-        resolver = RefResolverOrdered('file://' + asset.abspath(), schema)
+        resolver = RefResolver('file://' + asset.abspath(), schema)
     # use mixinProperties, mixinFacets, mixinAggregations, and mixinColumns (if provided)
     schema = mixinSchemas(
         mixinSchemas(

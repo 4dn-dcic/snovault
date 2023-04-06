@@ -808,6 +808,31 @@ class TestingBiogroupSno(Item):
     ]
 
 
+@collection(
+    'testing-keys',
+    properties={
+        'title': 'Test keys',
+        'description': 'Testing. Testing. 1, 2, 3.',
+    },
+    unique_key='testing_accession',
+)
+class TestingKey(Item):
+    item_type = 'testing_key'
+    schema = {
+        'type': 'object',
+        'properties': {
+            'name': {
+                'type': 'string',
+                'uniqueKey': True,
+            },
+            'accession': {
+                'type': 'string',
+                'uniqueKey': 'testing_accession',
+            },
+        }
+    }
+
+
 @collection('testing-hidden-facets')
 class TestingHiddenFacets(Item):
     """ Collection designed to test searching with hidden facets. Yes this is large, but this is a complex feature

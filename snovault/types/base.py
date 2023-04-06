@@ -1,10 +1,4 @@
 """base class creation for all the schemas that exist."""
-import re
-import string
-
-# from datetime import date
-# from functools import lru_cache
-# from jsonschema_serialize_fork import NO_DEFAULT
 from pyramid.security import (
     # ALL_PERMISSIONS,
     Allow,
@@ -12,14 +6,11 @@ from pyramid.security import (
     # DENY_ALL,
     Everyone,
 )
-# from pyramid.traversal import find_root
 from pyramid.view import (
     view_config,
 )
-# from pyramid.httpexceptions import HTTPUnprocessableEntity
 from .. import Item, Collection, AbstractCollection, abstract_collection, calculated_property
 from ..util import debug_log
-# import snovault default post / patch stuff so we can overwrite it in this file
 from ..validators import (
     validate_item_content_post,
     validate_item_content_put,
@@ -29,7 +20,6 @@ from ..validators import (
     no_validate_item_content_put,
     no_validate_item_content_patch
 )
-# We will extend the following functions with CGAP-specific actions
 from ..crud_views import (
     collection_add as sno_collection_add,
     item_edit as sno_item_edit,
@@ -108,16 +98,6 @@ def get_item_or_none(request, value, itype=None, frame='object'):
 
     # could lead to unexpected errors if == None
     return item
-
-
-def set_namekey_from_title(properties):  # TODO: I'm not sure this is used anywhere. -kmp 25-Sep-2022
-    name = None
-    if properties.get('title'):
-        exclude = set(string.punctuation.replace('-', ''))
-        name = properties['title'].replace('&', ' n ')
-        name = ''.join(ch if ch not in exclude and ch != ' ' else '-' for ch in name)
-        name = re.sub(r"[-]+", '-', name).strip('-').lower()
-    return name
 
 
 def validate_item_type_of_linkto_field(context, request):

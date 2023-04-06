@@ -2182,7 +2182,7 @@ class TestSearchHiddenAndAdditionalFacets:
         self.check_and_verify_result(many_non_nested_facets, _facet, n_expected)
 
 
-@pytest.fixture(scope='function')
+@pytest.fixture(scope='session')
 def bucket_range_data_raw():
     """ 9 objects with a numerical field we will bucket on.
             'special_integer' has i in it.
