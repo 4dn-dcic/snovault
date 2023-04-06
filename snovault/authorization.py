@@ -5,7 +5,7 @@ from . import COLLECTIONS
 from pyramid.security import Authenticated
 
 
-DEBUG_PERMISSIONS = environ_bool("DEBUG_PERMISSIONS", default=True)
+DEBUG_PERMISSIONS = environ_bool("DEBUG_PERMISSIONS", default=False)
 
 
 def groupfinder(login, request):

@@ -11,7 +11,7 @@ from string import digits  # , ascii_uppercase
 
 
 ACCESSION_FACTORY = __name__ + ':accession_factory'
-ACCESSION_PREFIX = 'GAP'  # TODO: refactor so this is overridden downstream
+ACCESSION_PREFIX = 'SNO'  # Can be changed downstream
 ACCESSION_TEST_PREFIX = 'TST'
 
 
@@ -70,25 +70,6 @@ def accession(instance, subschema):
             continue
         return new_accession
     raise AssertionError("Free accession not found in %d attempts" % ATTEMPTS)
-
-# TODO: keep in CGAP
-@server_default
-def userproject(instance, subschema):
-    user = get_user_resource()
-    if user == NO_DEFAULT:
-        return NO_DEFAULT
-    project_roles = user.properties.get("project_roles", [])
-    if len(project_roles) > 0:
-        return project_roles[0]["project"]
-    return NO_DEFAULT
-
-# TODO: keep in CGAP
-@server_default
-def userinstitution(instance, subschema):
-    user = get_user_resource()
-    if user == NO_DEFAULT:
-        return NO_DEFAULT
-    return user.properties.get("user_institution", NO_DEFAULT)
 
 
 def get_userid():

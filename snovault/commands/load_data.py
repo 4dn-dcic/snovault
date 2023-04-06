@@ -14,26 +14,15 @@ log = structlog.getLogger(__name__)
 EPILOG = __doc__
 
 
-def load_data_should_proceed(env, allow_prod):
+# should be overridden in downstream application to pass a different app
+def load_data_should_proceed(env, allow_prod, app='cgap'):
     """ Returns True on whether or not load_data should proceed.
 
     :param env: env we are on
     :param allow_prod: prod argument from argparse, defaults to False
     :return: True if load_data should continue, False otherwise
     """
-
-    return permit_load_data(envname=env, allow_prod=allow_prod, orchestrated_app='cgap')  # TODO figure app out
-
-    # # run on cgaptest -- XXX: this logic should probably be refactored into dcicutils
-    # if env == CGAP_ENV_MASTERTEST:
-    #     log.info('load_data: proceeding since we are on %s' % env)
-    #     return True
-    # elif env and not allow_prod:  # old logic, allow run on servers if prod is specified
-    #     log.info('load_data: skipping, since on %s' % env)
-    #     return False
-    # else:  # allow run on local, which will not have env set
-    #     log.info('load_data: proceeding since we are either on local or specified the prod option')
-    #     return True
+    return permit_load_data(envname=env, allow_prod=allow_prod, orchestrated_app=app)  # noqa
 
 
 def main(simulated_args=None):
@@ -42,7 +31,7 @@ def main(simulated_args=None):
     logging.getLogger('encoded').setLevel(logging.DEBUG)
 
     parser = argparse.ArgumentParser(  # noqa - PyCharm wrongly thinks the formatter_class is specified wrong here.
-        description="Load Test Data", epilog=EPILOG,
+        description="Load Data", epilog=EPILOG,
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument('--app-name', help="Pyramid app name in configfile")

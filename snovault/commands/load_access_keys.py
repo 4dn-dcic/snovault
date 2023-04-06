@@ -15,6 +15,10 @@ log = structlog.getLogger(__name__)
 EPILOG = __doc__
 
 
+# This should be imported/overridden by downstream application
+ADMIN_EMAIL = 'snovault.platform@gmail.com'
+
+
 def get_existing_key_ids(testapp, user_uuid, key_desc):
     """
     Search for an access key with given description and user uuid.
@@ -122,8 +126,7 @@ def main():
     s3_bucket = app.registry.settings['system_bucket']
 
     # we generate keys for the following accounts w/ corresponding descriptions
-    # TODO: this first email needs customization, probably at top level
-    to_generate = [('cgap.platform@gmail.com', 'access_key_admin'),
+    to_generate = [(ADMIN_EMAIL, 'access_key_admin'),
                    ('tibanna.app@gmail.com', 'access_key_tibanna'),
                    ('foursight.app@gmail.com', 'access_key_foursight')]
     for email, key_name in to_generate:

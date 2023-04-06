@@ -34,21 +34,8 @@ def includeme(config):
 
 
 # order of items references with linkTo in a field in  'required' in schemas
-# TODO: refactor so this comes from the portal repo
-ORDER = [
-    'project',
-    'institution',
-    'user',
-    'file_format',
-    'workflow',
-    'meta_workflow',
-    'workflow_run',
-    'meta_workflow_run',
-    'variant',
-    'structural_variant',
-    'structural_variant_sample',
-    'higlass_view_config'
-]
+# This should be set by the downstream application
+ORDER = []
 
 IS_ATTACHMENT = [
     'attachment',
@@ -56,6 +43,7 @@ IS_ATTACHMENT = [
 ]
 
 
+# This uuid should be constant across all portals
 LOADXL_USER_UUID = "3202fd57-44d2-44fb-a131-afb1e43d8ae5"
 
 

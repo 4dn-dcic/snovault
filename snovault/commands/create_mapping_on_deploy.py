@@ -6,11 +6,11 @@ from pyramid.paster import get_app
 from snovault.elasticsearch.create_mapping import run as run_create_mapping
 from snovault.elasticsearch.create_mapping import reindex_by_type_staggered
 from dcicutils.log_utils import set_logging
+from dcicutils.env_utils import is_stg_or_prd_env, is_test_env
 
-# TODO: This import should be defined here as needed so it can be overridden in the portal
-from ..appdefs import (
-    ITEM_INDEX_ORDER, ENV_HOTSEAT, ENV_WEBDEV, ENV_WEBPROD,
-    BEANSTALK_TEST_ENVS, BEANSTALK_PROD_ENVS, NEW_BEANSTALK_PROD_ENVS,
+# override this order in the downstream portal
+from ..loadxl import (
+    ORDER as ITEM_INDEX_ORDER
 )
 
 log = structlog.getLogger(__name__)
@@ -38,29 +38,16 @@ def get_deployment_config(app):
     :return: dict of config options
     """
     deploy_cfg = {}
-    current_prod_env = ENV_WEBPROD  # this could change for CGAP depending on how we do this in the future
     my_env = get_my_env(app)
     deploy_cfg['ENV_NAME'] = my_env
-    if current_prod_env == my_env:
+    if is_stg_or_prd_env(my_env):
         log.info('This looks like our production environment -- do not wipe ES')
         deploy_cfg['WIPE_ES'] = False
-    elif my_env in BEANSTALK_PROD_ENVS:  # unused in CGAP but could be used in future
-        log.info('This looks like our staging environment -- do not wipe ES')
-        deploy_cfg['WIPE_ES'] = False  # do not wipe ES
-    elif my_env in NEW_BEANSTALK_PROD_ENVS:
-        log.info('This looks like a new production environment -- do nothing for now')
-        exit(0)
-    elif my_env in BEANSTALK_TEST_ENVS:
-        if my_env == ENV_HOTSEAT or my_env == ENV_WEBDEV:
-            log.info('Looks like we are on hotseat/cgapdev -- do not wipe ES')
-            deploy_cfg['WIPE_ES'] = False
-        else:
-            # XXX: enable to force cgaptest reindexing
-            log.info('Looks like we are on cgaptest -- normally we would wipe ES but no longer.')
-            deploy_cfg['WIPE_ES'] = False
+    elif is_test_env(my_env):
+        log.info('This looks like a test environment -- wipe ES')
+        deploy_cfg['WIPE_ES'] = True
     else:
-        log.warning('This environment is not recognized: %s' % my_env)
-        log.warning('Proceeding without wiping ES')
+        log.info('This environment is not recognized -- do not wipe ES')
         deploy_cfg['WIPE_ES'] = False
     return deploy_cfg
 
