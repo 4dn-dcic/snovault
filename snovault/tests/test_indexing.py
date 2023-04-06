@@ -94,7 +94,7 @@ else:
     raise Exception("Bad value of INDEXER_MODE: %s. Possible values are MPINDEX, INDEX, and BOTH." % INDEXER_MODE)
 
 
-@pytest.yield_fixture(scope='module', params=INDEXER_APP_PARAMS)  # must happen AFTER scope='session' moto setup
+@pytest.fixture(scope='module', params=INDEXER_APP_PARAMS)  # must happen AFTER scope='session' moto setup
 def app(app_settings, request):
     old_mpindexer = app_settings['mpindexer']
     with override_dict(app_settings, mpindexer=old_mpindexer):  # we plan to set it inside here
@@ -115,7 +115,7 @@ def app(app_settings, request):
 
 # XXX C4-312: refactor tests so this can be module scope.
 # Having to have to drop DB tables and re-run create_mapping for every test is slow.
-@pytest.yield_fixture(scope='function', autouse=True)
+@pytest.fixture(scope='function', autouse=True)
 def setup_and_teardown(app):
     """
     Run create mapping and purge queue before tests and clear out the
@@ -144,7 +144,7 @@ def setup_and_teardown(app):
     transaction_management.commit()
 
 
-@pytest.yield_fixture(scope='function')
+@pytest.fixture(scope='function')
 def es_based_target(app, testapp):
     # must run create mapping BEFORE posting the ES-based item, since it will
     # cause the underlying item properties in the index to be lost

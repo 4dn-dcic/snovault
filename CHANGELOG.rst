@@ -7,6 +7,12 @@ Change Log
 ----------
 
 
+7.3.1
+=====
+
+* Change ``pytest.yield_fixture`` to ``pytest.yield``. This is techinically incompatible since it would break downstream portals if they were below ``pytest`` 6, but they are both at ``pytest 7`` now, so they should be unaffected.
+
+
 7.3.0
 =====
 

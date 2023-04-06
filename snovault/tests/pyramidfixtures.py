@@ -10,13 +10,13 @@ from pyramid.testing import setUp, tearDown
 from pyramid.threadlocal import manager
 
 
-@pytest.yield_fixture
+@pytest.fixture
 def config():
     yield setUp()
     tearDown()
 
 
-@pytest.yield_fixture
+@pytest.fixture
 def threadlocals(request, dummy_request, registry):
     notice_pytest_fixtures(request, dummy_request, registry)
     manager.push({'request': dummy_request, 'registry': registry})

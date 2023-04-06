@@ -44,7 +44,7 @@ def pytest_configure():
 
 
 @pytest.mark.fixture_cost(10)
-@pytest.yield_fixture(scope='session')
+@pytest.fixture(scope='session')
 def engine_url(tmpdir_factory):
     if NO_SERVER_FIXTURES:
         yield 'NO_SERVER_FIXTURES'
@@ -66,7 +66,7 @@ def engine_url(tmpdir_factory):
 
 
 @pytest.mark.fixture_cost(10)
-@pytest.yield_fixture(scope='session')
+@pytest.fixture(scope='session')
 def postgresql_server(tmpdir_factory):
     if NO_SERVER_FIXTURES:
         yield 'NO_SERVER_FIXTURES'
@@ -96,7 +96,7 @@ def elasticsearch_server_dir(tmpdir_factory):
 
 
 @pytest.mark.fixture_cost(10)
-@pytest.yield_fixture(scope='session')
+@pytest.fixture(scope='session')
 def elasticsearch_server(elasticsearch_server_dir, elasticsearch_host_port, remote_es):
     if NO_SERVER_FIXTURES:
         yield 'NO_SERVER_FIXTURES'
@@ -121,7 +121,7 @@ def elasticsearch_server(elasticsearch_server_dir, elasticsearch_host_port, remo
 # By binding the SQLAlchemy Session to an external transaction multiple testapp
 # requests can be rolled back at the end of the test.
 
-@pytest.yield_fixture(scope='session')
+@pytest.fixture(scope='session')
 def engine(engine_url):
     if NO_SERVER_FIXTURES:
         yield 'NO_SERVER_FIXTURES'
@@ -139,7 +139,7 @@ def engine(engine_url):
     yield engine
 
 
-@pytest.yield_fixture(scope='session')
+@pytest.fixture(scope='session')
 def conn(engine):
     if NO_SERVER_FIXTURES:
         yield 'NO_SERVER_FIXTURES'
@@ -178,7 +178,7 @@ def DBSession(_DBSession, zsa_savepoints, check_constraints):
     return _DBSession
 
 
-@pytest.yield_fixture
+@pytest.fixture
 def external_tx(request, conn):
     if NO_SERVER_FIXTURES:
         yield 'NO_SERVER_FIXTURES'
@@ -208,7 +208,7 @@ def transaction(request, external_tx, zsa_savepoints, check_constraints):
     return transaction_management
 
 
-@pytest.yield_fixture(scope='session')
+@pytest.fixture(scope='session')
 def zsa_savepoints(conn):
     """ Place a savepoint at the start of the zope transaction
 
@@ -274,7 +274,7 @@ def session(transaction, DBSession):
     return DBSession()
 
 
-@pytest.yield_fixture(scope='session')
+@pytest.fixture(scope='session')
 def check_constraints(conn, _DBSession):
     """
     Check deferred constraints on zope transaction commit.
@@ -396,7 +396,7 @@ class ExecutionWatcher(object):
         self._active = False
 
 
-@pytest.yield_fixture
+@pytest.fixture
 def execute_counter(conn, zsa_savepoints, check_constraints, filter=None):
     """
     This fixture gives you a context manager that can be used to count calls to the SQLAlchemy 'execute' operation.
@@ -452,7 +452,7 @@ def execute_counter(conn, zsa_savepoints, check_constraints, filter=None):
     sqlalchemy.event.remove(conn, 'after_cursor_execute', after_cursor_execute)
 
 
-@pytest.yield_fixture
+@pytest.fixture
 def no_deps(conn, DBSession):
     notice_pytest_fixtures(conn, DBSession)
 
@@ -502,7 +502,7 @@ def wsgi_server_app(app):
 
 
 @pytest.mark.fixture_cost(100)
-@pytest.yield_fixture(scope='session')
+@pytest.fixture(scope='session')
 def wsgi_server(request, wsgi_server_app, wsgi_server_host_port):
     notice_pytest_fixtures(request, wsgi_server_app, wsgi_server_host_port)
 
