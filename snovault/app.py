@@ -61,17 +61,28 @@ def configure_engine(settings):
     return engine
 
 
-def set_postgresql_statement_timeout(engine, timeout=20 * 1000):
+def set_postgresql_statement_timeout(engine, timeout: int = 20 * 1000):
     """
     Prevent Postgres waiting indefinitely for a lock.
+
+    :param engine: a database engine
+    :param timeout: a number of milliseconds to set for as statement_timeout
     """
 
     @event.listens_for(engine, 'connect')
     def connect(dbapi_connection, connection_record):
         ignored(connection_record)
+        timeout_ms = timeout
+        if not isinstance(timeout_ms, int):
+            # This coercion will truncate 3.5 to 3, but so would the %d below,
+            # and we have long used that. But the real purpose of introducing
+            # this coercion is to get a ValueError if a string other than a
+            # representation of a number slips through, to seal out accidental injection.
+            # -kmp 6-Apr-2023
+            timeout_ms = int(timeout_ms)
         cursor = dbapi_connection.cursor()
         try:
-            cursor.execute("SET statement_timeout TO %d" % timeout)
+            cursor.execute("SET statement_timeout TO %d" % timeout_ms)
         except psycopg2.Error:
             dbapi_connection.rollback()
         finally:

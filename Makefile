@@ -50,7 +50,7 @@ test-one:
 test:
 	@git log -1 --decorate | head -1
 	@date
-	make test-unit && make test-indexing
+	make test-unit && make test-indexing && make test-static
 	@git log -1 --decorate | head -1
 	@date
 
@@ -59,6 +59,7 @@ test-full:
 	@date
 	make test-unit-full
 	make test-indexing-full
+	make test-static || echo "Static tests failed."
 	@git log -1 --decorate | head -1
 	@date
 

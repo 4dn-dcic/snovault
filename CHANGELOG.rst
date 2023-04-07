@@ -9,7 +9,42 @@ Change Log
 8.0.0
 =====
 
-* Redis
+* Redis support, adding /callback info to /auth0_config if a Redis server is configured
+
+
+7.3.1
+=====
+
+* Change ``pytest.yield_fixture`` to ``pytest.yield``. This is techinically incompatible since it would break downstream portals if they were below ``pytest`` 6, but they are both at ``pytest 7`` now, so they should be unaffected.
+* Address some places involving ``.execute(raw_string)`` that should be ``.execute(text(raw_string))``.
+
+7.3.0
+=====
+
+* In ``Makefile``:
+
+  * Make sure ``make test`` and ``make test-full`` also run ``make test-static``.
+
+* In ``snovault/storage.py``:
+
+  * Add ``POSTGRES_COMPATIBLE_MAJOR_VERSIONS`` (moved from ``snovault/tests/test_storage.py``)
+
+* In ``snovault/elasticsearch/create_mapping.py``:
+
+  * Per Will's direction, replace a call to ``run_index_data`` with a ``vapp`` creation and
+    a call to an index post with given uuids.
+
+* In ``snovault/elasticsearch/mpindexer.py``:
+
+  * Very minor syntactic refactor to make a use of ``global`` more clear.
+
+* In ``snovault/tools.py``:
+
+  * Reimplement ``index_n_items_for_testing`` for better clarity and to fix a potential bug.
+
+* In ``snovault/tests/test_indexing.py``
+
+  * Various test optimizations using better synchronization for robustness.
 
 
 7.2.1
@@ -51,9 +86,9 @@ Change Log
   * Include ``pipdeptree`` as a dev dependency for debugging.
 
   * Remove "backports.statistics", needed for Python 3.3 support and earlier.
-  
+
   * Bump python_magic foothold (no effective change, just faster locking)
-  
+
   * Update some comments.
 
 * In ``snovault/updater.py``:

@@ -31,7 +31,7 @@ def autouse_external_tx(external_tx):
 #     return False
 #
 #
-# @pytest.yield_fixture(scope='session', autouse=True)
+# @pytest.fixture(scope='session', autouse=True)
 # def start_moto_server_sqs():
 #     """
 #     Spins off a moto server running sqs, yields to the tests and cleans up.

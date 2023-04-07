@@ -20,7 +20,7 @@ from dcicutils.misc_utils import ignored, get_error_message, override_dict
 from dcicutils.qa_utils import ControlledTime, Eventually, notice_pytest_fixtures
 from elasticsearch.exceptions import NotFoundError
 from pyramid.traversal import traverse
-from sqlalchemy import MetaData
+from sqlalchemy import MetaData, text as psql_text
 from unittest import mock
 from zope.sqlalchemy import mark_changed
 
@@ -45,7 +45,7 @@ from ..elasticsearch.indexer_utils import compute_invalidation_scope
 from ..elasticsearch.interfaces import ELASTIC_SEARCH, INDEXER_QUEUE, INDEXER_QUEUE_MIRROR
 from ..interfaces import DBSESSION, STORAGE, COLLECTIONS, TYPES
 from ..storage import Base
-from ..tools import index_n_items_for_testing
+from ..tools import index_n_items_for_testing, delay_rerun, make_es_count_checker
 from ..util import INDEXER_NAMESPACE_FOR_TESTING
 
 from .testing_views import TestingLinkSourceSno
@@ -55,21 +55,6 @@ notice_pytest_fixtures(TestingLinkSourceSno)
 
 
 pytestmark = [pytest.mark.indexing]
-
-
-def delay_rerun(*args):
-    """ Rerun function for flaky """
-    ignored(args)
-    time.sleep(10)
-    return True
-
-
-def make_es_count_checker(n, *, es, namespaced_index):
-    def es_count_checker():
-        indexed_count = es.count(index=namespaced_index).get('count')
-        assert indexed_count == n
-        return n
-    return es_count_checker
 
 
 TEST_COLL = '/testing-post-put-patch-sno/'
@@ -109,7 +94,7 @@ else:
     raise Exception("Bad value of INDEXER_MODE: %s. Possible values are MPINDEX, INDEX, and BOTH." % INDEXER_MODE)
 
 
-@pytest.yield_fixture(scope='module', params=INDEXER_APP_PARAMS)  # must happen AFTER scope='session' moto setup
+@pytest.fixture(scope='module', params=INDEXER_APP_PARAMS)  # must happen AFTER scope='session' moto setup
 def app(app_settings, request):
     old_mpindexer = app_settings['mpindexer']
     with override_dict(app_settings, mpindexer=old_mpindexer):  # we plan to set it inside here
@@ -130,7 +115,7 @@ def app(app_settings, request):
 
 # XXX C4-312: refactor tests so this can be module scope.
 # Having to have to drop DB tables and re-run create_mapping for every test is slow.
-@pytest.yield_fixture(scope='function', autouse=True)
+@pytest.fixture(scope='function', autouse=True)
 def setup_and_teardown(app):
     """
     Run create mapping and purge queue before tests and clear out the
@@ -151,15 +136,15 @@ def setup_and_teardown(app):
     # meta = MetaData(bind=session.connection())
     # meta.reflect()
     # sqlalchemy 1.4 - use TRUNCATE instead of DELETE
-    connection.execute('TRUNCATE {} RESTART IDENTITY CASCADE;'.format(
-        ','.join(table.name
-                 for table in reversed(Base.metadata.sorted_tables))))
+    table_names = [table.name for table in reversed(Base.metadata.sorted_tables)]
+    table_names_spec = ','.join(table_names)
+    connection.execute(psql_text(f"TRUNCATE {table_names_spec} RESTART IDENTITY CASCADE;"))
     session.flush()
     mark_changed(session())
     transaction_management.commit()
 
 
-@pytest.yield_fixture(scope='function')
+@pytest.fixture(scope='function')
 def es_based_target(app, testapp):
     # must run create mapping BEFORE posting the ES-based item, since it will
     # cause the underlying item properties in the index to be lost
@@ -858,7 +843,7 @@ def test_queue_indexing_with_linked(app, testapp, indexer_testapp, dummy_request
     assert 'Item status must equal deleted before purging' in str(excinfo.value)
     del_res1 = testapp.delete_json('/' + source['uuid'])
     assert del_res1.json['status'] == 'success'
-    # this item will still have items linking to it indexing occurs
+    # this item will still have items linking to it until indexing occurs
     with pytest.raises(webtest.AppError) as excinfo:
         testapp.delete_json('/' + source['uuid'] + '/?purge=True')
     assert 'Cannot purge item as other items still link to it' in str(excinfo.value)
@@ -878,13 +863,22 @@ def test_queue_indexing_with_linked(app, testapp, indexer_testapp, dummy_request
     assert del_res3.json['status'] == 'success'
     assert del_res3.json['notification'] == 'Permanently deleted ' + source['uuid']
     time.sleep(3)
-    # make sure everything has updated on ES
-    check_es_source = es.get(index=namespaced_link_source, id=source['uuid'], ignore=[404])
-    assert check_es_source['found'] is False
-    # source uuid removed from the target uuid
-    check_es_target = es.get(index=namespaced_link_target, id=target['uuid'])
-    uuids_linked_emb2 = [link['uuid'] for link in check_es_target['_source']['linked_uuids_embedded']]
-    assert source['uuid'] not in uuids_linked_emb2
+
+    @Eventually.consistent()
+    def await_not_found():
+        # TODO: Will asks "Should a version of this be available generally?" -kmp 29-Mar-2023
+
+        # make sure everything has updated on ES
+        check_es_source = es.get(index=namespaced_link_source, id=source['uuid'], ignore=[404])
+        assert check_es_source['found'] is False
+
+        # source uuid removed from the target uuid
+        check_es_target = es.get(index=namespaced_link_target, id=target['uuid'])
+        uuids_linked_emb2 = [link['uuid'] for link in check_es_target['_source']['linked_uuids_embedded']]
+        assert source['uuid'] not in uuids_linked_emb2
+
+    await_not_found()
+
     # the source is now purged
     testapp.get('/' + source['uuid'], status=404)
     # make sure check_es_and_cache_linked_sids fails for the purged item
@@ -892,25 +886,32 @@ def test_queue_indexing_with_linked(app, testapp, indexer_testapp, dummy_request
     assert es_res_emb2 is None
 
 
-@pytest.mark.flaky
+# @pytest.mark.flaky
 def test_indexing_invalid_sid(app, testapp, indexer_testapp):
+    namespaced_test_type = indexer_utils.get_namespaced_index(app, TEST_TYPE)
+    assert namespaced_test_type
     es = app.registry[ELASTIC_SEARCH]
     # post an item, index, then find version (sid)
     res = testapp.post_json(TEST_COLL, {'required': ''})
     test_uuid = res.json['@graph'][0]['uuid']
-    res = indexer_testapp.post_json('/index', {'record': True})
-    assert res.json['indexing_count'] == 1
-    time.sleep(4)
-    namespaced_test_type = indexer_utils.get_namespaced_index(app, TEST_TYPE)
+
+    index_n_items_for_testing(indexer_testapp, 1)
+    # res = indexer_testapp.post_json('/index', {'record': True})
+    # assert res.json['indexing_count'] == 1
+    # time.sleep(4)
+
     es_item = es.get(index=namespaced_test_type, id=test_uuid)
     initial_version = es_item['_version']  # same as sid
     assert es_item['_source']['max_sid'] == initial_version
 
     # now increment the version and check it
     testapp.patch_json(TEST_COLL + test_uuid, {'required': 'meh'})
-    res = indexer_testapp.post_json('/index', {'record': True})
-    assert res.json['indexing_count'] == 1
-    time.sleep(4)
+
+    index_n_items_for_testing(indexer_testapp, 1)
+    # res = indexer_testapp.post_json('/index', {'record': True})
+    # assert res.json['indexing_count'] == 1
+    # time.sleep(4)
+
     es_item = es.get(index=namespaced_test_type, id=test_uuid)
     assert es_item['_version'] == initial_version + 1
     assert es_item['_source']['max_sid'] == initial_version + 1
@@ -947,8 +948,12 @@ def test_indexing_invalid_sid_linked_items(app, testapp, indexer_testapp):
     }
     testapp.post_json('/testing-link-targets-sno/', target1, status=201)
     testapp.post_json('/testing-link-sources-sno/', source, status=201)
-    indexer_testapp.post_json('/index', {'record': True})
-    time.sleep(2)
+
+    index_n_items_for_testing(indexer_testapp, 2)
+
+    # indexer_testapp.post_json('/index', {'record': True})
+    # time.sleep(2)
+
     namespaced_link_target = indexer_utils.get_namespaced_index(app, 'testing_link_target_sno')
     es_item = es.get(index=namespaced_link_target, id=target1['uuid'])
     initial_version = es_item['_version']
@@ -965,9 +970,13 @@ def test_indexing_invalid_sid_linked_items(app, testapp, indexer_testapp):
     indexer_queue.send_messages([to_queue], target_queue='primary')
     received_secondary = indexer_queue.receive_messages(target_queue='secondary')
     assert len(received_secondary) == 0
+
+    # No point to using index_n_items here because 0 is problematic. -kmp 9-Mar-2023
     res = indexer_testapp.post_json('/index', {'record': True})
     time.sleep(4)
     assert res.json['indexing_count'] == 0
+
+    # TODO: This part needs more work
     # make sure nothing is in secondary queue after calling /index
     received_secondary = indexer_queue.receive_messages(target_queue='secondary')
     assert len(received_secondary) == 0
@@ -1092,9 +1101,12 @@ def test_confirm_mapping(app, testapp, indexer_testapp):
     es.indices.delete(index=namespaced_index)
     time.sleep(2)
     testapp.post_json(TEST_COLL, {'required': ''})
-    res = indexer_testapp.post_json('/index', {'record': True})
-    assert res.json['indexing_count'] == 1
+
+    index_n_items_for_testing(indexer_testapp, 1)
+    # res = indexer_testapp.post_json('/index', {'record': True})
+    # assert res.json['indexing_count'] == 1
     time.sleep(2)
+
     mapping = create_mapping_by_type(TEST_TYPE, app.registry)
     index_record = build_index_record(mapping, TEST_TYPE)
     tries_taken = confirm_mapping(es, namespaced_index, TEST_TYPE, index_record)
@@ -1152,20 +1164,29 @@ def test_es_purge_uuid(app, testapp, indexer_testapp, session):
     es = app.registry[ELASTIC_SEARCH]
     # == Adding new test resource to DB ==
     storage = app.registry[STORAGE]
-    test_body = {'required': '', 'simple1': 'foo', 'simple2': 'bar'}
-    res = testapp.post_json(TEST_COLL, test_body)
-    test_uuid = res.json['@graph'][0]['uuid']
-    check = storage.get_by_uuid(test_uuid)
 
+    test_body = {'required': '', 'simple1': 'foo', 'simple2': 'bar'}
+    result = testapp.post_json(TEST_COLL, test_body).json
+    #  print(json.dumps(result, indent=2))
+
+    test_uuid = result['@graph'][0]['uuid']
+    print(f"test_uuid={test_uuid}")
+
+    check = storage.get_by_uuid(test_uuid)
     assert str(check.uuid) == test_uuid
 
-    # Then index it:
+    print("Indexing...")
+
+    # TODO: Maybe instead do this? -kmp 10-Mar-2023
+    # index_n_items_for_testing(indexer_testapp, 1, initial_wait_seconds=2)
+
     create_mapping.run(app, collections=[TEST_TYPE], sync_index=True)
     indexer_queue.clear_queue()
-    # time.sleep(4)
+    time.sleep(4)
 
     @Eventually.consistent()
     def ensure_uuid_not_in_es():
+        print("Trying ensure_uuid_not_in_es...")
         # Now ensure that we do have it in ES:
         try:
             namespaced_index = indexer_utils.get_namespaced_index(app, TEST_TYPE)
@@ -1178,41 +1199,60 @@ def test_es_purge_uuid(app, testapp, indexer_testapp, session):
 
     namespaced_index, es_item, item_uuid = ensure_uuid_not_in_es()
 
+    print("Indexing complete.")
+
     check_post_from_rdb = storage.write.get_by_uuid(test_uuid)
     assert check_post_from_rdb is not None
 
     assert es_item['_source']['embedded']['simple1'] == test_body['simple1']
     assert es_item['_source']['embedded']['simple2'] == test_body['simple2']
 
+    print("Getting revisions...")
+
     # The actual delete
     revisions = testapp.get('/' + test_uuid + '/@@revision-history').json['revisions']
     assert len(revisions) == 1
-    storage.purge_uuid(test_uuid, TEST_TYPE)
+
+    print("Found 1 revision. Purging...")
+
+    storage.purge_uuid(rid=test_uuid, item_type=TEST_TYPE)
 
     # Riddle me this: above^ delete supposedly fails if the below is not commented out? - Will 04/23/21
     # revisions = testapp.get('/' + test_uuid + '/@@revision-history').json['revisions']
     # assert len(revisions) == 1  # es_items have no revision history
 
+    print("Purge complete. Checking DB...")
+
     @Eventually.consistent()
     def check_rdb_2():
-
+        print("Trying check_rdb_2...")
         check_post_from_rdb_2 = storage.write.get_by_uuid(test_uuid)
         assert check_post_from_rdb_2 is None
 
     check_rdb_2()
 
+    print("DB ok. Checking ES...")
+
     @Eventually.consistent()
     def check_es_2():
+        print("Trying check_es_2...")
         # time.sleep(5)  # Allow time for ES API to send network request to ES server to perform delete.
         check_post_from_es_2 = es.get(index=namespaced_index, id=test_uuid, ignore=[404])
         assert check_post_from_es_2['found'] is False
 
     check_es_2()
 
+    print("Purge results verified for DB and ES. Getting revision history...")
+
     # Now that all the es work is done, test es item revision history
 
     revisions = testapp.get('/' + test_uuid + '/@@revision-history').json['revisions']
     assert len(revisions) == 1  # es_items have no revision history
+
+    print("1 revision found. All good.")
+
+    # TODO: None of these changes are needed, and issues can happen on teardown. Maybe something a commit or abort?
+    # transaction_management.abort()
 
 
 @pytest.mark.flaky
@@ -1404,7 +1444,7 @@ def test_indexing_rdbstorage_can_purge_without_es(app, testapp, indexer_testapp)
     print("All done.")
 
 
-@pytest.mark.flaky(max_runs=3, rerun_filter=delay_rerun)
+# @pytest.mark.flaky(max_runs=3, rerun_filter=delay_rerun)
 def test_aggregated_items(app, testapp, indexer_testapp):
     """
     Test that the item aggregation works, which only occurs when indexing
@@ -1418,101 +1458,139 @@ def test_aggregated_items(app, testapp, indexer_testapp):
     - Ensure that duplicate aggregated_items are deduplicated
     - Check aggregated-items view; should now match ES results
     """
+
     es = app.registry[ELASTIC_SEARCH]
     # first, run create mapping with the indices we will use
     namespaced_aggregate = indexer_utils.get_namespaced_index(app, 'testing_link_aggregate_sno')
-    create_mapping.run(
-        app,
-        collections=['testing_link_target_sno', 'testing_link_aggregate_sno'],
-        skip_indexing=True
-    )
+
     # generate a uuid for the aggregate item
     agg_res_uuid = str(uuid.uuid4())
-    target1 = {'name': 'one', 'uuid': '775795d3-4410-4114-836b-8eeecf1d0c2f'}
-    target2 = {'name': 'two', 'uuid': '775795d3-4410-4114-836b-8eeecf1daabc'}
+    target_uuid1 = '775795d3-4410-4114-836b-8eeecf1d0c2f'
+    target_uuid2 = '775795d3-4410-4114-836b-8eeecf1daabc'
+    target1 = {'name': 'one', 'uuid': target_uuid1}
+    target2 = {'name': 'two', 'uuid': target_uuid2}
     aggregated = {
         'name': 'A',
         'targets': [
             {
                 'test_description': 'target one',
-                'target': '775795d3-4410-4114-836b-8eeecf1d0c2f'
+                'target': target_uuid1,
             },
             {
                 'test_description': 'target two',
-                'target': '775795d3-4410-4114-836b-8eeecf1daabc'
+                'target': target_uuid2,
             }
         ],
         'uuid': agg_res_uuid,
         'status': 'current'
     }
-    # you can do stuff like this and it will take effect
-    # app.registry['types']['testing_link_aggregate_sno'].aggregated_items['targets'] = (
-    #    ['target.name', 'test_description'])
-    testapp.post_json('/testing-link-targets-sno/', target1, status=201)
-    testapp.post_json('/testing-link-targets-sno/', target2, status=201)
-    agg_res = testapp.post_json('/testing-link-aggregates-sno/', aggregated, status=201)
-    agg_res_atid = agg_res.json['@graph'][0]['@id']
-    # ensure that aggregated-items view shows nothing before indexing
-    pre_agg_view = testapp.get(agg_res_atid + '@@aggregated-items', status=200).json
-    assert pre_agg_view['@id'] == agg_res_atid
-    assert pre_agg_view['aggregated_items'] == {}
-    # wait for the items to index
-    indexer_testapp.post_json('/index', {'record': True})
-    time.sleep(2)
-    # wait for test-link-aggregated item to index
-    doc_count = es.count(index=namespaced_aggregate).get('count')
-    tries = 0
-    while doc_count < 1 and tries < 5:
-        time.sleep(4)
-        doc_count = es.count(index=namespaced_aggregate).get('count')
-        tries += 1
-    assert doc_count == 1
-    es_agg_res = es.get(index=namespaced_aggregate, id=agg_res_uuid)
-    assert 'aggregated_items' in es_agg_res['_source']
-    es_agg_items = es_agg_res['_source']['aggregated_items']
-    assert 'targets' in es_agg_items
-    assert len(es_agg_items['targets']) == 2
-    for idx, target_agg in enumerate(es_agg_items['targets']):
-        # order of targets should be maintained
-        assert target_agg['parent'] == agg_res.json['@graph'][0]['@id']
-        assert target_agg['embedded_path'] == 'targets'
-        if idx == 0:
-            assert target_agg['item']['test_description'] == 'target one'
-            assert target_agg['item']['target']['uuid'] == target1['uuid']
-        else:
-            assert target_agg['item']['test_description'] == 'target two'
-            assert target_agg['item']['target']['uuid'] == target2['uuid']
-    # now make sure they get updated on a patch
-    # use duplicate items, which should be deduplicated if all aggregated
-    # content (including parent) is exactly the same
-    testapp.patch_json(
-        '/testing-link-aggregates-sno/' + aggregated['uuid'],
-        {'targets': [
-            {'test_description': 'target one revised',
-             'target': '775795d3-4410-4114-836b-8eeecf1d0c2f'},
-            {'test_description': 'target one revised',
-             'target': '775795d3-4410-4114-836b-8eeecf1d0c2f'},
-            {'test_description': 'target one revised2',
-             'target': '775795d3-4410-4114-836b-8eeecf1d0c2f'}
-        ]}
-    )
-    indexer_testapp.post_json('/index', {'record': True})
-    time.sleep(10)  # be lazy and just wait a bit
-    es_agg_res = es.get(index=namespaced_aggregate, id=agg_res_uuid)
-    assert 'aggregated_items' in es_agg_res['_source']
-    es_agg_items = es_agg_res['_source']['aggregated_items']
-    assert 'targets' in es_agg_items
-    assert len(es_agg_items['targets']) == 2
-    assert es_agg_items['targets'][0]['item']['test_description'] == 'target one revised'
-    assert es_agg_items['targets'][1]['item']['test_description'] == 'target one revised2'
-    # check that the aggregated-items view now works
-    post_agg_view = testapp.get(agg_res_atid + '@@aggregated-items', status=200).json
-    assert post_agg_view['@id'] == agg_res_atid
-    assert post_agg_view['aggregated_items'] == es_agg_res['_source']['aggregated_items']
-    # clean up the test items
-    testapp.patch_json('/testing-link-aggregates-sno/' + aggregated['uuid'],
-                       {'targets': []})
-    indexer_testapp.post_json('/index', {'record': True})
+
+    try:
+
+        create_mapping.run(
+            app,
+            collections=['testing_link_target_sno', 'testing_link_aggregate_sno'],
+            skip_indexing=True
+        )
+
+        time.sleep(2)
+        # you can do stuff like this and it will take effect
+        # app.registry['types']['testing_link_aggregate_sno'].aggregated_items['targets'] = (
+        #    ['target.name', 'test_description'])
+
+        testapp.post_json('/testing-link-targets-sno/', target1, status=201)
+        testapp.post_json('/testing-link-targets-sno/', target2, status=201)
+        agg_res = testapp.post_json('/testing-link-aggregates-sno/', aggregated, status=201)
+        agg_res_atid = agg_res.json['@graph'][0]['@id']
+
+        # ensure that aggregated-items view shows nothing before indexing
+        pre_agg_view = testapp.get(agg_res_atid + '@@aggregated-items', status=200).json
+        assert pre_agg_view['@id'] == agg_res_atid
+        assert pre_agg_view['aggregated_items'] == {}
+
+        index_n_items_for_testing(indexer_testapp, 3)
+        # wait for the items to index
+        # indexer_testapp.post_json('/index', {'record': True})
+        time.sleep(2)
+
+        # wait for test-link-aggregated item to index
+        # doc_count = es.count(index=namespaced_aggregate).get('count')
+        # tries = 0
+        # while doc_count < 1 and tries < 5:
+        #     time.sleep(4)
+        #     doc_count = es.count(index=namespaced_aggregate).get('count')
+        #     tries += 1
+        # assert doc_count == 1
+        Eventually.call_assertion(make_es_count_checker(1, es=es, namespaced_index=namespaced_aggregate),
+                                  wait_seconds=4)
+
+        @Eventually.consistent()
+        def check_links():
+            es_agg_res = es.get(index=namespaced_aggregate, id=agg_res_uuid)
+            assert 'aggregated_items' in es_agg_res['_source']
+            es_agg_items = es_agg_res['_source']['aggregated_items']
+            assert 'targets' in es_agg_items
+            assert len(es_agg_items['targets']) == 2
+            for idx, target_agg in enumerate(es_agg_items['targets']):
+                # order of targets should be maintained
+                assert target_agg['parent'] == agg_res.json['@graph'][0]['@id']
+                assert target_agg['embedded_path'] == 'targets'
+                if idx == 0:
+                    assert target_agg['item']['test_description'] == 'target one'
+                    assert target_agg['item']['target']['uuid'] == target1['uuid']
+                else:
+                    assert target_agg['item']['test_description'] == 'target two'
+                    assert target_agg['item']['target']['uuid'] == target2['uuid']
+
+        check_links()
+
+        # now make sure they get updated on a patch
+        # use duplicate items, which should be deduplicated if all aggregated
+        # content (including parent) is exactly the same
+        testapp.patch_json(
+            '/testing-link-aggregates-sno/' + aggregated['uuid'],
+            {'targets': [
+                {'test_description': 'target one revised',
+                 'target': target_uuid1},
+                {'test_description': 'target one revised',
+                 'target': target_uuid1},
+                {'test_description': 'target one revised2',
+                 'target': target_uuid1}
+            ]}
+        )
+
+        index_n_items_for_testing(indexer_testapp, 1)
+
+        # indexer_testapp.post_json('/index', {'record': True})
+        # time.sleep(10)  # be lazy and just wait a bit
+
+        @Eventually.consistent()
+        def check_updated_links():
+            es_agg_res = es.get(index=namespaced_aggregate, id=agg_res_uuid)
+            assert 'aggregated_items' in es_agg_res['_source']
+            es_agg_items = es_agg_res['_source']['aggregated_items']
+            assert 'targets' in es_agg_items
+            assert len(es_agg_items['targets']) == 2
+            assert es_agg_items['targets'][0]['item']['test_description'] == 'target one revised'
+            assert es_agg_items['targets'][1]['item']['test_description'] == 'target one revised2'
+            # check that the aggregated-items view now works
+            post_agg_view = testapp.get(agg_res_atid + '@@aggregated-items', status=200).json
+            assert post_agg_view['@id'] == agg_res_atid
+            assert post_agg_view['aggregated_items'] == es_agg_res['_source']['aggregated_items']
+
+        check_updated_links()
+
+    finally:
+
+        # TODO: Will thinks this is not needed and that setup_and_teardown's call to create_mapping is
+        #       enough to assure this will ultimately be reset. I'll leave that to debug another day. -kmp 29-Mar-2023
+
+        # clean up the test items
+        testapp.patch_json('/testing-link-aggregates-sno/' + aggregated['uuid'],
+                           {'targets': []})
+        # indexer_testapp.post_json('/index', {'record': True})
+        index_n_items_for_testing(indexer_testapp, 1)
+        time.sleep(2)  # allow some settling out
 
 
 @pytest.mark.flaky(max_runs=2, rerun_filter=delay_rerun)
