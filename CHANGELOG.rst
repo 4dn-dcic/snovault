@@ -6,14 +6,12 @@ snovault
 Change Log
 ----------
 
-<<<<<<< HEAD
-7.4.0
+8.1.0
 =====
 
 * Add several modules/commands from upstream portals that are generic enough to live in
   this repository (to reduce code/library maintenace overhead)
 
-=======
 8.0.0
 =====
 
@@ -25,7 +23,6 @@ Change Log
 
 * Change ``pytest.yield_fixture`` to ``pytest.yield``. This is techinically incompatible since it would break downstream portals if they were below ``pytest`` 6, but they are both at ``pytest 7`` now, so they should be unaffected.
 * Address some places involving ``.execute(raw_string)`` that should be ``.execute(text(raw_string))``.
->>>>>>> 0c4dfbbcbd7fd2ea345fb781557437501e4bfd9a
 
 7.3.0
 =====
