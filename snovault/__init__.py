@@ -97,6 +97,10 @@ def main(global_config, **local_config):
     if 'elasticsearch.server' in config.registry.settings:
         config.include('snovault.elasticsearch')
 
+    # configure redis server in production.ini
+    if 'redis.server' in config.registry.settings:
+        config.include('snovault.redis')
+
     config.include(changelogs)
 
     # TODO This is optional AWS only - possibly move to a plug-in

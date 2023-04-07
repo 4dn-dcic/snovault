@@ -6,6 +6,11 @@ snovault
 Change Log
 ----------
 
+8.0.0
+=====
+
+* Redis support, adding /callback info to /auth0_config if a Redis server is configured
+
 
 7.3.1
 =====
@@ -81,9 +86,9 @@ Change Log
   * Include ``pipdeptree`` as a dev dependency for debugging.
 
   * Remove "backports.statistics", needed for Python 3.3 support and earlier.
-  
+
   * Bump python_magic foothold (no effective change, just faster locking)
-  
+
   * Update some comments.
 
 * In ``snovault/updater.py``:
