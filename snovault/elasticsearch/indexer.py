@@ -12,6 +12,7 @@ from elasticsearch.exceptions import (
     TransportError,
 )
 from pyramid.view import view_config
+from sqlalchemy import text as psql_text
 from timeit import default_timer as timer
 from urllib3.exceptions import ReadTimeoutError
 from ..interfaces import (
@@ -176,7 +177,7 @@ class Indexer(object):
         """
         session = request.registry[DBSESSION]()
         connection = session.connection()
-        connection.execute('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY')
+        connection.execute(psql_text('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY'))
 
         # indexing is either run with sync uuids passed through the request
         # (which is synchronous) OR uuids from the queue

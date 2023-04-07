@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "dcicsnovault"
-version = "7.4.0"
+version = "8.1.0"
 description = "Storage support for 4DN Data Portals."
 authors = ["4DN-DCIC Team <support@4dnucleome.org>"]
 license = "MIT"
@@ -44,7 +44,7 @@ botocore = ">=1.27.36"  # no particular version required, but this speeds up sea
 boto3 = ">=1.24.36"  # no particular version required, but this speeds up search
 elasticsearch = "7.13.4"  # versions >= 7.14.0 lock out AWS ES
 elasticsearch_dsl = "^7.4.0"
-dcicutils = "^6.10.0"
+dcicutils = "^7.0.0"
 future = ">=0.15.2,<1"
 html5lib = ">=1.1"  # experimental, should be OK now that we're not using moto server
 humanfriendly = "^1.44.9"
@@ -84,6 +84,8 @@ xlrd = "^1.0.0"
 "zope.interface" = ">=4.7.2,<6"
 "zope.sqlalchemy" = "1.6"
 pyjwt = "^2.6.0"
+pytest-redis = "^2.0.0"
+redis = "^4.5.1"
 
 [tool.poetry.dev-dependencies]
 botocore-stubs = ">=1.27.36"  # no particular version required, but this speeds up search
