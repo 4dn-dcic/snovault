@@ -23,6 +23,7 @@ def includeme(config):
     config.include('pyramid_tm')
     config.include('.authentication')
     config.include('.util')
+    config.include('.drs')
     config.include('.stats')
     config.include('.batchupgrade')
     config.include('.calculated')

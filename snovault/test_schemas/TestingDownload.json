@@ -1,5 +1,9 @@
 {
     "type": "object",
+    "mixinProperties": [
+        { "$ref": "mixins.json#/status" },
+        { "$ref": "mixins.json#/submitted" }
+    ],
     "properties": {
         "attachment": {
             "type": "object",
