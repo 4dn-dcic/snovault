@@ -1,5 +1,6 @@
 import pytest
-from .test_attachment import testing_download
+from pyramid.exceptions import HTTPNotFound
+from .test_attachment import testing_download  # noQA fixture import
 
 
 class TestDRSAPI:
@@ -10,7 +11,8 @@ class TestDRSAPI:
     REQUIRED_FIELDS = [
         'id',
         'created_time',
-        'drs_id'
+        'drs_id',
+        'self_uri'
     ]
 
     def test_drs_get_object(self, testapp, testing_download):
@@ -20,3 +22,7 @@ class TestDRSAPI:
         drs_object = testapp.get(f'/ga4gh/drs/v1/objects/{drs_object_uri}')
         for key in self.REQUIRED_FIELDS:
             assert key in drs_object
+        assert drs_object['self_uri'] == 'drs://localhost:80/ga4gh/drs/v1/objects/211826d0-8f5e-4d83-b86a-6cabb3cfeff1'
+
+        # failure cases
+        testapp.get(f'/ga4gh/drs/v1/objects/not_a_uri', status=404)

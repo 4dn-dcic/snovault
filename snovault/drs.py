@@ -1,5 +1,6 @@
 from pyramid.view import view_config
 from pyramid.security import Authenticated
+from pyramid.exceptions import HTTPNotFound
 from .util import debug_log
 
 
@@ -18,11 +19,19 @@ def get_and_format_drs_object(request, object_uri):
     """ Call request.embed on the object_uri and reformats it such that it fits the DRS
         format, returning access_methods etc as needed if it is a file
     """
-    rendered_object = request.embed(object_uri, '@@object', as_user=True)
+    try:
+        rendered_object = request.embed(object_uri, '@@object', as_user=True)
+    except Exception:
+        raise HTTPNotFound('You accessed a DRS object_uri that either does not exist'
+                           ' or you do not have access to it.')
+
+    # Build required fields
+    import pdb; pdb.set_trace()
     drs_object = {
         'id': rendered_object['@id'],
         'created_time': rendered_object['date_created'],
         'drs_id': rendered_object['uuid'],
+        'self_uri': f'drs://{request.host}{request.path}'
     }
     return drs_object
 
