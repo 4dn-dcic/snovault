@@ -1,7 +1,6 @@
 from unittest import mock
 import pytest
 import re
-# import transaction as transaction_management
 import uuid
 import boto3
 
@@ -11,6 +10,7 @@ from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
 from ..interfaces import DBSESSION, STORAGE
 from ..storage import (
+    POSTGRES_COMPATIBLE_MAJOR_VERSIONS,
     Blob,
     CurrentPropertySheet,
     Key,
@@ -25,11 +25,6 @@ from ..storage import (
 from moto import mock_s3
 
 pytestmark = pytest.mark.storage
-
-
-# These 3 versions are known to be compatible, older versions should not be
-# used, odds are 14 can be used as well - Will Sept 13 2022
-POSTGRES_COMPATIBLE_MAJOR_VERSIONS = ['11', '12', '13']
 
 
 def test_postgres_version(session):

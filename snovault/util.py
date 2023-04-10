@@ -3,16 +3,17 @@ import datetime as datetime_module
 import functools
 import json
 import os
+import structlog
 import sys
+
 from copy import copy
 from datetime import datetime, timedelta
-
-import structlog
 from pyramid.httpexceptions import HTTPForbidden
 from pyramid.threadlocal import manager as threadlocal_manager
 
 from .interfaces import CONNECTION, STORAGE, TYPES
 from .settings import Settings
+
 
 log = structlog.getLogger(__name__)
 
@@ -39,9 +40,9 @@ NESTED_ENABLED = 'enable_nested'
 REFRESH_INTERVAL = '1s'
 
 # Schema keys to ignore when finding embeds
-SCHEMA_KEYS_TO_IGNORE_FOR_EMBEDS = set([
+SCHEMA_KEYS_TO_IGNORE_FOR_EMBEDS = {
     "items", "properties", "additionalProperties", "patternProperties"
-])
+}
 
 
 class IndexSettings:
@@ -720,7 +721,7 @@ def crawl_schemas_by_embeds(item_type, types, split_path, schema):
         element = split_path[idx]
         # schema_cursor should always be a dictionary if we have more split_fields
         if not isinstance(schema_cursor, dict):
-            error_message = '{} has a bad embed: {} does not have valid schemas throughout.'.format(item_type, linkTo_path)
+            error_message = f'{item_type} has a bad embed: {linkTo_path} does not have valid schemas throughout.'
             return error_message, embeds_to_add
         if element == '*':
             linkTo_path = '.'.join(split_path[:-1])
@@ -875,11 +876,19 @@ def recursively_process_field(item, split_fields):
 ###########################
 
 
+def _sid_cache(request):
+    return request._sid_cache  # noQA. Centrally ignore that it's an access to a protected member.
+
+
+def _sid_cache_update(request, new_value):
+    request._sid_cache.update(new_value)  # noQA. Centrally ignore that it's an access to a protected member.
+
+
 def check_es_and_cache_linked_sids(context, request, view='embedded'):
     """
     For the given context and request, see if the desired item is present in
     Elasticsearch and, if so, retrieve it cache all sids of the linked objects
-    that correspond to the given view. Store these in request._sid_cacheself.
+    that correspond to the given view. Store these in request's sid cache.
 
     Args:
         context: current Item
@@ -896,9 +905,9 @@ def check_es_and_cache_linked_sids(context, request, view='embedded'):
     es_links_field = 'linked_uuids_object' if view == 'object' else 'linked_uuids_embedded'
     if es_res and es_res.get(es_links_field):
         linked_uuids = [link['uuid'] for link in es_res[es_links_field]
-                        if link['uuid'] not in request._sid_cache]
+                        if link['uuid'] not in _sid_cache(request)]
         to_cache = request.registry[STORAGE].write.get_sids_by_uuids(linked_uuids)
-        request._sid_cache.update(to_cache)
+        _sid_cache_update(request, to_cache)
         return es_res
     return None
 
@@ -938,11 +947,12 @@ def validate_es_content(context, request, es_res, view='embedded'):
             return False
     for linked in linked_es_sids:
         # infrequently, may need to add sids from the db to the _sid_cache
-        if linked['uuid'] not in request._sid_cache:
+        cached = _sid_cache(request)
+        found_sid = cached.get(linked['uuid'])
+        if not found_sid:
             db_res = request.registry[STORAGE].write.get_by_uuid(linked['uuid'])
             if db_res:
-                request._sid_cache[linked['uuid']] = db_res.sid
-        found_sid = request._sid_cache.get(linked['uuid'])
+                cached[linked['uuid']] = found_sid = db_res.sid
         if found_sid is None or linked['sid'] < found_sid:
             use_es_result = False
             break
