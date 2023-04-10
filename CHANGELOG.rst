@@ -6,6 +6,21 @@ snovault
 Change Log
 ----------
 
+
+8.0.1
+=====
+
+* Fix some warnings from ``pytest``
+
+  * If a method has "test" in its name but isn't a test, it needs a prefix "_"
+
+* Fix some warnings from ``sqlalchemy``
+
+  * ``session.connection()`` doesn't need to ``.connect()``
+  * ``.join(x, y, ...)`` should be ``.join(x).join(y)...``
+  * ``session.query(Foo).get(bar)`` should be ``session.get(Foo, bar)``
+
+
 8.0.0
 =====
 
