@@ -5,7 +5,7 @@ import structlog
 
 from dcicutils.env_utils import is_stg_or_prd_env
 from dcicutils.lang_utils import disjoined_list
-from dcicutils.misc_utils import PRINT, get_error_message
+from dcicutils.misc_utils import PRINT  # , get_error_message
 from pyramid.paster import get_app
 # from snovault import DBSESSION
 # from snovault.storage import Base

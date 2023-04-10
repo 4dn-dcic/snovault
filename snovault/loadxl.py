@@ -21,17 +21,21 @@ from pyramid.response import Response
 from pyramid.view import view_config
 from snovault.util import debug_log
 
+
 # from .server_defaults import add_last_modified
 def add_last_modified(*args, **kwargs):
     raise NotImplementedError("add_last_modified is not yet implemented.")
 
+
 _MYDIR = os.path.dirname(__file__)
+
 
 def resource_filename(resource, filename):
     assert resource == 'encoded'
     # TODO: In fact we should do this based on the working dir so that when this is imported to another repo,
     #       it gets the inserts out of that repo's tests, not our own.
     return os.path.join(_MYDIR, filename)
+
 
 text = type(u'')
 logger = structlog.getLogger(__name__)

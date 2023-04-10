@@ -45,15 +45,14 @@ class PyramidAppManager:
 
         """
         connection = self.session.connection().connect()
-        try:
-
+        if not transaction:
             yield connection
-        except Exception as e:
-            if as_transaction:
-                transaction.abort()
-            raise
         else:
-            if as_transaction:
+            try:
+                yield connection
+            except Exception:
+                transaction.abort()
+            else:
                 # commit all changes to DB
                 self.session.flush()
                 mark_changed(self.session())

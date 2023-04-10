@@ -11,7 +11,7 @@ from jsonschema_serialize_fork import (
     FormatChecker,
     RefResolver,
 )
-from jsonschema_serialize_fork import NO_DEFAULT
+# from jsonschema_serialize_fork import NO_DEFAULT
 # TODO (C4-177): remove these imports (urlsplit, urlopen) when RefResolverOrdered is removed
 from jsonschema_serialize_fork.compat import urlsplit, urlopen
 from jsonschema_serialize_fork.exceptions import ValidationError
