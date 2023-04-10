@@ -115,10 +115,11 @@ def test_get_by_json(session):
     resource = session.query(Resource).one()
     session.flush()
     query = (session.query(CurrentPropertySheet)
-             .join(CurrentPropertySheet.propsheet, CurrentPropertySheet.resource)
+             # Rewrittent to use two separate joins per SQLAlchemy 2.0 requirements. -kmp 10-Apr-2023
+             .join(CurrentPropertySheet.propsheet)
+             .join(CurrentPropertySheet.resource)
              .filter(PropertySheet.properties['foo'].astext == 'baz')
              )
-
     data = query.one()
     assert data.propsheet.properties == props2
 

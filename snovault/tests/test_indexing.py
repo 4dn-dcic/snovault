@@ -132,7 +132,7 @@ def setup_and_teardown(app):
 
     # AFTER THE TEST
     session = app.registry[DBSESSION]
-    connection = session.connection().connect()
+    connection = session.connection()  # was session.connection().connect(), rewritten for SA2.0
     # The reflect=True argument to MetaData was deprecated. Instead, one is supposed to call the .reflect()
     # method after creation. (This comment is transitional and can go away if things seem to work normally.)
     # -kmp 11-May-2020
@@ -2322,7 +2322,8 @@ def test_assert_transactions_table_is_gone(app):
     """
     session = app.registry[DBSESSION]
     conn = session.connection()
-    conn.connect()
+    # In SQLAlchemy 2.0, it is no longer necessary to explicitly connect.
+    # conn.connect()
     # The reflect=True argument to MetaData was deprecated. Instead, one is supposed to call the .reflect()
     # method after creation. (This comment is transitional and can go away if things seem to work normally.)
     # -kmp 11-May-2020
