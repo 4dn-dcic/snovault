@@ -375,7 +375,9 @@ class RDBStorage(object):
         try:
             # baked query seem to not work with json
             query = (session.query(CurrentPropertySheet)
-                     .join(CurrentPropertySheet.propsheet, CurrentPropertySheet.resource)
+                     # Rewrittent to use two separate joins per SQLAlchemy 2.0 requirements. -kmp 10-Apr-2023
+                     .join(CurrentPropertySheet.propsheet)
+                     .join(CurrentPropertySheet.resource)
                      .filter(Resource.item_type == item_type,
                              PropertySheet.properties[key].astext == value)
                      )
@@ -480,7 +482,8 @@ class RDBStorage(object):
             msg = 'Cannot update because of one or more conflicting (or undefined) UUIDs'
             raise HTTPConflict(msg)
         assert unique_keys is not None
-        conflicts = [pk for pk in keys_add if session.query(Key).get(pk) is not None]
+        # Formerly session.query(Key).get(pk), rewritten for SA2.0
+        conflicts = [pk for pk in keys_add if session.get(Key, pk) is not None]
         assert conflicts
         msg = 'Keys conflict: %r' % conflicts
         raise HTTPConflict(msg)
@@ -524,7 +527,7 @@ class RDBStorage(object):
 
         session = self.DBSession()
         for pk in to_remove:
-            key = session.query(Key).get(pk)
+            key = session.get(Key, pk)  # formerly session.query(Key).get(pk), rewritten for SA2.0
             session.delete(key)
 
         for name, value in to_add:
@@ -548,7 +551,8 @@ class RDBStorage(object):
         to_add = rels - existing
 
         for rel, target in to_remove:
-            link = session.query(Link).get((source, rel, target))
+            # formerly link = session.query(Link).get((source, rel, target)), rewritten for SA2.0
+            link = session.get(Link, (source, rel, target))
             session.delete(link)
 
         for rel, target in to_add:
@@ -640,7 +644,7 @@ class RDBBlobStorage(object):
         if isinstance(blob_id, str):
             blob_id = uuid.UUID(blob_id)
         session = self.DBSession()
-        blob = session.query(Blob).get(blob_id)
+        blob = session.get(Blob, blob_id)  # was session.query(Blob).get(blob_id), rewritten for SA2.0
         return blob.data
 
 
