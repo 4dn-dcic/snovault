@@ -25,6 +25,7 @@ from ..schema_utils import load_schema
 from ..attachment import ItemWithAttachment
 from ..interfaces import CONNECTION
 from ..util import IndexSettings
+from ..drs import validate_drs_object
 
 
 def includeme(config):
@@ -426,6 +427,38 @@ class NestedObjectLinkTarget(Item):
 class TestingDownload(ItemWithAttachment):
     item_type = 'testing_download'
     schema = load_schema('snovault:test_schemas/TestingDownload.json')
+
+
+@view_config(name='drs', context=TestingDownload, request_method='GET',
+             permission='view', subpath_segments=[0, 1])
+def drs(context, request):
+    """ Example DRS object implementation. Write this for all object classes that
+        you want to render a DRS object. This structure is minimally validated by the
+        downstream API (see drs.py).
+    """
+    rendered_object = request.embed(str(context.uuid), '@@object', as_user=True)
+    drs_object = {
+        'id': rendered_object['@id'],
+        'created_time': rendered_object['date_created'],
+        'drs_id': rendered_object['uuid'],
+        'self_uri': f'drs://{request.host}{request.path}',
+        'size': 0,
+        'checksums': [
+            {
+                'checksum': 'something',
+                'type': 'md5'
+            }
+        ],
+        'access_methods': [
+            {
+                'access_url': {
+                    'url': f'http://{request.host}/{context.uuid}/@@download'
+                },
+                'type': 'http'
+            },
+        ]
+    }
+    return drs_object
 
 
 @collection('testing-link-sources-sno', unique_key='testing_link_sources-sno:name')
