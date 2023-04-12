@@ -1,4 +1,3 @@
-import pytest
 import unittest
 
 from pyramid.interfaces import IAuthenticationPolicy
@@ -6,9 +5,6 @@ from pyramid.security import Authenticated, Everyone
 from pyramid.testing import DummyRequest
 from zope.interface.verify import verifyObject, verifyClass
 from ..authentication import NamespacedAuthenticationPolicy
-
-
-pytestmark = [pytest.mark.working]
 
 
 class TestNamespacedAuthenticationPolicy(unittest.TestCase):

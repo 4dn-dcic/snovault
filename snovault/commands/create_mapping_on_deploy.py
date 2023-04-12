@@ -41,13 +41,13 @@ def get_deployment_config(app):
     my_env = get_my_env(app)
     deploy_cfg['ENV_NAME'] = my_env
     if is_stg_or_prd_env(my_env):
-        log.info('This looks like our production environment -- do not wipe ES')
+        log.info('This looks like our production environment -- not wiping ES')
         deploy_cfg['WIPE_ES'] = False
     elif is_test_env(my_env):
-        log.info('This looks like a test environment -- wipe ES')
+        log.info('This looks like a test environment -- wiping ES')
         deploy_cfg['WIPE_ES'] = True
     else:
-        log.info('This environment is not recognized -- do not wipe ES')
+        log.info('This environment is not recognized -- not wiping ES')
         deploy_cfg['WIPE_ES'] = False
     return deploy_cfg
 

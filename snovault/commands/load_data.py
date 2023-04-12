@@ -3,6 +3,8 @@ import logging
 import structlog
 
 from dcicutils.env_utils import permit_load_data
+from dcicutils.common import APP_CGAP
+
 from pyramid.paster import get_app
 from pyramid.path import DottedNameResolver
 from .. import configure_dbsession
@@ -15,13 +17,16 @@ EPILOG = __doc__
 
 
 # should be overridden in downstream application to pass a different app
-def load_data_should_proceed(env, allow_prod, app='cgap'):
+def load_data_should_proceed(env, allow_prod, app=None):
     """ Returns True on whether or not load_data should proceed.
 
     :param env: env we are on
     :param allow_prod: prod argument from argparse, defaults to False
+    :param app: app type, one of cgap, fourfront (enums from dcicutils.common)
     :return: True if load_data should continue, False otherwise
     """
+    if not app:
+        app = APP_CGAP  # this fallback is somewhat reasonable
     return permit_load_data(envname=env, allow_prod=allow_prod, orchestrated_app=app)  # noqa
 
 
