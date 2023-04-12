@@ -1,6 +1,9 @@
 clean:
 	rm -rf *.egg-info
 
+aws-ip-ranges:
+	curl -o aws-ip-ranges.json https://ip-ranges.amazonaws.com/ip-ranges.json
+
 configure:  # does any pre-requisite installs
 	@#pip install --upgrade pip==21.0.1
 	pip install --upgrade pip
@@ -31,6 +34,7 @@ build-configured:
 	make build-after-poetry
 
 build-after-poetry:
+	make aws-ip-ranges
 	poetry run python setup_eb.py develop
 	make fix-dist-info
 	poetry run prepare-local-dev
@@ -130,6 +134,7 @@ help:
 
 info:
 	@: $(info Here are some 'make' options:)
+	   $(info - Use 'make aws-ip-ranges' to download latest ip range information. Invoked automatically when needed.)
 	   $(info - Use 'make clean' to clear out (non-python) dependencies)
 	   $(info - Use 'make configure' to install poetry, though 'make build' will do it automatically.)
 	   $(info - Use 'make build' to build only application dependencies (or 'make macbuild' on OSX Catalina))
