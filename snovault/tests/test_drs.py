@@ -8,7 +8,7 @@ class TestDRSAPI:
         the @@download scheme
     """
 
-    def test_drs_get_object(self, testapp, testing_download):
+    def test_drs_get_object(self, testapp, testing_download):  # noQA fixture
         """ Tests basic structure about a drs object """
         res = testapp.get(testing_download)
         drs_object_uri = res.json['uuid']
@@ -27,7 +27,7 @@ class TestDRSAPI:
         for key in REQUIRED_FIELDS:
             assert key in drs_object_2
 
-    def test_drs_get_object_url(self, testapp, testing_download):
+    def test_drs_get_object_url(self, testapp, testing_download):  # noQA fixture
         """ Tests extracting URL through ga4gh pathway """
         res = testapp.get(testing_download)
         drs_object_uri = res.json['uuid']
@@ -56,7 +56,7 @@ class TestDRSAPI:
             'url': f'http://localhost:80/{drs_object_uri}/@@download'
         }
 
-    def test_drs_get_object_failure(self, testapp, testing_download):
+    def test_drs_get_object_failure(self, testapp, testing_download):  # noQA fixture
         """ Tests a bunch of bunk URLs """
         res = testapp.get(testing_download)
         drs_object_uri = res.json['uuid']

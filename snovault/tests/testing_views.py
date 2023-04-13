@@ -25,7 +25,6 @@ from ..schema_utils import load_schema
 from ..attachment import ItemWithAttachment
 from ..interfaces import CONNECTION
 from ..util import IndexSettings
-from ..drs import validate_drs_object
 
 
 def includeme(config):
