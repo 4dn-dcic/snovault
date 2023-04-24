@@ -13,6 +13,40 @@ Change Log
   this repository (to reduce code/library maintenace overhead)
 
 
+* Port support for ``make deploy1`` from the portals:
+
+  * In ``Makefile``:
+
+    * Support for ``make deploy1``
+
+    * Support for ``make psql-dev``
+
+    * Support for ``make psql-test``
+
+    * Support for ``make kibana-start`` (commented out for now, pending testing)
+
+    * Support for ``make kibana-start-test`` (commented out)
+
+    * Support for ``make kibana-stop`` (commented out)
+
+  * In ``pyproject.toml``:
+
+    * Template file ``development.ini.template``
+
+    * Template file ``test.ini.template``
+
+    * Support for ``prepare-local-dev`` script,
+      which creates ``development.ini`` from ``development.ini.template``
+      and ``test.ini`` from ``test.ini.template``.
+
+ * Port the ``dev_servers.py`` support from CGAP.
+
+ * In the ``scripts/`` dir:
+
+   * Add ``scripts/psql-start`
+     in support of ``make psql-dev`` and ``make psql-test``.
+
+
 8.0.1
 =====
 

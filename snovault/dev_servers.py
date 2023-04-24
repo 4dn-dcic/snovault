@@ -16,10 +16,10 @@ import subprocess
 import sys
 
 from dcicutils.misc_utils import PRINT
-from pkg_resources import resource_filename
 from pyramid.paster import get_app, get_appsettings
 from pyramid.path import DottedNameResolver
 from .elasticsearch import create_mapping
+from .project import PROJECT_NAME, project_filename
 from .tests import elasticsearch_fixture, postgresql_fixture
 
 
@@ -31,7 +31,7 @@ logger = logging.getLogger(__name__)
 def nginx_server_process(prefix='', echo=False):
     args = [
         os.path.join(prefix, 'nginx'),
-        '-c', resource_filename('encoded', 'nginx-dev.conf'),
+        '-c', project_filename('nginx-dev.conf'),
         '-g', 'daemon off;'
     ]
     process = subprocess.Popen(
@@ -115,7 +115,7 @@ def run(app_name, config_uri, datadir, clear=False, init=False, load=False, inge
 
     logging.basicConfig(format='')
     # Loading app will have configured from config file. Reconfigure here:
-    logging.getLogger('encoded').setLevel(logging.INFO)
+    logging.getLogger(PROJECT_NAME).setLevel(logging.INFO)
 
     # get the config and see if we want to connect to non-local servers
     # TODO: This variable seems to not get used? -kmp 25-Jul-2020
@@ -154,6 +154,7 @@ def run(app_name, config_uri, datadir, clear=False, init=False, load=False, inge
     # For now - required components
     postgres = postgresql_fixture.server_process(pgdata, echo=True)
     processes.append(postgres)
+
     es_server_url = config.get('elasticsearch.server', "localhost")
 
     if '127.0.0.1' in es_server_url or 'localhost' in es_server_url:
@@ -181,6 +182,8 @@ def run(app_name, config_uri, datadir, clear=False, init=False, load=False, inge
         ingestion_listener = ingestion_listener_process(config_uri, app_name)
         processes.append(ingestion_listener)
 
+    # TODO: We now assign app above in case redis needs it. Can we just use that value
+    # and get rid of this whole if/then/else? -kmp 12-Apr-2023
     if init:
         app = get_app(config_uri, app_name)
     else:

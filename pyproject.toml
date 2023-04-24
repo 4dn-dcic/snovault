@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "dcicsnovault"
-version = "8.1.0"
+version = "8.0.1.2b1"  # to become 8.1.0
 description = "Storage support for 4DN Data Portals."
 authors = ["4DN-DCIC Team <support@4dnucleome.org>"]
 license = "MIT"
@@ -50,10 +50,14 @@ html5lib = ">=1.1"  # experimental, should be OK now that we're not using moto s
 humanfriendly = "^1.44.9"
 jsonschema_serialize_fork = "^2.1.1"
 netaddr = ">=0.8.0,<1"
+PasteDeploy = "1.5.2"
+plaster = "1.0"
+plaster-pastedeploy = "0.6"
 passlib = "^1.7.4"
 psutil = "^5.9.0"
 psycopg2-binary = "^2.9.1"
 PyBrowserID = ">=0.10.0,<1"
+pyjwt = "^2.6.0"
 pyramid = "1.10.4"
 pyramid_localroles = ">=0.1,<1"
 pyramid-multiauth = ">=0.9.0,<1"
@@ -65,6 +69,7 @@ python_magic = ">=0.4.27"
 pytz = ">=2021.3"
 rdflib = "^4.2.2"
 rdflib-jsonld = ">=0.5.0,<1.0.0"
+redis = "^4.5.1"
 rutter = ">=0.3,<1"
 simplejson = "^3.17.6"
 SPARQLWrapper = "^1.8.5"
@@ -83,9 +88,6 @@ xlrd = "^1.0.0"
 "zope.deprecation" = "^4.4.0"
 "zope.interface" = ">=4.7.2,<6"
 "zope.sqlalchemy" = "1.6"
-pyjwt = "^2.6.0"
-pytest-redis = "^2.0.0"
-redis = "^4.5.1"
 
 [tool.poetry.dev-dependencies]
 botocore-stubs = ">=1.27.36"  # no particular version required, but this speeds up search
@@ -117,6 +119,7 @@ pytest-cov = ">=2.2.1"
 pytest-instafail = ">=0.3.0"
 # TODO: Investigate whether a major version upgrade is allowable for 'pytest-mock'.
 pytest-mock = ">=0.11.0"
+pytest-redis = "^2.0.0"
 # TODO: Investigate whether a major version upgrade is allowable for 'pytest-runner'.
 pytest-runner = ">=4.0"
 pytest-timeout = ">=1.0.0"
@@ -134,7 +137,20 @@ PyYAML = ">=5.1,<5.5"
 wheel = ">=0.29.0"
 
 [tool.poetry.scripts]
+dev-servers = "snovault.dev_servers:main"
+list-db-tables = "snovault.commands.list_db_tables:main"
+prepare-local-dev = "snovault.commands.prepare_template:prepare_local_dev_main"
 wipe-test-indices = "snovault.commands.wipe_test_indices:main"
+
+[paste.app_factory]
+main = "snovault:main"
+
+[paste.composite_factory]
+indexer = "snovault.elasticsearch.es_index_listener:composite"
+# ingester = "encoded.ingestion_listener:composite"
+
+# [paste.filter_app_factory]
+# memlimit = "encoded.memlimit:filter_app"
 
 [build-system]
 requires = ["poetry_core>=1.0.0"]

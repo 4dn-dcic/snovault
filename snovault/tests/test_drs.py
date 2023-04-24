@@ -1,6 +1,10 @@
 import pytest
 from .test_attachment import testing_download  # noQA fixture import
+from dcicutils.qa_utils import notice_pytest_fixtures
 from ..drs import REQUIRED_FIELDS
+
+
+notice_pytest_fixtures(testing_download)
 
 
 class TestDRSAPI:

@@ -44,13 +44,13 @@ def test_nested_embed(testapp, use_nested):
             assert td_res['@graph'][0]['uuid'] == uuid
 
         res = testapp.post_json('/nested-embedding-container/',
-                                   {
-                                       "link_to_nested_object": td_res['@graph'][0]['uuid'],
-                                       "title": "required title",
-                                       "description": "foo",
-                                       "uuid": NESTED_EMBEDDING_CONTAINER_GUID,
-                                   },
-                                   status=201).json
+                                {
+                                    "link_to_nested_object": td_res['@graph'][0]['uuid'],
+                                    "title": "required title",
+                                    "description": "foo",
+                                    "uuid": NESTED_EMBEDDING_CONTAINER_GUID,
+                                },
+                                status=201).json
         embedded_json = testapp.get(res['@graph'][0]['@id'] + "?frame=embedded").json
         print(json.dumps(embedded_json, indent=2))
 
@@ -78,13 +78,13 @@ def test_nested_embed_calculated(testapp, use_nested):
             assert td_res['@graph'][0]['uuid'] == uuid
 
         res = testapp.post_json('/nested-embedding-container/',
-                                   {
-                                       "link_to_nested_object": NESTED_OBJECT_LINK_TARGET_GUID_1,
-                                       "title": "required title",
-                                       "description": "foo",
-                                       "uuid": NESTED_EMBEDDING_CONTAINER_GUID,
-                                   },
-                                   status=201).json
+                                {
+                                    "link_to_nested_object": NESTED_OBJECT_LINK_TARGET_GUID_1,
+                                    "title": "required title",
+                                    "description": "foo",
+                                    "uuid": NESTED_EMBEDDING_CONTAINER_GUID,
+                                },
+                                status=201).json
         embedded_json = testapp.get(res['@graph'][0]['@id'] + "?frame=embedded").json
         print(json.dumps(embedded_json, indent=2))
 
@@ -118,17 +118,17 @@ def test_nested_embed_multi_trivial(testapp, use_nested):
             assert td_res['@graph'][0]['uuid'] == uuid
 
         res = testapp.post_json('/nested-embedding-container/',
-                                   {
-                                       "link_to_nested_objects": [td_res['@graph'][0]['uuid']],
-                                       "title": "required title",
-                                       "description": "foo",
-                                       "uuid": NESTED_EMBEDDING_CONTAINER_GUID,
-                                   },
-                                   status=201).json
+                                {
+                                    "link_to_nested_objects": [td_res['@graph'][0]['uuid']],
+                                    "title": "required title",
+                                    "description": "foo",
+                                    "uuid": NESTED_EMBEDDING_CONTAINER_GUID,
+                                },
+                                status=201).json
         embedded_json = testapp.get(res['@graph'][0]['@id'] + "?frame=embedded").json
         print(json.dumps(embedded_json, indent=2))
         [item] = embedded_json['link_to_nested_objects']  # We only associated one uuid in our post
-        [associate] = item['associates'] # We only described one associate in the target
+        [associate] = item['associates']  # We only described one associate in the target
         assert associate['x'] == '1'
         assert associate['y'] == '2'
         assert 'z' not in associate
@@ -157,10 +157,10 @@ def test_nested_embed_multi(testapp, use_nested):
                                               {
                                                   "associates": [prop_bindings],
                                                   # Fields "title" and "description" are required, but might as well
-                                                  # include useful stuff in case it's needed for debugging. These values
-                                                  # do not affect the outcome. -kmp 4-Jul-2020
-                                                  "title": "Item {i} with props={props}".format(i=i, props=prop_bindings),
-                                                  "description": "This is item {}".format(i),
+                                                  # include useful stuff in case it's needed for debugging.
+                                                  # These values do not affect the outcome. -kmp 4-Jul-2020
+                                                  "title": f"Item {i} with props={prop_bindings}",
+                                                  "description": f"This is item {i}",
                                                   # Here we make sure that we make sure that the various
                                                   "uuid": (NESTED_OBJECT_LINK_TARGET_GUIDS[i]
                                                            if i < minimum_n
@@ -212,7 +212,7 @@ def test_json(testapp, item_type):
 
 def test_json_basic_auth(anontestapp):
     url = '/'
-    value = "Authorization: Basic %s" % ascii_native_(b64encode(b'nobody:pass'))
+    value = f"Authorization: Basic {ascii_native_(b64encode(b'nobody:pass'))}"
     res = anontestapp.get(url, headers={'Authorization': value}, status=401)
     assert res.content_type == 'application/json'
 
@@ -241,7 +241,7 @@ def test_collection_post_missing_content_type(testapp):
 
 
 def test_collection_post_bad(anontestapp):
-    value = "Authorization: Basic %s" % ascii_native_(b64encode(b'nobody:pass'))
+    value = f"Authorization: Basic {ascii_native_(b64encode(b'nobody:pass'))}"
     anontestapp.post_json('/embedding-tests', {}, headers={'Authorization': value}, status=401)
 
 
@@ -272,7 +272,7 @@ def test_collection_put(testapp, execute_counter):
     """ Insert and udpate an item into a collection, verify it worked """
     initial = {
         'title': "Testing",
-        'type': "object", # include a non-required field
+        'type': "object",  # include a non-required field
         'description': "This is the initial insert",
     }
     item_url = testapp.post_json('/embedding-tests', initial).location
@@ -307,7 +307,7 @@ def test_invalid_collection_put(testapp):
     nonexistent_field = {
         'title': "Testing",
         'type': "string",
-        'descriptionn': "This is a descriptionn", # typo
+        'descriptionn': "This is a descriptionn",  # typo
     }
     testapp.post_json('/embedding-tests', nonexistent_field, status=422)
 
@@ -336,7 +336,7 @@ def test_jsonld_context(testapp):
 @pytest.mark.slow
 @pytest.mark.parametrize('item_type', PARAMETERIZED_NAMES)
 def test_index_data_workbook(testapp, indexer_testapp, item_type):
-    res = testapp.get('/%s?limit=all' % item_type).follow(status=200)
+    res = testapp.get(f'/{item_type}?limit=all').follow(status=200)
     for item in res.json['@graph']:
         indexer_testapp.get(item['@id'] + '@@index-data', status=200)
 
@@ -347,7 +347,7 @@ def test_home(testapp):
 
 @pytest.mark.parametrize('item_type', TYPE_NAMES)
 def test_profiles(testapp, item_type):
-    res = testapp.get('/profiles/%s.json' % item_type).maybe_follow(status=200)
+    res = testapp.get(f'/profiles/{item_type}.json').maybe_follow(status=200)
     errors = Draft4Validator.check_schema(res.json)
     assert not errors
     # added from ..schema_views._annotated_schema
@@ -359,7 +359,7 @@ def test_profiles(testapp, item_type):
 
 @pytest.mark.parametrize('item_type', ['AbstractItemTest'])
 def test_profiles_abstract(testapp, item_type):
-    res = testapp.get('/profiles/%s.json' % item_type).maybe_follow(status=200)
+    res = testapp.get(f'/profiles/{item_type}.json').maybe_follow(status=200)
     errors = Draft4Validator.check_schema(res.json)
     assert not errors
     # added from ..schema_views._annotated_schema
