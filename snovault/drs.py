@@ -4,7 +4,8 @@ from pyramid.exceptions import HTTPNotFound
 from .util import debug_log
 
 
-DRS_PREFIX_V1 = 'ga4gh/drs/v1'
+DRS_VERSION_1 = 'v1'
+DRS_PREFIX_V1 = f'ga4gh/drs/{DRS_VERSION_1}'
 DRS_OBJECT_GET = DRS_PREFIX_V1 + '/objects/{object_id}'
 DRS_OBJECT_GET_ACCESS_URL = DRS_PREFIX_V1 + '/objects/{object_id}/access/{access_id}'
 DRS_OBJECT_GET_ACCESSS_URL_SLASH = DRS_PREFIX_V1 + '/objects/{object_id}/access/'

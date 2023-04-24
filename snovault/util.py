@@ -6,11 +6,15 @@ import os
 import structlog
 import sys
 import re
+import boto3
 
+from botocore.client import Config
 from copy import copy
 from datetime import datetime, timedelta
 from pyramid.httpexceptions import HTTPForbidden
 from pyramid.threadlocal import manager as threadlocal_manager
+from dcicutils.secrets_utils import assume_identity
+from dcicutils.ecs_utils import ECSUtils
 
 from .interfaces import CONNECTION, STORAGE, TYPES
 from .settings import Settings
@@ -1183,3 +1187,40 @@ def content_type_allowed(request):
                 raise NotImplementedError(f"Unrecognized path_condition: {path_condition}")
 
     return False
+
+
+def check_user_is_logged_in(request):
+    """ Raises HTTPForbidden if the request did not come from a logged in user. """
+    for principal in request.effective_principals:
+        if principal.startswith('userid.') or principal == 'group.admin':  # allow if logged in OR has admin
+            break
+    else:
+        raise HTTPForbidden(title="Not logged in.")
+
+
+def make_s3_client():
+    s3_client_extra_args = {}
+    if 'IDENTITY' in os.environ:
+        identity = assume_identity()
+        s3_client_extra_args['aws_access_key_id'] = key_id = identity.get('S3_AWS_ACCESS_KEY_ID')
+        s3_client_extra_args['aws_secret_access_key'] = identity.get('S3_AWS_SECRET_ACCESS_KEY')
+        s3_client_extra_args['region_name'] = ECSUtils.REGION
+        log.warning(f"make_s3_client using S3 entity ID {key_id[:10]} arguments in `boto3 client creation call.")
+        if 'ENCODED_S3_ENCRYPT_KEY_ID' in identity:
+            # This setting is required when testing locally and encrypted buckets need to be accessed.
+            s3_client_extra_args['config'] = Config(signature_version='s3v4')
+    else:
+        log.warning(f'make_s3_client called with no identity')
+
+    s3_client = boto3.client('s3', **s3_client_extra_args)
+    return s3_client
+
+
+def build_s3_presigned_get_url(*, params):
+    """ Helper function that builds a presigned URL. """
+    s3_client = make_s3_client()
+    return s3_client.generate_presigned_url(
+        ClientMethod='get_object',
+        Params=params,
+        ExpiresIn=36 * 60 * 60
+    )

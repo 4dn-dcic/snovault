@@ -290,6 +290,7 @@ def item_delete_full(context, request, render=None):
         user_details = request.user_info.get('details', {})
     else:
         # used to check for admin here, now done in user_info above
+        # note that hasattr() results in a function call when referring to an @property
         user_details = {}
     if 'admin' not in user_details.get('groups', []):
         msg = u'Must be admin to fully delete items.'
