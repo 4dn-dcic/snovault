@@ -5,7 +5,7 @@ import structlog
 
 from dcicutils.env_utils import is_stg_or_prd_env
 from dcicutils.lang_utils import disjoined_list
-from dcicutils.misc_utils import PRINT  # , get_error_message
+from dcicutils.misc_utils import PRINT, get_error_message
 from pyramid.paster import get_app
 # from snovault import DBSESSION
 # from snovault.storage import Base
@@ -15,9 +15,10 @@ from typing import Optional, List
 # from zope.sqlalchemy import mark_changed
 from .. import configure_dbsession
 from ..sqlalchemy_tools import PyramidAppManager
+from ..project import PROJECT_NAME
 
 
-log = structlog.getLogger(__name__)
+logger = structlog.getLogger(__name__)
 
 
 EPILOG = __doc__
@@ -66,30 +67,27 @@ def run_list_db_tables(app, only_envs: Optional[List[str]] = None, skip_es: bool
     current_env = app.registry.settings.get('env.name', 'local')
 
     if is_stg_or_prd_env(current_env) and not allow_prod:
-        log.error(f"list-db-tables: This action cannot be performed on env {current_env}"
-                  f" because it is a production-class (stg or prd) environment."
-                  f" {SKIPPING_LIST_ATTEMPT}")
+        logger.error(f"list-db-tables: This action cannot be performed on env {current_env}"
+                     f" because it is a production-class (stg or prd) environment."
+                     f" {SKIPPING_LIST_ATTEMPT}")
         return False
 
     if only_envs and current_env not in only_envs:
-        log.error(f"list-db-tables: The current environment, {current_env}, is not {disjoined_list(only_envs)}."
-                  f" {SKIPPING_LIST_ATTEMPT}")
+        logger.error(f"list-db-tables: The current environment, {current_env}, is not {disjoined_list(only_envs)}."
+                     f" {SKIPPING_LIST_ATTEMPT}")
         return False
 
-    log.info('list-db-tables: Listing DB tables...')
-    list_db_success = list_db_tables(app)
-    if not list_db_success:
-        log.info("list-db-tables failed.")
+    logger.info('list-db-tables: Listing DB tables...')
+    try:
+        list_db_tables(app)
+    except Exception as e:
+        logger.info(f"list-db-tables failed. {get_error_message(e)}")
         return False
-    log.info("list-db-tables succeeded.")
+    logger.info("list-db-tables succeeded.")
     return True
 
 
 def main(simulated_args=None):
-    logging.basicConfig()
-    # Loading app will have configured from config file. Reconfigure here:
-    logging.getLogger('encoded').setLevel(logging.DEBUG)
-
     parser = argparse.ArgumentParser(  # noqa - PyCharm wrongly thinks the formatter_class is specified wrong here.
         description='List DB Contents', epilog=EPILOG,
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -105,6 +103,8 @@ def main(simulated_args=None):
                         help="Specify --no-confirm to suppress interactive confirmation.")
     parser.add_argument('--allow-prod', action='store_true', default=False,
                         help='DANGER: If set, will allow running this command on an env that is staging or prod')
+    parser.add_argument('--log', action='store_true', default=False,
+                        help='Set loglevel to DEBUG. Otherwise it will be ERROR.')
     args = parser.parse_args(simulated_args)
 
     confirm = args.confirm
@@ -112,6 +112,14 @@ def main(simulated_args=None):
     config_uri = args.config_uri
     only_envs = args.only_envs
     allow_prod = args.allow_prod
+    log = args.log
+
+    logging.basicConfig()
+    # Loading app will have configured from config file. Reconfigure here:
+    if log:
+        logging.getLogger(PROJECT_NAME).setLevel(logging.DEBUG)
+    else:
+        logging.getLogger(PROJECT_NAME).setLevel(logging.ERROR)
 
     if confirm is None:
         confirm = False   # not only_envs  # If only_envs is supplied, we have better protection so don't need to confirm

@@ -15,26 +15,13 @@ from base64 import b64encode
 from dcicutils.misc_utils import ignored
 from dcicutils.secrets_utils import assume_identity
 from PIL import Image
-# from pkg_resources import resource_filename
 from pyramid.paster import get_app
 from pyramid.response import Response
 from pyramid.view import view_config
 from snovault.util import debug_log
 
-
-# from .server_defaults import add_last_modified
-def add_last_modified(*args, **kwargs):
-    raise NotImplementedError("add_last_modified is not yet implemented.")
-
-
-_MYDIR = os.path.dirname(__file__)
-
-
-def resource_filename(resource, filename):
-    assert resource == 'encoded'
-    # TODO: In fact we should do this based on the working dir so that when this is imported to another repo,
-    #       it gets the inserts out of that repo's tests, not our own.
-    return os.path.join(_MYDIR, filename)
+from .project import project_filename
+from .server_defaults import add_last_modified
 
 
 text = type(u'')
@@ -48,20 +35,8 @@ def includeme(config):
 
 
 # order of items references with linkTo in a field in  'required' in schemas
-ORDER = [
-    'project',
-    'institution',
-    'user',
-    'file_format',
-    'workflow',
-    'meta_workflow',
-    'workflow_run',
-    'meta_workflow_run',
-    'variant',
-    'structural_variant',
-    'structural_variant_sample',
-    'higlass_view_config'
-]
+# This should be set by the downstream application
+ORDER = []
 
 IS_ATTACHMENT = [
     'attachment',
@@ -69,6 +44,7 @@ IS_ATTACHMENT = [
 ]
 
 
+# This uuid should be constant across all portals
 LOADXL_USER_UUID = "3202fd57-44d2-44fb-a131-afb1e43d8ae5"
 
 
@@ -141,7 +117,7 @@ def load_data_view(context, request):
     inserts = None
     from_json = False
     if fdn_dir:
-        inserts = resource_filename('encoded', 'tests/data/' + fdn_dir + '/')
+        inserts = project_filename('tests/data/' + fdn_dir + '/')
     elif local_path:
         inserts = local_path
     elif store:
@@ -379,7 +355,7 @@ def load_all_gen(testapp, inserts, docsdir, overwrite=True, itype=None, from_jso
             store = {itype: store.get(itype, [])}
     # clear empty values
     store = {k: v for k, v in store.items() if v is not None}
-    if not store:
+    if False:  # not store:
         if from_json:
             err_msg = 'No items found in input "store" json'
         else:
@@ -529,11 +505,6 @@ def load_data(app, indir='inserts', docsdir=None, overwrite=False,
         indir (inserts): inserts folder, should be relative to tests/data/
         docsdir (None): folder with attachment documents, relative to tests/data
     """
-    print("=" * 80)
-    print("load_data is not yet implemented")
-    print("=" * 80)
-    return
-
     environ = {
         'HTTP_ACCEPT': 'application/json',
         'REMOTE_USER': 'TEST',
@@ -541,7 +512,7 @@ def load_data(app, indir='inserts', docsdir=None, overwrite=False,
     testapp = webtest.TestApp(app, environ)
     # load master-inserts by default
     if indir != 'master-inserts' and use_master_inserts:
-        master_inserts = resource_filename('encoded', 'tests/data/master-inserts/')
+        master_inserts = project_filename('tests/data/master-inserts/')
         master_res = load_all(testapp, master_inserts, [], skip_types=skip_types)
         if master_res:  # None if successful
             print(LOAD_ERROR_MESSAGE)
@@ -550,13 +521,13 @@ def load_data(app, indir='inserts', docsdir=None, overwrite=False,
 
     if not indir.endswith('/'):
         indir += '/'
-    inserts = resource_filename('encoded', 'tests/data/' + indir)
+    inserts = project_filename('tests/data/' + indir)
     if docsdir is None:
         docsdir = []
     else:
         if not docsdir.endswith('/'):
             docsdir += '/'
-        docsdir = [resource_filename('encoded', 'tests/data/' + docsdir)]
+        docsdir = [project_filename('tests/data/' + docsdir)]
     res = load_all(testapp, inserts, docsdir, overwrite=overwrite)
     if res:  # None if successful
         print(LOAD_ERROR_MESSAGE)
@@ -592,7 +563,7 @@ def load_local_data(app, overwrite=False):
     ]
 
     for test_insert_dir in test_insert_dirs:
-        chk_dir = resource_filename('encoded', "tests/data/" + test_insert_dir)
+        chk_dir = project_filename("tests/data/" + test_insert_dir)
         for (dirpath, dirnames, filenames) in os.walk(chk_dir):
             if any([fn for fn in filenames if fn.endswith('.json') or fn.endswith('.json.gz')]):
                 logger.info('Loading inserts from "{}" directory.'.format(test_insert_dir))
@@ -735,7 +706,7 @@ def load_data_by_type(app, indir='master-inserts', overwrite=True, itype=None):
 
     if not indir.endswith('/'):
         indir += '/'
-    inserts = resource_filename('encoded', 'tests/data/' + indir)
+    inserts = project_filename('tests/data/' + indir)
 
     res = load_all(testapp, inserts, docsdir=[], overwrite=overwrite, itype=itype)
     if res:  # None if successful
