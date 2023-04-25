@@ -92,6 +92,13 @@ test:
 	@git log -1 --decorate | head -1
 	@date
 
+ES_URL = search-fourfront-testing-opensearch-kqm7pliix4wgiu4druk2indorq.us-east-1.es.amazonaws.com:443
+
+LOCAL_INSTAFAIL_OPTIONS = --timeout=400 -xvv --instafail
+LOCAL_MULTIFAIL_OPTIONS = --timeout=200 -vv
+GA_CICD_TESTING_OPTIONS = --timeout=400 -xvvv --durations=100 --aws-auth --es ${ES_URL}
+STATIC_ANALYSIS_OPTIONS =  -vv
+
 test-full:
 	@git log -1 --decorate | head -1
 	@date
@@ -159,7 +166,7 @@ remote-test-indexing-es:
 remote-test-indexing-not-es:
 	SQLALCHEMY_WARN_20=1 poetry run pytest ${GA_CICD_TESTING_OPTIONS} -m "indexing and not es"
 
-update:  # updates dependencies
+update:
 	poetry update
 
 publish:

@@ -73,6 +73,26 @@ def ingestion_listener_process(config_uri, app_name, echo=True):
     return process
 
 
+def redis_server_process(echo=False):
+    """ Handler that spins up a Redis server on port 6379 (default)"""
+    args = [
+        'redis-server',
+        '--daemonize',
+        'yes'
+    ]
+    process = subprocess.Popen(
+        args,
+        close_fds=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+    )
+    if not echo:
+        process.stdout.close()
+    if echo:
+        print('Started Redis Server at redis://localhost:6379')
+    return process
+
+
 def main():
     parser = argparse.ArgumentParser(  # noqa - PyCharm wrongly thinks the formatter_class is specified wrong here.
         description="Run development servers", epilog=EPILOG,
@@ -129,8 +149,6 @@ def run(app_name, config_uri, datadir, clear=False, init=False, load=False, inge
             process.wait()
 
     processes = []
-    # app = get_app(config_uri, app_name)
-    # settings = app.registry.settings
 
     # For now - required components
     postgres = postgresql_fixture.server_process(pgdata, echo=True)
@@ -154,16 +172,17 @@ def run(app_name, config_uri, datadir, clear=False, init=False, load=False, inge
     nginx = nginx_server_process(echo=True)
     processes.append(nginx)
 
+    app = get_app(config_uri, app_name)
+    settings = app.registry.settings
+
+    # Optional components
+    if 'redis.server' in settings:
+        redis = redis_server_process(echo=True)
+        processes.append(redis)
+
     if ingest:
         ingestion_listener = ingestion_listener_process(config_uri, app_name)
         processes.append(ingestion_listener)
-
-    # TODO: We now assign app above in case redis needs it. Can we just use that value
-    # and get rid of this whole if/then/else? -kmp 12-Apr-2023
-    if init:
-        app = get_app(config_uri, app_name)
-    else:
-        app = None
 
     # clear queues and initialize indices before loading data. No indexing yet.
     # this is needed for items with properties stored in ES

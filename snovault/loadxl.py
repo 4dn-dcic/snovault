@@ -12,7 +12,7 @@ import traceback
 import uuid
 
 from base64 import b64encode
-from dcicutils.misc_utils import ignored
+from dcicutils.misc_utils import ignored, environ_bool
 from dcicutils.secrets_utils import assume_identity
 from PIL import Image
 from pyramid.paster import get_app
@@ -287,6 +287,9 @@ def load_all(testapp, inserts, docsdir, overwrite=True, itype=None, from_json=Fa
         return Exception(gen.caught)
 
 
+LOADXL_ALLOW_NONE = environ_bool("LOADXL_ALLOW_NONE", default=True)
+
+
 def load_all_gen(testapp, inserts, docsdir, overwrite=True, itype=None, from_json=False,
                  patch_only=False, post_only=False, skip_types=None):
     """
@@ -355,7 +358,9 @@ def load_all_gen(testapp, inserts, docsdir, overwrite=True, itype=None, from_jso
             store = {itype: store.get(itype, [])}
     # clear empty values
     store = {k: v for k, v in store.items() if v is not None}
-    if False:  # not store:
+    if not store:
+        if LOADXL_ALLOW_NONE:
+            return
         if from_json:
             err_msg = 'No items found in input "store" json'
         else:

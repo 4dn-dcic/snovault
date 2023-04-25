@@ -428,6 +428,38 @@ class TestingDownload(ItemWithAttachment):
     schema = load_schema('snovault:test_schemas/TestingDownload.json')
 
 
+@view_config(name='drs', context=TestingDownload, request_method='GET',
+             permission='view', subpath_segments=[0, 1])
+def drs(context, request):
+    """ Example DRS object implementation. Write this for all object classes that
+        you want to render a DRS object. This structure is minimally validated by the
+        downstream API (see drs.py).
+    """
+    rendered_object = request.embed(str(context.uuid), '@@object', as_user=True)
+    drs_object = {
+        'id': rendered_object['@id'],
+        'created_time': rendered_object['date_created'],
+        'drs_id': rendered_object['uuid'],
+        'self_uri': f'drs://{request.host}{request.path}',
+        'size': 0,
+        'checksums': [
+            {
+                'checksum': 'something',
+                'type': 'md5'
+            }
+        ],
+        'access_methods': [
+            {
+                'access_url': {
+                    'url': f'http://{request.host}/{context.uuid}/@@download'
+                },
+                'type': 'http'
+            },
+        ]
+    }
+    return drs_object
+
+
 @collection('testing-link-sources-sno', unique_key='testing_link_sources-sno:name')
 class TestingLinkSourceSno(Item):
     item_type = 'testing_link_source_sno'
@@ -806,3 +838,226 @@ class TestingBiogroupSno(Item):
         'sources.samples.*',  # embed everything at top level
         'sources.contributor.*'
     ]
+
+
+@collection(
+    'testing-keys',
+    properties={
+        'title': 'Test keys',
+        'description': 'Testing. Testing. 1, 2, 3.',
+    },
+    unique_key='testing_accession',
+)
+class TestingKey(Item):
+    item_type = 'testing_key'
+    schema = {
+        'type': 'object',
+        'properties': {
+            'name': {
+                'type': 'string',
+                'uniqueKey': True,
+            },
+            'accession': {
+                'type': 'string',
+                'uniqueKey': 'testing_accession',
+            },
+        }
+    }
+
+
+@collection('testing-hidden-facets')
+class TestingHiddenFacets(Item):
+    """ Collection designed to test searching with hidden facets. Yes this is large, but this is a complex feature
+        with many possible cases. """
+    item_type = 'testing_hidden_facets'
+    schema = {
+        'type': 'object',
+        'properties': {
+            'first_name': {
+                'type': 'string'
+            },
+            'last_name': {
+                'type': 'string'
+            },
+            'sid': {
+                'type': 'integer'
+            },
+            'unfaceted_string': {
+                'type': 'string'
+            },
+            'unfaceted_integer': {
+                'type': 'integer'
+            },
+            'disabled_string': {
+                'type': 'string',
+            },
+            'disabled_integer': {
+                'type': 'integer',
+            },
+            'unfaceted_object': {
+                'type': 'object',
+                'properties': {
+                    'mother': {
+                        'type': 'string'
+                    },
+                    'father': {
+                        'type': 'string'
+                    }
+                }
+            },
+            'unfaceted_array_of_objects': {
+                'type': 'array',
+                'enable_nested': True,
+                'items': {
+                    'type': 'object',
+                    'properties': {
+                        'fruit': {
+                            'type': 'string'
+                        },
+                        'color': {
+                            'type': 'string'
+                        },
+                        'uid': {
+                            'type': 'integer'
+                        }
+                    }
+                }
+            }
+        },
+        'facets': {
+            'first_name': {
+                'title': 'First Name'
+            },
+            'last_name': {
+                'default_hidden': True,
+                'title': 'Last Name'
+            },
+            'sid': {
+                'default_hidden': True,
+                'title': 'SID',
+                'aggregation_type': 'stats',
+                'number_step': 1
+            },
+            'disabled_string': {
+                'disabled': True
+            },
+            'disabled_integer': {
+                'disabled': True
+            }
+        }
+    }
+
+    @calculated_property(schema={
+        'type': 'array',
+        'items': {
+            'type': 'object',
+            'properties': {
+                'fruit': {
+                    'type': 'string'
+                },
+                'color': {
+                    'type': 'string'
+                },
+                'uid': {
+                    'type': 'integer'
+                }
+            }
+        }
+    })
+    def non_nested_array_of_objects(self, unfaceted_array_of_objects):
+        """ Non-nested view of the unfaceted_array_of_objects field """
+        return unfaceted_array_of_objects
+
+
+@collection('testing-bucket-range-facets')
+class TestingBucketRangeFacets(Item):
+    """ Collection for testing BucketRange facets.
+        Also tests 'add_no_value' schema param behavior.
+    """
+    item_type = 'testing_bucket_range_facets'
+    schema = {
+        'type': 'object',
+        'properties': {
+            'no_value_integer': {
+                'type': 'integer',
+                'add_no_value': True  # if a range query is specified on this field, include documents that
+                                      # have 'No value' for the field
+            },
+            'no_value_integer_array': {
+                'type': 'array',
+                'items': {
+                    'type': 'integer',
+                    'add_no_value': True
+                }
+            },
+            'special_integer': {
+                'type': 'integer'
+            },
+            'special_object_that_holds_integer': {
+                'type': 'object',
+                'properties': {
+                    'embedded_integer': {
+                        'type': 'integer'
+                    }
+                }
+            },
+            'array_of_objects_that_holds_integer': {
+                'type': 'array',
+                'items': {
+                    'type': 'object',
+                    'enable_nested': False,
+                    'properties': {
+                        'embedded_identifier': {
+                            'type': 'string'
+                        },
+                        'embedded_integer': {
+                            'type': 'integer'
+                        }
+                    }
+                }
+            }
+        },
+        'facets': {
+            'no_value_integer': {
+                'title': 'No value integer',
+                'aggregation_type': 'range',
+                'ranges': [
+                    {'from': 0, 'to': 5},
+                    {'from': 5, 'to': 10}
+                ]
+            },
+            'no_value_integer_array': {
+                'title': 'No value integer array',
+                'aggregation_type': 'range',
+                'ranges': [
+                    {'from': 0, 'to': 0},  # test zero range faceting behavior
+                    {'from': 0, 'to': 5},
+                    {'from': 5, 'to': 10}
+                ]
+            },
+            'special_integer': {
+                'title': 'Special Integer',
+                'aggregation_type': 'range',
+                'ranges': [
+                    {'from': 0, 'to': 5},
+                    {'from': 5, 'to': 10}
+                ]
+            },
+            'special_object_that_holds_integer.embedded_integer': {
+                'title': 'Single Object Embedded Integer',
+                'aggregation_type': 'range',
+                'ranges': [
+                    {'from': 0, 'to': 5},
+                    {'from': 5, 'to': 10}
+                ]
+            },
+            'array_of_objects_that_holds_integer.embedded_integer': {
+                'title': 'Array of Objects Embedded Integer',
+                'aggregation_type': 'range',
+                'ranges': [
+                    {'from': 0, 'to': 5, 'label': 'Low'},
+                    {'from': 5, 'to': 10, 'label': 'High'}
+                ]
+            }
+        }
+    }

@@ -32,21 +32,21 @@ _app_settings = {
             'github', 'google-oauth2', 'partners'
         ]
     },
-    'multiauth.policies': 'session remoteuser accesskey webuser',
-    'multiauth.groupfinder': 'snovault.tests.authorization.groupfinder',
-    'multiauth.policy.session.use': 'snovault.tests.authentication.NamespacedAuthenticationPolicy',
+    'multiauth.policies': 'session remoteuser accesskey auth0',
+    'multiauth.groupfinder': 'snovault.authorization.groupfinder',
+    'multiauth.policy.session.use': 'snovault.authentication.NamespacedAuthenticationPolicy',
     'multiauth.policy.session.base': 'pyramid.authentication.SessionAuthenticationPolicy',
     'multiauth.policy.session.namespace': 'mailto',
-    'multiauth.policy.remoteuser.use': 'snovault.tests.authentication.NamespacedAuthenticationPolicy',
+    'multiauth.policy.remoteuser.use': 'snovault.authentication.NamespacedAuthenticationPolicy',
     'multiauth.policy.remoteuser.namespace': 'remoteuser',
     'multiauth.policy.remoteuser.base': 'pyramid.authentication.RemoteUserAuthenticationPolicy',
-    'multiauth.policy.accesskey.use': 'snovault.tests.authentication.NamespacedAuthenticationPolicy',
+    'multiauth.policy.accesskey.use': 'snovault.authentication.NamespacedAuthenticationPolicy',
     'multiauth.policy.accesskey.namespace': 'accesskey',
-    'multiauth.policy.accesskey.base': 'snovault.tests.authentication.BasicAuthAuthenticationPolicy',
-    'multiauth.policy.accesskey.check': 'snovault.tests.authentication.basic_auth_check',
-    'multiauth.policy.webuser.use':  'snovault.tests.authentication.NamespacedAuthenticationPolicy',
-    'multiauth.policy.webuser.namespace': 'webuser',
-    'multiauth.policy.webuser.base': 'snovault.tests.authentication.WebUserAuthenticationPolicy'
+    'multiauth.policy.accesskey.base': 'snovault.authentication.BasicAuthAuthenticationPolicy',
+    'multiauth.policy.accesskey.check': 'snovault.authentication.basic_auth_check',
+    'multiauth.policy.auth0.use': 'snovault.authentication.NamespacedAuthenticationPolicy',
+    'multiauth.policy.auth0.namespace': 'auth0',
+    'multiauth.policy.auth0.base': 'snovault.authentication.Auth0AuthenticationPolicy',
 }
 
 
@@ -93,7 +93,7 @@ def encrypted_testapp(encrypted_app):
     return webtest.TestApp(encrypted_app, environ)
 
 
-@pytest.fixture
+@pytest.fixture(scope='session')
 def testapp(app):
     """ TestApp with JSON accept header. """
     environ = {

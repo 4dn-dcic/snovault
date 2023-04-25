@@ -21,12 +21,15 @@ from .upgrader import upgrade_step  # noqa
 def includeme(config):
     config.include('pyramid_retry')
     config.include('pyramid_tm')
+    config.include('.authentication')
     config.include('.util')
+    config.include('.drs')
     config.include('.stats')
     config.include('.batchupgrade')
     config.include('.calculated')
     config.include('.config')
     config.include('.connection')
+    config.include('.custom_embed')
     config.include('.embed')
     config.include('.json_renderer')
     config.include('.validation')
@@ -36,6 +39,7 @@ def includeme(config):
     config.include('.aggregated_items')
     config.include('.storage')
     config.include('.typeinfo')
+    config.include('.types')
     config.include('.resources')
     config.include('.attachment')
     config.include('.schema_graph')
@@ -83,13 +87,14 @@ def main(global_config, **local_config):
 
     config.include('.renderers')
 
+    if settings.get('elasticsearch.server'):
+        config.include('snovault.search.search')
+        config.include('snovault.search.compound_search')
+
     # only include this stuff if we're testing
     if asbool(settings.get('testing', False)):
         config.include('snovault.tests.testing_views')
-        config.include('snovault.tests.authentication')
         config.include('snovault.tests.root')
-        if settings.get('elasticsearch.server'):
-            config.include('snovault.tests.search')
 
         # in addition, enable invalidation scope for testing - but NOT by default
         settings[INVALIDATION_SCOPE_ENABLED] = True

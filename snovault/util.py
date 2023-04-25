@@ -5,11 +5,16 @@ import json
 import os
 import structlog
 import sys
+import re
+import boto3
 
+from botocore.client import Config
 from copy import copy
 from datetime import datetime, timedelta
 from pyramid.httpexceptions import HTTPForbidden
 from pyramid.threadlocal import manager as threadlocal_manager
+from dcicutils.secrets_utils import assume_identity
+from dcicutils.ecs_utils import ECSUtils
 
 from .interfaces import CONNECTION, STORAGE, TYPES
 from .settings import Settings
@@ -133,6 +138,20 @@ def dictionary_lookup(dictionary, key):
         # raise DictionaryKeyError(dictionary=dictionary, key=key)  this causes MPIndexer exception - will 3/10/2020
     else:
         return dictionary[key]
+
+
+def deduplicate_list(lst):
+    """ De-duplicates the given list by converting it to a set then back to a list.
+
+    NOTES:
+    * The list must contain 'hashable' type elements that can be used in sets.
+    * The result list might not be ordered the same as the input list.
+    * This will also take tuples as input, though the result will be a list.
+
+    :param lst: list to de-duplicate
+    :return: de-duplicated list
+    """
+    return list(set(lst))
 
 
 _skip_fields = ['@type', 'principals_allowed']  # globally accessible if need be in the future
@@ -1064,3 +1083,144 @@ def generate_indexer_namespace_for_testing(prefix='sno'):
 
 
 INDEXER_NAMESPACE_FOR_TESTING = generate_indexer_namespace_for_testing()
+
+
+def is_admin_request(request):
+    """ Checks for 'group.admin' in effective_principals on request - if present we know this
+        request was submitted by an admin
+    """
+    return 'group.admin' in request.effective_principals
+
+
+def get_item_or_none(request, value, itype=None, frame='object'):
+    """
+    Return the view of an item with given frame. Can specify different types
+    of `value` for item lookup
+
+    Args:
+        request: the current Request
+        value (str): String item identifier or a dict containing @id/uuid
+        itype (str): Optional string collection name for the item (e.g. /file-formats/)
+        frame (str): Optional frame to return. Defaults to 'object'
+
+    Returns:
+        dict: given view of the item or None on failure
+    """
+    item = None
+
+    if isinstance(value, dict):
+        if 'uuid' in value:
+            value = value['uuid']
+        elif '@id' in value:
+            value = value['@id']
+
+    svalue = str(value)
+
+    # Below case is for UUIDs & unique_keys such as accessions, but not @ids
+    if not svalue.startswith('/') and not svalue.endswith('/'):
+        svalue = '/' + svalue + '/'
+        if itype is not None:
+            svalue = '/' + itype + svalue
+
+    # Request.embed will attempt to get from ES for frame=object/embedded
+    # If that fails, get from DB. Use '@@' syntax instead of 'frame=' because
+    # these paths are cached in indexing
+    try:
+        item = request.embed(svalue, '@@' + frame)
+    except Exception:
+        pass
+
+    # could lead to unexpected errors if == None
+    return item
+
+
+CONTENT_TYPE_SPECIAL_CASES = {
+    'application/x-www-form-urlencoded': [
+        # Single legacy special case to allow us to POST to metadata TSV requests via form submission.
+        # All other special case values should be added using register_path_content_type.
+        '/metadata/',
+        '/variant-sample-search-spreadsheet/',
+        re.compile(r'/variant-sample-lists/[\da-z-]+/@@spreadsheet/'),
+    ]
+}
+
+
+def register_path_content_type(*, path, content_type):
+    """
+    Registers that endpoints that begin with the specified path use the indicated content_type.
+
+    This is part of an inelegant workaround for an issue in renderers.py that maybe we can make go away in the future.
+    See the 'implementation note' in ingestion/common.py for more details.
+    """
+    exceptions = CONTENT_TYPE_SPECIAL_CASES.get(content_type, None)
+    if exceptions is None:
+        CONTENT_TYPE_SPECIAL_CASES[content_type] = exceptions = []
+    if path not in exceptions:
+        exceptions.append(path)
+
+
+compiled_regexp_class = type(re.compile("foo.bar"))  # Hides that it's _sre.SRE_Pattern in 3.6, but re.Pattern in 3.7
+
+
+def content_type_allowed(request):
+    """
+    Returns True if the current request allows the requested content type.
+
+    This is part of an inelegant workaround for an issue in renderers.py that maybe we can make go away in the future.
+    See the 'implementation note' in ingestion/common.py for more details.
+    """
+    if request.content_type == "application/json":
+        # For better or worse, we always allow this.
+        return True
+
+    exceptions = CONTENT_TYPE_SPECIAL_CASES.get(request.content_type)
+
+    if exceptions:
+        for path_condition in exceptions:
+            if isinstance(path_condition, str):
+                if path_condition in request.path:
+                    return True
+            elif isinstance(path_condition, compiled_regexp_class):
+                if path_condition.match(request.path):
+                    return True
+            else:
+                raise NotImplementedError(f"Unrecognized path_condition: {path_condition}")
+
+    return False
+
+
+def check_user_is_logged_in(request):
+    """ Raises HTTPForbidden if the request did not come from a logged in user. """
+    for principal in request.effective_principals:
+        if principal.startswith('userid.') or principal == 'group.admin':  # allow if logged in OR has admin
+            break
+    else:
+        raise HTTPForbidden(title="Not logged in.")
+
+
+def make_s3_client():
+    s3_client_extra_args = {}
+    if 'IDENTITY' in os.environ:
+        identity = assume_identity()
+        s3_client_extra_args['aws_access_key_id'] = key_id = identity.get('S3_AWS_ACCESS_KEY_ID')
+        s3_client_extra_args['aws_secret_access_key'] = identity.get('S3_AWS_SECRET_ACCESS_KEY')
+        s3_client_extra_args['region_name'] = ECSUtils.REGION
+        log.warning(f"make_s3_client using S3 entity ID {key_id[:10]} arguments in `boto3 client creation call.")
+        if 'ENCODED_S3_ENCRYPT_KEY_ID' in identity:
+            # This setting is required when testing locally and encrypted buckets need to be accessed.
+            s3_client_extra_args['config'] = Config(signature_version='s3v4')
+    else:
+        log.warning(f'make_s3_client called with no identity')
+
+    s3_client = boto3.client('s3', **s3_client_extra_args)
+    return s3_client
+
+
+def build_s3_presigned_get_url(*, params):
+    """ Helper function that builds a presigned URL. """
+    s3_client = make_s3_client()
+    return s3_client.generate_presigned_url(
+        ClientMethod='get_object',
+        Params=params,
+        ExpiresIn=36 * 60 * 60
+    )

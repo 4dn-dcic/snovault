@@ -1,6 +1,9 @@
 import pytest
 
-from .snowflake_hash import SNOWHash
+from ..edw_hash import EDWHash
+
+
+pytestmark = [pytest.mark.setone, pytest.mark.working]
 
 
 TEST_HASHES = {
@@ -11,5 +14,5 @@ TEST_HASHES = {
 
 
 @pytest.mark.parametrize(('password', 'pwhash'), TEST_HASHES.items())
-def test_snowflake_hash(password, pwhash):
-    assert SNOWHash.hash(password) == pwhash
+def test_edw_hash(password, pwhash):
+    assert EDWHash.hash(password) == pwhash

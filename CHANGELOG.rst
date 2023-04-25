@@ -6,6 +6,12 @@ snovault
 Change Log
 ----------
 
+8.0.1.0b0
+=========
+
+* Add several modules/commands from upstream portals that are generic enough to live in
+  this repository (to reduce code/library maintenace overhead)
+
 
 8.0.1
 =====
