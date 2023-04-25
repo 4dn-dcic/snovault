@@ -18,7 +18,7 @@ macpoetry-install:
 configure:  # does any pre-requisite installs
 	pip install --upgrade pip
 	pip install wheel
-	pip install poetry==1.3.2
+	pip install poetry==1.4.2
 
 build-poetry:
 	make configure
