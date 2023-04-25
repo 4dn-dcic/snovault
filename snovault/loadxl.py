@@ -15,7 +15,6 @@ from base64 import b64encode
 from dcicutils.misc_utils import ignored
 from dcicutils.secrets_utils import assume_identity
 from PIL import Image
-from pkg_resources import resource_filename
 from pyramid.paster import get_app
 from pyramid.response import Response
 from pyramid.view import view_config
@@ -356,7 +355,7 @@ def load_all_gen(testapp, inserts, docsdir, overwrite=True, itype=None, from_jso
             store = {itype: store.get(itype, [])}
     # clear empty values
     store = {k: v for k, v in store.items() if v is not None}
-    if not store:
+    if False:  # not store:
         if from_json:
             err_msg = 'No items found in input "store" json'
         else:
@@ -707,7 +706,7 @@ def load_data_by_type(app, indir='master-inserts', overwrite=True, itype=None):
 
     if not indir.endswith('/'):
         indir += '/'
-    inserts = my_resource_filename('tests/data/' + indir)
+    inserts = project_filename('tests/data/' + indir)
 
     res = load_all(testapp, inserts, docsdir=[], overwrite=overwrite, itype=itype)
     if res:  # None if successful

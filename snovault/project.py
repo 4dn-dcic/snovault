@@ -1,5 +1,7 @@
 import toml
 
+from pkg_resources import resource_filename
+
 
 PYPROJECT_TOML = toml.load("pyproject.toml")
 POETRY_DATA = PYPROJECT_TOML['tool']['poetry']

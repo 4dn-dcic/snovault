@@ -16,7 +16,6 @@ import subprocess
 import sys
 
 from dcicutils.misc_utils import PRINT
-from pkg_resources import resource_filename
 from pyramid.paster import get_app, get_appsettings
 from pyramid.path import DottedNameResolver
 from .elasticsearch import create_mapping
@@ -130,8 +129,8 @@ def run(app_name, config_uri, datadir, clear=False, init=False, load=False, inge
             process.wait()
 
     processes = []
-    app = get_app(config_uri, app_name)
-    settings = app.registry.settings
+    # app = get_app(config_uri, app_name)
+    # settings = app.registry.settings
 
     # For now - required components
     postgres = postgresql_fixture.server_process(pgdata, echo=True)
