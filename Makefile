@@ -12,23 +12,13 @@ clear-poetry-cache:  # clear poetry/pypi cache. for user to do explicitly, never
 aws-ip-ranges:
 	curl -o aws-ip-ranges.json https://ip-ranges.amazonaws.com/ip-ranges.json
 
-moto-setup:  # optional moto setup that must be done separately
-	@# This setup was needed here because there was no bracket syntax in pypoetry.com.
-	@# Now that we're using a higher version of moto, and not using the server parts, we don't need this here.
-	@# It's now all done in pyproject.toml, getting a higher version as well.
-	@# This comment and this make target can go away once that's proven effective. -kmp 23-Mar-2023
-	@# pip install "moto[server]==1.3.7"
-	@echo "'moto[server]' not being installed here. Regular 'moto' will be installed by pyproject.toml."
-
 macpoetry-install:
 	scripts/macpoetry-install
 
 configure:  # does any pre-requisite installs
-	@#pip install --upgrade pip==21.0.1
 	pip install --upgrade pip
-	@#pip install poetry==1.1.9  # this version is known to work. -kmp 5-Oct-2021
 	pip install wheel
-	pip install poetry
+	pip install poetry==1.3.2
 
 build-poetry:
 	make configure
