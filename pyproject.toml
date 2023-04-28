@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "dcicsnovault"
-version = "8.0.1.0b1"  # to become 8.1.0
+version = "8.0.1.0b2"  # to become 8.1.0
 description = "Storage support for 4DN Data Portals."
 authors = ["4DN-DCIC Team <support@4dnucleome.org>"]
 license = "MIT"
@@ -86,6 +86,7 @@ xlrd = "^1.0.0"
 pyjwt = "^2.6.0"
 pytest-redis = "^2.0.0"
 redis = "^4.5.1"
+pillow = "^9.5.0"
 
 [tool.poetry.dev-dependencies]
 botocore-stubs = ">=1.27.36"  # no particular version required, but this speeds up search
