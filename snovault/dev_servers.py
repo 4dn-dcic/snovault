@@ -16,10 +16,10 @@ import subprocess
 import sys
 
 from dcicutils.misc_utils import PRINT
-from pkg_resources import resource_filename
 from pyramid.paster import get_app, get_appsettings
 from pyramid.path import DottedNameResolver
 from .elasticsearch import create_mapping
+from .project import PROJECT_NAME, project_filename
 from .tests import elasticsearch_fixture, postgresql_fixture
 
 
@@ -31,7 +31,7 @@ logger = logging.getLogger(__name__)
 def nginx_server_process(prefix='', echo=False):
     args = [
         os.path.join(prefix, 'nginx'),
-        '-c', resource_filename('encoded', 'nginx-dev.conf'),
+        '-c', project_filename('nginx-dev.conf'),
         '-g', 'daemon off;'
     ]
     process = subprocess.Popen(
@@ -104,18 +104,19 @@ def main():
     parser.add_argument('--init', action="store_true", help="Init database")
     parser.add_argument('--load', action="store_true", help="Load test set")
     parser.add_argument('--datadir', default='/tmp/snovault', help="path to datadir")
-    parser.add_argument('--no_ingest', action="store_true", default=False, help="Don't start the ingestion process.")
+    # parser.add_argument('--no_ingest', action="store_true", default=False, help="Don't start the ingestion process.")
     args = parser.parse_args()
 
     run(app_name=args.app_name, config_uri=args.config_uri, datadir=args.datadir,
-        clear=args.clear, init=args.init, load=args.load, ingest=not args.no_ingest)
+        # Ingestion is disabled. snovault has no such concept. -kmp 17-Feb-2023
+        clear=args.clear, init=args.init, load=args.load, ingest=False)  # ingest=not args.no_ingest
 
 
 def run(app_name, config_uri, datadir, clear=False, init=False, load=False, ingest=True):
 
     logging.basicConfig(format='')
     # Loading app will have configured from config file. Reconfigure here:
-    logging.getLogger('encoded').setLevel(logging.INFO)
+    logging.getLogger(PROJECT_NAME).setLevel(logging.INFO)
 
     # get the config and see if we want to connect to non-local servers
     # TODO: This variable seems to not get used? -kmp 25-Jul-2020
@@ -148,12 +149,11 @@ def run(app_name, config_uri, datadir, clear=False, init=False, load=False, inge
             process.wait()
 
     processes = []
-    app = get_app(config_uri, app_name)
-    settings = app.registry.settings
 
     # For now - required components
     postgres = postgresql_fixture.server_process(pgdata, echo=True)
     processes.append(postgres)
+
     es_server_url = config.get('elasticsearch.server', "localhost")
 
     if '127.0.0.1' in es_server_url or 'localhost' in es_server_url:
@@ -172,6 +172,9 @@ def run(app_name, config_uri, datadir, clear=False, init=False, load=False, inge
     nginx = nginx_server_process(echo=True)
     processes.append(nginx)
 
+    app = get_app(config_uri, app_name)
+    settings = app.registry.settings
+
     # Optional components
     if 'redis.server' in settings:
         redis = redis_server_process(echo=True)
@@ -180,11 +183,6 @@ def run(app_name, config_uri, datadir, clear=False, init=False, load=False, inge
     if ingest:
         ingestion_listener = ingestion_listener_process(config_uri, app_name)
         processes.append(ingestion_listener)
-
-    if init:
-        app = get_app(config_uri, app_name)
-    else:
-        app = None
 
     # clear queues and initialize indices before loading data. No indexing yet.
     # this is needed for items with properties stored in ES

@@ -6,11 +6,44 @@ snovault
 Change Log
 ----------
 
-8.0.1.0b0
-=========
+8.1.0
+=====
 
 * Add several modules/commands from upstream portals that are generic enough to live in
   this repository (to reduce code/library maintenace overhead)
+
+* Port support for ``make deploy1`` from the portals:
+
+  * In ``Makefile``:
+
+    * Support for ``make deploy1``
+
+    * Support for ``make psql-dev``
+
+    * Support for ``make psql-test``
+
+    * Support for ``make kibana-start`` (commented out for now, pending testing)
+
+    * Support for ``make kibana-start-test`` (commented out)
+
+    * Support for ``make kibana-stop`` (commented out)
+
+  * In ``pyproject.toml``:
+
+    * Template file ``development.ini.template``
+
+    * Template file ``test.ini.template``
+
+    * Support for ``prepare-local-dev`` script,
+      which creates ``development.ini`` from ``development.ini.template``
+      and ``test.ini`` from ``test.ini.template``.
+
+ * Port the ``dev_servers.py`` support from CGAP.
+
+ * In the ``scripts/`` dir:
+
+   * Add ``scripts/psql-start``
+     in support of ``make psql-dev`` and ``make psql-test``.
 
 
 8.0.1
@@ -38,6 +71,7 @@ Change Log
 
 * Change ``pytest.yield_fixture`` to ``pytest.yield``. This is techinically incompatible since it would break downstream portals if they were below ``pytest`` 6, but they are both at ``pytest 7`` now, so they should be unaffected.
 * Address some places involving ``.execute(raw_string)`` that should be ``.execute(text(raw_string))``.
+
 
 7.3.0
 =====
