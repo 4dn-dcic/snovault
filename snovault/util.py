@@ -1224,3 +1224,32 @@ def build_s3_presigned_get_url(*, params):
         Params=params,
         ExpiresIn=36 * 60 * 60
     )
+
+
+class SettingsKey:
+    APPLICATION_BUCKET_PREFIX = 'application_bucket_prefix'
+    BLOB_BUCKET = 'blob_bucket'
+    EB_APP_VERSION = 'eb_app_version'
+    ELASTICSEARCH_SERVER = 'elasticsearch.server'
+    ENCODED_VERSION = 'encoded_version'
+    FILE_UPLOAD_BUCKET = 'file_upload_bucket'
+    FILE_WFOUT_BUCKET = 'file_wfout_bucket'
+    FOURSIGHT_BUCKET_PREFIX = 'foursight_bucket_prefix'
+    IDENTITY = 'identity'
+    INDEXER = 'indexer'
+    INDEXER_NAMESPACE = 'indexer.namespace'
+    INDEX_SERVER = 'index_server'
+    LOAD_TEST_DATA = 'load_test_data'
+    METADATA_BUNDLES_BUCKET = 'metadata_bundles_bucket'
+    S3_ENCRYPT_KEY_ID = 's3_encrypt_key_id'
+    SNOVAULT_VERSION = 'snovault_version'
+    SQLALCHEMY_URL = 'sqlalchemy.url'
+    SYSTEM_BUCKET = 'system_bucket'
+    TIBANNA_CWLS_BUCKET = 'tibanna_cwls_bucket'
+    TIBANNA_OUTPUT_BUCKET = 'tibanna_output_bucket'
+    UTILS_VERSION = 'utils_version'
+
+
+class ExtraArgs:
+    SERVER_SIDE_ENCRYPTION = "ServerSideEncryption"
+    SSE_KMS_KEY_ID = "SSEKMSKeyId"

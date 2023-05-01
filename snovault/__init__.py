@@ -98,6 +98,8 @@ def main(global_config, **local_config):
 
         # in addition, enable invalidation scope for testing - but NOT by default
         settings[INVALIDATION_SCOPE_ENABLED] = True
+    else:
+        config.include('snovault.root')
 
     if 'elasticsearch.server' in config.registry.settings:
         config.include('snovault.elasticsearch')
