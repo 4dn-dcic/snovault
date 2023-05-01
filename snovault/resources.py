@@ -6,7 +6,9 @@ from dcicutils.misc_utils import ignored
 from pyramid.decorator import reify
 from pyramid.httpexceptions import HTTPInternalServerError
 from pyramid.security import (
-    # Allow,
+    Allow,
+    Deny,
+    ALL_PERMISSIONS,
     Everyone,
     Authenticated,
     principals_allowed_by_permission
@@ -42,6 +44,31 @@ def includeme(config):
     config.scan(__name__)
 
 
+def acl_from_settings(settings):
+    # XXX Unsure if any of the demo instance still need this
+    acl = []
+    for k, v in settings.items():
+        if k.startswith('allow.'):
+            action = Allow
+            permission = k[len('allow.'):]
+            principals = v.split()
+        elif k.startswith('deny.'):
+            action = Deny
+            permission = k[len('deny.'):]
+            principals = v.split()
+        else:
+            continue
+        if permission == 'ALL_PERMISSIONS':
+            permission = ALL_PERMISSIONS
+        for principal in principals:
+            if principal == 'Authenticated':
+                principal = Authenticated
+            elif principal == 'Everyone':
+                principal = Everyone
+            acl.append((action, principal, permission))
+    return acl
+
+
 class Resource(object):
     """
     Just used to add global calculated properties
@@ -71,6 +98,19 @@ class Root(Resource):
 
     def __init__(self, registry):
         self.registry = registry
+
+    @reify
+    def __acl__(self):
+        acl = acl_from_settings(self.registry.settings) + [
+            (Allow, Everyone, ['list', 'search']),
+            (Allow, 'group.admin', ALL_PERMISSIONS),
+            (Allow, 'remoteuser.EMBED', 'restricted_fields'),
+        ] + [
+                  (Allow, 'remoteuser.INDEXER', ['view', 'view_raw', 'list', 'index']),
+                  (Allow, 'remoteuser.EMBED', ['view', 'view_raw', 'expand']),
+                  (Allow, Everyone, ['visible_for_edit'])
+              ]
+        return acl
 
     @reify
     def connection(self):

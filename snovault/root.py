@@ -7,7 +7,7 @@ from dcicutils.s3_utils import HealthPageKey
 from dcicutils.env_utils import infer_foursight_url_from_env
 from pyramid.decorator import reify
 from pyramid.security import ALL_PERMISSIONS, Allow, Authenticated, Deny, Everyone
-from snovault import Root, calculated_property, root, COLLECTIONS, STORAGE
+from . import Root, calculated_property, root, COLLECTIONS, STORAGE
 from .appdefs import APP_VERSION_REGISTRY_KEY, ITEM_INDEX_ORDER
 from .schema_formats import is_accession
 from .util import SettingsKey

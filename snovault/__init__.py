@@ -49,6 +49,7 @@ def includeme(config):
     config.include('.indexing_views')
     config.include('.resource_views')
     config.include('.settings')
+    config.include('.server_defaults')
 
 
 def main(global_config, **local_config):
