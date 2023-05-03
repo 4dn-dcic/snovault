@@ -28,7 +28,8 @@ PROJECT_ACCESSION_PREFIXES = {
     'cgap': 'GAP',
     'fourfront': '4DN',
     'snovault': 'SNO',
-    'encoded-core': 'COR',
+    'encoded-core': 'SNO',
+    'smaht': 'SMT',
 }
 PROJECT_ACCESSION_PREFIX = None
 for key, val in PROJECT_ACCESSION_PREFIXES.items():
