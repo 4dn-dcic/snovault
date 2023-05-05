@@ -1,6 +1,7 @@
 import random
 import uuid
 
+from dcicutils.misc_utils import utc_now_str
 from datetime import datetime
 from jsonschema_serialize_fork import NO_DEFAULT
 from pyramid.path import DottedNameResolver
@@ -44,11 +45,6 @@ def _userid():
 @server_default
 def now(instance, subschema):  # args required by jsonschema-serialize-fork
     return utc_now_str()
-
-
-def utc_now_str():
-    # from jsonschema_serialize_fork date-time format requires a timezone
-    return datetime.utcnow().isoformat() + '+00:00'
 
 
 @server_default
