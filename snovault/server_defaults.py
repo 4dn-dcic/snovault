@@ -2,7 +2,6 @@ import random
 import uuid
 
 from dcicutils.misc_utils import utc_now_str
-from datetime import datetime
 from jsonschema_serialize_fork import NO_DEFAULT
 from pyramid.path import DottedNameResolver
 from pyramid.threadlocal import get_current_request
