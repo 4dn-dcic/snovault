@@ -16,6 +16,7 @@ _app_settings = {
     'retry.attempts': 3,
     'production': True,
     'structlog.dir': '/tmp/',
+    'g.recaptcha.key': 'dummy-recaptcha',
     'auth0.client': 'dummy-client',
     'auth0.domain': 'dummy.domain',
     'auth0.options': {
