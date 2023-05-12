@@ -37,11 +37,11 @@ classifiers = [
 [tool.poetry.dependencies]
 python = ">=3.8.1,<3.10"
 aws_requests_auth = "^0.4.1"
-botocore = ">=1.19.119"  # no particular version required, but this speeds up search
-boto3 = ">=1.26.119"  # no particular version required, but this speeds up search
+botocore = ">=1.26.133"  # no particular version required, but this speeds up search
+boto3 = ">=1.26.133"  # no particular version required, but this speeds up search
 elasticsearch = "7.13.4"  # versions >= 7.14.0 lock out AWS ES
 elasticsearch_dsl = "^7.4.0"
-dcicutils = "^7.0.0"
+dcicutils = "^7.4.0"
 future = ">=0.15.2,<1"
 html5lib = ">=1.1"  # experimental, should be OK now that we're not using moto server
 humanfriendly = "^1.44.9"
