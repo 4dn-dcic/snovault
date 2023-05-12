@@ -7,7 +7,7 @@ from pyramid.compat import (
 )
 from pyramid.httpexceptions import HTTPNotFound, HTTPServerError
 import pyramid.request
-from .crud_views import sno_collection_add
+from .crud_views import collection_add as sno_collection_add
 from .interfaces import COLLECTIONS, CONNECTION
 from .resources import Collection
 from .schema_utils import validate_request
