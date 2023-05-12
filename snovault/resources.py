@@ -41,6 +41,7 @@ logger = logging.getLogger(__name__)
 
 def includeme(config):
     config.include(auth0_config)
+    config.include(recaptcha_config)
     config.scan(__name__)
 
 
@@ -193,6 +194,31 @@ def auth0_config(config):
         return response_dict
 
     config.add_view(auth0_config_view, route_name='auth0-config')
+
+
+def recaptcha_config(config):
+    """ Route that exposes the recaptcha site key """
+    config.add_route(
+        'recaptcha-config',
+        '/recaptcha_config'
+    )
+    recaptcha_config_values = {  # determines which values are echoed
+        'g.recaptcha.key': 'RecaptchaKey',
+    }
+
+    def recaptcha_config_view(request):
+        response = request.response
+        response.content_type = 'application/json; charset=utf-8'
+        response_dict = {
+            'title': 'Recaptcha Config',
+        }
+        settings = config.registry.settings
+        for config_key, result_key in recaptcha_config_values.items():
+            if config_key in settings:
+                response_dict[result_key] = settings[config_key]
+        return response_dict
+
+    config.add_view(recaptcha_config_view, route_name='recaptcha-config')
 
 
 class AbstractCollection(Resource, Mapping):

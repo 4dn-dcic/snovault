@@ -7,6 +7,7 @@ class TestDRSAPI:
     """ Class for testing the DRS implementation - uses TestingDownload as it implements
         the @@download scheme
     """
+    BASE_URL = 'http://localhost:80/'
 
     def test_drs_get_object(self, testapp, testing_download):  # noQA fixture
         """ Tests basic structure about a drs object """
@@ -17,7 +18,7 @@ class TestDRSAPI:
             assert key in drs_object_1
         assert drs_object_1['self_uri'] == f'drs://localhost:80/ga4gh/drs/v1/objects/{drs_object_uri}'
         assert (drs_object_1['access_methods'][0]['access_url']['url']
-                == f'http://localhost:80/{drs_object_uri}/@@download')
+                == f'{self.BASE_URL}{drs_object_uri}/@@download')
 
         # failure cases
         testapp.get(f'/ga4gh/drs/v1/objects/not_a_uri', status=404)
@@ -35,25 +36,25 @@ class TestDRSAPI:
         # standard URI with meaningful access_id, discarded
         drs_object_download = testapp.get(f'/ga4gh/drs/v1/objects/{drs_object_uri}/access/https').json
         assert drs_object_download == {
-            'url': f'http://localhost:80/{drs_object_uri}/@@download'
+            'url': f'{self.BASE_URL}{drs_object_uri}/@@download'
         }
 
         # /access/ method
         drs_object_download = testapp.get(f'/ga4gh/drs/v1/objects/{drs_object_uri}/access/').json
         assert drs_object_download == {
-            'url': f'http://localhost:80/{drs_object_uri}/@@download'
+            'url': f'{self.BASE_URL}{drs_object_uri}/@@download'
         }
 
         # standard URI with nonsense access id, still discarded
         drs_object_download = testapp.get(f'/ga4gh/drs/v1/objects/{drs_object_uri}/access/blah').json
         assert drs_object_download == {
-            'url': f'http://localhost:80/{drs_object_uri}/@@download'
+            'url': f'{self.BASE_URL}{drs_object_uri}/@@download'
         }
 
         # /access method
         drs_object_download = testapp.get(f'/ga4gh/drs/v1/objects/{drs_object_uri}/access').json
         assert drs_object_download == {
-            'url': f'http://localhost:80/{drs_object_uri}/@@download'
+            'url': f'{self.BASE_URL}{drs_object_uri}/@@download'
         }
 
     def test_drs_get_object_failure(self, testapp, testing_download):  # noQA fixture
