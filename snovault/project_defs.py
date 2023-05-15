@@ -6,4 +6,4 @@ from .project import (
 
 @ProjectRegistry.register('dcicsnovault')
 class SnovaultProject(_Project):
-    NAME = 'snovault'
+    NAME = 'dcicsnovault'
