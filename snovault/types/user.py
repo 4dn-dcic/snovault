@@ -14,7 +14,6 @@ from snovault import (
     load_schema,
     # display_title_schema,
 )
-from ..project import PROJECT_NAME
 from ..crud_views import collection_add
 from ..resource_views import item_view_page
 from ..schema_utils import validate_request
@@ -52,8 +51,8 @@ DELETED_USER_ACL = [
     name='users',
     unique_key='user:email',
     properties={
-        'title': f'{PROJECT_NAME} Users',
-        'description': f'Listing of current {PROJECT_NAME} users',
+        'title': 'Users',
+        'description': f'Listing of current users',
     },
 )
 class User(Item):
