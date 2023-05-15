@@ -104,12 +104,12 @@ def main():
     parser.add_argument('--init', action="store_true", help="Init database")
     parser.add_argument('--load', action="store_true", help="Load test set")
     parser.add_argument('--datadir', default='/tmp/snovault', help="path to datadir")
-    # parser.add_argument('--no_ingest', action="store_true", default=False, help="Don't start the ingestion process.")
+    parser.add_argument('--no_ingest', action="store_true", default=False, help="Don't start the ingestion process.")
     args = parser.parse_args()
 
     run(app_name=args.app_name, config_uri=args.config_uri, datadir=args.datadir,
         # Ingestion is disabled. snovault has no such concept. -kmp 17-Feb-2023
-        clear=args.clear, init=args.init, load=args.load, ingest=False)  # ingest=not args.no_ingest
+        clear=args.clear, init=args.init, load=args.load, ingest=not args.no_ingest)
 
 
 def run(app_name, config_uri, datadir, clear=False, init=False, load=False, ingest=True):
