@@ -433,3 +433,19 @@ def test_auth0_config_admin(testapp, registry):
 def test_auth0_config_anon(anontestapp, registry):
     """ Tests that acquiring auth0 config gives the expected values from settings for anonymous users. """
     _test_auth_config(anontestapp, registry)
+
+
+def _test_recaptcha_config(testapp, registry):
+    cfg = testapp.get('/recaptcha_config').json
+    assert cfg['title'] == 'Recaptcha Config'
+    assert cfg['RecaptchaKey'] == registry.settings['g.recaptcha.key']
+
+
+def test_recaptcha_config_admin(testapp, registry):
+    """ Tests that acquiring recaptcha config gives the expected values from settings for admins. """
+    _test_recaptcha_config(testapp, registry)
+
+
+def test_recaptcha_config_anon(anontestapp, registry):
+    """ Tests that acquiring recaptcha config gives the expected values from settings for anonymous users. """
+    _test_recaptcha_config(anontestapp, registry)

@@ -140,20 +140,6 @@ def dictionary_lookup(dictionary, key):
         return dictionary[key]
 
 
-def deduplicate_list(lst):
-    """ De-duplicates the given list by converting it to a set then back to a list.
-
-    NOTES:
-    * The list must contain 'hashable' type elements that can be used in sets.
-    * The result list might not be ordered the same as the input list.
-    * This will also take tuples as input, though the result will be a list.
-
-    :param lst: list to de-duplicate
-    :return: de-duplicated list
-    """
-    return list(set(lst))
-
-
 _skip_fields = ['@type', 'principals_allowed']  # globally accessible if need be in the future
 
 

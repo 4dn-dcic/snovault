@@ -14,6 +14,7 @@ from snovault import (
     load_schema,
     # display_title_schema,
 )
+from ..project import PROJECT_NAME
 from ..crud_views import collection_add
 from ..resource_views import item_view_page
 from ..schema_utils import validate_request
@@ -51,8 +52,8 @@ DELETED_USER_ACL = [
     name='users',
     unique_key='user:email',
     properties={
-        'title': 'CGAP Users',
-        'description': 'Listing of current CGAP users',
+        'title': f'{PROJECT_NAME} Users',
+        'description': f'Listing of current {PROJECT_NAME} users',
     },
 )
 class User(Item):
@@ -104,6 +105,9 @@ class User(Item):
         return {owner: 'role.owner'}
 
 
+USER_PAGE_VIEW_ATTRIBUTES = ['@id', '@type', 'uuid', 'title', 'display_title']
+
+
 @view_config(context=User, permission='view', request_method='GET', name='page')
 @debug_log
 def user_page_view(context, request):
@@ -111,7 +115,7 @@ def user_page_view(context, request):
     properties = item_view_page(context, request)
     if not request.has_permission('view_details'):
         filtered = {}
-        for key in ['@id', '@type', 'uuid', 'title', 'display_title']:
+        for key in USER_PAGE_VIEW_ATTRIBUTES:
             try:
                 filtered[key] = properties[key]
             except KeyError:
