@@ -8,11 +8,11 @@ from pyramid.threadlocal import get_current_request
 from snovault.schema_utils import server_default
 from snovault import COLLECTIONS  # , ROOT
 from string import digits  # , ascii_uppercase
-from .project import PROJECT_ACCESSION_PREFIX
+from .project import app_project
 
 
 ACCESSION_FACTORY = __name__ + ':accession_factory'
-ACCESSION_PREFIX = PROJECT_ACCESSION_PREFIX
+ACCESSION_PREFIX = app_project().ACCESSION_PREFIX
 ACCESSION_TEST_PREFIX = 'TST'
 
 

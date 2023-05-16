@@ -1,11 +1,12 @@
-# import os
-# import time
-# import tempfile
-import pytest
 import logging
-# import subprocess
+import pytest
 
+from dcicutils.misc_utils import ignored
 from ..elasticsearch.indexer_queue import QueueManager
+from .. import project_start
+
+
+ignored(project_start)  # Loading that file is enough
 
 
 # required so that db transactions are properly rolled back in tests

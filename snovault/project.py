@@ -3,18 +3,24 @@ import toml
 
 from pkg_resources import resource_filename
 from dcicutils.env_utils import EnvUtils
-from dcicutils.misc_utils import classproperty, full_class_name
+from dcicutils.misc_utils import classproperty
 
 
 # This isn't the home of snovault, but the home of the snovault-based application.
 # So in CGAP, for example, this would want to be the home of the CGAP application.
 # If not set, it will be assumed that the current working directory is that.
 APPLICATION_PROJECT_HOME = os.environ.get("APPLICATION_PROJECT_HOME", os.path.abspath(os.curdir))
-PYPROJECT_TOML_FILE = os.path.join(APPLICATION_PROJECT_HOME, "pyproject.toml")
-PYPROJECT_TOML = toml.load(PYPROJECT_TOML_FILE)
-POETRY_DATA = PYPROJECT_TOML['tool']['poetry']
+_PYPROJECT_TOML_FILE = os.path.join(APPLICATION_PROJECT_HOME, "pyproject.toml")
+PYPROJECT_TOML_FILE = _PYPROJECT_TOML_FILE if os.path.exists(_PYPROJECT_TOML_FILE) else None
+PYPROJECT_TOML = toml.load(PYPROJECT_TOML_FILE) if PYPROJECT_TOML_FILE else None
+POETRY_DATA = PYPROJECT_TOML['tool']['poetry'] if PYPROJECT_TOML else None
 
-PYPROJECT_NAME = POETRY_DATA['name']
+_DECLARED_PYPROJECT_NAME = os.environ.get("APPLICATION_PYPROJECT_NAME")
+_INFERRED_PYPROJECT_NAME = POETRY_DATA['name'] if POETRY_DATA else None
+if _DECLARED_PYPROJECT_NAME and _INFERRED_PYPROJECT_NAME and _DECLARED_PYPROJECT_NAME != _INFERRED_PYPROJECT_NAME:
+    raise RuntimeError(f"APPLICATION_PYPROJECT_NAME={_DECLARED_PYPROJECT_NAME!r} but {PYPROJECT_TOML_FILE}"
+                       f" says it should be {_INFERRED_PYPROJECT_NAME!r}")
+PYPROJECT_NAME = _DECLARED_PYPROJECT_NAME or _INFERRED_PYPROJECT_NAME
 
 
 def project_filename(filename):
@@ -43,7 +49,7 @@ class ProjectRegistry:
         def _wrap_class(the_class):
             the_class_name = the_class.__name__
             if not issubclass(the_class, Project):
-                raise ValueError(f"The class {the_class_name} must inherit from {full_class_name(Project)}.")
+                raise ValueError(f"The class {the_class_name} must inherit from Project.")
             lower_registry_name = name.lower()
             for x in ['cgap-portal', 'fourfront', 'smaht']:
                 if x in lower_registry_name:
@@ -97,7 +103,7 @@ class ProjectRegistry:
     @classmethod
     def initialize(cls):
         if cls._initialized:
-            raise RuntimeError(f"{full_class_name(cls)}.initialize() was called more than once.")
+            raise RuntimeError(f"{cls.__name__}.initialize() was called more than once.")
         cls._app_project = cls._make_project()
         cls._initalized = True
         app_project: Project = cls.app_project
@@ -111,7 +117,7 @@ class ProjectRegistry:
         """
         if cls._app_project is None:
             # You need to put a call to
-            raise RuntimeError(f"Attempt to access {full_class_name(cls)}.project before .initialize() called.")
+            raise RuntimeError(f"Attempt to access {cls.__name__}.project before .initialize() called.")
         return cls._app_project
 
 
