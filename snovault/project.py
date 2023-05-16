@@ -150,7 +150,7 @@ class Project:
 
     @classmethod
     def _prettify(cls, name):
-        return name.title().replace("Cgap", "CGAP").replace("Smaht", "SMaHT").replace("-Portal", "").replace("-", " ")
+        return name.title().replace("Cgap", "CGAP").replace("Smaht", "SMaHT").replace("-", " ")
 
     @classproperty
     def PACKAGE_NAME(cls):  # noQA - PyCharm wants the variable name to be self
