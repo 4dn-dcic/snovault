@@ -7,3 +7,4 @@ from .project import (
 @ProjectRegistry.register('dcicsnovault')
 class SnovaultProject(_Project):
     NAME = 'dcicsnovault'
+    ACCESSION_PREFIX = 'SNO'
