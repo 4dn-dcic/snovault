@@ -15,7 +15,7 @@ from typing import Optional, List
 # from zope.sqlalchemy import mark_changed
 from .. import configure_dbsession
 from ..sqlalchemy_tools import PyramidAppManager
-from ..project import PROJECT_NAME
+from ..project import app_project
 
 
 logger = structlog.getLogger(__name__)
@@ -115,11 +115,12 @@ def main(simulated_args=None):
     log = args.log
 
     logging.basicConfig()
+    project = app_project(initialize=True)
     # Loading app will have configured from config file. Reconfigure here:
     if log:
-        logging.getLogger(PROJECT_NAME).setLevel(logging.DEBUG)
+        logging.getLogger(project.NAME).setLevel(logging.DEBUG)
     else:
-        logging.getLogger(PROJECT_NAME).setLevel(logging.ERROR)
+        logging.getLogger(project.NAME).setLevel(logging.ERROR)
 
     if confirm is None:
         confirm = False   # not only_envs  # If only_envs is supplied, we have better protection so don't need to confirm

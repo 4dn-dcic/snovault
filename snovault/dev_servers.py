@@ -19,7 +19,7 @@ from dcicutils.misc_utils import PRINT
 from pyramid.paster import get_app, get_appsettings
 from pyramid.path import DottedNameResolver
 from .elasticsearch import create_mapping
-from .project import PROJECT_NAME, project_filename
+from .project import app_project, project_filename
 from .tests import elasticsearch_fixture, postgresql_fixture
 
 
@@ -114,9 +114,11 @@ def main():
 
 def run(app_name, config_uri, datadir, clear=False, init=False, load=False, ingest=True):
 
+    project = app_project(initialize=True)
+
     logging.basicConfig(format='')
     # Loading app will have configured from config file. Reconfigure here:
-    logging.getLogger(PROJECT_NAME).setLevel(logging.INFO)
+    logging.getLogger(project.NAME).setLevel(logging.INFO)
 
     # get the config and see if we want to connect to non-local servers
     # TODO: This variable seems to not get used? -kmp 25-Jul-2020
