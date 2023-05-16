@@ -1,12 +1,11 @@
 import logging
 import pytest
 
-from dcicutils.misc_utils import ignored
+from ..project_defs import SnovaultProject
 from ..elasticsearch.indexer_queue import QueueManager
-from .. import project_start
 
 
-ignored(project_start)  # Loading that file is enough
+SnovaultProject.initialize_app_project(initialize_env_utils=False)
 
 
 # required so that db transactions are properly rolled back in tests
