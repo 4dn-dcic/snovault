@@ -26,6 +26,7 @@ from snovault.util import debug_log
 from snovault.validation import ValidationFailure
 from snovault.validators import no_validate_item_content_post
 from urllib.parse import urlencode
+from snovault.project import app_project
 
 
 log = structlog.getLogger(__name__)
@@ -322,9 +323,13 @@ def get_jwt(request):
     return token
 
 
-@view_config(route_name='login', request_method='POST', permission=NO_PERMISSION_REQUIRED)
+#@view_config(route_name='login', request_method='POST', permission=NO_PERMISSION_REQUIRED)
 @debug_log
-def login(context, request):
+def login_view(context, request, samesite: str = "strict"):
+    return app_project().login(context, request, samesite)
+
+
+def login(context, request, samesite: str = "strict"):
     """
     Save JWT as httpOnly cookie
     """
@@ -344,7 +349,7 @@ def login(context, request):
         domain=request.domain,
         path="/",
         httponly=True,
-        samesite="strict",
+        samesite=samesite,
         overwrite=True,
         secure=is_https
     )
@@ -355,6 +360,10 @@ def login(context, request):
 @view_config(route_name='logout',
              permission=NO_PERMISSION_REQUIRED, http_cache=0)
 @debug_log
+def logout_view(context, request):
+    return app_project().logout(context, request)
+
+
 def logout(context, request):
     """
     This endpoint proxies a request to Auth0 for it to remove its session cookies.
@@ -671,3 +680,11 @@ def create_unauthorized_user(context, request):
                 'WWW-Authenticate':
                     "Bearer realm=\"{}\"; Basic realm=\"{}\"".format(request.domain, request.domain)}
         )
+
+class SnovaultProjectAuthentication:
+
+    def login(self, context, request, samesite):
+        return login(context, request, samesite)
+
+    def logout(self, context, request):
+        return logout(context, request)

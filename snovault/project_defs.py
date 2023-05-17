@@ -1,9 +1,6 @@
-from .project import (
-    ProjectRegistry,
-    Project as _Project  # renamed to avoid confusing programmers using discovery into thinking this is an export
-)
-
+from .project import ProjectRegistry, Project
+from .authentication import SnovaultProjectAuthentication
 
 @ProjectRegistry.register('dcicsnovault')
-class SnovaultProject(_Project):
+class SnovaultProject(Project, SnovaultProjectAuthentication):
     NAME = 'dcicsnovault'
