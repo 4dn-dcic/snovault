@@ -1,12 +1,14 @@
 import logging
 from copy import deepcopy
 from posixpath import join
+from typing import Union
 
 from pyramid.compat import (
     native_,
     unquote_bytes_to_wsgi,
 )
 from pyramid.httpexceptions import HTTPNotFound
+from pyramid.request import Request
 
 from .interfaces import CONNECTION
 
@@ -164,16 +166,7 @@ def _embed(request, path, as_user='EMBED'):
     """
     # Carl: the subrequest is 'built' here, but not actually invoked
     subreq = make_subrequest(request, path)
-    # these attributes are propogated across the subrequest
-    subreq.override_renderer = 'null_renderer'
-    subreq._indexing_view = request._indexing_view
-    subreq._aggregate_for = request._aggregate_for
-    subreq._aggregated_items = request._aggregated_items
-    subreq._sid_cache = request._sid_cache
-    if as_user is not True:
-        if 'HTTP_COOKIE' in subreq.environ:
-            del subreq.environ['HTTP_COOKIE']
-        subreq.remote_user = as_user
+    _set_subrequest_attributes(subreq, request, as_user=as_user)
     # _linked_uuids are populated in item_view_object of resource_views.py
     try:
         result = request.invoke_subrequest(subreq)
@@ -188,6 +181,34 @@ def _embed(request, path, as_user='EMBED'):
             '_rev_linked_by_item': subreq._rev_linked_uuids_by_item,
             '_aggregated_items': subreq._aggregated_items,
             '_sid_cache': subreq._sid_cache}
+
+
+def _set_subrequest_attributes(
+    subrequest: Request, request: Request, as_user: Union[str, bool] = False
+) -> None:
+    subrequest.override_renderer = 'null_renderer'
+    _add_propagated_attributes(subrequest, request)
+    if as_user is not True:
+        _remove_http_cookie_and_set_user(subrequest, as_user)
+
+
+def _add_propagated_attributes(subrequest: Request, request: Request) -> None:
+    subrequest._indexing_view = request._indexing_view
+    subrequest._aggregate_for = request._aggregate_for
+    subrequest._aggregated_items = request._aggregated_items
+    subrequest._sid_cache = request._sid_cache
+    try:
+        subrequest._stats = request._stats
+    except AttributeError:
+        subrequest._stats = {}
+
+
+def _remove_http_cookie_and_set_user(
+    subrequest: Request, remote_user: Union[str, bool]
+) -> None:
+    if 'HTTP_COOKIE' in subrequest.environ:
+        del subrequest.environ['HTTP_COOKIE']
+    subrequest.remote_user = remote_user
 
 
 class NullRenderer:
