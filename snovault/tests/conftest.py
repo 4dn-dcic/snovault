@@ -1,11 +1,11 @@
-# import os
-# import time
-# import tempfile
-import pytest
 import logging
-# import subprocess
+import pytest
 
+from ..project_defs import SnovaultProject
 from ..elasticsearch.indexer_queue import QueueManager
+
+
+SnovaultProject.initialize_app_project(initialize_env_utils=False)
 
 
 # required so that db transactions are properly rolled back in tests
