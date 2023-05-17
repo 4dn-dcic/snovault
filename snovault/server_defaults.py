@@ -8,7 +8,7 @@ from pyramid.threadlocal import get_current_request
 from snovault.schema_utils import server_default
 from snovault import COLLECTIONS  # , ROOT
 from string import digits  # , ascii_uppercase
-from .project import app_project
+from .project_defs import app_project
 
 
 ACCESSION_FACTORY = __name__ + ':accession_factory'

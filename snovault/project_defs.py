@@ -1,10 +1,10 @@
-from .project import (
-    ProjectRegistry,
-    Project as _Project  # renamed to avoid confusing programmers using discovery into thinking this is an export
-)
-
+from dcicutils.project_utils import ProjectRegistry, C4Project
 
 @ProjectRegistry.register('dcicsnovault')
-class SnovaultProject(_Project):
-    NAME = 'dcicsnovault'
+class SnovaultProject(C4Project):
+    NAME = 'snovault'
+    PYPI_NAME = 'dcicsnovault'
     ACCESSION_PREFIX = 'SNO'
+
+
+app_project = SnovaultProject.app_project_maker()
