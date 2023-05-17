@@ -187,12 +187,12 @@ def _set_subrequest_attributes(
     subrequest: Request, request: Request, as_user: Union[str, bool] = False
 ) -> None:
     subrequest.override_renderer = 'null_renderer'
-    _add_propagated_attributes(subrequest, request)
+    _set_propagated_attributes(subrequest, request)
     if as_user is not True:
         _remove_http_cookie_and_set_user(subrequest, as_user)
 
 
-def _add_propagated_attributes(subrequest: Request, request: Request) -> None:
+def _set_propagated_attributes(subrequest: Request, request: Request) -> None:
     subrequest._indexing_view = request._indexing_view
     subrequest._aggregate_for = request._aggregate_for
     subrequest._aggregated_items = request._aggregated_items
