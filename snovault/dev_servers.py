@@ -19,7 +19,7 @@ from dcicutils.misc_utils import PRINT
 from pyramid.paster import get_app, get_appsettings
 from pyramid.path import DottedNameResolver
 from .elasticsearch import create_mapping
-from .project import app_project, project_filename
+from .project_defs import app_project
 from .tests import elasticsearch_fixture, postgresql_fixture
 
 
@@ -31,7 +31,7 @@ logger = logging.getLogger(__name__)
 def nginx_server_process(prefix='', echo=False):
     args = [
         os.path.join(prefix, 'nginx'),
-        '-c', project_filename('nginx-dev.conf'),
+        '-c', app_project().project_filename('nginx-dev.conf'),
         '-g', 'daemon off;'
     ]
     process = subprocess.Popen(

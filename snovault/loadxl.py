@@ -20,7 +20,7 @@ from pyramid.response import Response
 from pyramid.view import view_config
 from snovault.util import debug_log
 
-from .project import project_filename
+from .project_defs import app_project
 from .server_defaults import add_last_modified
 
 
@@ -117,7 +117,7 @@ def load_data_view(context, request):
     inserts = None
     from_json = False
     if fdn_dir:
-        inserts = project_filename('tests/data/' + fdn_dir + '/')
+        inserts = app_project().project_filename('tests/data/' + fdn_dir + '/')
     elif local_path:
         inserts = local_path
     elif store:
@@ -517,7 +517,7 @@ def load_data(app, indir='inserts', docsdir=None, overwrite=False,
     testapp = webtest.TestApp(app, environ)
     # load master-inserts by default
     if indir != 'master-inserts' and use_master_inserts:
-        master_inserts = project_filename('tests/data/master-inserts/')
+        master_inserts = app_project().project_filename('tests/data/master-inserts/')
         master_res = load_all(testapp, master_inserts, [], skip_types=skip_types)
         if master_res:  # None if successful
             print(LOAD_ERROR_MESSAGE)
@@ -526,13 +526,13 @@ def load_data(app, indir='inserts', docsdir=None, overwrite=False,
 
     if not indir.endswith('/'):
         indir += '/'
-    inserts = project_filename('tests/data/' + indir)
+    inserts = app_project().project_filename('tests/data/' + indir)
     if docsdir is None:
         docsdir = []
     else:
         if not docsdir.endswith('/'):
             docsdir += '/'
-        docsdir = [project_filename('tests/data/' + docsdir)]
+        docsdir = [app_project().project_filename('tests/data/' + docsdir)]
     res = load_all(testapp, inserts, docsdir, overwrite=overwrite)
     if res:  # None if successful
         print(LOAD_ERROR_MESSAGE)
@@ -568,7 +568,7 @@ def load_local_data(app, overwrite=False):
     ]
 
     for test_insert_dir in test_insert_dirs:
-        chk_dir = project_filename("tests/data/" + test_insert_dir)
+        chk_dir = app_project().project_filename("tests/data/" + test_insert_dir)
         for (dirpath, dirnames, filenames) in os.walk(chk_dir):
             if any([fn for fn in filenames if fn.endswith('.json') or fn.endswith('.json.gz')]):
                 logger.info('Loading inserts from "{}" directory.'.format(test_insert_dir))
@@ -711,7 +711,7 @@ def load_data_by_type(app, indir='master-inserts', overwrite=True, itype=None):
 
     if not indir.endswith('/'):
         indir += '/'
-    inserts = project_filename('tests/data/' + indir)
+    inserts = app_project().project_filename('tests/data/' + indir)
 
     res = load_all(testapp, inserts, docsdir=[], overwrite=overwrite, itype=itype)
     if res:  # None if successful

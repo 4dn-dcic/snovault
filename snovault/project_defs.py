@@ -1,7 +1,10 @@
-from .project import ProjectRegistry, Project
-from .authentication import SnovaultProjectAuthentication
+from dcicutils.project_utils import ProjectRegistry, C4Project
 
 @ProjectRegistry.register('dcicsnovault')
-class SnovaultProject(Project, SnovaultProjectAuthentication):
-    NAME = 'dcicsnovault'
+class SnovaultProject(C4Project):
+    NAME = 'snovault'
+    PYPI_NAME = 'dcicsnovault'
     ACCESSION_PREFIX = 'SNO'
+
+
+app_project = SnovaultProject.app_project_maker()
