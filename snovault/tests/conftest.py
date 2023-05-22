@@ -1,11 +1,11 @@
 import logging
 import pytest
 
-from ..project_defs import SnovaultProject
+# from ..project_defs import C4ProjectRegistry
 from ..elasticsearch.indexer_queue import QueueManager
 
 
-SnovaultProject.initialize_app_project(initialize_env_utils=False)
+# C4ProjectRegistry.initialize() probably not needed
 
 
 # required so that db transactions are properly rolled back in tests
