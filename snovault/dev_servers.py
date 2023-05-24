@@ -114,7 +114,8 @@ def main():
 
 def run(app_name, config_uri, datadir, clear=False, init=False, load=False, ingest=True):
 
-    project = app_project(initialize=True)
+    #project = app_project(initialize=True)
+    project = app_project()
 
     logging.basicConfig(format='')
     # Loading app will have configured from config file. Reconfigure here:

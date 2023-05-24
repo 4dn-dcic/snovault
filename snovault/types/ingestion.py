@@ -266,6 +266,10 @@ class SubmissionFolio:
     })
 class IngestionSubmission(Item):
     """The IngestionSubmission class that holds info on requests to ingest data."""
+    def __new__(cls, *args, **kwargs): # xyzzy
+        # import pdb ; pdb.set_trace()  # Set pdb breakpoint # xyzzy
+        # return super().__new__(cls, *args, **kwargs) # xyzzy
+        return super().__new__(cls) # xyzzy
 
     item_type = 'ingestion_submission'
     schema = load_schema('encoded:schemas/ingestion_submission.json')

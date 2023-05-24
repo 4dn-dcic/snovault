@@ -1,3 +1,4 @@
+#xyzzy/end
 import base64
 import datetime
 import jwt
@@ -26,7 +27,7 @@ from snovault.util import debug_log
 from snovault.validation import ValidationFailure
 from snovault.validators import no_validate_item_content_post
 from urllib.parse import urlencode
-from snovault.project import app_project
+from snovault.project_defs import app_project
 
 
 log = structlog.getLogger(__name__)
@@ -126,17 +127,28 @@ class NamespacedAuthenticationPolicy(object):
         super().__init__(*args, **kw)
 
     def unauthenticated_userid(self, request):
+        return app_project().namespaced_authentication_policy_unauthenticated_userid(self, request)
+
+    def _unauthenticated_userid_implementation(self, request):
         userid = super().unauthenticated_userid(request)
         if userid is not None:
             userid = self._namespace_prefix + userid
         return userid
 
-    def authenticated_userid(self, request):
+    def authenticated_userid(self, request, set_user_info_property=True):
+        # TODO maybe ...
+        # return app_project().login_policy.authenticated_userid(request, set_user_info_property)
+        return app_project().namespaced_authentication_policy_authenticated_userid(self, request, set_user_info_property)
+
+    def _authenticated_userid_implementation(self, request, set_user_info_property=True):
         """
         Adds `request.user_info` for all authentication types.
         Fetches and returns some user details if called.
         """
         namespaced_userid = super().authenticated_userid(request)
+
+        if not set_user_info_property:
+            return namespaced_userid
 
         if namespaced_userid is not None:
             # userid, if present, may be in form of UUID (if remoteuser) or an email (if Auth0).
@@ -220,6 +232,8 @@ class Auth0AuthenticationPolicy(CallbackAuthenticationPolicy):
 
         # At this point, email has been authenticated with their Auth0 provider and via `get_token_info`,
         # but we don't know yet if this email is in our database. `authenticated_userid` should take care of this.
+
+        app_project().note_auth0_authentication_policy_unauthenticated_userid(self, request, email, id_token)
 
         return email
 
@@ -323,13 +337,13 @@ def get_jwt(request):
     return token
 
 
-#@view_config(route_name='login', request_method='POST', permission=NO_PERMISSION_REQUIRED)
+@view_config(route_name='login', request_method='POST', permission=NO_PERMISSION_REQUIRED)
 @debug_log
 def login_view(context, request, samesite: str = "strict"):
-    return app_project().login(context, request, samesite)
+    return app_project().login(context, request, samesite=samesite)
 
 
-def login(context, request, samesite: str = "strict"):
+def login(context, request, *, samesite: str = "strict"):
     """
     Save JWT as httpOnly cookie
     """
@@ -681,10 +695,35 @@ def create_unauthorized_user(context, request):
                     "Bearer realm=\"{}\"; Basic realm=\"{}\"".format(request.domain, request.domain)}
         )
 
+
+# Authentication related functions which may be overriden by an implementing
+# app, e.g. Foursight or CGAP portal, without having to worry about
+# reimplementing any associated view_config setup and whatnot.
+
+# TODO maybe ...
+#def SnovaultNamespacedAuthenticationPolicy:
+#    def __init__(self, app_project):
+#        self.app_project = app_project
+#    def authenticated_userid(self, namespaced_authentication_policy, request, set_user_info_property):
+#        return namespaced_authentication_policy._authenticated_userid_implementation(request, set_user_info_property)
+
 class SnovaultProjectAuthentication:
 
-    def login(self, context, request, samesite):
-        return login(context, request, samesite)
+    # TODO maybe ...
+    # def __init__(self):
+    #    self.login_policy = 
+
+    def login(self, context, request, *, samesite):
+        return login(context, request, samesite=samesite)
 
     def logout(self, context, request):
         return logout(context, request)
+
+    def namespaced_authentication_policy_authenticated_userid(self, namespaced_authentication_policy, request, set_user_info_property):
+        return namespaced_authentication_policy._authenticated_userid_implementation(request, set_user_info_property)
+
+    def namespaced_authentication_policy_unauthenticated_userid(self, namespaced_authentication_policy, request):
+        return namespaced_authentication_policy._unauthenticated_userid_implementation(request)
+
+    def note_auth0_authentication_policy_unauthenticated_userid(self, auth0_authentication_policy, request, email, id_token):
+        pass

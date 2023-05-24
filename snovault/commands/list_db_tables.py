@@ -115,7 +115,8 @@ def main(simulated_args=None):
     log = args.log
 
     logging.basicConfig()
-    project = app_project(initialize=True)
+    #project = app_project(initialize=True)
+    project = app_project()
     # Loading app will have configured from config file. Reconfigure here:
     if log:
         logging.getLogger(project.NAME).setLevel(logging.DEBUG)

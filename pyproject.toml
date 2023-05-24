@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "dcicsnovault"
-version = "8.0.1.4b10"  # to become 8.1.0
+version = "8.2.0.1b1"  # to become 8.2.0
 description = "Storage support for 4DN Data Portals."
 authors = ["4DN-DCIC Team <support@4dnucleome.org>"]
 license = "MIT"
@@ -41,7 +41,9 @@ botocore = ">=1.26.133"  # no particular version required, but this speeds up se
 boto3 = ">=1.26.133"  # no particular version required, but this speeds up search
 elasticsearch = "7.13.4"  # versions >= 7.14.0 lock out AWS ES
 elasticsearch_dsl = "^7.4.0"
-dcicutils = "7.4.2.1b13"  # "^7.0.0"
+#dcicutils = "7.4.2.1b13"  # "^7.0.0"
+#dcicutils = "7.4.2.3b14"
+dcicutils = "7.4.3.5b19"
 future = ">=0.15.2,<1"
 html5lib = ">=1.1"  # experimental, should be OK now that we're not using moto server
 humanfriendly = "^1.44.9"
@@ -125,7 +127,7 @@ pytest-timeout = ">=1.0.0"
 # And we only need .safe_load in testing, so we're moving this to dev dependencies. -kmp 22-Feb-2022
 PyYAML = ">=5.1,<5.5"
 "repoze.debug" = ">=1.0.2"
-wheel = ">=0.29.0"
+wheel = ">=0.40.0"
 
 [tool.poetry.scripts]
 dev-servers = "snovault.dev_servers:main"

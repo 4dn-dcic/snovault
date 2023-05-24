@@ -3,6 +3,7 @@ import json
 from dcicutils.misc_utils import environ_bool, PRINT
 from . import COLLECTIONS
 from pyramid.security import Authenticated
+from snovault.project_defs import app_project
 
 
 DEBUG_PERMISSIONS = environ_bool("DEBUG_PERMISSIONS", default=False)
@@ -95,6 +96,11 @@ def groupfinder(login, request):
             PRINT("groupfinder for %s found user %s, but that user has status deleted." % (login, user))
         return None
 
+    return app_project().authorization_create_principals(login, user, collections)
+
+
+def _create_principals(login, user, collections):
+    user_properties = user.properties
     principals = ['userid.%s' % user.uuid]
     if DEBUG_PERMISSIONS:
         PRINT("groupfinder starting with principals", principals)
@@ -118,3 +124,10 @@ def is_admin_request(request):
         request was submitted by an admin
     """
     return 'group.admin' in request.effective_principals
+
+
+# Authorization related functions which may be overriden by an implementing app, e.g. Foursight or CGAP portal.
+class SnovaultProjectAuthorization:
+
+    def authorization_create_principals(self, login, user, collections):
+        return _create_principals(login, user, collections)

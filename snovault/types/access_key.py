@@ -49,6 +49,9 @@ from ..authentication import (
         (Deny, Everyone, 'list'),
     ])
 class AccessKey(Item):
+    def __init__(self): # xyzzy
+        # import pdb ; pdb.set_trace() # xyzzy
+        pass # xyzzy
     """AccessKey class."""
     ACCESS_KEY_EXPIRATION_TIME = 90  # days
     item_type = 'access_key'
