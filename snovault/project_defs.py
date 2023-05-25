@@ -6,4 +6,4 @@ class SnovaultProject(C4Project):
     ACCESSION_PREFIX = 'SNO'
 
 
-app_project = SnovaultProject.app_project_maker()
+app_project = C4ProjectRegistry.app_project_maker()
