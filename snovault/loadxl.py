@@ -7,12 +7,13 @@ import magic
 import mimetypes
 import os
 import structlog
+from typing import Union
 import webtest
 import traceback
 import uuid
 
 from base64 import b64encode
-from dcicutils.misc_utils import ignored, environ_bool
+from dcicutils.misc_utils import ignored, environ_bool, VirtualApp
 from dcicutils.secrets_utils import assume_identity
 from PIL import Image
 from pyramid.paster import get_app
@@ -36,7 +37,7 @@ def includeme(config):
 
 # order of items references with linkTo in a field in  'required' in schemas
 # This should be set by the downstream application
-ORDER = []
+ORDER = app_project().loadxl_order()
 
 IS_ATTACHMENT = [
     'attachment',
@@ -95,7 +96,7 @@ def load_data_view(context, request):
        item_type should be same as insert file names i.e. file_fastq
     """
     ignored(context)
-    # this is a bit wierd but want to reuse load_data functionality so I'm rolling with it
+    # this is a bit weird but want to reuse load_data functionality so I'm rolling with it
     config_uri = request.json.get('config_uri', 'production.ini')
     patch_only = request.json.get('patch_only', False)
     post_only = request.json.get('post_only', False)
@@ -291,7 +292,7 @@ LOADXL_ALLOW_NONE = environ_bool("LOADXL_ALLOW_NONE", default=True)
 
 
 def load_all_gen(testapp, inserts, docsdir, overwrite=True, itype=None, from_json=False,
-                 patch_only=False, post_only=False, skip_types=None):
+                 patch_only=False, post_only=False, skip_types=None, validate_only=False):
     """
     Generator function that yields bytes information about each item POSTed/PATCHed.
     Is the base functionality of load_all function.
@@ -422,13 +423,20 @@ def load_all_gen(testapp, inserts, docsdir, overwrite=True, itype=None, from_jso
                         to_post = an_item
                     else:
                         to_post = {key: value for (key, value) in an_item.items() if key in first_fields}
+                    post_request = f'/{a_type}?skip_indexing=true'
+                    if validate_only:
+                        post_request += '&check_only=true'
                     to_post = format_for_attachment(to_post, docsdir)
                     try:
-                        res = testapp.post_json('/' + a_type + '?skip_indexing=true', to_post)  # skip indexing in round 1
-                        assert res.status_code == 201
-                        posted += 1
-                        # yield bytes to work with Response.app_iter
-                        yield str.encode('POST: %s\n' % res.json['@graph'][0]['uuid'])
+                        res = testapp.post_json(post_request, to_post)  # skip indexing in round 1
+                        if not validate_only:
+                            assert res.status_code == 201
+                            posted += 1
+                            # yield bytes to work with Response.app_iter
+                            yield str.encode('POST: %s\n' % res.json['@graph'][0]['uuid'])
+                        else:
+                            assert res.status_code == 200
+                            yield str.encode('CHECK: %s\n' % an_item['uuid'])
                     except Exception as e:
                         print('Posting {} failed. Post body:\n{}\nError Message:{}'
                               ''.format(a_type, str(first_fields), str(e)))
@@ -437,8 +445,11 @@ def load_all_gen(testapp, inserts, docsdir, overwrite=True, itype=None, from_jso
                         yield str.encode('ERROR: %s\n' % e_str)
                         return
                         # raise StopIteration
-            if not post_only:
-                second_round_items[a_type] = [i for i in store[a_type] if i['uuid'] not in skip_existing_items]
+            if not validate_only:
+                if not post_only:
+                    second_round_items[a_type] = [i for i in store[a_type] if i['uuid'] not in skip_existing_items]
+            else:
+                second_round_items[a_type] = []
             logger.info('{} 1st: {} items posted, {} items exists.'.format(a_type, posted, skip_exist))
             logger.info('{} 1st: {} items will be patched in second round'
                         .format(a_type, str(len(second_round_items.get(a_type, [])))))
@@ -715,3 +726,45 @@ def load_data_by_type(app, indir='master-inserts', overwrite=True, itype=None):
         logger.error('load_data_by_type: failed to load from %s' % indir, error=res)
         return res
     return None  # unnecessary, but makes it more clear that no error was encountered
+
+
+def load_data_via_ingester(vapp: VirtualApp,
+                           ontology: dict,
+                           itype: Union[str, list] = ["ontology", "ontology_term"],
+                           validate_only: bool = False) -> dict:
+    """
+    Entry point for call from encoded.ingester.processors.handle_ontology_update (2023-03-08).
+    Returns dictionary itemizing the created (post), updated (patch), skipped (skip), checked (check),
+    and errored (error) ontology term uuids; as well as a count of the number of unique uuids processed;
+    the checked category is for validate_only;
+    """
+    response = load_all_gen(vapp, ontology, None, overwrite=True, itype=itype,
+                            from_json=True, patch_only=False, validate_only=validate_only)
+    results = {"post": [], "patch": [], "skip": [], "check": [], "error": []}
+    unique_uuids = set()
+    INGESTION_RESPONSE_PATTERN = re.compile(r"^([A-Z]+): ([0-9a-f-]+)$")
+    for item in response:
+        # Assume each item in the response looks something like one of (string or bytes):
+        # POST: 15425d13-01ce-4e61-be5d-cd04401dff29
+        # PATCH: 5b45e66f-7b4f-4923-824b-d0864a689bb
+        # SKIP: 4efe24b5-eb17-4406-adb8-060ea2ae2180
+        # CHECK: deadbeef-eb17-4406-adb8-0eacafebabe
+        # ERROR: 906c4667-483e-4a08-96b9-3ce85ce8bf8c
+        # Note that SKIP means skip post/insert; still may to patch/update (if overwrite).
+        if isinstance(item, bytes):
+            item = item.decode("ascii")
+        elif not isinstance(item, str):
+            logger.warning(f"load_data_via_ingester: skipping response item of unexpected type ({type(item)}): {item!r}")
+            continue
+        match = INGESTION_RESPONSE_PATTERN.match(item)
+        if not match:
+            logger.warning(f"load_data_via_ingester: skipping response item in unexpected form: {item!r}")
+            continue
+        action = match.group(1).lower()
+        uuid = match.group(2)
+        if not results.get(action):
+            results[action] = []
+        results[action].append(uuid)
+        unique_uuids.add(uuid)
+    results["unique"] = len(unique_uuids)
+    return results

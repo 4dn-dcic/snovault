@@ -1,3 +1,5 @@
+from ..project_defs import SnovaultProject
+from ..project_app import app_project
 import argparse
 import atexit
 import botocore.exceptions
