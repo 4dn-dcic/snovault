@@ -1,4 +1,3 @@
-#xyzzy/end
 import base64
 import datetime
 import jwt
@@ -22,12 +21,12 @@ from pyramid.view import view_config
 from snovault import ROOT, COLLECTIONS
 from snovault.calculated import calculate_properties
 from snovault.crud_views import collection_add as sno_collection_add
+from snovault.project_app import app_project
 from snovault.schema_utils import validate_request
 from snovault.util import debug_log
 from snovault.validation import ValidationFailure
 from snovault.validators import no_validate_item_content_post
 from urllib.parse import urlencode
-from snovault.project_defs import app_project
 
 
 log = structlog.getLogger(__name__)
@@ -136,7 +135,7 @@ class NamespacedAuthenticationPolicy(object):
         return userid
 
     def authenticated_userid(self, request, set_user_info_property=True):
-        # TODO maybe ...
+        # TODO: Maybe something like ...
         # return app_project().login_policy.authenticated_userid(request, set_user_info_property)
         return app_project().namespaced_authentication_policy_authenticated_userid(self, request, set_user_info_property)
 
@@ -694,36 +693,3 @@ def create_unauthorized_user(context, request):
                 'WWW-Authenticate':
                     "Bearer realm=\"{}\"; Basic realm=\"{}\"".format(request.domain, request.domain)}
         )
-
-
-# Authentication related functions which may be overriden by an implementing
-# app, e.g. Foursight or CGAP portal, without having to worry about
-# reimplementing any associated view_config setup and whatnot.
-
-# TODO maybe ...
-#def SnovaultNamespacedAuthenticationPolicy:
-#    def __init__(self, app_project):
-#        self.app_project = app_project
-#    def authenticated_userid(self, namespaced_authentication_policy, request, set_user_info_property):
-#        return namespaced_authentication_policy._authenticated_userid_implementation(request, set_user_info_property)
-
-class SnovaultProjectAuthentication:
-
-    # TODO maybe ...
-    # def __init__(self):
-    #    self.login_policy = 
-
-    def login(self, context, request, *, samesite):
-        return login(context, request, samesite=samesite)
-
-    def logout(self, context, request):
-        return logout(context, request)
-
-    def namespaced_authentication_policy_authenticated_userid(self, namespaced_authentication_policy, request, set_user_info_property):
-        return namespaced_authentication_policy._authenticated_userid_implementation(request, set_user_info_property)
-
-    def namespaced_authentication_policy_unauthenticated_userid(self, namespaced_authentication_policy, request):
-        return namespaced_authentication_policy._unauthenticated_userid_implementation(request)
-
-    def note_auth0_authentication_policy_unauthenticated_userid(self, auth0_authentication_policy, request, email, id_token):
-        pass

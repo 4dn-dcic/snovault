@@ -1,9 +1,9 @@
 import json
 
-from dcicutils.misc_utils import environ_bool, PRINT
-from . import COLLECTIONS
 from pyramid.security import Authenticated
-from snovault.project_defs import app_project
+from dcicutils.misc_utils import environ_bool, PRINT
+from snovault import COLLECTIONS
+from snovault.project_app import app_project
 
 
 DEBUG_PERMISSIONS = environ_bool("DEBUG_PERMISSIONS", default=False)
@@ -124,10 +124,3 @@ def is_admin_request(request):
         request was submitted by an admin
     """
     return 'group.admin' in request.effective_principals
-
-
-# Authorization related functions which may be overriden by an implementing app, e.g. Foursight or CGAP portal.
-class SnovaultProjectAuthorization:
-
-    def authorization_create_principals(self, login, user, collections):
-        return _create_principals(login, user, collections)

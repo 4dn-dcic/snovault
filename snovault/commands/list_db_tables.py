@@ -15,7 +15,7 @@ from typing import Optional, List
 # from zope.sqlalchemy import mark_changed
 from .. import configure_dbsession
 from ..sqlalchemy_tools import PyramidAppManager
-from ..project_defs import app_project
+from ..project_app import app_project
 
 
 logger = structlog.getLogger(__name__)

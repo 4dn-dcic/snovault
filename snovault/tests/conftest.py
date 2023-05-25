@@ -5,9 +5,6 @@ from ..project_defs import SnovaultProject
 from ..elasticsearch.indexer_queue import QueueManager
 
 
-SnovaultProject.initialize_app_project(initialize_env_utils=False)
-
-
 # required so that db transactions are properly rolled back in tests
 @pytest.fixture(autouse=True)
 def autouse_external_tx(external_tx):

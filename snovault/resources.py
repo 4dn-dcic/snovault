@@ -376,7 +376,6 @@ class Item(Resource):
     Collection = Collection
 
     def __init__(self, registry, model):
-        # import pdb ; pdb.set_trace()
         self.registry = registry
         self.model = model
 
@@ -410,7 +409,6 @@ class Item(Resource):
         Used in the resource path for this item. Use `self.name_key` if
         present, otherwise `self.uuid`
         """
-        # import pdb ; pdb.set_trace()
         if self.name_key is None:
             return str(self.uuid)
         return self.properties.get(self.name_key, None) or str(self.uuid)
@@ -578,8 +576,6 @@ class Item(Resource):
         This method instantiates a new Item class instance from provided `uuid` and `properties`,
         then runs the `_update` (instance method) to save the Item to the database.
         """
-#       if "ingestionsubmission" in str(cls).lower():
-#           import pdb ; pdb.set_trace() # xyzzy
         model = registry[CONNECTION].create(cls.__name__, uuid)
         item_instance = cls(registry, model)
         item_instance._update(properties, sheets)

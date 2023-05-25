@@ -8,8 +8,6 @@ import io
 import json
 import logging
 from typing import Optional
-# import os
-# import re
 import traceback
 
 from dcicutils.misc_utils import PRINT  # , ignored, check_true, VirtualApp
@@ -30,6 +28,7 @@ from ..util import (
     make_vapp_for_ingestion,  # vapp_for_email,
 )
 from ..ingestion.common import metadata_bundles_bucket  # , get_parameter
+from ..project_app import app_project
 
 
 # ALLOW_SUBMITTER_VIEW_ACL = (
@@ -266,13 +265,9 @@ class SubmissionFolio:
     })
 class IngestionSubmission(Item):
     """The IngestionSubmission class that holds info on requests to ingest data."""
-    def __new__(cls, *args, **kwargs): # xyzzy
-        # import pdb ; pdb.set_trace()  # Set pdb breakpoint # xyzzy
-        # return super().__new__(cls, *args, **kwargs) # xyzzy
-        return super().__new__(cls) # xyzzy
 
     item_type = 'ingestion_submission'
-    schema = load_schema('encoded:schemas/ingestion_submission.json')
+    schema = load_schema(app_project().ingestion_submission_schema_file())
     # embedded_list = [...] + Item.embedded_list
 
     schema_json = json.loads(json.dumps(schema))

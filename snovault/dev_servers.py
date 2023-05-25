@@ -19,7 +19,7 @@ from dcicutils.misc_utils import PRINT
 from pyramid.paster import get_app, get_appsettings
 from pyramid.path import DottedNameResolver
 from .elasticsearch import create_mapping
-from .project_defs import app_project
+from .project_app import app_project
 from .tests import elasticsearch_fixture, postgresql_fixture
 
 
