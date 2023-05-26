@@ -1,3 +1,3 @@
-from dcicutils.project_utils import C4Project
+from dcicutils.project_utils import C4ProjectRegistry
 
-app_project = C4Project.app_project_maker()
+app_project = C4ProjectRegistry.app_project_maker()

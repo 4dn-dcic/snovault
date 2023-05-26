@@ -6,6 +6,7 @@ import json
 import magic
 import mimetypes
 import os
+import re
 import structlog
 from typing import Union
 import webtest

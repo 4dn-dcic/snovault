@@ -1,5 +1,5 @@
-from ..project_defs import SnovaultProject
-from ..project_app import app_project
+#from ..project_defs import SnovaultProject
+#from ..project_app import app_project
 import argparse
 import atexit
 import botocore.exceptions
@@ -38,7 +38,7 @@ from .ingestion_listener_base import (
     IngestionListenerBase,
 )
 from .ingestion_message_handler_decorator import call_ingestion_message_handler
-from .ingestion_processors import get_ingestion_processor
+from .ingestion_processor_decorator import get_ingestion_processor
 from .queue_utils import IngestionQueueManager
 
 

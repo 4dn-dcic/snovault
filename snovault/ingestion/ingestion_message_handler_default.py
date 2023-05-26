@@ -1,13 +1,13 @@
 import json
 import structlog
 from dcicutils.misc_utils import ignored, PRINT
-from ..ingestion_listener import (IngestionListener, DEBUG_SUBMISSIONS)
+from .ingestion_listener import (IngestionListener, DEBUG_SUBMISSIONS)
 from ..types.ingestion import SubmissionFolio
 from ..util import (debuglog, vapp_for_email, make_s3_client)
 from .common import metadata_bundles_bucket
 from .ingestion_message import IngestionMessage
 from .ingestion_message_handler_decorator import ingestion_message_handler
-from .ingestion_processor import get_ingestion_processor
+from .ingestion_processor_decorator import get_ingestion_processor
 
 
 log = structlog.getLogger(__name__)
