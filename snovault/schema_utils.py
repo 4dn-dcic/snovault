@@ -11,10 +11,12 @@ from jsonschema_serialize_fork import (
     RefResolver,
 )
 from jsonschema_serialize_fork.exceptions import ValidationError
+import os
 from pyramid.path import AssetResolver, caller_package
 from pyramid.threadlocal import get_current_request
 from pyramid.traversal import find_resource
 from uuid import UUID
+from .project_app import app_project
 from .util import ensurelist
 
 # This was originally an internal import from "." (__init__.py), but I have replaced that reference
@@ -43,6 +45,30 @@ class NoRemoteResolver(RefResolver):
 
 
 def mixinSchemas(schema, resolver, key_name='properties'):
+
+    def favor_app_specific_ref(schema_ref: str) -> str:
+        """
+        If the given schema_ref refers to a schema (file) which exists in the app-specific schemas
+        package/directory then favor that version of the file over the local version, and return a
+        reference to that schema instead of the given one.
+
+        For example, if the given schema is "mixins.json#/modified" and the current
+        app is fourfront and if the file encoded/schemas/mixins.json exists then
+        return: "file:///full-path-to/encoded/schemas/mixins.json#/modified"
+
+        This uses the dcicutils.project_utils mechanism to get the app-specific file/path name.
+        """
+        if schema_ref:
+            schema_parts = schema_ref.split("#")
+            schema_filename = schema_parts[0]
+            app_specific_schema_filename = app_project().project_filename(f"/schemas/{schema_filename}")
+            if os.path.exists(app_specific_schema_filename):
+                schema_ref = f"file://{app_specific_schema_filename}"
+                schema_element = schema_parts[1] if len(schema_parts) > 1 else None
+                if schema_element:
+                    schema_ref += f"#{schema_element}"
+        return schema_ref
+
     mixinKeyName = 'mixin' + key_name.capitalize()
     mixins = schema.get(mixinKeyName)
     if mixins is None:
@@ -52,6 +78,10 @@ def mixinSchemas(schema, resolver, key_name='properties'):
     for mixin in reversed(mixins):
         ref = mixin.get('$ref')
         if ref is not None:
+            # For mixins check if there is an associated app-specific
+            # schema file and favor that over the local one if any.
+            # TODO: This may be controversial and up for discussion. 2023-05-27
+            ref = favor_app_specific_ref(ref)
             with resolver.resolving(ref) as resolved:
                 mixin = resolved
         bases.append(mixin)
