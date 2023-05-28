@@ -4,3 +4,5 @@
 class SnovaultProjectIngestion:
     def ingestion_submission_schema_file(self):
         return "snovault:schemas/ingestion_submission.json"
+    def note_ingestion_enqueue_uuids_for_request(self, ingestion_type, request, uuids):
+        pass

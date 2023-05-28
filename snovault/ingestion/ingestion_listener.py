@@ -1,5 +1,5 @@
 #from ..project_defs import SnovaultProject
-#from ..project_app import app_project
+from ..project_app import app_project
 import argparse
 import atexit
 import botocore.exceptions
@@ -319,6 +319,7 @@ def enqueue_uuids_for_request(request, uuids, *, ingestion_type, override_name=N
         response['notification'] = 'Success'
         response['number_queued'] = len(uuids)
         response['detail'] = 'Successfully queued the following uuids: %s' % uuids
+        app_project().note_ingestion_enqueue_uuids_for_request(ingestion_type, request, uuids)
     else:
         response['number_queued'] = len(uuids) - len(failed)
         response['detail'] = 'Some uuids failed: %s' % failed
