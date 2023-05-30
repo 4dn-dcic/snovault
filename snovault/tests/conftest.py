@@ -1,11 +1,14 @@
 import logging
 import pytest
 
-from ..project_defs import SnovaultProject
+from ..project_defs import C4ProjectRegistry
 from ..elasticsearch.indexer_queue import QueueManager
 
 
-SnovaultProject.initialize_app_project(initialize_env_utils=False)
+# This might not be needed because it should demand-initialize, but there's a chance that the
+# demand-initialization would happen in some weird state of mocking, so rather than risk that,
+# we force it here.
+C4ProjectRegistry.initialize()
 
 
 # required so that db transactions are properly rolled back in tests

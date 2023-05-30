@@ -4,6 +4,7 @@ import hashlib
 import json
 import os
 import psycopg2
+import psycopg2.extensions
 import subprocess
 import zope.sqlalchemy
 
@@ -13,7 +14,7 @@ from pyramid.path import AssetResolver, caller_package
 from pyramid.session import SignedCookieSessionFactory
 from pyramid.settings import asbool
 from pyramid_localroles import LocalRolesAuthorizationPolicy
-from sqlalchemy import engine_from_config, event, orm
+from sqlalchemy import engine_from_config, event, orm  # , text as psql_text
 from webob.cookies import JSONSerializer
 
 from .interfaces import DBSESSION
@@ -82,7 +83,13 @@ def set_postgresql_statement_timeout(engine, timeout: int = 20 * 1000):
             timeout_ms = int(timeout_ms)
         cursor = dbapi_connection.cursor()
         try:
-            cursor.execute("SET statement_timeout TO %d" % timeout_ms)
+            # cursor: psycopg2.extensions.cursor
+            # This call to psycopg2.extensions.cursor.execute expects a real string. Giving it an sqlalchemy.text
+            # object will fail because something will try to do a boolean test, probably "if thing_to_execute:..."
+            # and __bool__ is not defined on sqlalchemy.txt
+            # Bottom line: Cannot wrap this string with psql_text(...) like we do elsewhere. It's not ready.
+            # Might be we could do such a wrapper if we called execute on some other object.
+            cursor.execute("SET statement_timeout = %d;" % timeout_ms)
         except psycopg2.Error:
             dbapi_connection.rollback()
         finally:
