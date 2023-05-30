@@ -267,7 +267,7 @@ class IngestionSubmission(Item):
     """The IngestionSubmission class that holds info on requests to ingest data."""
 
     item_type = 'ingestion_submission'
-    schema = load_schema(app_project().ingestion_submission_schema_file())
+    schema = load_schema('snovault:schemas/ingestion_submission.json')
     # embedded_list = [...] + Item.embedded_list
 
     schema_json = json.loads(json.dumps(schema))
