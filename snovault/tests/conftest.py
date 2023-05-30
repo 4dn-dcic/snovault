@@ -1,7 +1,7 @@
 import logging
 import pytest
 
-from ..project_defs import SnovaultProject
+from ..project_defs import C4ProjectRegistry
 from ..elasticsearch.indexer_queue import QueueManager
 
 
