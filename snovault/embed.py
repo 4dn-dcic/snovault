@@ -205,55 +205,56 @@ def subrequest_object(request, object_id):
     return object_json
 
 
-def subrequest_item_creation(request: pyramid.request.Request, item_type: str, json_body: dict = None) -> dict:
-    """
-    Acting as proxy on behalf of request, this creates a new item of the given item_type with attributes per json_body.
-
-    For example,
-
-        subrequest_item_creation(request=request, item_type='NobelPrize',
-                                 json_body={'category': 'peace', 'year': 2016))
-
-    Args:
-        request: the request on behalf of which this subrequest is done
-        item_type: the name of the item item type to be created
-        json_body: a python dictionary representing JSON containing data to use in initializing the newly created item
-
-    Returns:
-        a python dictionary (JSON description) of the item created
-
-    """
-
-    if json_body is None:
-        json_body = {}
-    collection_path = '/' + item_type
-    method = 'POST'
-    # json_utf8 = json.dumps(json_body).encode('utf-8')  # Unused, but here just in case
-    check_true(not request.remote_user, "request.remote_user has %s before we set it." % request.remote_user)
-    request.remote_user = 'EMBED'
-    subrequest = make_subrequest(request=request, path=collection_path, method=method, json_body=json_body)
-    subrequest.remote_user = 'EMBED'
-    subrequest.registry = request.registry
-    # Maybe...
-    # validated = json_body.copy()
-    # subrequest.validated = validated
-    registry: Registry = subrequest.registry  # noQA - PyCharm can't tell subrequest.registry IS a Registry
-    collection: Collection = registry[COLLECTIONS][item_type]
-    check_true(subrequest.json_body, "subrequest.json_body is not properly initialized.")
-    check_true(not subrequest.validated, "subrequest was unexpectedly validated already.")
-    check_true(not subrequest.errors, "subrequest.errors already has errors before trying to validate.")
-    check_true(subrequest.remote_user == request.remote_user,
-               "Mismatch: subrequest.remote_user=%r request.remote_user=%r"
-               % (subrequest.remote_user, request.remote_user))
-    validate_request(schema=collection.type_info.schema, request=subrequest, data=json_body)
-    if not subrequest.validated:
-        return {
-            "@type": ["Exception"],
-            "errors": subrequest.errors
-        }
-    else:
-        json_result: dict = sno_collection_add(context=collection, request=subrequest, render=False)
-        return json_result
+# Does not seemed to be used anywhere (dmichaels/2023-05-30) ...
+#def subrequest_item_creation(request: pyramid.request.Request, item_type: str, json_body: dict = None) -> dict:
+#    """
+#    Acting as proxy on behalf of request, this creates a new item of the given item_type with attributes per json_body.
+#
+#    For example,
+#
+#        subrequest_item_creation(request=request, item_type='NobelPrize',
+#                                 json_body={'category': 'peace', 'year': 2016))
+#
+#    Args:
+#        request: the request on behalf of which this subrequest is done
+#        item_type: the name of the item item type to be created
+#        json_body: a python dictionary representing JSON containing data to use in initializing the newly created item
+#
+#    Returns:
+#        a python dictionary (JSON description) of the item created
+#
+#    """
+#
+#    if json_body is None:
+#        json_body = {}
+#    collection_path = '/' + item_type
+#    method = 'POST'
+#    # json_utf8 = json.dumps(json_body).encode('utf-8')  # Unused, but here just in case
+#    check_true(not request.remote_user, "request.remote_user has %s before we set it." % request.remote_user)
+#    request.remote_user = 'EMBED'
+#    subrequest = make_subrequest(request=request, path=collection_path, method=method, json_body=json_body)
+#    subrequest.remote_user = 'EMBED'
+#    subrequest.registry = request.registry
+#    # Maybe...
+#    # validated = json_body.copy()
+#    # subrequest.validated = validated
+#    registry: Registry = subrequest.registry  # noQA - PyCharm can't tell subrequest.registry IS a Registry
+#    collection: Collection = registry[COLLECTIONS][item_type]
+#    check_true(subrequest.json_body, "subrequest.json_body is not properly initialized.")
+#    check_true(not subrequest.validated, "subrequest was unexpectedly validated already.")
+#    check_true(not subrequest.errors, "subrequest.errors already has errors before trying to validate.")
+#    check_true(subrequest.remote_user == request.remote_user,
+#               "Mismatch: subrequest.remote_user=%r request.remote_user=%r"
+#               % (subrequest.remote_user, request.remote_user))
+#    validate_request(schema=collection.type_info.schema, request=subrequest, data=json_body)
+#    if not subrequest.validated:
+#        return {
+#            "@type": ["Exception"],
+#            "errors": subrequest.errors
+#        }
+#    else:
+#        json_result: dict = sno_collection_add(context=collection, request=subrequest, render=False)
+#        return json_result
 
 
 class NullRenderer:
