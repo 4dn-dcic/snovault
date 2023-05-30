@@ -59,11 +59,11 @@ def favor_app_specific_schema(schema: str) -> str:
     if isinstance(schema, str):
         schema_parts = schema.split(":")
         schema_project = schema_parts[0] if len(schema_parts) > 1 else None
-        if schema_project != app_project().NAME and schema_project != app_project().PYPROJECT_NAME:
+        if schema_project != app_project().PACKAGE_NAME:
             schema_filename = schema_parts[1] if len(schema_parts) > 1 else schema_parts[0]
             app_specific_schema_filename = app_project().project_filename(f"/{schema_filename}")
             if os.path.exists(app_specific_schema_filename):
-                schema = f"{app_project().PYPROJECT_NAME}:{schema_filename}"
+                schema = f"{app_project().PACKAGE_NAME}:{schema_filename}"
     return schema
 
 
