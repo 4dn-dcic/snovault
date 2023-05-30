@@ -160,10 +160,10 @@ update:
 	poetry update
 
 publish:
-	scripts/publish
+	poetry run publish-to-pypi
 
 publish-for-ga:
-	scripts/publish --noconfirm
+	poetry run publish-to-pypi --noconfirm
 
 kill:  # kills back-end processes associated with the application. Use with care.
 	pkill -f postgres &
