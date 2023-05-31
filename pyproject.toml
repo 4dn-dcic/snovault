@@ -134,6 +134,7 @@ wheel = ">=0.40.0"
 dev-servers-snovault = "snovault.dev_servers:main"
 list-db-tables = "snovault.commands.list_db_tables:main"
 prepare-local-dev = "snovault.commands.prepare_template:prepare_local_dev_main"
+publish-to-pypi = "dcicutils.scripts.publish_to_pypi:main"
 wipe-test-indices = "snovault.commands.wipe_test_indices:main"
 
 [paste.app_factory]
