@@ -24,7 +24,7 @@ from ..validators import (
 )
 from ..crud_views import (
     collection_add as sno_collection_add,
-    item_edit as sno_item_edit,
+    item_edit
 )
 from ..interfaces import CONNECTION
 from typing import Any, List, Tuple, Union
