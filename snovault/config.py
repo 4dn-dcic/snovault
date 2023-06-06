@@ -52,6 +52,7 @@ def collection(name, **kw):
     def set_collection(config, Collection, name, Item, **kw):
         registry = config.registry
         # registers the type in registry[TYPES].all and .by_item_type
+        # xyzzy import pdb ; pdb.set_trace()
         ti = registry[TYPES].register(Item)
         collection = Collection(registry, name, ti, **kw)
         registry[COLLECTIONS].register(name, collection)
