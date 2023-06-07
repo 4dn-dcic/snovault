@@ -164,15 +164,15 @@ publish:
 
 publish-for-ga:
 	@echo xyzzy-0
-	git --version
+	git remote -v
 	@echo xyzzy-1
-	git log -1 --decorate
+	git --version
 	@echo xyzzy-2
-	git log
+	git log -1 --decorate
 	@echo xyzzy-3
 	git describe --exact-match --tags HEAD
 	@echo xyzzy-4
-	git remote -v
+	git log
 	poetry run publish-to-pypi --noconfirm --debug
 
 kill:  # kills back-end processes associated with the application. Use with care.
