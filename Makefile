@@ -160,20 +160,10 @@ update:
 	poetry update
 
 publish:
-	poetry run publish-to-pypi --debug
+	poetry run publish-to-pypi
 
 publish-for-ga:
-	@echo xyzzy-0
-	git remote -v
-	@echo xyzzy-1
-	git --version
-	@echo xyzzy-2
-	git log -1 --decorate
-	@echo xyzzy-3
-	git describe --exact-match --tags HEAD
-	@echo xyzzy-4
-	git log
-	poetry run publish-to-pypi --noconfirm --debug
+	poetry run publish-to-pypi --noconfirm
 
 kill:  # kills back-end processes associated with the application. Use with care.
 	pkill -f postgres &
