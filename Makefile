@@ -171,6 +171,8 @@ publish-for-ga:
 	git log
 	@echo xyzzy-3
 	git describe --exact-match --tags HEAD
+	@echo xyzzy-4
+	git remote -v
 	poetry run publish-to-pypi --noconfirm --debug
 
 kill:  # kills back-end processes associated with the application. Use with care.
