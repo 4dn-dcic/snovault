@@ -163,6 +163,10 @@ publish:
 	poetry run publish-to-pypi --debug
 
 publish-for-ga:
+	echo xyzzy-1
+	git log -1 --decorate
+	echo xyzzy-2
+	git log
 	poetry run publish-to-pypi --noconfirm --debug
 
 kill:  # kills back-end processes associated with the application. Use with care.
