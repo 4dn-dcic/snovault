@@ -160,7 +160,7 @@ update:
 	poetry update
 
 publish:
-	poetry run publish-to-pypi --force-allow-username
+	poetry run publish-to-pypi
 
 publish-for-ga:
 	poetry run publish-to-pypi --noconfirm
