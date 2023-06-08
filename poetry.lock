@@ -784,14 +784,14 @@ tox = ["tox"]
 
 [[package]]
 name = "dcicutils"
-version = "7.5.0"
+version = "7.5.1"
 description = "Utility package for interacting with the 4DN Data Portal and other 4DN resources"
 category = "main"
 optional = false
 python-versions = ">=3.7,<3.10"
 files = [
-    {file = "dcicutils-7.5.0-py3-none-any.whl", hash = "sha256:044ef9487131bd9e21392519bac31e51c9c69779bcc90529aedb489c46908383"},
-    {file = "dcicutils-7.5.0.tar.gz", hash = "sha256:cf8dd1cc263a3de3d08bc862a21fed7f39b1462eaeb8b914d010b7f780de62e9"},
+    {file = "dcicutils-7.5.1-py3-none-any.whl", hash = "sha256:5c77b00116c3d1f9f413b30aa66865a9c50d88d02ea20349a4bb25e1e45eea85"},
+    {file = "dcicutils-7.5.1.tar.gz", hash = "sha256:c4211161f48ce727e9cd3e2b52f66336949c5a6ce6d518c908dfee9153f7b121"},
 ]
 
 [package.dependencies]
