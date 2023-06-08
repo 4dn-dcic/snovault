@@ -109,12 +109,12 @@ USER_PAGE_VIEW_ATTRIBUTES = ['@id', '@type', 'uuid', 'title', 'display_title']
 
 @view_config(context=User, permission='view', request_method='GET', name='page')
 @debug_log
-def user_page_view(context, request):
+def user_page_view(context, request, user_page_view_attributes = USER_PAGE_VIEW_ATTRIBUTES):
     """smth."""
     properties = item_view_page(context, request)
     if not request.has_permission('view_details'):
         filtered = {}
-        for key in USER_PAGE_VIEW_ATTRIBUTES:
+        for key in user_page_view_attributes:
             try:
                 filtered[key] = properties[key]
             except KeyError:
