@@ -17,7 +17,7 @@ from pyramid.traversal import (
     resource_path,
     traverse
 )
-from ..server_defaults import get_userid
+from .server_defaults import get_userid
 from .types.acl import ONLY_ADMIN_VIEW_ACL
 from .calculated import (
     calculate_properties,
