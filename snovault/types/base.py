@@ -178,7 +178,6 @@ def edit(context, request):
 
 @calculated_property(context=Item, category='action')
 def create(context, request):
-    import pdb ; pdb.set_trace()
     if request.has_permission('create'):
         return {
             'name': 'create',
