@@ -17,6 +17,8 @@ from pyramid.traversal import (
     resource_path,
     traverse
 )
+from ..server_defaults import get_userid
+from .types.acl import ONLY_ADMIN_VIEW_ACL
 from .calculated import (
     calculate_properties,
     calculated_property,
@@ -357,8 +359,6 @@ display_title_schema = {
     "description": "A calculated title for every object",
     "type": "string",
 }
-
-from .types.acl import  ONLY_ADMIN_VIEW_ACL #xyzzy
 
 class Item(Resource):
     """
