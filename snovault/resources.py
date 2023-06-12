@@ -358,6 +358,7 @@ display_title_schema = {
     "type": "string",
 }
 
+from .types.acl import  ONLY_ADMIN_VIEW_ACL #xyzzy
 
 class Item(Resource):
     """
@@ -374,10 +375,22 @@ class Item(Resource):
     schema = None
     AbstractCollection = AbstractCollection
     Collection = Collection
+    STATUS_ACL = {}  # note that this should ALWAYS be overridden by downstream application
 
     def __init__(self, registry, model):
         self.registry = registry
         self.model = model
+
+    def __acl__(self):
+        """This sets the ACL for the item based on mapping of status to ACL.
+           If there is no status or the status is not included in the STATUS_ACL
+           lookup then the access is set to admin only
+        """
+        # Don't finalize to avoid validation here.
+        properties = self.upgrade_properties().copy()
+        status = properties.get('status')
+        # import pdb ; pdb.set_trace()
+        return self.STATUS_ACL.get(status, ONLY_ADMIN_VIEW_ACL)
 
     def __repr__(self):
         return '<%s at %s>' % (type(self).__name__, resource_path(self))
