@@ -1,6 +1,6 @@
 """Access_key types file."""
 
-from pyramid.view import view_config
+import datetime
 from pyramid.security import (
     Allow,
     Deny,
@@ -8,28 +8,29 @@ from pyramid.security import (
     Everyone,
 )
 from pyramid.settings import asbool
-import datetime
-from .base import (
-    Item,
-    DELETED_ACL,
-    ONLY_ADMIN_VIEW_ACL,
-)
+from pyramid.view import view_config
 from .. import (
     collection,
     load_schema,
+)
+from ..authentication import (
+    generate_password,
+    generate_user,
+    CRYPT_CONTEXT,
 )
 from ..crud_views import (
     collection_add,
     item_edit,
 )
+from ..project_app import app_project
 from ..validators import (
     validate_item_content_post,
 )
 from ..util import debug_log
-from ..authentication import (
-    generate_password,
-    generate_user,
-    CRYPT_CONTEXT,
+from .base import (
+    Item,
+    DELETED_ACL,
+    ONLY_ADMIN_VIEW_ACL,
 )
 
 
@@ -64,7 +65,6 @@ class AccessKey(Item):
     @classmethod
     def create(cls, registry, uuid, properties, sheets=None):
         """ Sets the access key timeout 90 days from creation. """
-        from snovault.project_app import app_project
         if app_project().access_key_has_expiration_date():
             properties['expiration_date'] = (datetime.datetime.utcnow() + datetime.timedelta(
                 days=cls.ACCESS_KEY_EXPIRATION_TIME)).isoformat()

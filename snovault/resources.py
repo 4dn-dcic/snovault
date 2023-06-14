@@ -389,7 +389,6 @@ class Item(Resource):
         # Don't finalize to avoid validation here.
         properties = self.upgrade_properties().copy()
         status = properties.get('status')
-        # import pdb ; pdb.set_trace()
         return self.STATUS_ACL.get(status, ONLY_ADMIN_VIEW_ACL)
 
     def __repr__(self):
