@@ -64,8 +64,10 @@ class AccessKey(Item):
     @classmethod
     def create(cls, registry, uuid, properties, sheets=None):
         """ Sets the access key timeout 90 days from creation. """
-        properties['expiration_date'] = (datetime.datetime.utcnow() + datetime.timedelta(
-            days=cls.ACCESS_KEY_EXPIRATION_TIME)).isoformat()
+        from snovault.project_app import app_project
+        if app_project().access_key_has_expiration_date():
+            properties['expiration_date'] = (datetime.datetime.utcnow() + datetime.timedelta(
+                days=cls.ACCESS_KEY_EXPIRATION_TIME)).isoformat()
         return super().create(registry, uuid, properties, sheets)
 
     def __ac_local_roles__(self):
