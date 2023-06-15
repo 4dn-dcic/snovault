@@ -36,7 +36,6 @@ from .base import (
 
 @collection(
     name='access-keys',
-    unique_key='access_key:access_key_id',
     properties={
         'title': 'Access keys',
         'description': 'Programmatic access keys',
@@ -54,7 +53,6 @@ class AccessKey(Item):
     ACCESS_KEY_EXPIRATION_TIME = 90  # days
     item_type = 'access_key'
     schema = load_schema('snovault:schemas/access_key.json')
-    name_key = 'access_key_id'
     embedded_list = []
 
     STATUS_ACL = {
