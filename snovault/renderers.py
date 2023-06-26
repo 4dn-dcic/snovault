@@ -456,7 +456,7 @@ def render_page_html_tween_factory(handler, registry):
         Response=Response,
         reload_process=reload_process,
         # Other kwargs, including env below, get passed down to subprocess.Popen
-        args=['node', resource_filename(__name__, 'static/build/renderer.js')],
+        args=['node', resource_filename('encoded', 'static/build/renderer.js')],
         env=node_env
     )
 
