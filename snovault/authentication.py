@@ -21,6 +21,7 @@ from pyramid.view import view_config
 from snovault import ROOT, COLLECTIONS
 from snovault.calculated import calculate_properties
 from snovault.crud_views import collection_add as sno_collection_add
+from snovault.project_app import app_project
 from snovault.schema_utils import validate_request
 from snovault.util import debug_log
 from snovault.validation import ValidationFailure
@@ -61,7 +62,7 @@ AUTO_REGISTRATION_ENVS = ['cgap-training']
 
 
 def includeme(config):
-    config.include('snovault.edw_hash')
+    config.include('.edw_hash')
     setting_prefix = 'passlib.'
     passlib_settings = {
         k[len(setting_prefix):]: v
@@ -125,17 +126,28 @@ class NamespacedAuthenticationPolicy(object):
         super().__init__(*args, **kw)
 
     def unauthenticated_userid(self, request):
+        return app_project().namespaced_authentication_policy_unauthenticated_userid(self, request)
+
+    def _unauthenticated_userid_implementation(self, request):
         userid = super().unauthenticated_userid(request)
         if userid is not None:
             userid = self._namespace_prefix + userid
         return userid
 
-    def authenticated_userid(self, request):
+    def authenticated_userid(self, request, set_user_info_property=True):
+        # TODO: Maybe something like ...
+        # return app_project().login_policy.authenticated_userid(request, set_user_info_property)
+        return app_project().namespaced_authentication_policy_authenticated_userid(self, request, set_user_info_property)
+
+    def _authenticated_userid_implementation(self, request, set_user_info_property=True):
         """
         Adds `request.user_info` for all authentication types.
         Fetches and returns some user details if called.
         """
         namespaced_userid = super().authenticated_userid(request)
+
+        if not set_user_info_property:
+            return namespaced_userid
 
         if namespaced_userid is not None:
             # userid, if present, may be in form of UUID (if remoteuser) or an email (if Auth0).
@@ -219,6 +231,8 @@ class Auth0AuthenticationPolicy(CallbackAuthenticationPolicy):
 
         # At this point, email has been authenticated with their Auth0 provider and via `get_token_info`,
         # but we don't know yet if this email is in our database. `authenticated_userid` should take care of this.
+
+        app_project().note_auth0_authentication_policy_unauthenticated_userid(self, request, email, id_token)
 
         return email
 
@@ -324,7 +338,11 @@ def get_jwt(request):
 
 @view_config(route_name='login', request_method='POST', permission=NO_PERMISSION_REQUIRED)
 @debug_log
-def login(context, request):
+def login_view(context, request, samesite: str = "strict"):
+    return app_project().login(context, request, samesite=samesite)
+
+
+def login(context, request, *, samesite: str = "strict"):
     """
     Save JWT as httpOnly cookie
     """
@@ -344,7 +362,7 @@ def login(context, request):
         domain=request.domain,
         path="/",
         httponly=True,
-        samesite="strict",
+        samesite=samesite,
         overwrite=True,
         secure=is_https
     )
@@ -355,6 +373,10 @@ def login(context, request):
 @view_config(route_name='logout',
              permission=NO_PERMISSION_REQUIRED, http_cache=0)
 @debug_log
+def logout_view(context, request):
+    return app_project().logout(context, request)
+
+
 def logout(context, request):
     """
     This endpoint proxies a request to Auth0 for it to remove its session cookies.
@@ -548,14 +570,12 @@ def impersonate_user(context, request):
         auth0_secret,
         algorithm=JWT_ENCODING_ALGORITHM
     )
-    # In PyJWT v1, the id_token was bytes. In v2, it's a string. This insulates us.
-    id_token_string = id_token.decode('utf-8') if isinstance(id_token, bytes) else id_token
 
     is_https = request.scheme == "https"
 
     request.response.set_cookie(
         "jwtToken",
-        value=id_token_string,
+        value=id_token.decode('utf-8'),
         domain=request.domain,
         path="/",
         httponly=True,

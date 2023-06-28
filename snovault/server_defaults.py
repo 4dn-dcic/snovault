@@ -6,9 +6,10 @@ from jsonschema_serialize_fork import NO_DEFAULT
 from pyramid.path import DottedNameResolver
 from pyramid.threadlocal import get_current_request
 from snovault.schema_utils import server_default
-from snovault import COLLECTIONS  # , ROOT
+from .interfaces import COLLECTIONS  # , ROOT
 from string import digits  # , ascii_uppercase
-from .project import app_project
+from .project_app import app_project
+from .server_defaults_user import _userid, get_userid, get_user_resource
 
 
 ACCESSION_FACTORY = __name__ + ':accession_factory'
@@ -32,14 +33,6 @@ def includeme(config):
 @server_default
 def userid(instance, subschema):  # args required by jsonschema-serialize-fork
     return _userid()
-
-
-def _userid():
-    request = get_current_request()
-    for principal in request.effective_principals:
-        if principal.startswith('userid.'):
-            return principal[7:]
-    return NO_DEFAULT
 
 
 @server_default
@@ -66,19 +59,6 @@ def accession(instance, subschema):
             continue
         return new_accession
     raise AssertionError("Free accession not found in %d attempts" % ATTEMPTS)
-
-
-def get_userid():
-    """ Wrapper for the server_default 'userid' above so it is not called through SERVER_DEFAULTS in our code """
-    return _userid()
-
-
-def get_user_resource():
-    request = get_current_request()
-    userid_found = _userid()
-    if userid_found == NO_DEFAULT:
-        return NO_DEFAULT
-    return request.registry[COLLECTIONS]['user'][userid_found]
 
 
 def get_now():

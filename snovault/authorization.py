@@ -1,8 +1,9 @@
 import json
 
-from dcicutils.misc_utils import environ_bool, PRINT
-from . import COLLECTIONS
 from pyramid.security import Authenticated
+from dcicutils.misc_utils import environ_bool, PRINT
+from snovault import COLLECTIONS
+from snovault.project_app import app_project
 
 
 DEBUG_PERMISSIONS = environ_bool("DEBUG_PERMISSIONS", default=False)
@@ -95,6 +96,11 @@ def groupfinder(login, request):
             PRINT("groupfinder for %s found user %s, but that user has status deleted." % (login, user))
         return None
 
+    return app_project().authorization_create_principals(login, user, collections)
+
+
+def _create_principals(login, user, collections):
+    user_properties = user.properties
     principals = ['userid.%s' % user.uuid]
     if DEBUG_PERMISSIONS:
         PRINT("groupfinder starting with principals", principals)

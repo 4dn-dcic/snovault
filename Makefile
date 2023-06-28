@@ -51,7 +51,7 @@ build-for-ga:
 	poetry install
 
 deploy1:  # starts postgres/ES locally and loads inserts, and also starts ingestion engine
-	@DEBUGLOG=`pwd` SNOVAULT_DB_TEST_PORT=`grep 'sqlalchemy[.]url =' development.ini | sed -E 's|.*:([0-9]+)/.*|\1|'` dev-servers development.ini --app-name app --clear --init --load
+	@DEBUGLOG=`pwd` SNOVAULT_DB_TEST_PORT=`grep 'sqlalchemy[.]url =' development.ini | sed -E 's|.*:([0-9]+)/.*|\1|'` dev-servers-snovault development.ini --app-name app --clear --init --load
 
 psql-dev:  # starts psql with the url after 'sqlalchemy.url =' in development.ini
 	@scripts/psql-start dev
@@ -160,10 +160,10 @@ update:
 	poetry update
 
 publish:
-	scripts/publish
+	poetry run publish-to-pypi
 
 publish-for-ga:
-	scripts/publish --noconfirm
+	poetry run publish-to-pypi --noconfirm
 
 kill:  # kills back-end processes associated with the application. Use with care.
 	pkill -f postgres &

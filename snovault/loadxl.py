@@ -6,13 +6,15 @@ import json
 import magic
 import mimetypes
 import os
+import re
 import structlog
+from typing import Union
 import webtest
 import traceback
 import uuid
 
 from base64 import b64encode
-from dcicutils.misc_utils import ignored, environ_bool
+from dcicutils.misc_utils import ignored, environ_bool, VirtualApp
 from dcicutils.secrets_utils import assume_identity
 from PIL import Image
 from pyramid.paster import get_app
@@ -20,7 +22,7 @@ from pyramid.response import Response
 from pyramid.view import view_config
 from snovault.util import debug_log
 
-from .project import project_filename
+from .project_app import app_project
 from .server_defaults import add_last_modified
 
 
@@ -36,7 +38,7 @@ def includeme(config):
 
 # order of items references with linkTo in a field in  'required' in schemas
 # This should be set by the downstream application
-ORDER = []
+ORDER = app_project().loadxl_order()
 
 IS_ATTACHMENT = [
     'attachment',
@@ -95,7 +97,7 @@ def load_data_view(context, request):
        item_type should be same as insert file names i.e. file_fastq
     """
     ignored(context)
-    # this is a bit wierd but want to reuse load_data functionality so I'm rolling with it
+    # this is a bit weird but want to reuse load_data functionality so I'm rolling with it
     config_uri = request.json.get('config_uri', 'production.ini')
     patch_only = request.json.get('patch_only', False)
     post_only = request.json.get('post_only', False)
@@ -117,7 +119,7 @@ def load_data_view(context, request):
     inserts = None
     from_json = False
     if fdn_dir:
-        inserts = project_filename('tests/data/' + fdn_dir + '/')
+        inserts = app_project().project_filename('tests/data/' + fdn_dir + '/')
     elif local_path:
         inserts = local_path
     elif store:
@@ -291,7 +293,7 @@ LOADXL_ALLOW_NONE = environ_bool("LOADXL_ALLOW_NONE", default=True)
 
 
 def load_all_gen(testapp, inserts, docsdir, overwrite=True, itype=None, from_json=False,
-                 patch_only=False, post_only=False, skip_types=None):
+                 patch_only=False, post_only=False, skip_types=None, validate_only=False):
     """
     Generator function that yields bytes information about each item POSTed/PATCHed.
     Is the base functionality of load_all function.
@@ -336,7 +338,6 @@ def load_all_gen(testapp, inserts, docsdir, overwrite=True, itype=None, from_jso
             use_itype = True if (itype and isinstance(itype, str)) else False
         else:  # cannot get the file
             err_msg = 'Failure loading inserts from %s. Could not find matching file or directory.' % inserts
-            # import pdb; pdb.set_trace()
             print(err_msg)
             yield str.encode('ERROR: %s\n' % err_msg)
             return
@@ -367,7 +368,6 @@ def load_all_gen(testapp, inserts, docsdir, overwrite=True, itype=None, from_jso
             err_msg = 'No items found in %s' % inserts
         if itype:
             err_msg += ' for item type(s) %s' % itype
-        # import pdb; pdb.set_trace()
         print(err_msg)
         yield str.encode('ERROR: %s' % err_msg)
         return
@@ -424,24 +424,33 @@ def load_all_gen(testapp, inserts, docsdir, overwrite=True, itype=None, from_jso
                         to_post = an_item
                     else:
                         to_post = {key: value for (key, value) in an_item.items() if key in first_fields}
+                    post_request = f'/{a_type}?skip_indexing=true'
+                    if validate_only:
+                        post_request += '&check_only=true'
                     to_post = format_for_attachment(to_post, docsdir)
                     try:
-                        res = testapp.post_json('/' + a_type + '?skip_indexing=true', to_post)  # skip indexing in round 1
-                        assert res.status_code == 201
-                        posted += 1
-                        # yield bytes to work with Response.app_iter
-                        yield str.encode('POST: %s\n' % res.json['@graph'][0]['uuid'])
+                        res = testapp.post_json(post_request, to_post)  # skip indexing in round 1
+                        if not validate_only:
+                            assert res.status_code == 201
+                            posted += 1
+                            # yield bytes to work with Response.app_iter
+                            yield str.encode('POST: %s\n' % res.json['@graph'][0]['uuid'])
+                        else:
+                            assert res.status_code == 200
+                            yield str.encode('CHECK: %s\n' % an_item['uuid'])
                     except Exception as e:
                         print('Posting {} failed. Post body:\n{}\nError Message:{}'
                               ''.format(a_type, str(first_fields), str(e)))
                         # remove newlines from error, since they mess with generator output
                         e_str = str(e).replace('\n', '')
-                        # import pdb; pdb.set_trace()
                         yield str.encode('ERROR: %s\n' % e_str)
                         return
                         # raise StopIteration
-            if not post_only:
-                second_round_items[a_type] = [i for i in store[a_type] if i['uuid'] not in skip_existing_items]
+            if not validate_only:
+                if not post_only:
+                    second_round_items[a_type] = [i for i in store[a_type] if i['uuid'] not in skip_existing_items]
+            else:
+                second_round_items[a_type] = []
             logger.info('{} 1st: {} items posted, {} items exists.'.format(a_type, posted, skip_exist))
             logger.info('{} 1st: {} items will be patched in second round'
                         .format(a_type, str(len(second_round_items.get(a_type, [])))))
@@ -473,7 +482,6 @@ def load_all_gen(testapp, inserts, docsdir, overwrite=True, itype=None, from_jso
                       a_type, str(an_item), str(e)))
                 print('Full error: %s' % traceback.format_exc())
                 e_str = str(e).replace('\n', '')
-                # import pdb; pdb.set_trace()
                 yield str.encode('ERROR: %s\n' % e_str)
                 return
                 # raise StopIteration
@@ -517,7 +525,7 @@ def load_data(app, indir='inserts', docsdir=None, overwrite=False,
     testapp = webtest.TestApp(app, environ)
     # load master-inserts by default
     if indir != 'master-inserts' and use_master_inserts:
-        master_inserts = project_filename('tests/data/master-inserts/')
+        master_inserts = app_project().project_filename('tests/data/master-inserts/')
         master_res = load_all(testapp, master_inserts, [], skip_types=skip_types)
         if master_res:  # None if successful
             print(LOAD_ERROR_MESSAGE)
@@ -526,13 +534,13 @@ def load_data(app, indir='inserts', docsdir=None, overwrite=False,
 
     if not indir.endswith('/'):
         indir += '/'
-    inserts = project_filename('tests/data/' + indir)
+    inserts = app_project().project_filename('tests/data/' + indir)
     if docsdir is None:
         docsdir = []
     else:
         if not docsdir.endswith('/'):
             docsdir += '/'
-        docsdir = [project_filename('tests/data/' + docsdir)]
+        docsdir = [app_project().project_filename('tests/data/' + docsdir)]
     res = load_all(testapp, inserts, docsdir, overwrite=overwrite)
     if res:  # None if successful
         print(LOAD_ERROR_MESSAGE)
@@ -568,7 +576,7 @@ def load_local_data(app, overwrite=False):
     ]
 
     for test_insert_dir in test_insert_dirs:
-        chk_dir = project_filename("tests/data/" + test_insert_dir)
+        chk_dir = app_project().project_filename("tests/data/" + test_insert_dir)
         for (dirpath, dirnames, filenames) in os.walk(chk_dir):
             if any([fn for fn in filenames if fn.endswith('.json') or fn.endswith('.json.gz')]):
                 logger.info('Loading inserts from "{}" directory.'.format(test_insert_dir))
@@ -711,7 +719,7 @@ def load_data_by_type(app, indir='master-inserts', overwrite=True, itype=None):
 
     if not indir.endswith('/'):
         indir += '/'
-    inserts = project_filename('tests/data/' + indir)
+    inserts = app_project().project_filename('tests/data/' + indir)
 
     res = load_all(testapp, inserts, docsdir=[], overwrite=overwrite, itype=itype)
     if res:  # None if successful
@@ -719,3 +727,45 @@ def load_data_by_type(app, indir='master-inserts', overwrite=True, itype=None):
         logger.error('load_data_by_type: failed to load from %s' % indir, error=res)
         return res
     return None  # unnecessary, but makes it more clear that no error was encountered
+
+
+def load_data_via_ingester(vapp: VirtualApp,
+                           ontology: dict,
+                           itype: Union[str, list] = ["ontology", "ontology_term"],
+                           validate_only: bool = False) -> dict:
+    """
+    Entry point for call from encoded.ingester.processors.handle_ontology_update (2023-03-08).
+    Returns dictionary itemizing the created (post), updated (patch), skipped (skip), checked (check),
+    and errored (error) ontology term uuids; as well as a count of the number of unique uuids processed;
+    the checked category is for validate_only;
+    """
+    response = load_all_gen(vapp, ontology, None, overwrite=True, itype=itype,
+                            from_json=True, patch_only=False, validate_only=validate_only)
+    results = {"post": [], "patch": [], "skip": [], "check": [], "error": []}
+    unique_uuids = set()
+    INGESTION_RESPONSE_PATTERN = re.compile(r"^([A-Z]+): ([0-9a-f-]+)$")
+    for item in response:
+        # Assume each item in the response looks something like one of (string or bytes):
+        # POST: 15425d13-01ce-4e61-be5d-cd04401dff29
+        # PATCH: 5b45e66f-7b4f-4923-824b-d0864a689bb
+        # SKIP: 4efe24b5-eb17-4406-adb8-060ea2ae2180
+        # CHECK: deadbeef-eb17-4406-adb8-0eacafebabe
+        # ERROR: 906c4667-483e-4a08-96b9-3ce85ce8bf8c
+        # Note that SKIP means skip post/insert; still may to patch/update (if overwrite).
+        if isinstance(item, bytes):
+            item = item.decode("ascii")
+        elif not isinstance(item, str):
+            logger.warning(f"load_data_via_ingester: skipping response item of unexpected type ({type(item)}): {item!r}")
+            continue
+        match = INGESTION_RESPONSE_PATTERN.match(item)
+        if not match:
+            logger.warning(f"load_data_via_ingester: skipping response item in unexpected form: {item!r}")
+            continue
+        action = match.group(1).lower()
+        uuid = match.group(2)
+        if not results.get(action):
+            results[action] = []
+        results[action].append(uuid)
+        unique_uuids.add(uuid)
+    results["unique"] = len(unique_uuids)
+    return results

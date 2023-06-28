@@ -1,7 +1,8 @@
 import codecs
 import collections
-import uuid
+import io
 import json
+import uuid
 
 from datetime import datetime
 from dcicutils.misc_utils import ignored
@@ -11,10 +12,12 @@ from jsonschema_serialize_fork import (
     RefResolver,
 )
 from jsonschema_serialize_fork.exceptions import ValidationError
+import os
 from pyramid.path import AssetResolver, caller_package
 from pyramid.threadlocal import get_current_request
 from pyramid.traversal import find_resource
 from uuid import UUID
+from .project_app import app_project
 from .util import ensurelist
 
 # This was originally an internal import from "." (__init__.py), but I have replaced that reference
@@ -42,6 +45,72 @@ class NoRemoteResolver(RefResolver):
         raise ValueError('Resolution disallowed for: %s' % uri)
 
 
+def favor_app_specific_schema(schema: str) -> str:
+    """
+    If the given schema refers to a schema (file) which exists in the app-specific schemas
+    package/directory then favor that version of the file over the local version by returning
+    a reference to that schema; otherwise just returns the given schema.
+
+    For example, IF the given schema is snovault:access_key.json AND the current app is fourfront AND
+    if the file encoded/schemas/access_key.json exists THEN returns: encoded:schemas/access_key.json
+
+    This uses the dcicutils.project_utils mechanism to get the app-specific file/path name.
+    """
+    if isinstance(schema, str):
+        schema_parts = schema.split(":")
+        schema_project = schema_parts[0] if len(schema_parts) > 1 else None
+        if schema_project != app_project().PACKAGE_NAME:
+            schema_filename = schema_parts[1] if len(schema_parts) > 1 else schema_parts[0]
+            app_specific_schema_filename = app_project().project_filename(f"/{schema_filename}")
+            if os.path.exists(app_specific_schema_filename):
+                schema = f"{app_project().PACKAGE_NAME}:{schema_filename}"
+    return schema
+
+
+def favor_app_specific_schema_ref(schema_ref: str) -> str:
+    """
+    If the given schema_ref refers to a schema (file) which exists in the app-specific schemas
+    directory, AND it contains the specified element, then favor that version of the file over the
+    local version by returning a reference to that schema; otherwise just returns the given schema_ref.
+
+    For example, IF the given schema is mixins.json#/modified AND the current app is fourfront
+    AND if the file encoded/schemas/mixins.json exists AND if that file contains the modified
+    element THEN returns: file:///full-path-to/encoded/schemas/mixins.json#/modified
+
+    This uses the dcicutils.project_utils mechanism to get the app-specific file/path name.
+    """
+    def json_file_contains_element(json_filename: str, json_element: str) -> bool:
+        """
+        If the given JSON file exists and contains the given JSON element name then
+        returns True, otherwise returnes False. The given JSON element may or may 
+        not begin with a slash. Currently only looks at one single top-level element.
+        """
+        if json_filename and json_element:
+            try:
+                with io.open(json_filename, "r") as json_f:
+                    json_content = json.load(json_f) 
+                    json_element = json_element.strip("/")
+                    if json_element:
+                        if json_content.get(json_element):
+                            return True
+            except Exception:
+                pass
+        return False
+
+    if isinstance(schema_ref, str):
+        schema_parts = schema_ref.split("#")
+        schema_filename = schema_parts[0]
+        app_specific_schema_filename = app_project().project_filename(f"/schemas/{schema_filename}")
+        if os.path.exists(app_specific_schema_filename):
+            schema_element = schema_parts[1] if len(schema_parts) > 1 else None
+            if schema_element:
+                if json_file_contains_element(app_specific_schema_filename, schema_element):
+                    schema_ref = f"file://{app_specific_schema_filename}#{schema_element}"
+            else:
+                schema_ref = f"file://{app_specific_schema_filename}"
+    return schema_ref
+
+
 def mixinSchemas(schema, resolver, key_name='properties'):
     mixinKeyName = 'mixin' + key_name.capitalize()
     mixins = schema.get(mixinKeyName)
@@ -52,6 +121,10 @@ def mixinSchemas(schema, resolver, key_name='properties'):
     for mixin in reversed(mixins):
         ref = mixin.get('$ref')
         if ref is not None:
+            # For mixins check if there is an associated app-specific
+            # schema file and favor that over the local one if any.
+            # TODO: This may be controversial and up for discussion. 2023-05-27
+            ref = favor_app_specific_schema_ref(ref)
             with resolver.resolving(ref) as resolved:
                 mixin = resolved
         bases.append(mixin)
@@ -228,6 +301,7 @@ format_checker = FormatChecker()
 
 
 def load_schema(filename):
+    filename = favor_app_specific_schema(filename)
     if isinstance(filename, dict):
         schema = filename
         resolver = NoRemoteResolver.from_schema(schema)

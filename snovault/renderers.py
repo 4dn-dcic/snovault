@@ -24,6 +24,7 @@ from pyramid.traversal import split_path_info, _join_path_tuple
 from subprocess_middleware.worker import TransformWorker
 from urllib.parse import urlencode
 from webob.cookies import Cookie
+from .project_app import app_project
 from .util import content_type_allowed
 
 
@@ -456,7 +457,8 @@ def render_page_html_tween_factory(handler, registry):
         Response=Response,
         reload_process=reload_process,
         # Other kwargs, including env below, get passed down to subprocess.Popen
-        args=['node', resource_filename(__name__, 'static/build/renderer.js')],
+        # First argument to resource_filename to be 'snovault' or 'encoded' (for fourfront, cgap-port, smaht-portal).
+        args=['node', resource_filename(app_project().PACKAGE_NAME, 'static/build/renderer.js')],
         env=node_env
     )
 

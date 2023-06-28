@@ -1,20 +1,27 @@
+import boto3
 import contextlib
 import datetime as datetime_module
 import functools
+import gzip
+import io
 import json
 import os
+import re
 import structlog
 import sys
-import re
-import boto3
+import tempfile
+import time
+from typing import Optional
 
 from botocore.client import Config
 from copy import copy
 from datetime import datetime, timedelta
-from pyramid.httpexceptions import HTTPForbidden
+from io import BytesIO
+from pyramid.httpexceptions import HTTPUnprocessableEntity, HTTPForbidden
 from pyramid.threadlocal import manager as threadlocal_manager
-from dcicutils.secrets_utils import assume_identity
 from dcicutils.ecs_utils import ECSUtils
+from dcicutils.misc_utils import ignored, PRINT, VirtualApp, count_if, identity
+from dcicutils.secrets_utils import assume_identity
 
 from .interfaces import CONNECTION, STORAGE, TYPES
 from .settings import Settings
@@ -103,6 +110,74 @@ class IndexSettings:
         }
 
 
+def create_empty_s3_file(s3_client, bucket: str, key: str, s3_encrypt_key_id: Optional[str] = None):
+    """
+    Args:
+        s3_client: a client object that results from a boto3.client('s3', ...) call.
+        bucket: an S3 bucket name
+        key: the name of a key within the given S3 bucket
+        s3_encrypt_key_id: the name of a KMS encrypt key id, or None
+    """
+    empty_file = "/dev/null"
+
+    extra_kwargs = extra_kwargs_for_s3_encrypt_key_id(s3_encrypt_key_id=s3_encrypt_key_id,
+                                                      client_name='create_empty_s3_file')
+
+    s3_client.upload_file(empty_file, Bucket=bucket, Key=key, **extra_kwargs)
+
+
+def get_trusted_email(request, context=None, raise_errors=True):
+    """
+    Get an email address on behalf of which we can issue other requests.
+
+    If auth0 has authenticated user info to offer, return that.
+    Otherwise, look for a userid.xxx among request.effective_principals and get the email from that.
+
+    This will raise HTTPUnprocessableEntity if there's a problem obtaining the mail.
+    """
+    try:
+        context = context or "Requirement"
+        email = getattr(request, '_auth0_authenticated', None)
+        if not email:
+            user_uuid = None
+            for principal in request.effective_principals:
+                if principal.startswith('userid.'):
+                    user_uuid = principal[7:]
+                    break
+            if not user_uuid:
+                raise HTTPUnprocessableEntity('%s: Must provide authentication' % context)
+            user_props = get_item_or_none(request, user_uuid)
+            if not user_props:
+                raise HTTPUnprocessableEntity('%s: User profile missing' % context)
+            if 'email' not in user_props:
+                raise HTTPUnprocessableEntity('%s: Entry for "email" missing in user profile.' % context)
+            email = user_props['email']
+        return email
+    except Exception:
+        if raise_errors:
+            raise
+        return None
+
+
+def beanstalk_env_from_request(request):
+    return beanstalk_env_from_registry(request.registry)
+
+
+def beanstalk_env_from_registry(registry):
+    return registry.settings.get('env.name')
+
+
+def customized_delay_rerun(sleep_seconds=1):
+    def parameterized_delay_rerun(*args):
+        """ Rerun function for flaky """
+        ignored(args)
+        time.sleep(sleep_seconds)
+        return True
+    return parameterized_delay_rerun
+
+
+delay_rerun = customized_delay_rerun(sleep_seconds=1)
+
 @contextlib.contextmanager
 def mappings_use_nested(value=True):
     """ Context manager that sets the MAPPINGS_USE_NESTED setting with the given value, default True """
@@ -138,6 +213,55 @@ def dictionary_lookup(dictionary, key):
         # raise DictionaryKeyError(dictionary=dictionary, key=key)  this causes MPIndexer exception - will 3/10/2020
     else:
         return dictionary[key]
+
+
+def deduplicate_list(lst):
+    """ De-duplicates the given list by converting it to a set then back to a list.
+
+    NOTES:
+    * The list must contain 'hashable' type elements that can be used in sets.
+    * The result list might not be ordered the same as the input list.
+    * This will also take tuples as input, though the result will be a list.
+
+    :param lst: list to de-duplicate
+    :return: de-duplicated list
+    """
+    return list(set(lst))
+
+
+def gunzip_content(content):
+    """ Helper that will gunzip content (into memory) """
+    f_in = BytesIO()
+    f_in.write(content)
+    f_in.seek(0)
+    with gzip.GzipFile(fileobj=f_in, mode='rb') as f:
+        gunzipped_content = f.read()
+    return gunzipped_content.decode('utf-8')
+
+
+DEBUGLOG = os.environ.get('DEBUGLOG', "")
+
+
+def debuglog(*args):
+    """
+    As the name implies, this is a low-tech logging facility for temporary debugging info.
+    Prints info to a file in user's home directory.
+
+    The debuglog facility allows simple debugging for temporary debugging of disparate parts of the system.
+    It takes arguments like print or one of the logging operations and outputs to ~/DEBUGLOG-yyyymmdd.txt.
+    Each line in the log is timestamped.
+    """
+    if DEBUGLOG:
+        try:
+            nowstr = str(datetime.datetime.now())
+            dateid = nowstr[:10].replace('-', '')
+            with io.open(os.path.expanduser(os.path.join(DEBUGLOG, "DEBUGLOG-%s.txt" % dateid)), "a+") as fp:
+                PRINT(nowstr, *args, file=fp)
+        except Exception:
+            # There are many things that could go wrong, but none of them are important enough to fuss over.
+            # Maybe it was a bad pathname? Out of disk space? Network error?
+            # It doesn't really matter. Just continue...
+            pass
 
 
 _skip_fields = ['@type', 'principals_allowed']  # globally accessible if need be in the future
@@ -420,7 +544,7 @@ def secure_embed(request, item_path, addition='@@object'):
             res = ''
         return res
     except HTTPForbidden:
-        print("you don't have access to this object")
+        PRINT("you don't have access to this object")
 
     return res
 
@@ -647,7 +771,7 @@ def expand_embedded_list(item_type, types, embeds, schema, processed_embeds):
             # be cases of fields that are not valid for default embeds
             # but are still themselves valid fields
             processed_embeds.remove(embed_path)
-            print(error_message, file=sys.stderr)
+            PRINT(error_message, file=sys.stderr)
         else:
             embeds_to_add.extend(path_embeds_to_add)
     return embeds_to_add, processed_embeds
@@ -1184,6 +1308,51 @@ def check_user_is_logged_in(request):
         raise HTTPForbidden(title="Not logged in.")
 
 
+
+EMAIL_PATTERN = re.compile(r'[^@]+[@][^@]+')
+
+
+def make_vapp_for_email(*, email, app=None, registry=None, context=None):
+    app = _app_from_clues(app=app, registry=registry, context=context)
+    if not isinstance(email, str) or not EMAIL_PATTERN.match(email):
+        # It's critical to check that the pattern has an '@' so we know it's not a system account (injection).
+        raise RuntimeError("Expected email to be a string of the form 'user@host'.")
+    user_environ = {
+        'HTTP_ACCEPT': 'application/json',
+        'REMOTE_USER': email,
+    }
+    vapp = VirtualApp(app, user_environ)
+    return vapp
+
+
+@contextlib.contextmanager
+def vapp_for_email(email, app=None, registry=None, context=None):
+    yield make_vapp_for_email(email=email, app=app, registry=registry, context=context)
+
+
+def make_vapp_for_ingestion(*, app=None, registry=None, context=None):
+    app = _app_from_clues(app=app, registry=registry, context=context)
+    user_environ = {
+        'HTTP_ACCEPT': 'application/json',
+        'REMOTE_USER': 'INGESTION',
+    }
+    vapp = VirtualApp(app, user_environ)
+    return vapp
+
+
+@contextlib.contextmanager
+def vapp_for_ingestion(app=None, registry=None, context=None):
+    yield make_vapp_for_ingestion(app=app, registry=registry, context=context)
+
+
+def _app_from_clues(app=None, registry=None, context=None):
+    if count_if(identity, [app, registry, context]) != 1:
+        raise RuntimeError("Expected exactly one of app, registry, or context.")
+    if not app:
+        app = (registry or context).app
+    return app
+
+
 def make_s3_client():
     s3_client_extra_args = {}
     if 'IDENTITY' in os.environ:
@@ -1210,6 +1379,136 @@ def build_s3_presigned_get_url(*, params):
         Params=params,
         ExpiresIn=36 * 60 * 60
     )
+
+
+def convert_integer_to_comma_string(value):
+    """Convert integer to comma-formatted string for displaying SV
+    position.
+
+    :param value: Value to format.
+    :type value: int
+    :returns: Comma-formatted integer or None
+    :rtype: str or None
+    """
+    result = None
+    if isinstance(value, int):
+        result = format(value, ",d")
+    return result
+
+
+ENCODED_ROOT_DIR = os.path.dirname(__file__)
+
+
+def resolve_file_path(path, file_loc=None, root_dir=ENCODED_ROOT_DIR):
+    """ Takes a relative path from this file location and returns an absolute path to
+        the desired file, needed for WSGI to resolve embed files.
+
+    :param path: relative path to be converted
+    :param file_loc: absolute path to location path is relative to, by default path/to/encoded/src/
+    :return: absolute path to location specified by path
+    """
+    if path.startswith("~"):
+        # Really this shouldn't happen, so we could instead raise an error, but at least this is semantically correct.
+        path = os.path.expanduser(path)
+    if file_loc:
+        if file_loc.startswith("~"):
+            file_loc = os.path.expanduser(file_loc)
+        path_to_this_file = os.path.abspath(os.path.dirname(file_loc))
+    else:
+        path_to_this_file = os.path.abspath(root_dir)
+    return os.path.join(path_to_this_file, path)
+
+
+# These next few could be in dcicutils.s3_utils as part of s3Utils, but details of interfaces would have to change.
+# For now, for expedience, they can live here and we can refactor later. -kmp 25-Jul-2020
+
+@contextlib.contextmanager
+def s3_output_stream(s3_client, bucket: str, key: str, s3_encrypt_key_id: Optional[str] = None):
+    """
+    This context manager allows one to write:
+
+        with s3_output_stream(s3_client, bucket, key) as fp:
+            ... fp.write("foo") ...
+
+    to do output to an s3 bucket.
+
+    In fact, an intermediate local file is involved, so this function yields a file pointer (fp) to a
+    temporary local file that is open for write. That fp should be used to supply content to the file
+    during the dynamic scope of the context manager. Once the context manager's body executes, the
+    file will be closed, its contents will be copied to s3, and finally the temporary local file will
+    be deleted.
+
+    Args:
+        s3_client: a client object that results from a boto3.client('s3', ...) call.
+        bucket: an S3 bucket name
+        key: the name of a key within the given S3 bucket
+        s3_encrypt_key_id: a KMS encryption key id or None
+    """
+
+    tempfile_name = tempfile.mktemp()
+    try:
+        with io.open(tempfile_name, 'w') as fp:
+            yield fp
+        extra_kwargs = extra_kwargs_for_s3_encrypt_key_id(s3_encrypt_key_id=s3_encrypt_key_id,
+                                                          client_name='s3_output_stream')
+        s3_client.upload_file(Filename=tempfile_name, Bucket=bucket, Key=key, **extra_kwargs)
+    finally:
+        try:
+            os.remove(tempfile_name)
+        except Exception:
+            pass
+
+
+@contextlib.contextmanager
+def s3_local_file(s3_client, bucket: str, key: str):
+    """
+    This context manager allows one to write:
+
+        with s3_local_file(s3_client, bucket, key) as file:
+            with io.open(local_file, 'r') as fp:
+                dictionary = json.load(fp)
+
+    to do input from an s3 bucket.
+
+    Args:
+        s3_client: a client object that results from a boto3.client('s3', ...) call.
+        bucket: an S3 bucket name
+        key: the name of a key within the given S3 bucket
+    """
+    ext = os.path.splitext(key)[-1]
+    tempfile_name = tempfile.mktemp() + ext
+    try:
+        s3_client.download_file(Bucket=bucket, Key=key, Filename=tempfile_name)
+        yield tempfile_name
+    finally:
+        try:
+            os.remove(tempfile_name)
+        except Exception:
+            pass
+
+
+@contextlib.contextmanager
+def s3_input_stream(s3_client, bucket: str, key: str, mode: str = 'r'):
+    """
+    This context manager allows one to write:
+
+        with s3_input_stream(s3_client, bucket, key) as fp:
+            dictionary = json.load(fp)
+
+    to do input from an s3 bucket.
+
+    In fact, an intermediate local file is created, copied, and deleted.
+
+    Args:
+        s3_client: a client object that results from a boto3.client('s3', ...) call.
+        bucket: an S3 bucket name
+        key: the name of a key within the given S3 bucket
+        mode: an input mode acceptable to io.open
+    """
+
+    with s3_local_file(s3_client, bucket, key) as file:
+        with io.open(file, mode=mode) as fp:
+            yield fp
 
 
 class SettingsKey:
@@ -1239,3 +1538,19 @@ class SettingsKey:
 class ExtraArgs:
     SERVER_SIDE_ENCRYPTION = "ServerSideEncryption"
     SSE_KMS_KEY_ID = "SSEKMSKeyId"
+
+
+def extra_kwargs_for_s3_encrypt_key_id(s3_encrypt_key_id, client_name):
+
+    extra_kwargs = {}
+    if s3_encrypt_key_id:
+        log.error(f"{client_name} adding SSEKMSKeyId ({s3_encrypt_key_id}) arguments in upload_fileobj call.")
+        extra_kwargs["ExtraArgs"] = {
+            ExtraArgs.SERVER_SIDE_ENCRYPTION: "aws:kms",
+            ExtraArgs.SSE_KMS_KEY_ID: s3_encrypt_key_id,
+        }
+    else:
+        log.error(f"{client_name} found no s3 encrypt key id ({SettingsKey.S3_ENCRYPT_KEY_ID})"
+                  f" in request.registry.settings.")
+
+    return extra_kwargs

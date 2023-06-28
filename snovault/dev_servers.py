@@ -19,7 +19,7 @@ from dcicutils.misc_utils import PRINT
 from pyramid.paster import get_app, get_appsettings
 from pyramid.path import DottedNameResolver
 from .elasticsearch import create_mapping
-from .project import app_project, project_filename
+from .project_app import app_project
 from .tests import elasticsearch_fixture, postgresql_fixture
 
 
@@ -31,7 +31,7 @@ logger = logging.getLogger(__name__)
 def nginx_server_process(prefix='', echo=False):
     args = [
         os.path.join(prefix, 'nginx'),
-        '-c', project_filename('nginx-dev.conf'),
+        '-c', app_project().project_filename('nginx-dev.conf'),
         '-g', 'daemon off;'
     ]
     process = subprocess.Popen(
@@ -104,17 +104,18 @@ def main():
     parser.add_argument('--init', action="store_true", help="Init database")
     parser.add_argument('--load', action="store_true", help="Load test set")
     parser.add_argument('--datadir', default='/tmp/snovault', help="path to datadir")
-    # parser.add_argument('--no_ingest', action="store_true", default=False, help="Don't start the ingestion process.")
+    parser.add_argument('--no_ingest', action="store_true", default=False, help="Don't start the ingestion process.")
     args = parser.parse_args()
 
     run(app_name=args.app_name, config_uri=args.config_uri, datadir=args.datadir,
         # Ingestion is disabled. snovault has no such concept. -kmp 17-Feb-2023
-        clear=args.clear, init=args.init, load=args.load, ingest=False)  # ingest=not args.no_ingest
+        clear=args.clear, init=args.init, load=args.load, ingest=not args.no_ingest)
 
 
 def run(app_name, config_uri, datadir, clear=False, init=False, load=False, ingest=True):
 
-    project = app_project(initialize=True)
+    #project = app_project(initialize=True)
+    project = app_project()
 
     logging.basicConfig(format='')
     # Loading app will have configured from config file. Reconfigure here:

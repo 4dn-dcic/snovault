@@ -15,7 +15,7 @@ from typing import Optional, List
 # from zope.sqlalchemy import mark_changed
 from .. import configure_dbsession
 from ..sqlalchemy_tools import PyramidAppManager
-from ..project import app_project
+from ..project_app import app_project
 
 
 logger = structlog.getLogger(__name__)
@@ -115,7 +115,8 @@ def main(simulated_args=None):
     log = args.log
 
     logging.basicConfig()
-    project = app_project(initialize=True)
+    #project = app_project(initialize=True)
+    project = app_project()
     # Loading app will have configured from config file. Reconfigure here:
     if log:
         logging.getLogger(project.NAME).setLevel(logging.DEBUG)

@@ -9,6 +9,9 @@ from pyramid.security import (
 from pyramid.view import (
     view_config,
 )
+import re
+import string
+from typing import Any, List, Tuple, Union
 from .. import Item, Collection, AbstractCollection, abstract_collection, calculated_property
 from ..util import debug_log
 from ..validators import (
@@ -22,40 +25,15 @@ from ..validators import (
 )
 from ..crud_views import (
     collection_add as sno_collection_add,
-    item_edit as sno_item_edit,
+    item_edit
 )
 from ..interfaces import CONNECTION
-from typing import Any, List, Tuple, Union
 from ..server_defaults import get_userid, add_last_modified
-
-
-Acl = List[Tuple[Any, Any, Union[str, List[str]]]]
-
-# Item acls
-# TODO (C4-332): consolidate all acls into one place - i.e. their own file
-ONLY_ADMIN_VIEW_ACL: Acl = [
-    (Allow, 'group.admin', ['view', 'edit']),
-    (Allow, 'group.read-only-admin', ['view']),
-    (Allow, 'remoteuser.INDEXER', ['view']),
-    (Allow, 'remoteuser.EMBED', ['view']),
-    (Deny, Everyone, ['view', 'edit'])
-]
-
-
-PUBLIC_ACL: Acl = [
-    (Allow, Everyone, ['view']),
-] + ONLY_ADMIN_VIEW_ACL
-
-
-DELETED_ACL: Acl = [
-    (Deny, Everyone, 'visible_for_edit')
-] + ONLY_ADMIN_VIEW_ACL
-
-
-# Used for 'draft' status
-ALLOW_OWNER_EDIT: Acl = [
-    (Allow, 'role.owner', ['view', 'edit']),
-] + ONLY_ADMIN_VIEW_ACL
+from .acl import (
+    ONLY_ADMIN_VIEW_ACL,
+    PUBLIC_ACL,
+    DELETED_ACL
+)
 
 
 def get_item_or_none(request, value, itype=None, frame='object'):
@@ -100,6 +78,16 @@ def get_item_or_none(request, value, itype=None, frame='object'):
     return item
 
 
+def set_namekey_from_title(properties):
+    name = None
+    if properties.get('title'):
+        exclude = set(string.punctuation.replace('-', ''))
+        name = properties['title'].replace('&', ' n ')
+        name = ''.join(ch if ch not in exclude and ch != ' ' else '-' for ch in name)
+        name = re.sub(r"[-]+", '-', name).strip('-').lower()
+    return name
+
+
 def validate_item_type_of_linkto_field(context, request):
     """We are doing this case by case on item specific types files,
     but might want to carry it here if filter is used more often.
@@ -109,25 +97,6 @@ def validate_item_type_of_linkto_field(context, request):
     FileFormat items contain a field called "valid_item_types".
     We have the ff_flag on file_format field called "filter:valid_item_types"."""
     pass
-
-
-# ----------
-# Common lists of embeds to be re-used in certain files (similar to schema mixins)
-# ----------
-
-static_content_embed_list = [
-    "static_headers.*",            # Type: UserContent, may have differing properties
-    "static_content.content.@type",
-    "static_content.content.content",
-    "static_content.content.name",
-    "static_content.content.title",
-    "static_content.content.status",
-    "static_content.content.description",
-    "static_content.content.options",
-    "static_content.content.institution",
-    "static_content.content.project",
-    "static_content.content.filetype"
-]
 
 
 class AbstractCollection(AbstractCollection):
@@ -180,163 +149,6 @@ class Collection(Collection, AbstractCollection):
         super(Collection, self).__init__(*args, **kw)
         if hasattr(self, '__acl__'):
             return
-
-
-@abstract_collection(
-    name='items',
-    properties={
-        'title': "Item Listing",
-        'description': 'Abstract collection of all Items.',
-    })
-class Item(Item):
-    """smth."""
-    item_type = 'item'
-    AbstractCollection = AbstractCollection
-    Collection = Collection
-    STATUS_ACL = {  # note that this should ALWAYS be overridden by downstream application
-        # standard_status
-        'shared': PUBLIC_ACL,
-        'obsolete': PUBLIC_ACL,
-        'current': PUBLIC_ACL,
-        'inactive': PUBLIC_ACL,
-        'in review': PUBLIC_ACL,
-        'uploaded': PUBLIC_ACL,
-        'uploading': PUBLIC_ACL,
-        'archived': PUBLIC_ACL,
-        'deleted': DELETED_ACL,
-        'replaced': ONLY_ADMIN_VIEW_ACL,
-        'public': PUBLIC_ACL,
-        'draft': ALLOW_OWNER_EDIT
-    }
-    FACET_ORDER_OVERRIDE = {}  # empty by default
-
-    # Items of these statuses are filtered out from rev links
-    filtered_rev_statuses = ('deleted')
-
-    # Default embed list for all encoded Items
-    embedded_list = static_content_embed_list
-
-    def __init__(self, registry, models):
-        super().__init__(registry, models)
-        self.STATUS_ACL = self.__class__.STATUS_ACL
-
-    @property
-    def __name__(self):
-        """smth."""
-        if self.name_key is None:
-            return self.uuid
-        properties = self.upgrade_properties()
-        if properties.get('status') == 'replaced':
-            return self.uuid
-        return properties.get(self.name_key, None) or self.uuid
-
-    def __acl__(self):
-        """This sets the ACL for the item based on mapping of status to ACL.
-           If there is no status or the status is not included in the STATUS_ACL
-           lookup then the access is set to admin only
-        """
-        # Don't finalize to avoid validation here.
-        properties = self.upgrade_properties().copy()
-        status = properties.get('status')
-        return self.STATUS_ACL.get(status, ONLY_ADMIN_VIEW_ACL)
-
-    def __ac_local_roles__(self):
-        """Adds additional information allowing access of the Item based on
-           properties of the Item - currently most important is Project.
-           eg. ITEM.__ac_local_roles = {
-                    institution.uuid: role.institution_member,
-                    project.uuid: role.project_member
-                }
-          """
-        roles = {}
-        properties = self.upgrade_properties()
-        if 'institution' in properties:
-            # add institution_member as well
-            inst_member = 'institution.%s' % properties['institution']
-            roles[inst_member] = 'role.institution_member'
-            # to avoid conflation of the project used for attribution of the User ITEM
-            # from the project(s) specified in the project_roles specifying project_editor
-            # role - instead of using 'bare' project
-        if 'project' in properties:
-            project_editors = 'editor_for.%s' % properties['project']
-            roles[project_editors] = 'role.project_editor'
-        # This emulates __ac_local_roles__ of User.py (role.owner) - taken from 4DN in 2022-01
-        if 'submitted_by' in properties:
-            submitter = 'userid.%s' % properties['submitted_by']
-            roles[submitter] = 'role.owner'
-        return roles
-
-    def add_accession_to_title(self, title):
-        if self.properties.get('accession') is not None:
-            return title + ' - ' + self.properties.get('accession')
-        return title
-
-    def unique_keys(self, properties):
-        """smth."""
-        keys = super(Item, self).unique_keys(properties)
-        if 'accession' not in self.schema['properties']:
-            return keys
-        keys.setdefault('accession', []).extend(properties.get('alternate_accessions', []))
-        if properties.get('status') != 'replaced' and 'accession' in properties:
-            keys['accession'].append(properties['accession'])
-        return keys
-
-    def is_update_by_admin_user(self):
-        # determine if the submitter in the properties is an admin user
-        userid = get_userid()
-        users = self.registry['collections']['User']
-        user = users.get(userid)
-        if 'groups' in user.properties:
-            if 'admin' in user.properties['groups']:
-                return True
-        return False
-
-    def _update(self, properties, sheets=None):
-        add_last_modified(properties)
-        super(Item, self)._update(properties, sheets)
-
-    @calculated_property(schema={
-        "title": "Display Title",
-        "description": "A calculated title for every object in 4DN",
-        "type": "string"
-    })
-    def display_title(self, request=None):
-        """create a display_title field."""
-        display_title = ""
-        look_for = [
-            "title",
-            "name",
-            "location_description",
-            "accession",
-        ]
-        properties = self.upgrade_properties()
-        for field in look_for:
-            # special case for user: concatenate first and last names
-            display_title = properties.get(field, None)
-            if display_title:
-                if field != 'accession':
-                    display_title = self.add_accession_to_title(display_title)
-                return display_title
-        # if none of the existing terms are available, use @type + date_created
-        try:
-            type_date = self.__class__.__name__ + " from " + properties.get("date_created", None)[:10]
-            return type_date
-        # last resort, use uuid
-        except Exception:
-            return properties.get('uuid', None)
-
-    def rev_link_atids(self, request, rev_name):
-        """
-        Returns the list of reverse linked items given a defined reverse link,
-        which should be formatted like:
-        rev = {
-            '<reverse field name>': ('<reverse item class>', '<reverse field to find>'),
-        }
-
-        """
-        conn = request.registry[CONNECTION]
-        return [request.resource_path(conn[uuid]) for uuid in
-                self.get_filtered_rev_links(request, rev_name)]
 
 
 @calculated_property(context=Item.AbstractCollection, category='action')
@@ -424,23 +236,3 @@ def collection_add(context, request, render=None):
     #         content_type='application/json'
     #     )
     return sno_collection_add(context, request, render)
-
-
-@view_config(context=Item, permission='edit', request_method='PUT',
-             validators=[validate_item_content_put])
-@view_config(context=Item, permission='edit', request_method='PATCH',
-             validators=[validate_item_content_patch])
-@view_config(context=Item, permission='edit_unvalidated', request_method='PUT',
-             validators=[no_validate_item_content_put],
-             request_param=['validate=false'])
-@view_config(context=Item, permission='edit_unvalidated', request_method='PATCH',
-             validators=[no_validate_item_content_patch],
-             request_param=['validate=false'])
-@view_config(context=Item, permission='index', request_method='GET',
-             validators=[validate_item_content_in_place],
-             request_param=['check_only=true'])
-@debug_log
-def item_edit(context, request, render=None):
-    # This works
-    # Probably don't need to extend re: institution + project since if editing, assuming these have previously existed.
-    return sno_item_edit(context, request, render)
