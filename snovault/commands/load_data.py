@@ -4,6 +4,7 @@ import structlog
 
 from dcicutils.env_utils import permit_load_data
 from dcicutils.common import APP_CGAP
+from dcicutils.misc_utils import PRINT
 
 from pyramid.paster import get_app
 from pyramid.path import DottedNameResolver
@@ -57,7 +58,7 @@ def main(simulated_args=None):
 
     load_test_data = app.registry.settings.get('load_test_data')
     allow_prod = args.prod
-    log.info("load_data: load_test_data function is %s" % (load_test_data))
+    PRINT("load_data: load_test_data function is %s" % (load_test_data))
     load_test_data = DottedNameResolver().resolve(load_test_data)
 
     if load_data_should_proceed(env, allow_prod):
