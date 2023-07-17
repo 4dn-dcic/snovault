@@ -1,10 +1,15 @@
-from dataclass import dataclass, field
+from __future__ import annotations
+
+from dataclasses import dataclass, field
 from typing import Any, Optional, Union
 
 import structlog
 from pyramid.request import Request
 
-from dcicutils.item_models import JsonObject, PortalItem as PortalItemWithoutRequests
+from dcicutils.item_model_utils import (
+    JsonObject,
+    PortalItem as PortalItemWithoutRequests,
+)
 
 
 logger = structlog.getLogger(__name__)
@@ -12,7 +17,6 @@ logger = structlog.getLogger(__name__)
 
 @dataclass(frozen=True)
 class PortalItem(PortalItemWithoutRequests):
-
     request: Optional[Request] = field(default=None, hash=False)
 
     def get_request(self) -> Union[Request, None]:
@@ -20,47 +24,52 @@ class PortalItem(PortalItemWithoutRequests):
 
     @classmethod
     def from_properties(
-        cls, properties: JsonObject, embed_items=False, auth=None, request=None, **kwargs: Any
-    ) -> "PortalItem":
-        return cls(
-            properties=properties, embed_items=embed_items, auth=auth, request=request
-        )
+        cls,
+        properties: JsonObject,
+        fetch_links=False,
+        auth=None,
+        request=None,
+        **kwargs: Any,
+    ) -> PortalItem:
+        return cls(properties, fetch_links=fetch_links, auth=auth, request=request)
 
     @classmethod
     def from_identifier_and_existing_item(
-        cls, identifier: str, existing_item: "PortalItem", **kwargs: Any
-    ) -> "PortalItem":
-        embed_items = existing_item.do_embeds()
+        cls, identifier: str, existing_item: PortalItem, **kwargs: Any
+    ) -> PortalItem:
+        fetch_links = existing_item.should_fetch_links()
         auth = existing_item.get_auth()
         request = existing_item.get_request()
         if auth:
             return cls.from_identifier_and_auth(
-                identifier, auth, embed_items=embed_items, **kwargs
+                identifier, auth, fetch_links=fetch_links, **kwargs
             )
         if request:
             return cls.from_identifier_and_request(
-                identifier, request, embed_items=embed_items, **kwargs
+                identifier, request, fetch_links=fetch_links, **kwargs
             )
-        raise ValueError("Unable to create item from existing item")
+        raise RuntimeError(
+            "Unable to fetch given identifier without auth key or request"
+        )
 
     @classmethod
     def from_properties_and_existing_item(
-        cls, properties: JsonObject, existing_item: "PortalItem", **kwargs: Any
-    ) -> "PortalItem":
-        embed_items = existing_item.do_embeds()
+        cls, properties: JsonObject, existing_item: PortalItem, **kwargs: Any
+    ) -> PortalItem:
+        fetch_links = existing_item.should_fetch_links()
         auth = existing_item.get_auth()
         request = existing_item.get_request()
         return cls.from_properties(
-            properties, embed_items=embed_items, auth=auth, request=request, **kwargs
+            properties, fetch_links=fetch_links, auth=auth, request=request, **kwargs
         )
 
     @classmethod
     def from_identifier_and_request(
-        cls, identifier: str, request: Request, embed_items: bool, **kwargs: Any
-    ) -> "PortalItem":
+        cls, identifier: str, request: Request, fetch_links: bool, **kwargs: Any
+    ) -> PortalItem:
         properties = cls._get_item_via_request(identifier, request)
         return cls.from_properties(
-            properties=properties, request=request, embed_items=embed_items, **kwargs
+            properties, request=request, fetch_links=fetch_links, **kwargs
         )
 
     @classmethod
@@ -68,6 +77,6 @@ class PortalItem(PortalItemWithoutRequests):
         try:
             result = request.embed(identifier, "@@object")
         except Exception as e:
-            logger.exception(f"Unable to embed identifer {identifier}: {e}")
+            logger.exception(f"Unable to fetch identifer {identifier}: {e}")
             result = {}
         return result
