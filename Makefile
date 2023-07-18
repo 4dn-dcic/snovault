@@ -29,8 +29,13 @@ macbuild-poetry:
 	make macpoetry-install
 
 build:
+ifeq ($(shell uname -s), Darwin)
+	@echo "Looks like this is Mac so executing make macbuild"
+	make macbuild
+else
 	make build-poetry
 	make build-after-poetry
+endif
 
 macbuild:
 	make macbuild-poetry
