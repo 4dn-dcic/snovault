@@ -30,7 +30,7 @@ macbuild-poetry:
 
 build:
 ifeq ($(shell uname -s), Darwin)
-	@echo "Looks like this is Mac so executing make macbuild"
+	@echo "Looks like this is Mac so executing: make macbuild"
 	make macbuild
 else
 	make build-poetry
