@@ -1,3 +1,6 @@
 #!/bin/bash
 
+# For some reason on Mac M1 (as of July 2023) pyyaml install via poetry is problematic.
+pip install pyyaml==5.4.1
+
 CFLAGS="-I$(brew --prefix zlib)/include" LDFLAGS="-L$(brew --prefix zlib)/lib" poetry install
