@@ -13,7 +13,7 @@ from pyramid.config import Configurator
 from pyramid.path import AssetResolver, caller_package
 from pyramid.session import SignedCookieSessionFactory
 from pyramid.settings import asbool
-from pyramid_localroles import LocalRolesAuthorizationPolicy
+from .local_roles import LocalRolesAuthorizationPolicy
 from sqlalchemy import engine_from_config, event, orm  # , text as psql_text
 from webob.cookies import JSONSerializer
 

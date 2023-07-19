@@ -5,7 +5,7 @@ from dcicutils.ff_utils import get_health_page
 from dcicutils.log_utils import set_logging
 from pyramid.config import Configurator
 from pyramid.settings import asbool
-from pyramid_localroles import LocalRolesAuthorizationPolicy
+from .local_roles import LocalRolesAuthorizationPolicy
 
 from .app import app_version, session, configure_dbsession, changelogs, json_from_path
 from .calculated import calculated_property  # noqa
