@@ -28,7 +28,6 @@ from ..util import (
     make_vapp_for_ingestion,  # vapp_for_email,
 )
 from ..ingestion.common import metadata_bundles_bucket  # , get_parameter
-from ..project_app import app_project
 
 
 # ALLOW_SUBMITTER_VIEW_ACL = (

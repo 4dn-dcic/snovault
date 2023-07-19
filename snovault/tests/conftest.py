@@ -1,7 +1,7 @@
 import logging
 import pytest
 
-from ..project_defs import C4ProjectRegistry
+from ..project_defs import C4ProjectRegistry  # noQA
 from ..elasticsearch.indexer_queue import QueueManager
 
 

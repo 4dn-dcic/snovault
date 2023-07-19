@@ -1,4 +1,5 @@
 """base class creation for all the schemas that exist."""
+from dcicutils.misc_utils import exported
 from pyramid.security import (
     # ALL_PERMISSIONS,
     Allow,
@@ -11,7 +12,6 @@ from pyramid.view import (
 )
 import re
 import string
-from typing import Any, List, Tuple, Union
 from .. import Item, Collection, AbstractCollection, abstract_collection, calculated_property
 from ..util import debug_log
 from ..validators import (
@@ -30,6 +30,23 @@ from ..crud_views import (
 from ..interfaces import CONNECTION
 from ..server_defaults import get_userid, add_last_modified
 from .acl import (
+    ONLY_ADMIN_VIEW_ACL,
+    PUBLIC_ACL,
+    DELETED_ACL
+)
+exported(
+    Allow, Deny, Everyone,
+    abstract_collection,
+    validate_item_content_put,
+    validate_item_content_patch,
+    validate_item_content_in_place,
+    no_validate_item_content_post,
+    no_validate_item_content_put,
+    no_validate_item_content_patch,
+    item_edit,
+    CONNECTION,
+    get_userid,
+    add_last_modified,
     ONLY_ADMIN_VIEW_ACL,
     PUBLIC_ACL,
     DELETED_ACL

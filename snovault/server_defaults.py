@@ -1,7 +1,7 @@
 import random
 import uuid
 
-from dcicutils.misc_utils import utc_now_str
+from dcicutils.misc_utils import exported, utc_now_str
 from jsonschema_serialize_fork import NO_DEFAULT
 from pyramid.path import DottedNameResolver
 from pyramid.threadlocal import get_current_request
@@ -11,6 +11,15 @@ from string import digits  # , ascii_uppercase
 from .project_app import app_project
 from .server_defaults_misc import add_last_modified, get_now
 from .server_defaults_user import _userid, get_userid, get_user_resource
+
+exported(
+    COLLECTIONS,
+    add_last_modified,
+    get_now,
+    get_userid,
+    get_user_resource
+)
+
 
 
 ACCESSION_FACTORY = __name__ + ':accession_factory'
