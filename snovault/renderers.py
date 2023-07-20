@@ -444,7 +444,10 @@ def render_page_html_tween_factory(handler, registry):
     # tricky to enforce (we would need to create one cgroup per process.)
     # So we just manually check the resource usage after each transform.
 
-    rss_limit = 512 * (1024 ** 2)  # MB
+    # This has been adjusted upward to account for larger memory availability with nginx/Fargate - Will Jan 13 2023
+    kilo_bytes = 1024
+    mega_bytes = 1024 * kilo_bytes
+    rss_limit = 512 * mega_bytes
 
     reload_process = (True
                       if registry.settings.get('reload_templates', False)
