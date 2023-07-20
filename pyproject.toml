@@ -44,7 +44,7 @@ botocore = ">=1.27.36"  # no particular version required, but this speeds up sea
 boto3 = ">=1.24.36"  # no particular version required, but this speeds up search
 elasticsearch = "7.13.4"  # versions >= 7.14.0 lock out AWS ES
 elasticsearch_dsl = "^7.4.0"
-dcicutils = {path = "../utils", develop = true}
+dcicutils = "^7.5.0" 
 future = ">=0.15.2,<1"
 html5lib = ">=1.1"  # experimental, should be OK now that we're not using moto server
 humanfriendly = "^1.44.9"
