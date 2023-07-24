@@ -6,9 +6,9 @@ snovault
 Change Log
 ----------
 
-8.2.0
+9.0.0
 =====
-* Merge/unify ingestion code from cgap-portal and fourfront.
+* Merge/unify ingestion and other code from cgap-portal and fourfront.
 
 
 8.1.0
