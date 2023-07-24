@@ -865,6 +865,18 @@ class TestingKey(Item):
     }
 
 
+@collection(
+    'testing-linked-schema-fields',
+    properties={
+        'title': 'Test Linked Schema Fields',
+        'description': 'Testing that we can link fields across schemas.',
+    },
+)
+class TestingLinkedSchemaField(Item):
+    item_type = 'testing_linked_schema_field'
+    schema = load_schema('snovault:test_schemas/TestingLinkedSchemaField.json')
+
+
 @collection('testing-hidden-facets')
 class TestingHiddenFacets(Item):
     """ Collection designed to test searching with hidden facets. Yes this is large, but this is a complex feature

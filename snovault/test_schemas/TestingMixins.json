@@ -1,5 +1,6 @@
 {
   "title": "Testing Mixin Properties",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
   "description": "Test object that has a mixin that should appear",
   "type": "object",
   "required": ["name"],

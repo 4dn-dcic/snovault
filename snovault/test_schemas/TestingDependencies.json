@@ -1,5 +1,6 @@
 {
     "type": "object",
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
     "dependencies": {
         "dep1": ["dep2"],
         "dep2": ["dep1"]

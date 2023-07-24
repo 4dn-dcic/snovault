@@ -1,6 +1,6 @@
 import re
 
-from jsonschema_serialize_fork import FormatChecker
+from jsonschema import FormatChecker
 from .server_defaults import (
     ACCESSION_PREFIX,
     ACCESSION_TEST_PREFIX,

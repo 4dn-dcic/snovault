@@ -22,7 +22,7 @@
             ],
             "serverDefault": "uuid4",
             "permission": "restricted_fields",
-            "requestMethod": "POST"
+            "requestMethod": ["POST"]
         }
     },
     "accession": {
