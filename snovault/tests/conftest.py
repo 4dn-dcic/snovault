@@ -1,10 +1,7 @@
-# import os
-# import time
-# import tempfile
-import pytest
 import logging
-# import subprocess
+import pytest
 
+from ..project_defs import C4ProjectRegistry  # noQA
 from ..elasticsearch.indexer_queue import QueueManager
 
 

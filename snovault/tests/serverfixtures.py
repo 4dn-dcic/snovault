@@ -26,6 +26,7 @@ from .postgresql_fixture import (
 
 NO_SERVER_FIXTURES = environ_bool("NO_SERVER_FIXTURES")
 
+
 def pytest_configure():
     logging.basicConfig(format='')
     logging.getLogger('sqlalchemy.engine').setLevel(logging.WARNING)

@@ -5,7 +5,7 @@ from dcicutils.ff_utils import get_health_page
 from dcicutils.log_utils import set_logging
 from pyramid.config import Configurator
 from pyramid.settings import asbool
-from pyramid_localroles import LocalRolesAuthorizationPolicy
+from .local_roles import LocalRolesAuthorizationPolicy
 
 from .app import app_version, session, configure_dbsession, changelogs, json_from_path
 from .calculated import calculated_property  # noqa
@@ -21,30 +21,35 @@ from .upgrader import upgrade_step  # noqa
 def includeme(config):
     config.include('pyramid_retry')
     config.include('pyramid_tm')
-    config.include('.util')
-    config.include('.stats')
-    config.include('.batchupgrade')
-    config.include('.calculated')
-    config.include('.config')
-    config.include('.connection')
-    config.include('.embed')
-    config.include('.json_renderer')
-    config.include('.validation')
-    config.include('.predicates')
-    config.include('.invalidation')
-    config.include('.upgrader')
-    config.include('.aggregated_items')
-    config.include('.storage')
-    config.include('.typeinfo')
-    config.include('.resources')
-    config.include('.attachment')
-    config.include('.schema_graph')
-    config.include('.jsonld_context')
-    config.include('.schema_views')
-    config.include('.crud_views')
-    config.include('.indexing_views')
-    config.include('.resource_views')
-    config.include('.settings')
+    config.include('snovault.authentication')
+    config.include('snovault.util')
+    config.include('snovault.drs')
+    config.include('snovault.stats')
+    config.include('snovault.batchupgrade')
+    config.include('snovault.calculated')
+    config.include('snovault.config')
+    config.include('snovault.connection')
+    config.include('snovault.custom_embed')
+    config.include('snovault.embed')
+    config.include('snovault.json_renderer')
+    config.include('snovault.validation')
+    config.include('snovault.predicates')
+    config.include('snovault.invalidation')
+    config.include('snovault.upgrader')
+    config.include('snovault.aggregated_items')
+    config.include('snovault.storage')
+    config.include('snovault.typeinfo')
+    config.include('snovault.types')
+    config.include('snovault.resources')
+    config.include('snovault.attachment')
+    config.include('snovault.schema_graph')
+    config.include('snovault.jsonld_context')
+    config.include('snovault.schema_views')
+    config.include('snovault.crud_views')
+    config.include('snovault.indexing_views')
+    config.include('snovault.resource_views')
+    config.include('snovault.settings')
+    config.include('snovault.server_defaults')
 
 
 def main(global_config, **local_config):
@@ -83,16 +88,19 @@ def main(global_config, **local_config):
 
     config.include('.renderers')
 
+    if settings.get('elasticsearch.server'):
+        config.include('snovault.search.search')
+        config.include('snovault.search.compound_search')
+
     # only include this stuff if we're testing
     if asbool(settings.get('testing', False)):
         config.include('snovault.tests.testing_views')
-        config.include('snovault.tests.authentication')
         config.include('snovault.tests.root')
-        if settings.get('elasticsearch.server'):
-            config.include('snovault.tests.search')
 
         # in addition, enable invalidation scope for testing - but NOT by default
         settings[INVALIDATION_SCOPE_ENABLED] = True
+    else:
+        config.include('snovault.root')
 
     if 'elasticsearch.server' in config.registry.settings:
         config.include('snovault.elasticsearch')

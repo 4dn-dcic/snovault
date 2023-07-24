@@ -67,7 +67,8 @@ def test_find_default_embeds_and_expand_emb_list(registry):
         'attachment',
         'attachment.attachment.*',
         'attachment.attachment2.*',
-        'attachment.principals_allowed.*'
+        'attachment.principals_allowed.*',
+        'attachment.submitted_by'
     ]
     assert set(embs_to_add) == set(expected_to_add)
 
