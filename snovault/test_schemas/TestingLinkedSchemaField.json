@@ -3,10 +3,10 @@
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "properties": {
       "linked_targets": {
-        "$ref": "TestingLinkAggregateSno.json#/properties/targets"
+        "$ref": "./TestingLinkAggregateSno.json#/properties/targets"
       },
       "quality": {
-        "$ref": "TestingBiosampleSno.json#/properties/quality"
+        "$ref": "./TestingBiosampleSno.json#/properties/quality"
       }
     }
 }

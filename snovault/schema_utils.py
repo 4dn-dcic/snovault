@@ -42,9 +42,7 @@ class NoRemoteResolver(RefResolver):
     """ This has been modified to allow remote resolution that does not involve an http, https or ftp url
         ie: local remote resolution """
     def resolve_remote(self, uri):
-        if any(s in uri for s in ['http', 'https', 'ftp', 'sftp']):
-            raise ValueError('Resolution disallowed for: %s' % uri)
-        return super().resolve_remote(uri)
+        raise ValueError(f'Resolution disallowed for: {uri}')
 
 
 def favor_app_specific_schema(schema: str) -> str:
@@ -111,6 +109,64 @@ def favor_app_specific_schema_ref(schema_ref: str) -> str:
             else:
                 schema_ref = f"file://{app_specific_schema_filename}"
     return schema_ref
+
+
+def resolve_merge_ref(ref, resolver):
+    with resolver.resolving(ref) as resolved:
+        if not isinstance(resolved, dict):
+            raise ValueError(
+                f'Schema ref {ref} must resolve dict, not {type(resolved)}'
+            )
+        return resolved
+
+
+def _update_resolved_data(resolved_data, value, resolver):
+    # Assumes resolved value is dictionary.
+    resolved_data.update(
+        # Recurse here in case the resolved value has refs.
+        resolve_merge_refs(
+            # Actually get the ref value.
+            resolve_merge_ref(value, resolver),
+            resolver
+        )
+    )
+
+
+def _handle_list_or_string_value(resolved_data, value, resolver):
+    if isinstance(value, list):
+        for v in value:
+            _update_resolved_data(resolved_data, v, resolver)
+    else:
+        _update_resolved_data(resolved_data, value, resolver)
+
+
+def resolve_merge_refs(data, resolver):
+    if isinstance(data, dict):
+        # Return copy.
+        resolved_data = {}
+        for k, v in data.items():
+            if k == '$merge':
+                _handle_list_or_string_value(resolved_data, v, resolver)
+            else:
+                resolved_data[k] = resolve_merge_refs(v, resolver)
+    elif isinstance(data, list):
+        # Return copy.
+        resolved_data = [
+            resolve_merge_refs(v, resolver)
+            for v in data
+        ]
+    else:
+        # Assumes we're only dealing with other JSON types
+        # like string, number, boolean, null, not other
+        # types like tuples, sets, functions, classes, etc.,
+        # which would require a deep copy.
+        resolved_data = data
+    return resolved_data
+
+
+def fill_in_schema_merge_refs(schema, resolver):
+    """ Resolves $merge properties, custom $ref implementation from IGVF SNO2-6 """
+    return resolve_merge_refs(schema, resolver)
 
 
 def mixinSchemas(schema, resolver, key_name='properties'):
@@ -308,7 +364,7 @@ def load_schema(filename):
         asset = AssetResolver(caller_package()).resolve(filename)
         schema = json.load(utf8(asset.stream()),
                            object_pairs_hook=collections.OrderedDict)
-        resolver = NoRemoteResolver('file://' + asset.abspath(), schema)
+        resolver = RefResolver('file://' + asset.abspath(), schema)
     # use mixinProperties, mixinFacets, mixinAggregations, and mixinColumns (if provided)
     schema = mixinSchemas(
         mixinSchemas(
@@ -318,6 +374,7 @@ def load_schema(filename):
         ),
         resolver, 'columns'
     )
+    schema = fill_in_schema_merge_refs(schema, resolver)
 
     # SchemaValidator is not thread safe for now
     SchemaValidator(schema, resolver=resolver)
