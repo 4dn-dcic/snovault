@@ -6,6 +6,11 @@ snovault
 Change Log
 ----------
 
+9.1.0
+=====
+* Fix for MIME type ordering in renderers.py (differs between cgap and fourfront).
+
+
 9.0.0
 =====
 * Merge/unify ingestion and other code from cgap-portal and fourfront.

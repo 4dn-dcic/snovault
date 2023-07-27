@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "dcicsnovault"
-version = "9.0.0"
+version = "9.0.0.1b1"  # TODO: To become 9.1.0
 description = "Storage support for 4DN Data Portals."
 authors = ["4DN-DCIC Team <support@4dnucleome.org>"]
 license = "MIT"
@@ -123,7 +123,7 @@ pytest-timeout = ">=1.0.0"
 # 5.2 had soe bugs that were probably only in Python 2, but we require 5.2 here just in case.
 # Any narrowing beyond that is just to help 'poetry lock' converge faster.
 # And we only need .safe_load in testing, so we're moving this to dev dependencies. -kmp 22-Feb-2022
-PyYAML = ">=5.1,<5.5"
+PyYAML = "5.3.1"
 "repoze.debug" = ">=1.0.2"
 wheel = ">=0.40.0"
 
