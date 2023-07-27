@@ -5,6 +5,7 @@ import os
 import psutil
 import time
 
+from dcicutils.misc_utils import exported
 from dcicutils.misc_utils import environ_bool, PRINT, ignored
 from functools import lru_cache
 from pkg_resources import resource_filename
@@ -24,9 +25,12 @@ from pyramid.traversal import split_path_info, _join_path_tuple
 from subprocess_middleware.worker import TransformWorker
 from urllib.parse import urlencode
 from webob.cookies import Cookie
-from .mime_types import MIME_TYPE_HTML
+from .mime_types import MIME_TYPE_HTML, MIME_TYPE_JSON, MIME_TYPE_LD_JSON
 from .project_app import app_project
 from .util import content_type_allowed
+exported(
+    MIME_TYPE_HTML, MIME_TYPE_JSON, MIME_TYPE_LD_JSON
+)
 
 
 log = logging.getLogger(__name__)
