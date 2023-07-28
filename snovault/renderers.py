@@ -5,6 +5,7 @@ import os
 import psutil
 import time
 
+from dcicutils.misc_utils import exported
 from dcicutils.misc_utils import environ_bool, PRINT, ignored
 from functools import lru_cache
 from pkg_resources import resource_filename
@@ -24,8 +25,12 @@ from pyramid.traversal import split_path_info, _join_path_tuple
 from subprocess_middleware.worker import TransformWorker
 from urllib.parse import urlencode
 from webob.cookies import Cookie
+from .mime_types import MIME_TYPE_HTML, MIME_TYPE_JSON, MIME_TYPE_LD_JSON
 from .project_app import app_project
 from .util import content_type_allowed
+exported(
+    MIME_TYPE_HTML, MIME_TYPE_JSON, MIME_TYPE_LD_JSON
+)
 
 
 log = logging.getLogger(__name__)
@@ -314,13 +319,9 @@ def canonical_redirect(event):
 
 # Web browsers send an Accept request header for initial (e.g. non-AJAX) page requests
 # which should contain 'text/html'
-MIME_TYPE_HTML = 'text/html'
-MIME_TYPE_JSON = 'application/json'
-MIME_TYPE_LD_JSON = 'application/ld+json'
-
 # Note: In cgap-portal, MIME_TYPE_JSON is at the head of this list. In fourfront, MIME_TYPE_HTML is.
 # The cgap-portal behavior might be a bug we should look at bringing into alignment. -kmp 29-Jan-2022
-MIME_TYPES_SUPPORTED = [MIME_TYPE_JSON, MIME_TYPE_HTML, MIME_TYPE_LD_JSON]
+MIME_TYPES_SUPPORTED = app_project().renderers_mime_types_supported()
 MIME_TYPE_DEFAULT = MIME_TYPES_SUPPORTED[0]
 MIME_TYPE_TRIAGE_MODE = 'modern'  # if this doesn't work, fall back to 'legacy'
 
