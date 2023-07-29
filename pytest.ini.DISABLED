@@ -8,7 +8,14 @@ addopts =
     -p snovault.tests.serverfixtures
     --instafail
 filterwarnings =
-    ignore: Using or importing the ABCs from 'collections' instead of from 'collections.abc' is deprecated since Python 3.3,and in 3.9 it will stop working:DeprecationWarning
+    ignore:Using or importing the ABCs from 'collections' instead of from 'collections.abc' is deprecated since Python 3.3,and in 3.9 it will stop working:DeprecationWarning
+    ignore:Use of .. or absolute path in a resource path is not allowed and will raise exceptions in a future release.:DeprecationWarning
+    ignore:nested transaction already deassociated from connection:
+    ignore:New instance .* with identity key .* conflicts with persistent instance .*:
+    ignore:The MetaData.bind argument is deprecated and will be removed in SQLAlchemy 2.0 .*:
+    ignore:The [`][`]bind[`][`] argument for schema methods that invoke SQL against an engine or connection will be required in SQLAlchemy 2.0. .*:
+    ignore:The MetaData.bind argument is deprecated and will be removed in SQLAlchemy 2.0.:
+    ignore:The Connection.connect[(][)] method is considered legacy as of the 1.x series of SQLAlchemy and will be removed in 2.0:
 markers =
     es: mark a test as an elastic search test (deselect with '-m "not es"')
     indexing: mark a test as an indexing test (deselect with '-m "not indexing"')

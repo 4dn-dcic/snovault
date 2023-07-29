@@ -42,7 +42,7 @@ boto3 = ">=1.26.133"  # no particular version required, but this speeds up searc
 elasticsearch = "7.13.4"  # versions >= 7.14.0 lock out AWS ES
 elasticsearch_dsl = "^7.4.0"
 #dcicutils = "7.4.4.5b21"
-dcicutils = "^7.5.0"
+dcicutils = "7.6.0.2b7"  # ^7.5.0"
 future = ">=0.15.2,<1"
 html5lib = ">=1.1"  # experimental, should be OK now that we're not using moto server
 humanfriendly = "^1.44.9"
@@ -133,6 +133,42 @@ list-db-tables = "snovault.commands.list_db_tables:main"
 prepare-local-dev = "snovault.commands.prepare_template:prepare_local_dev_main"
 publish-to-pypi = "dcicutils.scripts.publish_to_pypi:main"
 wipe-test-indices = "snovault.commands.wipe_test_indices:main"
+
+[tool.pytest.ini_options]
+log_cli_level = "INFO"
+redis_exec = "/Users/willronchetti/Documents/4dn/redis-6.0.6/src/redis-server"
+addopts = [
+    "-p snovault.tests.pyramidfixtures",
+    "-p snovault.tests.toolfixtures",
+    "-p snovault.tests.testappfixtures",
+    "-p snovault.tests.serverfixtures",
+    "--instafail"
+]
+filterwarnings = [
+    "ignore:Using or importing the ABCs from 'collections' instead of from 'collections.abc' is deprecated since Python 3.3,and in 3.9 it will stop working:DeprecationWarning",
+    "ignore:Use of .. or absolute path in a resource path is not allowed and will raise exceptions in a future release.:DeprecationWarning",
+    "ignore:nested transaction already deassociated from connection:",
+    # These SAWarnings (SQL Alchemy warnings) could be suppressed, but we're expressly asking for them...
+    # "ignore:New instance .* with identity key .* conflicts with persistent instance .*:",
+    # "ignore:The MetaData.bind argument is deprecated and will be removed in SQLAlchemy 2.0 .*:",
+    # "ignore:The [`][`]bind[`][`] argument for schema methods that invoke SQL against an engine or connection will be required in SQLAlchemy 2.0. .*:",
+    # "ignore:The MetaData.bind argument is deprecated and will be removed in SQLAlchemy 2.0.:",
+    # "ignore:The Connection.connect[(][)] method is considered legacy as of the 1.x series of SQLAlchemy and will be removed in 2.0:",
+    ]
+markers = [
+    "es: mark a test as an elastic search test (deselect with '-m \"not es\"')",
+    "indexing: mark a test as an indexing test (deselect with '-m \"not indexing\"')",
+    "integrated: an integration test",
+    "integratedx: an excludable integration test, redundantly testing functionality also covered by a unit test",
+    "performance: mark a test as a performance test (deselect with '-m \"not performance\"')",
+    "setone: (deprecated) instead of '-m \"setone\"', please use '-m \"not indexing\"'",  # TODO: refs and scripts to be rewritten
+    "slow: mark a test as slow (deselect with '-m \"not slow\"')",
+    "static: mark as a test that is testing the static form of code, not its runtime functionality",
+    "storage: mark a test as about storage (deselect with '-m \"not storage\"')",
+    "unit: a proper unit test",
+    "working: mark a test as working (deselect with '-m \"not working\"')"
+]
+norecursedirs = ["*env", "site-packages", ".cache", ".git", ".idea", "*.egg-info"]
 
 [paste.app_factory]
 main = "snovault:main"

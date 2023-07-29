@@ -1,0 +1,84 @@
+{
+  "forked_at": "2016-12-06T16:01:26-05:00",
+  "excluded_fork": "stanford-snovault",
+  "pre_fork_contributors_by_name": null,
+  "contributors_by_name": {
+    "Alexander Balashov": {
+      "emails": [
+        "alexander_balashov@hms.harvard.edu"
+      ],
+      "names": [
+        "Alex Balashov",
+        "Alexander Balashov"
+      ]
+    },
+    "Carl Vitzthum": {
+      "emails": [
+        "carl.vitzthum@gmail.com",
+        "carl_vitzthum@hms.harvard.edu"
+      ],
+      "names": [
+        "Carl Vitzthum",
+        "carlvitzthum"
+      ]
+    },
+    "David Michaels": {
+      "emails": [
+        "david_michaels@hms.harvard.edu",
+        "105234079+dmichaels-harvard@users.noreply.github.com"
+      ],
+      "names": [
+        "David Michaels",
+        "dmichaels-harvard"
+      ]
+    },
+    "Douglas Rioux": {
+      "emails": [
+        "douglas_rioux@hms.harvard.edu",
+        "58236592+drio18@users.noreply.github.com"
+      ],
+      "names": [
+        "Douglas Rioux",
+        "drio18"
+      ]
+    },
+    "Jeremy Johnson": {
+      "emails": [
+        "jeremy@softworks.com.my",
+        "jeremy_johnson@hms.harvard.edu"
+      ],
+      "names": [
+        "Jeremy Johnson",
+        "j1z0"
+      ]
+    },
+    "Kent M Pitman": {
+      "emails": [
+          "netsettler@users.noreply.github.com",
+        "kent_pitman@hms.harvard.edu"
+      ],
+      "names": [
+        "Kent M Pitman",
+        "Kent Pitman"
+      ]
+    },
+    "Soo Lee": {
+      "emails": [
+        "duplexa@gmail.com"
+      ],
+      "names": [
+        "Soo Lee",
+        "SooLee"
+      ]
+    },
+    "William Ronchetti": {
+      "emails": [
+        "wrr33@cornell.edu"
+      ],
+      "names": [
+        "Will Ronchetti",
+        "William Ronchetti"
+      ]
+    }
+  }
+}
