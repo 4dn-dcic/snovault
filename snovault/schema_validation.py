@@ -26,6 +26,16 @@ def normalize_links(validator, links, linkTo):
     errors = []
     for link in links:
         try:
+            # Difference between us and IGVF - it is possible in our system in a roundabout way to refer to a link
+            # not by string but by dictionary, in most cases this shouldn't matter but does come up occasionally in
+            # unit tests (looking for errors) - Will July 31 2023
+            if isinstance(link, dict):
+                for possible in ['uuid', '@id']:
+                    if possible in link:
+                        link = link[possible]
+                        break
+                else:
+                    raise KeyError
             normalized_links.append(
                 str(find_resource(resource_base, link.replace(':', '%3A')).uuid)
             )

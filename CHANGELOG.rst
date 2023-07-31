@@ -6,8 +6,16 @@ snovault
 Change Log
 ----------
 
+10.0.0
+======
+
+* Updates ``jsonschema`` version, removing dependency on ``jsonschema-serialize-fork`` and allowing
+  us to use ``$merge`` refs.
+
+
 9.0.0
 =====
+
 * Merge/unify ingestion and other code from cgap-portal and fourfront.
 
 

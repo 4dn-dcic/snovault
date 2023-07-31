@@ -533,6 +533,7 @@ class TestingServerDefault(Item):
 
 @collection('testing-dependencies')
 class TestingDependencies(Item):
+    """ BREAKING CHANGE - dependencies --> dependentRequired in schema """
     item_type = 'testing_dependencies'
     schema = load_schema('snovault:test_schemas/TestingDependencies.json')
 
