@@ -333,7 +333,15 @@ def test_schema_utils_resolve_merge_refs_fills_allows_override_of_ref_property(m
     assert resolved_data == expected_data
 
 
-def test_schema_utils_resolve_merge_ref_in_real_schema():
+def test_schema_utils_resolve_merge_ref_in_real_schema(testapp):
     """ Tests that we can resolve a $merge object in our test schema """
-    # TODO write me
-
+    collection_url = '/testing-linked-schema-fields'
+    # test posting $merge quality field
+    testapp.post_json(collection_url, {'quality': 5}, status=201)
+    testapp.post_json(collection_url, {'quality': 'no'}, status=422)
+    # test posting $merge linkTo
+    atid = testapp.post_json('/testing-link-targets-sno', {'name': 'target'}, status=201).json['@graph'][0]['@id']
+    testapp.post_json(collection_url, {'quality': 5,
+                                       'linked_targets': [
+                                           {'target': atid, 'test_description': 'test'}
+                                       ]}, status=201)
