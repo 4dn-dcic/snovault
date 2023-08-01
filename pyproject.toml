@@ -46,7 +46,6 @@ dcicutils = "^7.5.0"
 future = ">=0.15.2,<1"
 html5lib = ">=1.1"  # experimental, should be OK now that we're not using moto server
 humanfriendly = "^1.44.9"
-jsonschema_serialize_fork = "^2.1.1"
 netaddr = ">=0.8.0,<1"
 passlib = "^1.7.4"
 pillow = "^9.5.0"
@@ -124,7 +123,7 @@ pytest-timeout = ">=1.0.0"
 # 5.2 had soe bugs that were probably only in Python 2, but we require 5.2 here just in case.
 # Any narrowing beyond that is just to help 'poetry lock' converge faster.
 # And we only need .safe_load in testing, so we're moving this to dev dependencies. -kmp 22-Feb-2022
-PyYAML = ">=5.1,<5.5"
+PyYAML = "5.3.1"
 "repoze.debug" = ">=1.0.2"
 wheel = ">=0.40.0"
 

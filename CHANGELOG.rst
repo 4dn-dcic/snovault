@@ -13,6 +13,12 @@ Change Log
   us to use ``$merge`` refs.
 
 
+9.1.0
+=====
+
+* Fix for MIME type ordering in renderers.py (differs between cgap and fourfront).
+
+
 9.0.0
 =====
 
