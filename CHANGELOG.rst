@@ -6,6 +6,11 @@ snovault
 Change Log
 ----------
 
+9.1.1
+=====
+
+* Small fix for JWT Decode incompatible change
+
 9.1.0
 =====
 * Fix for MIME type ordering in renderers.py (differs between cgap and fourfront).
