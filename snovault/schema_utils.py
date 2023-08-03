@@ -40,7 +40,13 @@ def server_default(func):
 
 class NoRemoteResolver(RefResolver):
     def resolve_remote(self, uri):
-        raise ValueError(f'Resolution disallowed for: {uri}')
+        """ Resolves remote uri for files so we can cross reference across our own
+            repos, which now contain base schemas we may want to use
+        """
+        if any(s in uri for s in ['http', 'https', 'ftp', 'sftp']):
+            raise ValueError(f'Resolution disallowed for: {uri}')
+        else:
+            return load_schema(favor_app_specific_schema_ref(uri))
 
 
 def favor_app_specific_schema(schema: str) -> str:
