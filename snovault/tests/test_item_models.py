@@ -1,9 +1,8 @@
 from contextlib import contextmanager
-from typing import Iterator, Optional, Union
+from typing import Any, Dict, Iterator, Optional, Union
 from unittest import mock
 
 import pytest
-from dcicutils.item_model_utils import JsonObject
 from dcicutils.testing_utils import patch_context
 from pyramid.request import Request
 
@@ -44,7 +43,7 @@ def mock_request(embed_exception: bool = False) -> mock.MagicMock:
 
 
 def get_portal_item(
-    auth: Optional[JsonObject] = SOME_AUTH,
+    auth: Optional[Dict[str, Any]] = SOME_AUTH,
     fetch_links: bool = False,
     request: Optional[Request] = None,
 ) -> PortalItem:
@@ -63,7 +62,7 @@ class TestPortalItem:
     )
     def test_from_identifier_and_existing_item(
         self,
-        auth: Union[JsonObject, None],
+        auth: Union[Dict[str, Any], None],
         request_param: Union[Request, None],
         exception_expected: bool,
     ) -> None:

@@ -1,15 +1,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Optional, Union
+from typing import Any, Dict, Optional, Union
 
 import structlog
 from pyramid.request import Request
 
-from dcicutils.item_model_utils import (
-    JsonObject,
-    PortalItem as PortalItemWithoutRequests,
-)
+from dcicutils.item_model_utils import PortalItem as PortalItemWithoutRequests
 
 
 logger = structlog.getLogger(__name__)
@@ -25,7 +22,7 @@ class PortalItem(PortalItemWithoutRequests):
     @classmethod
     def from_properties(
         cls,
-        properties: JsonObject,
+        properties: Dict[str, Any],
         fetch_links=False,
         auth=None,
         request=None,
@@ -54,7 +51,7 @@ class PortalItem(PortalItemWithoutRequests):
 
     @classmethod
     def from_properties_and_existing_item(
-        cls, properties: JsonObject, existing_item: PortalItem, **kwargs: Any
+        cls, properties: Dict[str, Any], existing_item: PortalItem, **kwargs: Any
     ) -> PortalItem:
         fetch_links = existing_item.should_fetch_links()
         auth = existing_item.get_auth()
@@ -73,7 +70,7 @@ class PortalItem(PortalItemWithoutRequests):
         )
 
     @classmethod
-    def _get_item_via_request(cls, identifier: str, request: Request) -> JsonObject:
+    def _get_item_via_request(cls, identifier: str, request: Request) -> Dict[str, Any]:
         try:
             result = request.embed(identifier, "@@object")
         except Exception as e:
