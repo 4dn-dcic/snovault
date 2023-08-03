@@ -13,6 +13,11 @@ Change Log
   us to use ``$merge`` refs.
 
 
+  9.1.1
+=====
+
+* Small fix for JWT Decode incompatible change
+
 9.1.0
 =====
 
