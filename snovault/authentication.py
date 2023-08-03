@@ -572,10 +572,10 @@ def impersonate_user(context, request):
     )
 
     is_https = request.scheme == "https"
-
+    token_value = id_token.decode('utf-8') if isinstance(id_token, bytes) else id_token
     request.response.set_cookie(
         "jwtToken",
-        value=id_token.decode('utf-8'),
+        value=token_value,
         domain=request.domain,
         path="/",
         httponly=True,
