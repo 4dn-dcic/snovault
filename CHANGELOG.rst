@@ -11,6 +11,8 @@ Change Log
 
 * Updates ``jsonschema`` version, removing dependency on ``jsonschema-serialize-fork`` and allowing
   us to use ``$merge`` refs.
+  * Breaking Change: dependencies --> dependentRequired in schema
+  * Breaking Change: object serialization in schema no longer valid
 
 
   9.1.1

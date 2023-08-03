@@ -45,6 +45,7 @@ def test_schema_utils_update_resolved_data(mocker):
 
 def test_schema_utils_handle_list_or_string_value(mocker):
     resolve_merge_ref = mocker.patch('snovault.schema_utils.resolve_merge_ref')
+
     def custom_resolver(ref, resolver):
         if ref == 'xyz':
             return {
@@ -87,6 +88,7 @@ def test_schema_utils_handle_list_or_string_value(mocker):
         'and': 'a ref',
         'inside': 'of a ref'
     }
+
     def custom_resolver(ref, resolver):
         if ref == 'xyz':
             return {
@@ -104,6 +106,7 @@ def test_schema_utils_handle_list_or_string_value(mocker):
         'a': 'b',
         'c': 'd',
     }
+
     def custom_resolver(ref, resolver):
         if ref == 'xyz':
             return {
@@ -222,6 +225,7 @@ def test_schema_utils_resolve_merge_refs_fills_in_refs(mocker):
             ]
         }
     }
+
     def custom_resolver(ref, resolver):
         if ref == 'xyz':
             return {

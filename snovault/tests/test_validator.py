@@ -1,6 +1,4 @@
-import pytest
-
-
+import pytest  # noQA
 from snovault.schema_validation import NO_DEFAULT
 from snovault.schema_utils import SchemaValidator
 from jsonschema.exceptions import ValidationError

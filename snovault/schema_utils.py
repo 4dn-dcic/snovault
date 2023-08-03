@@ -39,8 +39,6 @@ def server_default(func):
 
 
 class NoRemoteResolver(RefResolver):
-    """ This has been modified to allow remote resolution that does not involve an http, https or ftp url
-        ie: local remote resolution """
     def resolve_remote(self, uri):
         raise ValueError(f'Resolution disallowed for: {uri}')
 
@@ -82,7 +80,7 @@ def favor_app_specific_schema_ref(schema_ref: str) -> str:
     def json_file_contains_element(json_filename: str, json_element: str) -> bool:
         """
         If the given JSON file exists and contains the given JSON element name then
-        returns True, otherwise returnes False. The given JSON element may or may
+        returns True; otherwise returns False. The given JSON element may or may
         not begin with a slash. Currently only looks at one single top-level element.
         """
         if json_filename and json_element:
