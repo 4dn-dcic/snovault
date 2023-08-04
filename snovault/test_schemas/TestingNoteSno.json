@@ -1,8 +1,8 @@
 {
     "title": "TestingNote",
     "description": "TestingNote, based on schema for technical review of variants from CGAP.",
-    "id": "/profiles/testing_note.json",
-    "$schema": "http://json-schema.org/draft-04/schema#",
+    "$id": "/profiles/testing_note.json",
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
     "type": "object",
     "identifyingProperties": [
         "identifier"

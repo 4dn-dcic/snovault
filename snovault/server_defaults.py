@@ -2,7 +2,7 @@ import random
 import uuid
 
 from dcicutils.misc_utils import exported, utc_now_str
-from jsonschema_serialize_fork import NO_DEFAULT
+from snovault.schema_validation import NO_DEFAULT
 from pyramid.path import DottedNameResolver
 from pyramid.threadlocal import get_current_request
 from snovault.schema_utils import server_default

@@ -1,11 +1,12 @@
 {
   "title": "Testing Calculated Properties",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
   "description": "Test object that has calculated properties to test",
   "type": "object",
   "required": ["name", "foo", "bar", "nested", "nested2"],
   "properties": {
     "schema_version": {
-      "type": "object",
+      "type": "string",
       "default": "1"
     },
     "name": {

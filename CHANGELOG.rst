@@ -6,18 +6,29 @@ snovault
 Change Log
 ----------
 
-9.1.1
+10.0.0
+======
+
+* Updates ``jsonschema`` version, removing dependency on ``jsonschema-serialize-fork`` and allowing
+  us to use ``$merge`` refs.
+  * Breaking Change: dependencies --> dependentRequired in schema
+  * Breaking Change: object serialization in schema no longer valid
+
+
+  9.1.1
 =====
 
 * Small fix for JWT Decode incompatible change
 
 9.1.0
 =====
+
 * Fix for MIME type ordering in renderers.py (differs between cgap and fourfront).
 
 
 9.0.0
 =====
+
 * Merge/unify ingestion and other code from cgap-portal and fourfront.
 
 

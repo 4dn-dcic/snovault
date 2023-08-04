@@ -2,7 +2,7 @@
 # used in resources.Item.is_update_by_admin_user (commonized from fourfront/cgap-portal),
 # since server_defaults imports schema_utils which imports resources which wants get_userid.
 
-from jsonschema_serialize_fork import NO_DEFAULT
+from snovault.schema_validation import NO_DEFAULT
 from pyramid.threadlocal import get_current_request
 from .interfaces import COLLECTIONS
 

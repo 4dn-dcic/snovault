@@ -1,5 +1,5 @@
 from dcicutils.misc_utils import utc_now_str
-from jsonschema_serialize_fork import NO_DEFAULT
+from snovault.schema_validation import NO_DEFAULT
 from .server_defaults_user import get_userid
 
 

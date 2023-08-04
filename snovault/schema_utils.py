@@ -6,12 +6,10 @@ import uuid
 
 from datetime import datetime
 from dcicutils.misc_utils import ignored
-from jsonschema_serialize_fork import (
-    Draft4Validator,
-    FormatChecker,
-    RefResolver,
-)
-from jsonschema_serialize_fork.exceptions import ValidationError
+from snovault.schema_validation import SerializingSchemaValidator
+from jsonschema import FormatChecker
+from jsonschema import RefResolver
+from jsonschema.exceptions import ValidationError
 import os
 from pyramid.path import AssetResolver, caller_package
 from pyramid.threadlocal import get_current_request
@@ -42,7 +40,13 @@ def server_default(func):
 
 class NoRemoteResolver(RefResolver):
     def resolve_remote(self, uri):
-        raise ValueError('Resolution disallowed for: %s' % uri)
+        """ Resolves remote uri for files so we can cross reference across our own
+            repos, which now contain base schemas we may want to use
+        """
+        if any(s in uri for s in ['http', 'https', 'ftp', 'sftp']):
+            raise ValueError(f'Resolution disallowed for: {uri}')
+        else:
+            return load_schema(uri)
 
 
 def favor_app_specific_schema(schema: str) -> str:
@@ -82,13 +86,13 @@ def favor_app_specific_schema_ref(schema_ref: str) -> str:
     def json_file_contains_element(json_filename: str, json_element: str) -> bool:
         """
         If the given JSON file exists and contains the given JSON element name then
-        returns True, otherwise returnes False. The given JSON element may or may 
+        returns True; otherwise returns False. The given JSON element may or may
         not begin with a slash. Currently only looks at one single top-level element.
         """
         if json_filename and json_element:
             try:
                 with io.open(json_filename, "r") as json_f:
-                    json_content = json.load(json_f) 
+                    json_content = json.load(json_f)
                     json_element = json_element.strip("/")
                     if json_element:
                         if json_content.get(json_element):
@@ -109,6 +113,64 @@ def favor_app_specific_schema_ref(schema_ref: str) -> str:
             else:
                 schema_ref = f"file://{app_specific_schema_filename}"
     return schema_ref
+
+
+def resolve_merge_ref(ref, resolver):
+    with resolver.resolving(ref) as resolved:
+        if not isinstance(resolved, dict):
+            raise ValueError(
+                f'Schema ref {ref} must resolve dict, not {type(resolved)}'
+            )
+        return resolved
+
+
+def _update_resolved_data(resolved_data, value, resolver):
+    # Assumes resolved value is dictionary.
+    resolved_data.update(
+        # Recurse here in case the resolved value has refs.
+        resolve_merge_refs(
+            # Actually get the ref value.
+            resolve_merge_ref(value, resolver),
+            resolver
+        )
+    )
+
+
+def _handle_list_or_string_value(resolved_data, value, resolver):
+    if isinstance(value, list):
+        for v in value:
+            _update_resolved_data(resolved_data, v, resolver)
+    else:
+        _update_resolved_data(resolved_data, value, resolver)
+
+
+def resolve_merge_refs(data, resolver):
+    if isinstance(data, dict):
+        # Return copy.
+        resolved_data = {}
+        for k, v in data.items():
+            if k == '$merge':
+                _handle_list_or_string_value(resolved_data, v, resolver)
+            else:
+                resolved_data[k] = resolve_merge_refs(v, resolver)
+    elif isinstance(data, list):
+        # Return copy.
+        resolved_data = [
+            resolve_merge_refs(v, resolver)
+            for v in data
+        ]
+    else:
+        # Assumes we're only dealing with other JSON types
+        # like string, number, boolean, null, not other
+        # types like tuples, sets, functions, classes, etc.,
+        # which would require a deep copy.
+        resolved_data = data
+    return resolved_data
+
+
+def fill_in_schema_merge_refs(schema, resolver):
+    """ Resolves $merge properties, custom $ref implementation from IGVF SNO2-6 """
+    return resolve_merge_refs(schema, resolver)
 
 
 def mixinSchemas(schema, resolver, key_name='properties'):
@@ -210,10 +272,6 @@ def linkTo(validator, linkTo, instance, schema):
                 yield ValidationError(error)
                 return
 
-    # And normalize the value to a uuid
-    if validator._serialize:
-        validator._validated[-1] = str(item.uuid)
-
 
 class IgnoreUnchanged(ValidationError):
     pass
@@ -287,8 +345,8 @@ def calculatedProperty(validator, linkTo, instance, schema):
         yield ValidationError('submission of calculatedProperty disallowed')
 
 
-class SchemaValidator(Draft4Validator):
-    VALIDATORS = Draft4Validator.VALIDATORS.copy()
+class SchemaValidator(SerializingSchemaValidator):
+    VALIDATORS = SerializingSchemaValidator.VALIDATORS.copy()
     VALIDATORS['calculatedProperty'] = calculatedProperty
     VALIDATORS['linkTo'] = linkTo
     VALIDATORS['permission'] = permission
@@ -320,9 +378,10 @@ def load_schema(filename):
         ),
         resolver, 'columns'
     )
+    schema = fill_in_schema_merge_refs(schema, resolver)
 
     # SchemaValidator is not thread safe for now
-    SchemaValidator(schema, resolver=resolver, serialize=True)
+    SchemaValidator(schema, resolver=resolver)
     return schema
 
 
@@ -344,7 +403,7 @@ def validate(schema, data, current=None, validate_current=False):
         dict validated contents, list of errors
     """
     resolver = NoRemoteResolver.from_schema(schema)
-    sv = SchemaValidator(schema, resolver=resolver, serialize=True, format_checker=format_checker)
+    sv = SchemaValidator(schema, resolver=resolver, format_checker=format_checker)
     validated, errors = sv.serialize(data)
     # validate against current contents if validate_current is set
     if current and validate_current:
@@ -381,6 +440,18 @@ def validate(schema, data, current=None, validate_current=False):
                 #       Right now those other arms set seemingly-unused variables. -kmp 7-Aug-2022
                 if validated_value == current_value:
                     continue  # value is unchanged between data/current; ignore
+        # Also ignore requestMethod and permission errors from defaults.
+        if isinstance(error, IgnoreUnchanged):
+            current_value = data
+            try:
+                for key in error.path:
+                    # If it's in original data then either user passed it in
+                    # or it's from PATCH object with unchanged data. If it's
+                    # unchanged then it's already been skipped above.
+                    current_value = current_value[key]
+            except KeyError:
+                # If it's not in original data then it's filled in by defaults.
+                continue
         filtered_errors.append(error)
 
     return validated, filtered_errors
@@ -452,7 +523,6 @@ def combine_schemas(a, b):
 
 # for integrated tests
 def utc_now_str():
-    # from jsonschema_serialize_fork date-time format requires a timezone
     return datetime.utcnow().isoformat() + '+00:00'
 
 

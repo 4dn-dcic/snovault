@@ -3,7 +3,7 @@ import os
 import pytest
 
 from base64 import b64encode
-from jsonschema_serialize_fork import Draft4Validator
+from jsonschema import Draft202012Validator
 from pyramid.compat import ascii_native_
 from uuid import uuid4
 
@@ -348,7 +348,7 @@ def test_home(testapp):
 @pytest.mark.parametrize('item_type', TYPE_NAMES)
 def test_profiles(testapp, item_type):
     res = testapp.get('/profiles/%s.json' % item_type).maybe_follow(status=200)
-    errors = Draft4Validator.check_schema(res.json)
+    errors = Draft202012Validator.check_schema(res.json)
     assert not errors
     # added from ..schema_views._annotated_schema
     assert 'rdfs:seeAlso' in res.json
@@ -360,7 +360,7 @@ def test_profiles(testapp, item_type):
 @pytest.mark.parametrize('item_type', ['AbstractItemTest'])
 def test_profiles_abstract(testapp, item_type):
     res = testapp.get('/profiles/%s.json' % item_type).maybe_follow(status=200)
-    errors = Draft4Validator.check_schema(res.json)
+    errors = Draft202012Validator.check_schema(res.json)
     assert not errors
     # added from ..schema_views._annotated_schema
     assert 'rdfs:seeAlso' in res.json
