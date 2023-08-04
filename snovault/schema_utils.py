@@ -46,7 +46,7 @@ class NoRemoteResolver(RefResolver):
         if any(s in uri for s in ['http', 'https', 'ftp', 'sftp']):
             raise ValueError(f'Resolution disallowed for: {uri}')
         else:
-            return load_schema(favor_app_specific_schema_ref(uri))
+            return load_schema(uri)
 
 
 def favor_app_specific_schema(schema: str) -> str:

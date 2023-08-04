@@ -349,3 +349,18 @@ def test_schema_utils_resolve_merge_ref_in_real_schema(testapp):
                                        'linked_targets': [
                                            {'target': atid, 'test_description': 'test'}
                                        ]}, status=201)
+
+def test_schema_utils_resolve_merge_ref_in_embedded_schema(testapp):
+    """ Tests that we can resolve a $merge object in our test schema embedded in another schema """
+    collection_url = '/testing-linked-schema-fields'
+    atid = testapp.post_json('/testing-link-targets-sno', {'name': 'target'}, status=201).json['@graph'][0]['@id']
+    atid = testapp.post_json(collection_url, {'quality': 5,
+                                              'linked_targets': [
+                                                  {'target': atid, 'test_description': 'test'}
+                                              ]}, status=201).json['@graph'][0]['@id']
+    atid = testapp.post_json('/testing-embedded-linked-schema-fields', {
+        'link': atid
+    }, status=201).json['@graph'][0]['@id']
+    embedded = testapp.get(f'/{atid}?frame=embedded', status=200).json
+    assert embedded['link']['quality'] == 5
+    assert embedded['link']['linked_targets'][0]['test_description'] == 'test'

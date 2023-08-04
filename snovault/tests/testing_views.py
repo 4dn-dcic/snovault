@@ -874,8 +874,35 @@ class TestingKey(Item):
     },
 )
 class TestingLinkedSchemaField(Item):
+    """ Tests that we can resolve $merge refs within this repo """
     item_type = 'testing_linked_schema_field'
     schema = load_schema('snovault:test_schemas/TestingLinkedSchemaField.json')
+
+
+@collection(
+    'testing-embedded-linked-schema-fields',
+    properties={
+        'title': 'Test Embedded Linked Schema Fields',
+        'description': 'Testing that we can link fields across schemas.',
+    },
+)
+class TestingEmbeddedLinkedSchemaField(Item):
+    """ Tests that we can embed fields that are $merge refs on other schemas """
+    item_type = 'testing_embedded_linked_schema_field'
+    schema = {
+        'type': 'object',
+        'properties': {
+            'link': {
+                'type': 'string',
+                'linkTo': 'TestingLinkedSchemaField'
+            }
+        }
+    }
+    embedded_list = [
+        'link.linked_targets.*',
+        'link.quality'
+    ]
+
 
 
 @collection('testing-hidden-facets')

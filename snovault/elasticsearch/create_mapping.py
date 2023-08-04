@@ -44,6 +44,7 @@ from .indexer_utils import (
     get_uuids_for_types,
     SCAN_PAGE_SIZE,
 )
+from ..schema_utils import load_schema
 from .interfaces import ELASTIC_SEARCH, INDEXER_QUEUE
 from ..settings import Settings
 
@@ -104,6 +105,8 @@ def schema_mapping(field, schema, top_level=False, from_array=False):
     TODO: rename 'lower_case_sort' to 'lowercase' and adjust search code
     """
     ignored(top_level)  # TODO: maybe wants to be used below, but isn't yet?
+    if '$merge' in schema:
+        schema = load_schema(schema)
     type_ = schema['type']
 
     # Elasticsearch handles multiple values for a field
@@ -715,6 +718,8 @@ def type_mapping(types, item_type, embed=True):
     #       to relevant fields so that they are not mapped into full_text, for example.
     properties = schema['properties']
     for _, sub_mapping in properties.items():
+        if '$merge' in sub_mapping:
+            sub_mapping = load_schema(sub_mapping)
         if sub_mapping['type'] == 'text':
             sub_mapping['copy_to'] = ['full_text']
     return mapping
