@@ -6,6 +6,98 @@ snovault
 Change Log
 ----------
 
+10.0.0
+======
+
+* Updates ``jsonschema`` version, removing dependency on ``jsonschema-serialize-fork`` and allowing
+  us to use ``$merge`` refs.
+  * Breaking Change: dependencies --> dependentRequired in schema
+  * Breaking Change: object serialization in schema no longer valid
+
+
+  9.1.1
+=====
+
+* Small fix for JWT Decode incompatible change
+
+9.1.0
+=====
+
+* Fix for MIME type ordering in renderers.py (differs between cgap and fourfront).
+
+
+9.0.0
+=====
+
+* Merge/unify ingestion and other code from cgap-portal and fourfront.
+
+
+8.1.0
+=====
+
+* Add several modules/commands from upstream portals that are generic enough to live in
+  this repository (to reduce code/library maintenace overhead)
+
+* Port support for ``make deploy1`` from the portals:
+
+  * In ``Makefile``:
+
+    * Support for ``make deploy1``
+
+    * Support for ``make psql-dev``
+
+    * Support for ``make psql-test``
+
+    * Support for ``make kibana-start`` (commented out for now, pending testing)
+
+    * Support for ``make kibana-start-test`` (commented out)
+
+    * Support for ``make kibana-stop`` (commented out)
+
+  * In ``pyproject.toml``:
+
+    * Template file ``development.ini.template``
+
+    * Template file ``test.ini.template``
+
+    * Support for ``prepare-local-dev`` script,
+      which creates ``development.ini`` from ``development.ini.template``
+      and ``test.ini`` from ``test.ini.template``.
+
+ * Port the ``dev_servers.py`` support from CGAP.
+
+ * In the ``scripts/`` dir:
+
+   * Add ``scripts/psql-start``
+     in support of ``make psql-dev`` and ``make psql-test``.
+
+
+8.0.1
+=====
+
+* Fix some warnings from ``pytest``
+
+  * If a method has "test" in its name but isn't a test, it needs a prefix "_"
+
+* Fix some warnings from ``sqlalchemy``
+
+  * ``session.connection()`` doesn't need to ``.connect()``
+  * ``.join(x, y, ...)`` should be ``.join(x).join(y)...``
+  * ``session.query(Foo).get(bar)`` should be ``session.get(Foo, bar)``
+
+
+8.0.0
+=====
+
+* Redis support, adding /callback info to /auth0_config if a Redis server is configured
+
+
+7.3.1
+=====
+
+* Change ``pytest.yield_fixture`` to ``pytest.yield``. This is techinically incompatible since it would break downstream portals if they were below ``pytest`` 6, but they are both at ``pytest 7`` now, so they should be unaffected.
+* Address some places involving ``.execute(raw_string)`` that should be ``.execute(text(raw_string))``.
+
 
 7.3.0
 =====
@@ -75,9 +167,9 @@ Change Log
   * Include ``pipdeptree`` as a dev dependency for debugging.
 
   * Remove "backports.statistics", needed for Python 3.3 support and earlier.
-  
+
   * Bump python_magic foothold (no effective change, just faster locking)
-  
+
   * Update some comments.
 
 * In ``snovault/updater.py``:

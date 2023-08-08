@@ -10,14 +10,13 @@ while true; do
 done
 
 if [ "${do_moto_setup}" = 'yes' ]; then
-    make moto-setup
-else
-    echo "NOTE: For efficiency, we're skipping the 'make moto-setup' step."
-    echo "      You may need '--setup-moto' if moto server doesn't start."
+    echo "--setup-moto is no longer necessary."
 fi
 
 
 if [ "${TEST_JOB_ID}" = "" -a "${TRAVIS_JOB_ID}" != "" ]; then
+    echo "You've only set TRAVIS_JOB_ID, but should be setting only TEST_JOB_ID."
+    echo "PLEASE update your environment because that will soon break."
     export TEST_JOB_ID=${TRAVIS_JOB_ID}
     unset TRAVIS_JOB_ID
 fi

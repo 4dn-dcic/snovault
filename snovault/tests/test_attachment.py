@@ -251,7 +251,7 @@ class TestAttachmentEncrypted:
     """
     url = '/testing-downloads/'
 
-    def testing_encrypted_download(self, testapp):
+    def _testing_encrypted_download(self, testapp):  # not a test, just does some setup
         item = {
             'attachment': {
                 'download': 'red-dot.png',
@@ -270,10 +270,10 @@ class TestAttachmentEncrypted:
         blob_bucket = 'encoded-4dn-blobs'  # note that this bucket exists but is mocked out here
         conn = boto3.resource('s3', region_name='us-east-1')
         conn.create_bucket(Bucket=blob_bucket)
-        return self.testing_encrypted_download(testapp)
+        return self._testing_encrypted_download(testapp)
 
     @staticmethod
-    def get_attachment_from_s3(client, url):
+    def _get_attachment_from_s3(client, url):
         """ Uses ff_utils.parse_s3_bucket_and_key_url to parse the s3 URL in our data into it's
             bucket, key pairs and acquires/reads the content.
         """
@@ -282,12 +282,12 @@ class TestAttachmentEncrypted:
 
     def attachment_is_red_dot(self, client, url):
         """ Fails assertion if the url is not the RED_DOT """
-        content = self.get_attachment_from_s3(client, url)
+        content = self._get_attachment_from_s3(client, url)
         assert content == b64decode(RED_DOT.split(',', 1)[1])
 
     def attachment_is_blue_dot(self, client, url):
         """ Fails assertion if the url is not the BLUE_DOT """
-        content = self.get_attachment_from_s3(client, url)
+        content = self._get_attachment_from_s3(client, url)
         assert content == b64decode(BLUE_DOT.split(',', 1)[1])
 
     @mock_s3

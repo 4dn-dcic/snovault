@@ -1,23 +1,21 @@
 import codecs
 import collections
-import uuid
+import io
 import json
-import requests
+import uuid
 
 from datetime import datetime
 from dcicutils.misc_utils import ignored
-from jsonschema_serialize_fork import (
-    Draft4Validator,
-    FormatChecker,
-    RefResolver,
-)
-# TODO (C4-177): remove these imports (urlsplit, urlopen) when RefResolverOrdered is removed
-from jsonschema_serialize_fork.compat import urlsplit, urlopen
-from jsonschema_serialize_fork.exceptions import ValidationError
+from snovault.schema_validation import SerializingSchemaValidator
+from jsonschema import FormatChecker
+from jsonschema import RefResolver
+from jsonschema.exceptions import ValidationError
+import os
 from pyramid.path import AssetResolver, caller_package
 from pyramid.threadlocal import get_current_request
 from pyramid.traversal import find_resource
 from uuid import UUID
+from .project_app import app_project
 from .util import ensurelist
 
 # This was originally an internal import from "." (__init__.py), but I have replaced that reference
@@ -28,68 +26,151 @@ from .resources import Item, COLLECTIONS
 SERVER_DEFAULTS = {}
 
 
+# TODO: Shouldn't this return func? Otherwise this:
+#           @server_default
+#           def foo(instance, subschema):
+#               return ...something...
+#       does (approximately):
+#           SERVER_DEFAULTS['foo'] = lambda(instance, subschema): ...something...
+#           server_default = None
+#       It feels like the function should still get defined. -kmp 17-Feb-2023
 def server_default(func):
     SERVER_DEFAULTS[func.__name__] = func
 
 
-class RefResolverOrdered(RefResolver):
-    """
-    Overwrite the resolve_remote method in the RefResolver class, written
-    by lrowe. See:
-    https://github.com/lrowe/jsonschema_serialize_fork/blob/master/jsonschema_serialize_fork/validators.py
-    With python <3.6, json.loads was losing schema order for properties, facets,
-    and columns. Pass in the object_pairs_hook=collections.OrderedDict
-    argument to fix this.
-    WHEN ELASTICBEANSTALK IS RUNNING PY 3.6 WE CAN REMOVE THIS
-    """
-    # TODO (C4-177): The stated condition is now met. We are reliably in Python 3.6, so this code should be removed.
-
+class NoRemoteResolver(RefResolver):
     def resolve_remote(self, uri):
+        """ Resolves remote uri for files so we can cross reference across our own
+            repos, which now contain base schemas we may want to use
         """
-        Resolve a remote ``uri``.
-        Does not check the store first, but stores the retrieved document in
-        the store if :attr:`RefResolver.cache_remote` is True.
-        .. note::
-            If the requests_ library is present, ``jsonschema`` will use it to
-            request the remote ``uri``, so that the correct encoding is
-            detected and used.
-            If it isn't, or if the scheme of the ``uri`` is not ``http`` or
-            ``https``, UTF-8 is assumed.
-        :argument str uri: the URI to resolve
-        :returns: the retrieved document
-        .. _requests: http://pypi.python.org/pypi/requests/
-        """
-        scheme = urlsplit(uri).scheme
-
-        if scheme in self.handlers:
-            result = self.handlers[scheme](uri)
-        elif (
-            scheme in ["http", "https"] and
-            # TODO (C4-177): PyCharm flagged free references to 'requests' in this file as undefined,
-            #                so I've added an import at top of file. However, that suggests this 'elif'
-            #                branch is never entered. When this tangled code is removed, I'll be happier.
-            #                Meanwhile having a definition seems safer than not. -kmp 9-Jun-2020
-            requests and
-            getattr(requests.Response, "json", None) is not None
-        ):
-            # Requests has support for detecting the correct encoding of
-            # json over http
-            if callable(requests.Response.json):
-                result = collections.OrderedDict(requests.get(uri).json())
-            else:
-                result = collections.OrderedDict(requests.get(uri).json)
+        if any(s in uri for s in ['http', 'https', 'ftp', 'sftp']):
+            raise ValueError(f'Resolution disallowed for: {uri}')
         else:
-            # Otherwise, pass off to urllib and assume utf-8
-            result = json.loads(urlopen(uri).read().decode("utf-8"), object_pairs_hook=collections.OrderedDict)
-
-        if self.cache_remote:
-            self.store[uri] = result
-        return result
+            return load_schema(uri)
 
 
-class NoRemoteResolver(RefResolverOrdered):
-    def resolve_remote(self, uri):
-        raise ValueError('Resolution disallowed for: %s' % uri)
+def favor_app_specific_schema(schema: str) -> str:
+    """
+    If the given schema refers to a schema (file) which exists in the app-specific schemas
+    package/directory then favor that version of the file over the local version by returning
+    a reference to that schema; otherwise just returns the given schema.
+
+    For example, IF the given schema is snovault:access_key.json AND the current app is fourfront AND
+    if the file encoded/schemas/access_key.json exists THEN returns: encoded:schemas/access_key.json
+
+    This uses the dcicutils.project_utils mechanism to get the app-specific file/path name.
+    """
+    if isinstance(schema, str):
+        schema_parts = schema.split(":")
+        schema_project = schema_parts[0] if len(schema_parts) > 1 else None
+        if schema_project != app_project().PACKAGE_NAME:
+            schema_filename = schema_parts[1] if len(schema_parts) > 1 else schema_parts[0]
+            app_specific_schema_filename = app_project().project_filename(f"/{schema_filename}")
+            if os.path.exists(app_specific_schema_filename):
+                schema = f"{app_project().PACKAGE_NAME}:{schema_filename}"
+    return schema
+
+
+def favor_app_specific_schema_ref(schema_ref: str) -> str:
+    """
+    If the given schema_ref refers to a schema (file) which exists in the app-specific schemas
+    directory, AND it contains the specified element, then favor that version of the file over the
+    local version by returning a reference to that schema; otherwise just returns the given schema_ref.
+
+    For example, IF the given schema is mixins.json#/modified AND the current app is fourfront
+    AND if the file encoded/schemas/mixins.json exists AND if that file contains the modified
+    element THEN returns: file:///full-path-to/encoded/schemas/mixins.json#/modified
+
+    This uses the dcicutils.project_utils mechanism to get the app-specific file/path name.
+    """
+    def json_file_contains_element(json_filename: str, json_element: str) -> bool:
+        """
+        If the given JSON file exists and contains the given JSON element name then
+        returns True; otherwise returns False. The given JSON element may or may
+        not begin with a slash. Currently only looks at one single top-level element.
+        """
+        if json_filename and json_element:
+            try:
+                with io.open(json_filename, "r") as json_f:
+                    json_content = json.load(json_f)
+                    json_element = json_element.strip("/")
+                    if json_element:
+                        if json_content.get(json_element):
+                            return True
+            except Exception:
+                pass
+        return False
+
+    if isinstance(schema_ref, str):
+        schema_parts = schema_ref.split("#")
+        schema_filename = schema_parts[0]
+        app_specific_schema_filename = app_project().project_filename(f"/schemas/{schema_filename}")
+        if os.path.exists(app_specific_schema_filename):
+            schema_element = schema_parts[1] if len(schema_parts) > 1 else None
+            if schema_element:
+                if json_file_contains_element(app_specific_schema_filename, schema_element):
+                    schema_ref = f"file://{app_specific_schema_filename}#{schema_element}"
+            else:
+                schema_ref = f"file://{app_specific_schema_filename}"
+    return schema_ref
+
+
+def resolve_merge_ref(ref, resolver):
+    with resolver.resolving(ref) as resolved:
+        if not isinstance(resolved, dict):
+            raise ValueError(
+                f'Schema ref {ref} must resolve dict, not {type(resolved)}'
+            )
+        return resolved
+
+
+def _update_resolved_data(resolved_data, value, resolver):
+    # Assumes resolved value is dictionary.
+    resolved_data.update(
+        # Recurse here in case the resolved value has refs.
+        resolve_merge_refs(
+            # Actually get the ref value.
+            resolve_merge_ref(value, resolver),
+            resolver
+        )
+    )
+
+
+def _handle_list_or_string_value(resolved_data, value, resolver):
+    if isinstance(value, list):
+        for v in value:
+            _update_resolved_data(resolved_data, v, resolver)
+    else:
+        _update_resolved_data(resolved_data, value, resolver)
+
+
+def resolve_merge_refs(data, resolver):
+    if isinstance(data, dict):
+        # Return copy.
+        resolved_data = {}
+        for k, v in data.items():
+            if k == '$merge':
+                _handle_list_or_string_value(resolved_data, v, resolver)
+            else:
+                resolved_data[k] = resolve_merge_refs(v, resolver)
+    elif isinstance(data, list):
+        # Return copy.
+        resolved_data = [
+            resolve_merge_refs(v, resolver)
+            for v in data
+        ]
+    else:
+        # Assumes we're only dealing with other JSON types
+        # like string, number, boolean, null, not other
+        # types like tuples, sets, functions, classes, etc.,
+        # which would require a deep copy.
+        resolved_data = data
+    return resolved_data
+
+
+def fill_in_schema_merge_refs(schema, resolver):
+    """ Resolves $merge properties, custom $ref implementation from IGVF SNO2-6 """
+    return resolve_merge_refs(schema, resolver)
 
 
 def mixinSchemas(schema, resolver, key_name='properties'):
@@ -102,6 +183,10 @@ def mixinSchemas(schema, resolver, key_name='properties'):
     for mixin in reversed(mixins):
         ref = mixin.get('$ref')
         if ref is not None:
+            # For mixins check if there is an associated app-specific
+            # schema file and favor that over the local one if any.
+            # TODO: This may be controversial and up for discussion. 2023-05-27
+            ref = favor_app_specific_schema_ref(ref)
             with resolver.resolving(ref) as resolved:
                 mixin = resolved
         bases.append(mixin)
@@ -187,10 +272,6 @@ def linkTo(validator, linkTo, instance, schema):
                 yield ValidationError(error)
                 return
 
-    # And normalize the value to a uuid
-    if validator._serialize:
-        validator._validated[-1] = str(item.uuid)
-
 
 class IgnoreUnchanged(ValidationError):
     pass
@@ -264,8 +345,8 @@ def calculatedProperty(validator, linkTo, instance, schema):
         yield ValidationError('submission of calculatedProperty disallowed')
 
 
-class SchemaValidator(Draft4Validator):
-    VALIDATORS = Draft4Validator.VALIDATORS.copy()
+class SchemaValidator(SerializingSchemaValidator):
+    VALIDATORS = SerializingSchemaValidator.VALIDATORS.copy()
     VALIDATORS['calculatedProperty'] = calculatedProperty
     VALIDATORS['linkTo'] = linkTo
     VALIDATORS['permission'] = permission
@@ -278,6 +359,7 @@ format_checker = FormatChecker()
 
 
 def load_schema(filename):
+    filename = favor_app_specific_schema(filename)
     if isinstance(filename, dict):
         schema = filename
         resolver = NoRemoteResolver.from_schema(schema)
@@ -286,7 +368,7 @@ def load_schema(filename):
         asset = AssetResolver(caller_package()).resolve(filename)
         schema = json.load(utf8(asset.stream()),
                            object_pairs_hook=collections.OrderedDict)
-        resolver = RefResolverOrdered('file://' + asset.abspath(), schema)
+        resolver = RefResolver('file://' + asset.abspath(), schema)
     # use mixinProperties, mixinFacets, mixinAggregations, and mixinColumns (if provided)
     schema = mixinSchemas(
         mixinSchemas(
@@ -296,9 +378,10 @@ def load_schema(filename):
         ),
         resolver, 'columns'
     )
+    schema = fill_in_schema_merge_refs(schema, resolver)
 
     # SchemaValidator is not thread safe for now
-    SchemaValidator(schema, resolver=resolver, serialize=True)
+    SchemaValidator(schema, resolver=resolver)
     return schema
 
 
@@ -320,7 +403,7 @@ def validate(schema, data, current=None, validate_current=False):
         dict validated contents, list of errors
     """
     resolver = NoRemoteResolver.from_schema(schema)
-    sv = SchemaValidator(schema, resolver=resolver, serialize=True, format_checker=format_checker)
+    sv = SchemaValidator(schema, resolver=resolver, format_checker=format_checker)
     validated, errors = sv.serialize(data)
     # validate against current contents if validate_current is set
     if current and validate_current:
@@ -357,6 +440,18 @@ def validate(schema, data, current=None, validate_current=False):
                 #       Right now those other arms set seemingly-unused variables. -kmp 7-Aug-2022
                 if validated_value == current_value:
                     continue  # value is unchanged between data/current; ignore
+        # Also ignore requestMethod and permission errors from defaults.
+        if isinstance(error, IgnoreUnchanged):
+            current_value = data
+            try:
+                for key in error.path:
+                    # If it's in original data then either user passed it in
+                    # or it's from PATCH object with unchanged data. If it's
+                    # unchanged then it's already been skipped above.
+                    current_value = current_value[key]
+            except KeyError:
+                # If it's not in original data then it's filled in by defaults.
+                continue
         filtered_errors.append(error)
 
     return validated, filtered_errors
@@ -428,7 +523,6 @@ def combine_schemas(a, b):
 
 # for integrated tests
 def utc_now_str():
-    # from jsonschema_serialize_fork date-time format requires a timezone
     return datetime.utcnow().isoformat() + '+00:00'
 
 

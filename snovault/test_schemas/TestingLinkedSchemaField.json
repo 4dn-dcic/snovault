@@ -1,0 +1,12 @@
+{
+    "type": "object",
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "properties": {
+      "linked_targets": {
+        "$merge": "TestingLinkAggregateSno.json#/properties/targets"
+      },
+      "quality": {
+        "$merge": "TestingBiosampleSno.json#/properties/quality"
+      }
+    }
+}

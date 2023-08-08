@@ -12,7 +12,7 @@ from multiprocessing import get_context, cpu_count
 from multiprocessing.pool import Pool
 from pyramid.request import apply_request_extensions
 from pyramid.threadlocal import get_current_request, manager
-from sqlalchemy import orm
+from sqlalchemy import orm, text as psql_text
 
 from ..app import configure_engine
 from ..interfaces import DBSESSION
@@ -84,7 +84,7 @@ def threadlocal_manager():
     register_storage(request.registry, write_override=RDBStorage(DBSession))
     zope.sqlalchemy.register(DBSession)
     connection = DBSession().connection()
-    connection.execute('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY')
+    connection.execute(psql_text('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY'))
 
     # add the newly created request to the pyramid threadlocal manager
     manager.push({'request': request, 'registry': registry})
