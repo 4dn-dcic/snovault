@@ -1,7 +1,7 @@
 import pytest
 from snovault.schema_utils import (
-    _update_resolved_data, _handle_list_or_string_value, resolve_merge_refs,
-    validate
+    _update_resolved_data, _handle_list_or_string_value,  # noQA - testing protected members
+    resolve_merge_refs, validate
 )
 
 
@@ -389,7 +389,7 @@ def test_schema_utils_validates_dates(testapp, invalid_date):
         'date_property': invalid_date
     })
     date_error = str(errors[0])
-    assert f"'{invalid_date}' is not a 'date'" in date_error
+    assert f"{invalid_date!r} is not a 'date'" in date_error
 
 
 @pytest.mark.parametrize('invalid_date_time', [
@@ -419,4 +419,4 @@ def test_schema_utils_validates_date_times(testapp, invalid_date_time):
         'date_time_property': invalid_date_time
     })
     date_error = str(errors[0])
-    assert f"'{invalid_date_time}' is not a 'date-time'" in date_error
+    assert f"{invalid_date_time!r} is not a 'date-time'" in date_error
