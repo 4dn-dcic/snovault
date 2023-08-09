@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "dcicsnovault"
-version = "10.0.0"
+version = "10.0.1"
 description = "Storage support for 4DN Data Portals."
 authors = ["4DN-DCIC Team <support@4dnucleome.org>"]
 license = "MIT"
@@ -82,7 +82,7 @@ xlrd = "^1.0.0"
 "zope.deprecation" = "^4.4.0"
 "zope.interface" = ">=4.7.2,<6"
 "zope.sqlalchemy" = "1.6"
-jsonschema = "^4.18.4"
+jsonschema = {extras = ["format-nongpl"], version = "^4.19.0"}
 
 [tool.poetry.dev-dependencies]
 botocore-stubs = ">=1.29.119"  # no particular version required, but this speeds up search
