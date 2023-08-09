@@ -7,7 +7,7 @@ import uuid
 from datetime import datetime
 from dcicutils.misc_utils import ignored
 from snovault.schema_validation import SerializingSchemaValidator
-from jsonschema import FormatChecker
+from jsonschema import Draft202012Validator
 from jsonschema import RefResolver
 from jsonschema.exceptions import ValidationError
 import os
@@ -355,9 +355,6 @@ class SchemaValidator(SerializingSchemaValidator):
     SERVER_DEFAULTS = SERVER_DEFAULTS
 
 
-format_checker = FormatChecker()
-
-
 def load_schema(filename):
     filename = favor_app_specific_schema(filename)
     if isinstance(filename, dict):
@@ -403,7 +400,7 @@ def validate(schema, data, current=None, validate_current=False):
         dict validated contents, list of errors
     """
     resolver = NoRemoteResolver.from_schema(schema)
-    sv = SchemaValidator(schema, resolver=resolver, format_checker=format_checker)
+    sv = SchemaValidator(schema, resolver=resolver, format_checker=Draft202012Validator.FORMAT_CHECKER)
     validated, errors = sv.serialize(data)
     # validate against current contents if validate_current is set
     if current and validate_current:

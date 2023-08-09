@@ -6,6 +6,12 @@ snovault
 Change Log
 ----------
 
+10.0.1
+======
+
+* Extend ``FormatChecker`` to ensure date and date-time validation
+
+
 10.0.0
 ======
 

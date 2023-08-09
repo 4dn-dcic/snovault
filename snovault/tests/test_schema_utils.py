@@ -1,6 +1,7 @@
 import pytest
 from snovault.schema_utils import (
-    _update_resolved_data, _handle_list_or_string_value, resolve_merge_refs
+    _update_resolved_data, _handle_list_or_string_value, resolve_merge_refs,
+    validate
 )
 
 
@@ -364,3 +365,58 @@ def test_schema_utils_resolve_merge_ref_in_embedded_schema(testapp):
     embedded = testapp.get(f'/{atid}?frame=embedded', status=200).json
     assert embedded['link']['quality'] == 5
     assert embedded['link']['linked_targets'][0]['test_description'] == 'test'
+
+
+@pytest.mark.parametrize('invalid_date', [
+    'not a date',
+    'also-not-a-date',
+    '10-5-2022',
+    '10-05-almost',
+    '10-05-2023f'
+])
+def test_schema_utils_validates_dates(testapp, invalid_date):
+    """ Tests that our validator will validate dates """
+    schema = {
+        "type": "object",
+        "properties": {
+            "date_property": {
+                "type": "string",
+                "format": "date"
+            }
+        }
+    }
+    _, errors = validate(schema, {
+        'date_property': invalid_date
+    })
+    date_error = str(errors[0])
+    assert f"'{invalid_date}' is not a 'date'" in date_error
+
+
+@pytest.mark.parametrize('invalid_date_time', [
+    'not a date',
+    'also-not-a-date',
+    '10-5-2022',
+    '10-05-almost',
+    '10-05-2023f',
+    '1424-45-93T15:32:12.9023368Z',
+    '20015-10-23T15:32:12.9023368Z',
+    '2001-130-23T15:32:12.9023368Z',
+    '2001-10-233T15:32:12.9023368Z',
+    '2001-10-23T153:32:12.9023368Z'
+])
+def test_schema_utils_validates_date_times(testapp, invalid_date_time):
+    """ Tests that our validator will validate date-time """
+    schema = {
+        "type": "object",
+        "properties": {
+            "date_time_property": {
+                "type": "string",
+                "format": "date-time"
+            }
+        }
+    }
+    _, errors = validate(schema, {
+        'date_time_property': invalid_date_time
+    })
+    date_error = str(errors[0])
+    assert f"'{invalid_date_time}' is not a 'date-time'" in date_error
