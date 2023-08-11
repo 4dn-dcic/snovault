@@ -277,17 +277,12 @@ class IgnoreUnchanged(ValidationError):
     pass
 
 
-class SnoPermissionError(ValidationError):
-    pass
-
-
 def requestMethod(validator, requestMethod, instance, schema):
     ignored(instance, schema)
     if validator.is_type(requestMethod, "string"):
         requestMethod = [requestMethod]
     elif not validator.is_type(requestMethod, "array"):
         raise Exception("Bad schema")  # raise some sort of schema error
-
     request = get_current_request()
     if request.method not in requestMethod:
         reprs = ', '.join(repr(it) for it in requestMethod)
@@ -304,7 +299,7 @@ def permission(validator, permission, instance, schema):
     context = request.context
     if not request.has_permission(permission, context):
         error = "permission %r required" % permission
-        yield SnoPermissionError(error)
+        yield IgnoreUnchanged(error)
 
 
 VALIDATOR_REGISTRY = {}
@@ -386,6 +381,18 @@ def load_schema(filename):
     return schema
 
 
+def extract_schema_default(schema, path):
+    """ Extracts a schema default given a schema and an array path """
+    if 'properties' in schema:
+        schema = schema['properties']
+    try:
+        for key in path:
+            obj = schema[key]
+        return obj['default']
+    except Exception:
+        return None
+
+
 def validate(schema, data, current=None, validate_current=False):
     """
     Validate the given data using a schema. Optionally provide current data
@@ -443,16 +450,26 @@ def validate(schema, data, current=None, validate_current=False):
                     continue  # value is unchanged between data/current; ignore
         # Also ignore requestMethod and permission errors from defaults.
         if isinstance(error, IgnoreUnchanged):
-            current_value = data
+            new_value = data
             try:
                 for key in error.path:
                     # If it's in original data then either user passed it in
                     # or it's from PATCH object with unchanged data. If it's
                     # unchanged then it's already been skipped above.
-                    current_value = current_value[key]
+                    new_value = new_value[key]
+                    default = extract_schema_default(schema, error.path)
+                    if new_value == default:
+                        continue
             except KeyError:
-                # If it's not in original data then it's filled in by defaults.
-                continue
+                # always True for us
+                if current and validate_current:
+                    for key in error.path:
+                        val = current.get(key)
+                    default = extract_schema_default(schema, error.path)
+                    if val == default:
+                        continue
+                else:
+                    continue
         filtered_errors.append(error)
 
     return validated, filtered_errors
