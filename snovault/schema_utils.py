@@ -277,6 +277,10 @@ class IgnoreUnchanged(ValidationError):
     pass
 
 
+class SnoPermissionError(ValidationError):
+    pass
+
+
 def requestMethod(validator, requestMethod, instance, schema):
     ignored(instance, schema)
     if validator.is_type(requestMethod, "string"):
@@ -300,7 +304,7 @@ def permission(validator, permission, instance, schema):
     context = request.context
     if not request.has_permission(permission, context):
         error = "permission %r required" % permission
-        yield IgnoreUnchanged(error)
+        yield SnoPermissionError(error)
 
 
 VALIDATOR_REGISTRY = {}
