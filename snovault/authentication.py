@@ -631,7 +631,7 @@ def create_unauthorized_user(context, request):
     ignored(context)
     # env check
     env_name = request.registry.settings.get('env.name')
-    if not app_project().env_allows_registration(env_name):
+    if not app_project().env_allows_auto_registration(env_name):
         raise LoginDenied(f'Tried to register on {env_name} but it is disallowed')
 
     recaptcha_resp = request.json.get('g-recaptcha-response')
