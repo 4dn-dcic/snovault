@@ -6,7 +6,6 @@ import requests
 import structlog
 
 from dateutil.parser import isoparse
-from dcicutils.lang_utils import conjoined_list
 from dcicutils.misc_utils import remove_element, ignorable, ignored
 from operator import itemgetter
 from passlib.context import CryptContext
