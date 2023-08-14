@@ -56,11 +56,6 @@ JWT_ALL_ALGORITHMS = ['ES512', 'RS384', 'HS512', 'ES256', 'none',
 JWT_DECODING_ALGORITHMS = [JWT_ENCODING_ALGORITHM] + remove_element(JWT_ENCODING_ALGORITHM, JWT_ALL_ALGORITHMS)
 
 
-# envs where the back-end will accept automated user registration
-# TODO: move to dcicutils
-AUTO_REGISTRATION_ENVS = ['cgap-training']
-
-
 def includeme(config):
     config.include('.edw_hash')
     setting_prefix = 'passlib.'
@@ -637,9 +632,8 @@ def create_unauthorized_user(context, request):
     ignored(context)
     # env check
     env_name = request.registry.settings.get('env.name')
-    if env_name not in AUTO_REGISTRATION_ENVS:
-        raise LoginDenied(f'Tried to register on {env_name}. Self-registration is only enabled on '
-                          f'{conjoined_list(AUTO_REGISTRATION_ENVS)}')
+    if not app_project().env_allows_registration(env_name):
+        raise LoginDenied(f'Tried to register on {env_name} but it is disallowed')
 
     recaptcha_resp = request.json.get('g-recaptcha-response')
     if not recaptcha_resp:
