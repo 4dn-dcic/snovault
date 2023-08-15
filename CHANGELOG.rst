@@ -6,6 +6,13 @@ snovault
 Change Log
 ----------
 
+10.0.2
+======
+
+* Repair bug in ``permission`` implementation involving restricted fields
+* Repair bug in user registration, allowing customization through ``app_project`` definition
+
+
 10.0.1
 ======
 
