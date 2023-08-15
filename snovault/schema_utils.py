@@ -457,9 +457,11 @@ def validate(schema, data, current=None, validate_current=False):
                     # or it's from PATCH object with unchanged data. If it's
                     # unchanged then it's already been skipped above.
                     new_value = new_value[key]
-                    default = extract_schema_default(schema, error.path)
-                    if new_value == default:
-                        continue
+                    # XXX: the below I think creates a vulnerability where a user can revert
+                    # a protected field to it's default?
+                    # default = extract_schema_default(schema, error.path)
+                    # if new_value == default:
+                    #     continue
             except KeyError:
                 # always True for us
                 if current and validate_current:
