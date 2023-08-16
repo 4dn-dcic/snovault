@@ -109,7 +109,7 @@ def access_key_add(context, request):
         request.validated['access_key_id'] = generate_user()
 
     if 'user' not in request.validated:
-        request.validated['user'], = [
+        request.validated['user'] = [
             principal.split('.', 1)[1]
             for principal in request.effective_principals
             if principal.startswith('userid.')

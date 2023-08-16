@@ -6,6 +6,11 @@ snovault
 Change Log
 ----------
 
+10.0.3
+======
+* Fixed typo (trailing comma) in types/access_key.py in access_key_add WRT request.validated['user'].
+* Added identifyingProperties with just uuid in schema/access_key.json.
+
 10.0.2
 ======
 
