@@ -10,6 +10,7 @@ Change Log
 ======
 * Fixed typo (trailing comma) in types/access_key.py in access_key_add WRT request.validated['user'].
 * Added identifyingProperties with just uuid in schema/access_key.json.
+* Fix in setup_eb.py to handle jsonschema in pyproject.toml like {extras = ..., version = ...}.
 
 10.0.2
 ======
