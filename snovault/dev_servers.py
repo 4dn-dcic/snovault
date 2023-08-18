@@ -8,12 +8,15 @@ For the development.ini you must supply the paster app name:
 
 import argparse
 import atexit
+import json
 import logging
 import os.path
 import select
 import shutil
 import subprocess
 import sys
+import tempfile
+from typing import Union
 
 from dcicutils.misc_utils import PRINT
 from pyramid.paster import get_app, get_appsettings
@@ -93,6 +96,50 @@ def redis_server_process(echo=False):
     return process
 
 
+def load_data(data: Union[dict, list], data_type: str, config_uri: str = "development.ini", app_name: str = "app") -> bool:
+
+    def write_json_to_temporary_directory(data: list, data_type: str) -> str:
+        tmp_dir = tempfile.mkdtemp()
+        tmp_file = os.path.join(tmp_dir, f"{data_type}.json")
+        with open(tmp_file, 'w') as tmp_f:
+            json.dump(data, tmp_f, indent=4)
+            tmp_f.flush()
+        return tmp_dir
+
+    def delete_json_temporary_directory(file: str) -> bool:
+        def is_path_within_system_temporary_directory(path):
+            system_tmp_dir = tempfile.gettempdir()
+            return os.path.commonpath([path, system_tmp_dir]) == system_tmp_dir
+        if not is_path_within_system_temporary_directory(file):
+            return False
+        shutil.rmtree(os.path.dirname(file))
+        return True
+
+    if isinstance(data, dict):
+        data = [data]
+    elif not isinstance(data, list):
+        return False
+    if not data_type:
+        return False
+
+    data_directory = write_json_to_temporary_directory(data, data_type)
+    PRINT(f"Loading {data_type} data. From directory: {data_directory}")
+    app = get_app(config_uri, app_name)
+    load_data = app.registry.settings.get('load_data_from')
+    load_data = DottedNameResolver().resolve(load_data)
+    return load_data(app, data_directory=data_directory)
+    delete_json_temporary_directory(data_directory)
+    return True
+
+
+#def load_data_from_directory(directory: str, config_uri: str = "development.ini", app_name: str = "app"):
+#    PRINT(f"Only loading data. From directory: {directory}")
+#    app = get_app(config_uri, app_name)
+#    load_test_data = app.registry.settings.get('load_data_from')
+#    load_test_data = DottedNameResolver().resolve(load_test_data)
+#    return load_test_data(app, data_directory=directory)
+
+
 def main():
     parser = argparse.ArgumentParser(  # noqa - PyCharm wrongly thinks the formatter_class is specified wrong here.
         description="Run development servers", epilog=EPILOG,
@@ -105,7 +152,15 @@ def main():
     parser.add_argument('--load', action="store_true", help="Load test set")
     parser.add_argument('--datadir', default='/tmp/snovault', help="path to datadir")
     parser.add_argument('--no_ingest', action="store_true", default=False, help="Don't start the ingestion process.")
+    parser.add_argument('--only_load_from', default=None, help="Path to specific directory from which to load data.")
     args = parser.parse_args()
+
+    if args.only_load_from:
+        PRINT(f"Only loading data. From directory: {args.only_load_from}")
+        app = get_app(args.config_uri, args.app_name)
+        load_test_data = app.registry.settings.get('load_data_from')
+        load_test_data = DottedNameResolver().resolve(load_test_data)
+        return load_test_data(app, data_directory=args.only_load_from)
 
     run(app_name=args.app_name, config_uri=args.config_uri, datadir=args.datadir,
         # Ingestion is disabled. snovault has no such concept. -kmp 17-Feb-2023
@@ -154,6 +209,7 @@ def run(app_name, config_uri, datadir, clear=False, init=False, load=False, inge
     processes = []
 
     # For now - required components
+
     postgres = postgresql_fixture.server_process(pgdata, echo=True)
     processes.append(postgres)
 

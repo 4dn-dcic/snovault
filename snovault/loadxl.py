@@ -534,7 +534,10 @@ def load_data(app, indir='inserts', docsdir=None, overwrite=False,
 
     if not indir.endswith('/'):
         indir += '/'
-    inserts = app_project().project_filename('tests/data/' + indir)
+    if not os.path.isabs(indir):
+        inserts = app_project().project_filename('tests/data/' + indir)
+    else:
+        inserts = indir
     if docsdir is None:
         docsdir = []
     else:
@@ -606,6 +609,14 @@ def load_deploy_data(app, overwrite=True, **kwargs):
         None if successful, otherwise Exception encountered
     """
     return load_data(app, docsdir='documents', indir="deploy-inserts", overwrite=True)
+
+
+def load_data_from(app, data_directory, overwrite=True):
+    """
+    Loads data only from the given directory.
+    Created for use with the generate-local-access-key script in smaht-portal (August 2023).
+    """
+    return load_data(app, indir=data_directory, overwrite=overwrite, use_master_inserts=False)
 
 
 # Set of emails required by the application to function
