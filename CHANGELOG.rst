@@ -8,13 +8,15 @@ Change Log
 
 10.0.3
 ======
-* Fixed (trailing comma) in types/access_key.py in access_key_add WRT request.validated['user'].
+* Fixed access of user in types/access_key.py in access_key_add WRT request.validated['user'].
 * Added identifyingProperties with just uuid in schema/access_key.json.
 * Fix in setup_eb.py to handle jsonschema in pyproject.toml like {extras = ..., version = ...}.
 * Added load_data_from to loadxl.py to only load data, from a specified directory;
   for creating access-keys on the fly after startup for local dev/testing.
   * Enhancement in load_data in loadxl.py to respect a fully qualified data directory path name,
     i.e. do not make it relative to the current working directory if it is fully qualified.
+* Added load_data_from to loadxl.py to only load data, from a specified directory;
+* Added support for consortia and submission_centers in ingestion_listener.py.
 
 10.0.2
 ======
