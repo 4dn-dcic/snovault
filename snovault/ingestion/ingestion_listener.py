@@ -167,7 +167,7 @@ def submit_for_ingestion(context, request):
             submission_center = submission_centers[0]
         else:
             submission_center = submission_centers
-        submission_centers = submission_centers['@id']
+        submission_center = submission_center['@id']
         submission_center_arg = get_parameter(parameters, "submission_center", default=submission_center, update=True)
         if submission_center_arg != submission_center:
             # If the "submission_center" argument was passed, which we no longer require, make sure it's consistent.
