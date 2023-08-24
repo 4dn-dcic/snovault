@@ -24,6 +24,7 @@ from pyramid.path import DottedNameResolver
 from .elasticsearch import create_mapping
 from .project_app import app_project
 from .tests import elasticsearch_fixture, postgresql_fixture
+from .loadxl import load_data_from
 
 
 EPILOG = __doc__
@@ -106,13 +107,13 @@ def load_data(data: Union[dict, list], data_type: str, config_uri: str = "develo
             tmp_f.flush()
         return tmp_dir
 
-    def delete_json_temporary_directory(file: str) -> bool:
+    def delete_json_temporary_directory(path: str) -> bool:
         def is_path_within_system_temporary_directory(path):
             system_tmp_dir = tempfile.gettempdir()
             return os.path.commonpath([path, system_tmp_dir]) == system_tmp_dir
-        if not is_path_within_system_temporary_directory(file):
+        if not is_path_within_system_temporary_directory(path):
             return False
-        shutil.rmtree(os.path.dirname(file))
+        shutil.rmtree(path)
         return True
 
     if isinstance(data, dict):
@@ -125,19 +126,9 @@ def load_data(data: Union[dict, list], data_type: str, config_uri: str = "develo
     data_directory = write_json_to_temporary_directory(data, data_type)
     PRINT(f"Loading {data_type} data. From directory: {data_directory}")
     app = get_app(config_uri, app_name)
-    load_data = app.registry.settings.get('load_data_from')
-    load_data = DottedNameResolver().resolve(load_data)
-    return load_data(app, data_directory=data_directory)
+    load_data_from(app, data_directory=data_directory)
     delete_json_temporary_directory(data_directory)
     return True
-
-
-#def load_data_from_directory(directory: str, config_uri: str = "development.ini", app_name: str = "app"):
-#    PRINT(f"Only loading data. From directory: {directory}")
-#    app = get_app(config_uri, app_name)
-#    load_test_data = app.registry.settings.get('load_data_from')
-#    load_test_data = DottedNameResolver().resolve(load_test_data)
-#    return load_test_data(app, data_directory=directory)
 
 
 def main():
@@ -152,15 +143,7 @@ def main():
     parser.add_argument('--load', action="store_true", help="Load test set")
     parser.add_argument('--datadir', default='/tmp/snovault', help="path to datadir")
     parser.add_argument('--no_ingest', action="store_true", default=False, help="Don't start the ingestion process.")
-    parser.add_argument('--only_load_from', default=None, help="Path to specific directory from which to load data.")
     args = parser.parse_args()
-
-    if args.only_load_from:
-        PRINT(f"Only loading data. From directory: {args.only_load_from}")
-        app = get_app(args.config_uri, args.app_name)
-        load_test_data = app.registry.settings.get('load_data_from')
-        load_test_data = DottedNameResolver().resolve(load_test_data)
-        return load_test_data(app, data_directory=args.only_load_from)
 
     run(app_name=args.app_name, config_uri=args.config_uri, datadir=args.datadir,
         # Ingestion is disabled. snovault has no such concept. -kmp 17-Feb-2023

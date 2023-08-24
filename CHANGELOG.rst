@@ -18,6 +18,11 @@ Change Log
 * Added load_data_from to loadxl.py to only load data, from a specified directory;
 * Added support for consortia and submission_centers in ingestion_listener.py.
 * Added unique_key to types/access_key.py (helps get rid of this in cgap-portal).
+* Added snovault_commands/generate_local_access_key.py script; originally just for
+  smaht-portal to create access-key for local dev/testing because doing it via UI
+  not yet fully supported; but realized this could be generally useful/convenient
+  for cgap-portal and fourfront as well.
+
 
 10.0.2
 ======
