@@ -36,6 +36,7 @@ from .base import (
 
 @collection(
     name='access-keys',
+    unique_key='access_key:access_key_id',
     properties={
         'title': 'Access keys',
         'description': 'Programmatic access keys',
