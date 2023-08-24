@@ -17,6 +17,7 @@ Change Log
     i.e. do not make it relative to the current working directory if it is fully qualified.
 * Added load_data_from to loadxl.py to only load data, from a specified directory;
 * Added support for consortia and submission_centers in ingestion_listener.py.
+* Added unique_key to types/access_key.py (helps get rid of this in cgap-portal).
 
 10.0.2
 ======
