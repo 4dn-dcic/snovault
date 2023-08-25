@@ -9,8 +9,7 @@ homepage = "https://github.com/4dn-dcic/snovault"
 repository = "https://github.com/4dn-dcic/snovault"
 documentation = "https://github.com/4dn-dcic/snovault"
 packages = [
-  { include="snovault", from="." },
-  { include="snovault_commands", from="." }
+  { include="snovault", from="." }
 ]
 classifiers = [
     # How mature is this project? Common values are
