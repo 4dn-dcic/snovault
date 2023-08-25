@@ -1,7 +1,7 @@
 # --------------------------------------------------------------------------------------------------
-# Temporary script to generate a new portal access-key for local (localhost) development purposes.
+# Script to generate a new portal access-key for local (localhost) development purposes.
 # --------------------------------------------------------------------------------------------------
-# This will be needed only until the SMaHT portal has been fleshed out enough to be able to do this
+# This is really only needed until smaht-portal has been fleshed out enough to be able to do this
 # normally using the UI; as of August 2023 there no way to do this. So we generate a new access-key,
 # and associated secret, and either insert it directly into your locally running portal database,
 # or output JSON suitable for doing this via master-inserts/access_key.json; and either update
@@ -21,6 +21,41 @@
 # updated with the new access-key (for the "smaht-localhost" property).
 #
 # The --update option may be used to specify both --update-database and --update-keys.
+#
+# This is intended to be run from the smaht-portal repo; there is a generate-local-access-key
+# poetry script defined there to invoke this module. And just for convenience, this is also
+# supported in the cgap-portal and fourfront repos; 5o use it from from cgap-portal or fourfront
+# use the --app cgap or --app fourfront arguments, respectively.
+#
+# Example command:
+#  generate-local-access-key
+#
+# Example output:
+#   Creating a new local portal access-key ... Done.
+#   New local portal access-key record suitable for: /Users/dmichaels/.smaht-keys.json:
+#   {
+#       "key": "DHU74PRA",
+#       "secret": "fptkcxqdqqpbenin",
+#       "server": "http://localhost:8000"
+#   }
+#   New local portal access-key insert record suitable for: tests/data/master-inserts/access_key.json:
+#   {
+#       "status": "current",
+#       "user": "<your-user-uuid>",
+#       "description": "Manually generated local access-key for testing.",
+#       "access_key_id": "DHU74PRA",
+#       "secret_access_key_hash": "rpcHx3KtfzvHCXTpcINCm0LRvzORXBpviBy6SSJyMssmcKrs6JYqZYGIhLz7jFCD",
+#       "uuid": "c04987b2-42e6-47fc-8247-9de7e417355b"
+#   }
+#
+# Example command:
+#   generate-local-access-key --user david_michaels@hms.harvard.edu --update
+#
+# Example output:
+#   Creating a new local portal access-key ... Done.
+#   Writing new local portal access-key to: /Users/dmichaels/.smaht-keys.json ... Done.
+#   Writing new local portal access-key to locally running portal database ... Done.
+#
 # --------------------------------------------------------------------------------------------------
 
 import argparse
