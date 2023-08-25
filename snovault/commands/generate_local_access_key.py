@@ -146,17 +146,17 @@ def _generate_access_keys_file_item(access_key_id: str, access_key_secret: str, 
 
 def _generate_access_key(ini_file: str = _DEFAULT_INI_FILE) -> Tuple[str, str, str]:
     access_key_secret = generate_access_key_secret()
-    return generate_access_key(), access_key_secret, _hash_secret_like_snovault(access_key_secret)
+    return generate_access_key(), access_key_secret, _hash_secret_like_snovault(access_key_secret, ini_file)
 
 
-def _hash_secret_like_snovault(secret: str) -> str:
+def _hash_secret_like_snovault(secret: str, ini_file: str = _DEFAULT_INI_FILE) -> str:
     # We do NOT store the secret in plaintext in the database, but rather a hash of it; this function
     # hashes the (given) secret in the same way that the portal (snovault) does and returns this result.
     # See access_key_add in snovault/types/access_key.py and includeme in snovault/authentication.py.
     # Using that code directly from snovault is a little tricker then we want to deal with for this;
     # and/but we do make an effort to read any passlib properties which might exist in the .ini file,
     # just like snovault does; perhaps overkill; default is development.ini; change with --ini. 
-    def get_passlib_properties_from_ini_file(ini_file_name: str = _DEFAULT_INI_FILE,
+    def get_passlib_properties_from_ini_file(ini_file : str = _DEFAULT_INI_FILE,
                                              section_name = "app:app",
                                              property_name_prefix = "passlib."):
         """
@@ -167,14 +167,16 @@ def _hash_secret_like_snovault(secret: str) -> str:
         properties = {}
         try:
             config = configparser.ConfigParser()
-            config.read(ini_file_name)
+            read_files = config.read(ini_file)
+            if not read_files or read_file[0] != ini_file:
+                _exit_without_action(f"The given ini file ({ini_file}) cannot be read.")
             for property_name in [p for p in config.options(section_name) if p.startswith(property_name_prefix)]:
                 property_value = config.get(section_name, property_name)
                 properties[property_name[len(property_name_prefix):]] = property_value
         except Exception:
             pass
         return properties
-    passlib_properties = get_passlib_properties_from_ini_file()
+    passlib_properties = get_passlib_properties_from_ini_file(ini_file)
     if not passlib_properties:
         passlib_properties = {"schemes": "edw_hash, unix_disabled"}
     register_crypt_handler(EDWHash)
