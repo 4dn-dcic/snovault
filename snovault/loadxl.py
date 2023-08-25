@@ -23,7 +23,7 @@ from pyramid.view import view_config
 from snovault.util import debug_log
 
 from .project_app import app_project
-from .server_defaults import add_last_modified
+from .server_defaults_misc import add_last_modified
 
 
 text = type(u'')
@@ -36,10 +36,6 @@ def includeme(config):
     config.scan(__name__)
 
 
-# order of items references with linkTo in a field in  'required' in schemas
-# This should be set by the downstream application
-ORDER = app_project().loadxl_order()
-
 IS_ATTACHMENT = [
     'attachment',
     'file_format_specification',
@@ -48,6 +44,12 @@ IS_ATTACHMENT = [
 
 # This uuid should be constant across all portals
 LOADXL_USER_UUID = "3202fd57-44d2-44fb-a131-afb1e43d8ae5"
+
+
+# order of items references with linkTo in a field in  'required' in schemas
+def ORDER():
+    # This should be set by the downstream application
+    return app_project().loadxl_order()
 
 
 class LoadGenWrapper(object):
@@ -374,7 +376,7 @@ def load_all_gen(testapp, inserts, docsdir, overwrite=True, itype=None, from_jso
         # raise StopIteration
     # order Items
     all_types = list(store.keys())
-    for ref_item in reversed(ORDER):
+    for ref_item in reversed(ORDER()):
         if ref_item in all_types:
             all_types.insert(0, all_types.pop(all_types.index(ref_item)))
     # collect schemas
