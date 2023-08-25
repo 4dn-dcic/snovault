@@ -168,7 +168,7 @@ def _hash_secret_like_snovault(secret: str, ini_file: str = _DEFAULT_INI_FILE) -
         try:
             config = configparser.ConfigParser()
             read_files = config.read(ini_file)
-            if not read_files or read_file[0] != ini_file:
+            if not read_files or read_files[0] != ini_file:
                 _exit_without_action(f"The given ini file ({ini_file}) cannot be read.")
             for property_name in [p for p in config.options(section_name) if p.startswith(property_name_prefix)]:
                 property_value = config.get(section_name, property_name)
