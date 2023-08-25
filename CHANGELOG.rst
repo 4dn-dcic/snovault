@@ -6,7 +6,7 @@ snovault
 Change Log
 ----------
 
-10.0.3
+10.4.0
 ======
 * Fixed access of user in types/access_key.py in access_key_add WRT request.validated['user'].
 * Added identifyingProperties with just uuid in schemas/access_key.json.
