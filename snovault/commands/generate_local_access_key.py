@@ -145,7 +145,7 @@ def main():
                 exception = str(e)
         if exception:
             if "Unable to resolve link" in exception and access_key_user_uuid in exception:
-                _exit_without_action(f"User UUID does not appear to be in the locally running database: {access_key_user_uuid}")
+                _exit_without_action(f"User UUID does not appear to be in the locally running portal database: {access_key_user_uuid}")
             else:
                 _exit_without_action(f"Cannot load access-key into locally running database.")
         print("Done.")
