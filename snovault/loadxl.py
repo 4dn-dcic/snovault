@@ -267,7 +267,7 @@ LOAD_ERROR_MESSAGE = """#   ██▓     ▒█████   ▄▄▄      �
 
 
 def load_all(testapp, inserts, docsdir, overwrite=True, itype=None, from_json=False, patch_only=False, post_only=False,
-             skip_types=None):
+             skip_types=None, raise_exception=False):
     """
     Wrapper function for load_all_gen, which invokes the generator returned
     from that function. Takes all of the same args as load_all_gen, so
@@ -279,7 +279,7 @@ def load_all(testapp, inserts, docsdir, overwrite=True, itype=None, from_json=Fa
     with the functionality of load_all_gen.
     """
     gen = LoadGenWrapper(
-        load_all_gen(testapp, inserts, docsdir, overwrite, itype, from_json, patch_only, post_only, skip_types)
+        load_all_gen(testapp, inserts, docsdir, overwrite, itype, from_json, patch_only, post_only, skip_types, raise_exception=raise_exception)
     )
     # run the generator; don't worry about the output
     for _ in gen:
@@ -295,7 +295,7 @@ LOADXL_ALLOW_NONE = environ_bool("LOADXL_ALLOW_NONE", default=True)
 
 
 def load_all_gen(testapp, inserts, docsdir, overwrite=True, itype=None, from_json=False,
-                 patch_only=False, post_only=False, skip_types=None, validate_only=False):
+                 patch_only=False, post_only=False, skip_types=None, validate_only=False, raise_exception=False):
     """
     Generator function that yields bytes information about each item POSTed/PATCHed.
     Is the base functionality of load_all function.
@@ -441,6 +441,8 @@ def load_all_gen(testapp, inserts, docsdir, overwrite=True, itype=None, from_jso
                             assert res.status_code == 200
                             yield str.encode('CHECK: %s\n' % an_item['uuid'])
                     except Exception as e:
+                        if raise_exception:
+                            raise e
                         print('Posting {} failed. Post body:\n{}\nError Message:{}'
                               ''.format(a_type, str(first_fields), str(e)))
                         # remove newlines from error, since they mess with generator output
@@ -480,6 +482,8 @@ def load_all_gen(testapp, inserts, docsdir, overwrite=True, itype=None, from_jso
                 # yield bytes to work with Response.app_iter
                 yield str.encode('PATCH: %s\n' % an_item['uuid'])
             except Exception as e:
+                if raise_exception:
+                    raise e
                 print('Patching {} failed. Patch body:\n{}\n\nError Message:\n{}'.format(
                       a_type, str(an_item), str(e)))
                 print('Full error: %s' % traceback.format_exc())
@@ -512,7 +516,7 @@ def get_json_file_content(filename):
 
 
 def load_data(app, indir='inserts', docsdir=None, overwrite=False,
-              use_master_inserts=True, skip_types=None):
+              use_master_inserts=True, skip_types=None, raise_exception=False):
     """
     This function will take the inserts folder as input, and place them to the given environment.
     args:
@@ -528,7 +532,7 @@ def load_data(app, indir='inserts', docsdir=None, overwrite=False,
     # load master-inserts by default
     if indir != 'master-inserts' and use_master_inserts:
         master_inserts = app_project().project_filename('tests/data/master-inserts/')
-        master_res = load_all(testapp, master_inserts, [], skip_types=skip_types)
+        master_res = load_all(testapp, master_inserts, [], skip_types=skip_types, raise_exception=raise_exception)
         if master_res:  # None if successful
             print(LOAD_ERROR_MESSAGE)
             logger.error('load_data: failed to load from %s' % master_inserts, error=master_res)
@@ -546,7 +550,7 @@ def load_data(app, indir='inserts', docsdir=None, overwrite=False,
         if not docsdir.endswith('/'):
             docsdir += '/'
         docsdir = [app_project().project_filename('tests/data/' + docsdir)]
-    res = load_all(testapp, inserts, docsdir, overwrite=overwrite)
+    res = load_all(testapp, inserts, docsdir, overwrite=overwrite, raise_exception=raise_exception)
     if res:  # None if successful
         print(LOAD_ERROR_MESSAGE)
         logger.error('load_data: failed to load from %s' % docsdir, error=res)
@@ -618,7 +622,7 @@ def load_data_from(app, data_directory, overwrite=True):
     Loads data only from the given directory.
     Created for use with the generate-local-access-key script in smaht-portal (August 2023).
     """
-    return load_data(app, indir=data_directory, overwrite=overwrite, use_master_inserts=False)
+    return load_data(app, indir=data_directory, overwrite=overwrite, use_master_inserts=False, raise_exception=True)
 
 
 # Set of emails required by the application to function

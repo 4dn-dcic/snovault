@@ -1,5 +1,5 @@
 # --------------------------------------------------------------------------------------------------
-# Script to generate a new portal access-key for local (localhost) development purposes.
+# Script to manually generate a new portal access-key for local (localhost) development purposes.
 # --------------------------------------------------------------------------------------------------
 # This is really only needed until smaht-portal has been fleshed out enough to be able to do this
 # normally using the UI; as of August 2023 there no way to do this. So we generate a new access-key,
@@ -55,7 +55,6 @@
 #   Creating a new local portal access-key ... Done.
 #   Writing new local portal access-key to: /Users/dmichaels/.smaht-keys.json ... Done.
 #   Writing new local portal access-key to locally running portal database ... Done.
-#
 # --------------------------------------------------------------------------------------------------
 
 import argparse
@@ -64,6 +63,7 @@ import io
 import json
 import os
 import requests
+import toml
 import uuid
 from typing import Optional, Tuple
 from snovault.authentication import (
@@ -97,7 +97,7 @@ def main():
                         help="Port for localhost on which your local portal is running.")
     parser.add_argument("--ini", type=str, required=False, default=_DEFAULT_INI_FILE,
                         help=f"Name of the application .ini file; default is: {_DEFAULT_INI_FILE}")
-    parser.add_argument("--app", choices=["smaht", "cgap", "fourfront"], required=False, default="smaht",
+    parser.add_argument("--app", choices=["smaht", "cgap", "fourfront"], required=False, default=_guess_default_app(),
                         help="App name for which the access-key should be generated; default is smaht.")
     parser.add_argument("--verbose", action="store_true", required=False, default=False, help="Verbose output.")
     parser.add_argument("--debug", action="store_true", required=False, default=False, help="Debugging output.")
@@ -110,7 +110,7 @@ def main():
         args.update_database = True
         args.update_keys = True
 
-    print("Creating a new local portal access-key ... ", end="")
+    print(f"Creating a new local portal access-key for {args.app} ... ", end="")
     access_key_user_uuid = _generate_user_uuid(args.user, args.update_database)
     access_key_id, access_key_secret, access_key_secret_hash = _generate_access_key(args.ini)
     access_key_inserts_file_item = _generate_access_key_inserts_item(access_key_id, access_key_secret_hash, access_key_user_uuid)
@@ -137,8 +137,17 @@ def main():
         if not _is_local_portal_running(args.port):
             _exit_without_action(f"Portal must be running locally ({_get_local_portal_url(args.port)}) to do an insert.")
         print(f"Writing new local portal access-key to locally running portal database ... ", end="")
+        exception = None
         with captured_output(not args.debug):
-            load_data(access_key_inserts_file_item, "access_key")
+            try:
+                load_data(access_key_inserts_file_item, "access_key")
+            except Exception as e:
+                exception = str(e)
+        if exception:
+            if "Unable to resolve link" in exception and access_key_user_uuid in exception:
+                _exit_without_action(f"User UUID does not appear to be in the locally running database: {access_key_user_uuid}")
+            else:
+                _exit_without_action(f"Cannot load access-key into locally running database.")
         print("Done.")
     if not args.update_database or args.verbose:
         print(f"New local portal access-key insert record suitable for: {_INSERTS_DIR}/access_key.json ...")
@@ -216,6 +225,20 @@ def _hash_secret_like_snovault(secret: str, ini_file: str = _DEFAULT_INI_FILE) -
         passlib_properties = {"schemes": "edw_hash, unix_disabled"}
     register_crypt_handler(EDWHash)
     return CryptContext(**passlib_properties).hash(secret)
+
+
+def _guess_default_app() -> Optional[str]:
+    try:
+        with open("pyproject.toml", "r") as toml_f:
+            toml_contents = toml.loads(toml_f.read())
+            repository = toml_contents['tool']['poetry']['repository']
+            if repository.endswith("cgap-portal"):
+                return "cgap"
+            elif repository.endswith("fourfront"):
+                return "fourfront"
+    except Exception as e:
+        pass
+    return "smaht"
 
 
 def _is_local_portal_running(port: int) -> None:
