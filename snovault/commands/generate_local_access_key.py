@@ -62,18 +62,21 @@ import configparser
 import io
 import json
 import os
+from passlib.context import CryptContext
+from passlib.registry import register_crypt_handler
 import requests
+import shutil
+import tempfile
 import toml
+from typing import Optional, Tuple, Union
 import uuid
-from typing import Optional, Tuple
+from webtest import TestApp
 from snovault.authentication import (
     generate_password as generate_access_key_secret,
     generate_user as generate_access_key
 )
-from snovault.dev_servers import load_data
 from snovault.edw_hash import EDWHash
-from passlib.context import CryptContext
-from passlib.registry import register_crypt_handler
+from snovault.loadxl import create_testapp, load_data
 from .captured_output import captured_output
 
 
@@ -82,7 +85,7 @@ _USER_INSERTS_FILE = f"{_INSERTS_DIR}/user.json"
 _DEFAULT_INI_FILE = "development.ini"
 
 
-def main():
+def main() -> None:
 
     parser = argparse.ArgumentParser(description="Create local portal access-key for dev/testing purposes.")
     parser.add_argument("--user", required=False,
@@ -110,8 +113,18 @@ def main():
         args.update_database = True
         args.update_keys = True
 
+    if args.update_database:
+        # Just FYI the absolute minimal .ini file could look like this:
+        # [app:app]
+        # use = config:base.ini#app
+        # sqlalchemy.url = postgresql://postgres@localhost:5441/postgres?host=/tmp/snovault/pgdata
+        with captured_output(not args.debug):
+            app = create_testapp(args.ini)
+    else:
+        app = None
+
     print(f"Creating a new local portal access-key for {args.app} ... ", end="")
-    access_key_user_uuid = _generate_user_uuid(args.user, args.update_database)
+    access_key_user_uuid = _generate_user_uuid(args.user, app)
     access_key_id, access_key_secret, access_key_secret_hash = _generate_access_key(args.ini)
     access_key_inserts_file_item = _generate_access_key_inserts_item(access_key_id, access_key_secret_hash, access_key_user_uuid)
     access_keys_file_item = _generate_access_keys_file_item(access_key_id, access_key_secret, args.port)
@@ -137,36 +150,34 @@ def main():
         if not _is_local_portal_running(args.port):
             _exit_without_action(f"Portal must be running locally ({_get_local_portal_url(args.port)}) to do an insert.")
         print(f"Writing new local portal access-key to locally running portal database ... ", end="")
-        exception = None
         with captured_output(not args.debug):
-            try:
-                load_data(access_key_inserts_file_item, "access_key")
-            except Exception as e:
-                exception = str(e)
-        if exception:
-            if "Unable to resolve link" in exception and access_key_user_uuid in exception:
-                _exit_without_action(f"User UUID does not appear to be in the locally running portal database: {access_key_user_uuid}")
-            else:
-                _exit_without_action(f"Cannot load access-key into locally running database.")
+            _load_data(app, access_key_inserts_file_item, data_type="access_key")
         print("Done.")
     if not args.update_database or args.verbose:
         print(f"New local portal access-key insert record suitable for: {_INSERTS_DIR}/access_key.json ...")
         print(json.dumps(access_key_inserts_file_item, indent=4))
 
 
-def _generate_user_uuid(user: Optional[str], update_database: bool) -> Optional[str]:
+def _generate_user_uuid(user: Optional[str], app: TestApp = None) -> Optional[str]:
     if not user:
-        if update_database:
-            _exit_without_action(f"The --user option must be used to specify a UUID or an email in: {_USER_INSERTS_FILE}")
+        if app:
+            _exit_without_action(f"The --user option must specify a UUID or email in {_USER_INSERTS_FILE}")
         return "<your-user-uuid>"
+    user_uuid = None
     if _is_uuid(user):
-        return user
-    with io.open(_USER_INSERTS_FILE, "r") as user_inserts_f:
-        user_uuid_from_inserts = [item for item in json.load(user_inserts_f) if item.get("email") == user]
-        if not user_uuid_from_inserts:
-            _exit_without_action(f"The given user ({user}) was not found as an email"
-                                 f" in: {_USER_INSERTS_FILE}; and it is not a UUID.")
-        return user_uuid_from_inserts[0]["uuid"]
+        user_uuid = user
+    else:
+        with io.open(_USER_INSERTS_FILE, "r") as user_inserts_f:
+            user_uuid_from_inserts = [item for item in json.load(user_inserts_f) if item.get("email") == user]
+            if not user_uuid_from_inserts:
+                _exit_without_action(f"The given user ({user}) was not found as an email"
+                                     f" in: {_USER_INSERTS_FILE}; and it is not a UUID.")
+            user_uuid = user_uuid_from_inserts[0]["uuid"]
+    if user_uuid and app:
+        user = app.get_with_follow(f"/{user_uuid}", raise_exception=False)
+        if not user or user.status_code != 200:
+            _exit_without_action(f"The given user ({user_uuid}) was not found in the locally running portal database.")
+    return user_uuid
 
 
 def _generate_access_key_inserts_item(access_key_id: str, access_key_secret_hash: str, user_uuid: str) -> dict:
@@ -194,6 +205,7 @@ def _generate_access_key(ini_file: str = _DEFAULT_INI_FILE) -> Tuple[str, str, s
 
 
 def _hash_secret_like_snovault(secret: str, ini_file: str = _DEFAULT_INI_FILE) -> str:
+
     # We do NOT store the secret in plaintext in the database, but rather a hash of it; this function
     # hashes the (given) secret in the same way that the portal (snovault) does and returns this result.
     # See access_key_add in snovault/types/access_key.py and includeme in snovault/authentication.py.
@@ -202,7 +214,7 @@ def _hash_secret_like_snovault(secret: str, ini_file: str = _DEFAULT_INI_FILE) -
     # just like snovault does; perhaps overkill; default is development.ini; change with --ini. 
     def get_passlib_properties_from_ini_file(ini_file : str = _DEFAULT_INI_FILE,
                                              section_name = "app:app",
-                                             property_name_prefix = "passlib."):
+                                             property_name_prefix = "passlib.") -> str:
         """
         Returns from the specified section of the specified .ini file the values of properties with
         the specified property name prefix, in the form of a dictionary, where the property names have
@@ -220,6 +232,7 @@ def _hash_secret_like_snovault(secret: str, ini_file: str = _DEFAULT_INI_FILE) -
         except Exception:
             pass
         return properties
+
     passlib_properties = get_passlib_properties_from_ini_file(ini_file)
     if not passlib_properties:
         passlib_properties = {"schemes": "edw_hash, unix_disabled"}
@@ -236,7 +249,7 @@ def _guess_default_app() -> Optional[str]:
                 return "cgap"
             elif repository.endswith("fourfront"):
                 return "fourfront"
-    except Exception as e:
+    except Exception:
         pass
     return "smaht"
 
@@ -250,6 +263,38 @@ def _is_local_portal_running(port: int) -> None:
 
 def _get_local_portal_url(port: int) -> None:
     return f"http://localhost:{port}"
+
+
+def _load_data(app: TestApp, data: Union[dict, list], data_type: str) -> bool:
+
+    def write_json_to_temporary_directory(data: list, data_type: str) -> str:
+        tmp_dir = tempfile.mkdtemp()
+        tmp_file = os.path.join(tmp_dir, f"{data_type}.json")
+        with open(tmp_file, 'w') as tmp_f:
+            json.dump(data, tmp_f, indent=4)
+            tmp_f.flush()
+        return tmp_dir
+
+    def delete_json_temporary_directory(path: str) -> bool:
+        def is_path_within_system_temporary_directory(path):
+            system_tmp_dir = tempfile.gettempdir()
+            return os.path.commonpath([path, system_tmp_dir]) == system_tmp_dir
+        if not is_path_within_system_temporary_directory(path):
+            return False
+        shutil.rmtree(path)
+        return True
+
+    if isinstance(data, dict):
+        data = [data]
+    elif not isinstance(data, list):
+        return False
+    if not data_type:
+        return False
+
+    data_directory = write_json_to_temporary_directory(data, data_type)
+    load_data(app, indir=data_directory, overwrite=True, use_master_inserts=False, raise_exception=True)
+    delete_json_temporary_directory(data_directory)
+    return True
 
 
 def _is_uuid(s: str) -> bool:

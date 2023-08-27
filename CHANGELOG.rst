@@ -14,7 +14,7 @@ Change Log
 * Added snovault/commands/generate_local_access_key.py script; originally just for
   smaht-portal to create access-key for local dev/testing because doing it via UI
   not yet fully supported; but generally convenient for cgap-portal and fourfront as well.
-  * Added load_data_from to loadxl.py to only load data, from a specified directory;
+  * Mino changes (e.g. create_testapp) to loadxl.py to help load data from a specified directory;
     called from dev_server.py; for creating access-keys on the fly after startup for local dev/testing.
     * Enhancement in load_data in loadxl.py to respect a fully qualified data directory path name,
       i.e. do not make it relative to the current working directory if it is fully qualified.

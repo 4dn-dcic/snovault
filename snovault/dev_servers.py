@@ -8,15 +8,12 @@ For the development.ini you must supply the paster app name:
 
 import argparse
 import atexit
-import json
 import logging
 import os.path
 import select
 import shutil
 import subprocess
 import sys
-import tempfile
-from typing import Union
 
 from dcicutils.misc_utils import PRINT
 from pyramid.paster import get_app, get_appsettings
@@ -24,7 +21,6 @@ from pyramid.path import DottedNameResolver
 from .elasticsearch import create_mapping
 from .project_app import app_project
 from .tests import elasticsearch_fixture, postgresql_fixture
-from .loadxl import load_data_from
 
 
 EPILOG = __doc__
@@ -97,40 +93,6 @@ def redis_server_process(echo=False):
     return process
 
 
-def load_data(data: Union[dict, list], data_type: str, config_uri: str = "development.ini", app_name: str = "app") -> bool:
-
-    def write_json_to_temporary_directory(data: list, data_type: str) -> str:
-        tmp_dir = tempfile.mkdtemp()
-        tmp_file = os.path.join(tmp_dir, f"{data_type}.json")
-        with open(tmp_file, 'w') as tmp_f:
-            json.dump(data, tmp_f, indent=4)
-            tmp_f.flush()
-        return tmp_dir
-
-    def delete_json_temporary_directory(path: str) -> bool:
-        def is_path_within_system_temporary_directory(path):
-            system_tmp_dir = tempfile.gettempdir()
-            return os.path.commonpath([path, system_tmp_dir]) == system_tmp_dir
-        if not is_path_within_system_temporary_directory(path):
-            return False
-        shutil.rmtree(path)
-        return True
-
-    if isinstance(data, dict):
-        data = [data]
-    elif not isinstance(data, list):
-        return False
-    if not data_type:
-        return False
-
-    data_directory = write_json_to_temporary_directory(data, data_type)
-    PRINT(f"Loading {data_type} data. From directory: {data_directory}")
-    app = get_app(config_uri, app_name)
-    load_data_from(app, data_directory=data_directory)
-    delete_json_temporary_directory(data_directory)
-    return True
-
-
 def main():
     parser = argparse.ArgumentParser(  # noqa - PyCharm wrongly thinks the formatter_class is specified wrong here.
         description="Run development servers", epilog=EPILOG,
@@ -192,7 +154,6 @@ def run(app_name, config_uri, datadir, clear=False, init=False, load=False, inge
     processes = []
 
     # For now - required components
-
     postgres = postgresql_fixture.server_process(pgdata, echo=True)
     processes.append(postgres)
 

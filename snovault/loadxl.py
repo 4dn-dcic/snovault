@@ -1,27 +1,26 @@
 # -*- coding: utf-8 -*-
 """Load collections and determine the order."""
 
+from base64 import b64encode
 import gzip
 import json
 import magic
 import mimetypes
 import os
+from PIL import Image
 import re
 import structlog
-from typing import Union
-import webtest
 import traceback
+from typing import Union
+from webtest import TestApp
 import uuid
-
-from base64 import b64encode
-from dcicutils.misc_utils import ignored, environ_bool, VirtualApp
-from dcicutils.secrets_utils import assume_identity
-from PIL import Image
 from pyramid.paster import get_app
 from pyramid.response import Response
+from pyramid.router import Router
 from pyramid.view import view_config
+from dcicutils.misc_utils import ignored, environ_bool, VirtualApp
+from dcicutils.secrets_utils import assume_identity
 from snovault.util import debug_log
-
 from .project_app import app_project
 from .server_defaults_misc import add_last_modified
 
@@ -103,9 +102,7 @@ def load_data_view(context, request):
     config_uri = request.json.get('config_uri', 'production.ini')
     patch_only = request.json.get('patch_only', False)
     post_only = request.json.get('post_only', False)
-    app = get_app(config_uri, 'app')
-    environ = {'HTTP_ACCEPT': 'application/json', 'REMOTE_USER': 'TEST'}
-    testapp = webtest.TestApp(app, environ)
+    testapp = create_testapp(config_uri)
     # expected response
     request.response.status = 200
     result = {
@@ -524,11 +521,7 @@ def load_data(app, indir='inserts', docsdir=None, overwrite=False,
         indir (inserts): inserts folder, should be relative to tests/data/
         docsdir (None): folder with attachment documents, relative to tests/data
     """
-    environ = {
-        'HTTP_ACCEPT': 'application/json',
-        'REMOTE_USER': 'TEST',
-    }
-    testapp = webtest.TestApp(app, environ)
+    testapp = create_testapp(app)
     # load master-inserts by default
     if indir != 'master-inserts' and use_master_inserts:
         master_inserts = app_project().project_filename('tests/data/master-inserts/')
@@ -617,14 +610,6 @@ def load_deploy_data(app, overwrite=True, **kwargs):
     return load_data(app, docsdir='documents', indir="deploy-inserts", overwrite=True)
 
 
-def load_data_from(app, data_directory, overwrite=True):
-    """
-    Loads data only from the given directory.
-    Created for use with the generate-local-access-key script in smaht-portal (August 2023).
-    """
-    return load_data(app, indir=data_directory, overwrite=overwrite, use_master_inserts=False, raise_exception=True)
-
-
 # Set of emails required by the application to function
 REQUIRED_USER_CONFIG = [
     {
@@ -663,11 +648,7 @@ def load_custom_data(app, overwrite=False):
         [{"first_name": "John", "last_name": "Doe", "email": "john_doe@example.com"}]
     """
     # start with the users
-    environ = {
-        'HTTP_ACCEPT': 'application/json',
-        'REMOTE_USER': 'TEST',
-    }
-    testapp = webtest.TestApp(app, environ)
+    testapp = create_testapp(app)
     identity = assume_identity()
     admin_users = json.loads(identity.get('ENCODED_ADMIN_USERS', '{}'))
     if not admin_users:  # we assume you must have set one of these
@@ -728,11 +709,7 @@ def load_data_by_type(app, indir='master-inserts', overwrite=True, itype=None):
         print('load_data_by_type: No item type specified. Not loading anything.')
         return
 
-    environ = {
-        'HTTP_ACCEPT': 'application/json',
-        'REMOTE_USER': 'TEST',
-    }
-    testapp = webtest.TestApp(app, environ)
+    testapp = create_testapp(app)
 
     if not indir.endswith('/'):
         indir += '/'
@@ -786,3 +763,33 @@ def load_data_via_ingester(vapp: VirtualApp,
         unique_uuids.add(uuid)
     results["unique"] = len(unique_uuids)
     return results
+
+
+def create_testapp(ini_or_app_or_testapp: Union[str, Router, TestApp] = "development.ini",
+                   app_name_or_nothing: str = "app") -> TestApp:
+    if isinstance(ini_or_app_or_testapp, TestApp):
+        testapp = ini_or_app_or_testapp
+    else:
+        if isinstance(ini_or_app_or_testapp, Router):
+            app = ini_or_app_or_testapp
+        else:
+            app = get_app(ini_or_app_or_testapp, app_name_or_nothing)
+        testapp = TestApp(app, {"HTTP_ACCEPT": "application/json", "REMOTE_USER": "TEST"})
+    if not getattr(testapp, "get_with_follow", None):
+        def get_with_follow(self, *args, **kwargs):
+            raise_exception = kwargs.get("raise_exception", None)
+            if raise_exception is not None:
+                if not isinstance(raise_exception, bool):
+                    raise_exception = False
+                del kwargs["raise_exception"]
+            try:
+                response = self.get(*args, **kwargs)
+                if response and response.status_code in [301, 302, 303, 307, 308]:
+                    response = response.follow()
+                return response
+            except Exception as e:
+                if raise_exception:
+                    raise e
+                return None
+        testapp.get_with_follow = get_with_follow.__get__(testapp, TestApp)
+    return testapp
