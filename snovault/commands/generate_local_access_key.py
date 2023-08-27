@@ -58,12 +58,16 @@
 # --------------------------------------------------------------------------------------------------
 
 import argparse
+from collections import namedtuple
 import configparser
+from datetime import datetime
+import dateutil.tz
 import io
 import json
 import os
 from passlib.context import CryptContext
 from passlib.registry import register_crypt_handler
+import pytz
 import requests
 import shutil
 import tempfile
@@ -78,7 +82,6 @@ from snovault.authentication import (
 from snovault.edw_hash import EDWHash
 from snovault.loadxl import create_testapp, load_data
 from .captured_output import captured_output
-
 
 _INSERTS_DIR = "src/encoded/tests/data/master-inserts"
 _USER_INSERTS_FILE = f"{_INSERTS_DIR}/user.json"
@@ -102,6 +105,7 @@ def main() -> None:
                         help=f"Name of the application .ini file; default is: {_DEFAULT_INI_FILE}")
     parser.add_argument("--app", choices=["smaht", "cgap", "fourfront"], required=False, default=_guess_default_app(),
                         help="App name for which the access-key should be generated; default is smaht.")
+    parser.add_argument("--list", action="store_true", required=False, default=False, help="Just list access-keys.")
     parser.add_argument("--verbose", action="store_true", required=False, default=False, help="Verbose output.")
     parser.add_argument("--debug", action="store_true", required=False, default=False, help="Debugging output.")
     args = parser.parse_args()
@@ -113,7 +117,7 @@ def main() -> None:
         args.update_database = True
         args.update_keys = True
 
-    if args.update_database:
+    if args.update_database or args.list:
         # Just FYI the absolute minimal .ini file could look like this:
         # [app:app]
         # use = config:base.ini#app
@@ -122,6 +126,10 @@ def main() -> None:
             app = create_testapp(args.ini)
     else:
         app = None
+
+    if args.list:
+        _print_all_access_keys(app, args.verbose)
+        return
 
     print(f"Creating a new local portal access-key for {args.app} ... ", end="")
     access_key_user_uuid = _generate_user_uuid(args.user, app)
@@ -297,6 +305,36 @@ def _load_data(app: TestApp, data: Union[dict, list], data_type: str) -> bool:
     return True
 
 
+def _print_all_access_keys(app: TestApp, verbose: bool = False) -> None:
+    print("All access-keys defined for locally running portal:")
+    for item in _get_all_access_keys(app):
+        print(f"{item.id}", end="")
+        if item.created:
+            print(f" | Created: {item.created}", end="")
+        if item.expires:
+            print(f" | Expires: {item.expires}", end="")
+        if verbose:
+            print(f" | {item.uuid}", end="")
+        print()
+
+
+def _get_all_access_keys(app: TestApp) -> list:
+    response = []
+    AccessKey = namedtuple("AccessKey", ["id", "uuid", "created", "expires"])
+    access_keys = app.get_with_follow(f"/access-keys", raise_exception=False).json
+    if access_keys:
+        access_keys = access_keys.get("@graph")
+        if access_keys:
+            for access_key_item in access_keys:
+                access_key_id = access_key_item.get("access_key_id")
+                access_key_uuid = access_key_item.get("uuid")
+                access_key_created = _format_iso_datetime_string_to_local_datetime_string(access_key_item.get("date_created"))
+                access_key_expires = _format_iso_datetime_string_to_local_datetime_string(access_key_item.get("expiration_date"))
+                access_key = AccessKey(id=access_key_id, uuid=access_key_uuid, created=access_key_created, expires=access_key_expires)
+                response.append(access_key)
+    return sorted(response, key=lambda item: item.created, reverse=True)
+
+
 def _is_uuid(s: str) -> bool:
     try:
         return str(uuid.UUID(s)) == s
@@ -307,6 +345,35 @@ def _is_uuid(s: str) -> bool:
 def _exit_without_action(message: str) -> None:
     print(f"\nERROR: {message}")
     exit(1)
+
+
+# TODO: Move these datetime utility function to dcicutils ...
+
+def _parse_iso_datetime_string(value: str, format: str = "%Y-%m-%dT%H:%M:%S.%f") -> datetime:
+    try:
+        if value.endswith("+00:00"):
+            value = value[:-6]
+        return pytz.utc.localize(datetime.strptime(value, format))
+    except Exception:
+        return ""
+
+
+def _convert_iso_to_local_datetime(value: datetime, format: str = "%Y-%m-%dT%H:%M:%S.%f") -> datetime:
+    try:
+        return value.astimezone(dateutil.tz.tzlocal())
+    except Exception:
+        return ""
+
+
+def _format_datetime(value: datetime, format: str = "%Y-%m-%d %H:%M:%S %Z") -> str:
+    try:
+        return value.strftime(format)
+    except Exception:
+        return ""
+
+
+def _format_iso_datetime_string_to_local_datetime_string(value: str) -> str:
+    return _format_datetime(_convert_iso_to_local_datetime(_parse_iso_datetime_string(value)))
 
 
 if __name__ == "__main__":
