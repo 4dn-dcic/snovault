@@ -24,8 +24,8 @@
 #
 # This is intended to be run from the smaht-portal repo; there is a generate-local-access-key
 # poetry script defined there to invoke this module. And just for convenience, this is also
-# supported in the cgap-portal and fourfront repos; 5o use it from from cgap-portal or fourfront
-# use the --app cgap or --app fourfront arguments, respectively.
+# supported in the cgap-portal and fourfront repos; to use it from from cgap-portal or
+# fourfront use the --app cgap or --app fourfront arguments, respectively.
 #
 # Example command:
 #  generate-local-access-key
@@ -244,7 +244,7 @@ def _guess_default_app() -> Optional[str]:
     try:
         with open("pyproject.toml", "r") as toml_f:
             toml_contents = toml.loads(toml_f.read())
-            repository = toml_contents['tool']['poetry']['repository']
+            repository = toml_contents["tool"]["poetry"]["repository"]
             if repository.endswith("cgap-portal"):
                 return "cgap"
             elif repository.endswith("fourfront"):
@@ -270,7 +270,7 @@ def _load_data(app: TestApp, data: Union[dict, list], data_type: str) -> bool:
     def write_json_to_temporary_directory(data: list, data_type: str) -> str:
         tmp_dir = tempfile.mkdtemp()
         tmp_file = os.path.join(tmp_dir, f"{data_type}.json")
-        with open(tmp_file, 'w') as tmp_f:
+        with open(tmp_file, "w") as tmp_f:
             json.dump(data, tmp_f, indent=4)
             tmp_f.flush()
         return tmp_dir
