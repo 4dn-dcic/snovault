@@ -292,7 +292,7 @@ def _load_data(app: TestApp, data: Union[dict, list], data_type: str) -> bool:
         return False
 
     data_directory = write_json_to_temporary_directory(data, data_type)
-    load_data(app, indir=data_directory, overwrite=True, use_master_inserts=False, raise_exception=True)
+    load_data(app, indir=data_directory, overwrite=True, use_master_inserts=False)
     delete_json_temporary_directory(data_directory)
     return True
 

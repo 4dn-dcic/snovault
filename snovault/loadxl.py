@@ -264,7 +264,7 @@ LOAD_ERROR_MESSAGE = """#   ██▓     ▒█████   ▄▄▄      �
 
 
 def load_all(testapp, inserts, docsdir, overwrite=True, itype=None, from_json=False, patch_only=False, post_only=False,
-             skip_types=None, raise_exception=False):
+             skip_types=None):
     """
     Wrapper function for load_all_gen, which invokes the generator returned
     from that function. Takes all of the same args as load_all_gen, so
@@ -276,7 +276,7 @@ def load_all(testapp, inserts, docsdir, overwrite=True, itype=None, from_json=Fa
     with the functionality of load_all_gen.
     """
     gen = LoadGenWrapper(
-        load_all_gen(testapp, inserts, docsdir, overwrite, itype, from_json, patch_only, post_only, skip_types, raise_exception=raise_exception)
+        load_all_gen(testapp, inserts, docsdir, overwrite, itype, from_json, patch_only, post_only, skip_types)
     )
     # run the generator; don't worry about the output
     for _ in gen:
@@ -292,7 +292,7 @@ LOADXL_ALLOW_NONE = environ_bool("LOADXL_ALLOW_NONE", default=True)
 
 
 def load_all_gen(testapp, inserts, docsdir, overwrite=True, itype=None, from_json=False,
-                 patch_only=False, post_only=False, skip_types=None, validate_only=False, raise_exception=False):
+                 patch_only=False, post_only=False, skip_types=None, validate_only=False):
     """
     Generator function that yields bytes information about each item POSTed/PATCHed.
     Is the base functionality of load_all function.
@@ -438,8 +438,6 @@ def load_all_gen(testapp, inserts, docsdir, overwrite=True, itype=None, from_jso
                             assert res.status_code == 200
                             yield str.encode('CHECK: %s\n' % an_item['uuid'])
                     except Exception as e:
-                        if raise_exception:
-                            raise e
                         print('Posting {} failed. Post body:\n{}\nError Message:{}'
                               ''.format(a_type, str(first_fields), str(e)))
                         # remove newlines from error, since they mess with generator output
@@ -479,8 +477,6 @@ def load_all_gen(testapp, inserts, docsdir, overwrite=True, itype=None, from_jso
                 # yield bytes to work with Response.app_iter
                 yield str.encode('PATCH: %s\n' % an_item['uuid'])
             except Exception as e:
-                if raise_exception:
-                    raise e
                 print('Patching {} failed. Patch body:\n{}\n\nError Message:\n{}'.format(
                       a_type, str(an_item), str(e)))
                 print('Full error: %s' % traceback.format_exc())
@@ -513,7 +509,7 @@ def get_json_file_content(filename):
 
 
 def load_data(app, indir='inserts', docsdir=None, overwrite=False,
-              use_master_inserts=True, skip_types=None, raise_exception=False):
+              use_master_inserts=True, skip_types=None):
     """
     This function will take the inserts folder as input, and place them to the given environment.
     args:
@@ -525,7 +521,7 @@ def load_data(app, indir='inserts', docsdir=None, overwrite=False,
     # load master-inserts by default
     if indir != 'master-inserts' and use_master_inserts:
         master_inserts = app_project().project_filename('tests/data/master-inserts/')
-        master_res = load_all(testapp, master_inserts, [], skip_types=skip_types, raise_exception=raise_exception)
+        master_res = load_all(testapp, master_inserts, [], skip_types=skip_types)
         if master_res:  # None if successful
             print(LOAD_ERROR_MESSAGE)
             logger.error('load_data: failed to load from %s' % master_inserts, error=master_res)
@@ -543,7 +539,7 @@ def load_data(app, indir='inserts', docsdir=None, overwrite=False,
         if not docsdir.endswith('/'):
             docsdir += '/'
         docsdir = [app_project().project_filename('tests/data/' + docsdir)]
-    res = load_all(testapp, inserts, docsdir, overwrite=overwrite, raise_exception=raise_exception)
+    res = load_all(testapp, inserts, docsdir, overwrite=overwrite)
     if res:  # None if successful
         print(LOAD_ERROR_MESSAGE)
         logger.error('load_data: failed to load from %s' % docsdir, error=res)
@@ -777,11 +773,9 @@ def create_testapp(ini_or_app_or_testapp: Union[str, Router, TestApp] = "develop
         testapp = TestApp(app, {"HTTP_ACCEPT": "application/json", "REMOTE_USER": "TEST"})
     if not getattr(testapp, "get_with_follow", None):
         def get_with_follow(self, *args, **kwargs):
-            raise_exception = kwargs.get("raise_exception", None)
-            if raise_exception is not None:
-                if not isinstance(raise_exception, bool):
-                    raise_exception = False
-                del kwargs["raise_exception"]
+            raise_exception = kwargs.pop("raise_exception", True)
+            if not isinstance(raise_exception, bool):
+                raise_exception = True
             try:
                 response = self.get(*args, **kwargs)
                 if response and response.status_code in [301, 302, 303, 307, 308]:

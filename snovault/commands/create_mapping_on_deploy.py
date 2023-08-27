@@ -68,7 +68,7 @@ def _run_create_mapping(app, args):
             log.info('Overriding deploy_cfg and wiping ES')
             deploy_cfg['WIPE_ES'] = True
         run_create_mapping(app, check_first=(not deploy_cfg['WIPE_ES']), purge_queue=args.clear_queue,
-                           item_order=ITEM_INDEX_ORDER())
+                           item_order=ITEM_INDEX_ORDER)
     except Exception as e:
         log.error("Exception encountered while gathering deployment information or running create_mapping")
         log.error(str(e))
