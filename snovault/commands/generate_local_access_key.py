@@ -322,12 +322,12 @@ def _get_all_access_keys(app: TestApp) -> list:
     response = []
     try:
         AccessKey = namedtuple("AccessKey", ["id", "uuid", "created", "expires"])
-        for access_key_item in app.get_with_follow(f"/access-keys").json["@graph"]:
+        for access_key in app.get_with_follow(f"/access-keys").json["@graph"]:
             response.append(AccessKey(
-                id=access_key_item.get("access_key_id"),
-                uuid=access_key_item.get("uuid"),
-                created=_format_iso_datetime_string_to_local_datetime_string(access_key_item.get("date_created")),
-                expires=_format_iso_datetime_string_to_local_datetime_string(access_key_item.get("expiration_date"))))
+                id=access_key.get("access_key_id"),
+                uuid=access_key.get("uuid"),
+                created=_format_iso_datetime_string_to_local_datetime_string(access_key.get("date_created")),
+                expires=_format_iso_datetime_string_to_local_datetime_string(access_key.get("expiration_date"))))
     except Exception:
         pass
     return sorted(response, key=lambda item: item.created, reverse=True)
