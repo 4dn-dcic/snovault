@@ -355,11 +355,12 @@ class SchemaValidator(SerializingSchemaValidator):
 
 
 def load_schema(filename):
-    filename = favor_app_specific_schema(filename)
     if isinstance(filename, dict):
         schema = filename
         resolver = NoRemoteResolver.from_schema(schema)
     else:
+        if ':' not in filename:  # no repo in filename path, favor the app then fallthrough
+            filename = favor_app_specific_schema(filename)
         utf8 = codecs.getreader("utf-8")
         asset = AssetResolver(caller_package()).resolve(filename)
         schema = json.load(utf8(asset.stream()),
