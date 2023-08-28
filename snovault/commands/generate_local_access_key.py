@@ -320,18 +320,16 @@ def _print_all_access_keys(app: TestApp, verbose: bool = False) -> None:
 
 def _get_all_access_keys(app: TestApp) -> list:
     response = []
-    AccessKey = namedtuple("AccessKey", ["id", "uuid", "created", "expires"])
-    access_keys = app.get_with_follow(f"/access-keys", raise_exception=False).json
-    if access_keys:
-        access_keys = access_keys.get("@graph")
-        if access_keys:
-            for access_key_item in access_keys:
-                access_key_id = access_key_item.get("access_key_id")
-                access_key_uuid = access_key_item.get("uuid")
-                access_key_created = _format_iso_datetime_string_to_local_datetime_string(access_key_item.get("date_created"))
-                access_key_expires = _format_iso_datetime_string_to_local_datetime_string(access_key_item.get("expiration_date"))
-                access_key = AccessKey(id=access_key_id, uuid=access_key_uuid, created=access_key_created, expires=access_key_expires)
-                response.append(access_key)
+    try:
+        AccessKey = namedtuple("AccessKey", ["id", "uuid", "created", "expires"])
+        for access_key_item in app.get_with_follow(f"/access-keys").json["@graph"]:
+            response.append(AccessKey(
+                id=access_key_item.get("access_key_id"),
+                uuid=access_key_item.get("uuid"),
+                created=_format_iso_datetime_string_to_local_datetime_string(access_key_item.get("date_created")),
+                expires=_format_iso_datetime_string_to_local_datetime_string(access_key_item.get("expiration_date"))))
+    except Exception:
+        pass
     return sorted(response, key=lambda item: item.created, reverse=True)
 
 
