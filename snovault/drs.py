@@ -63,10 +63,21 @@ def get_drs_url(request, object_uri):
     """ Does 2 calls - one to verify the object_uri is in fact a valid DRS object and
         another to get the bytes of the DRS object """
     try:
+        default_method = None
+        requested_download_method = request.path.split('/')[-1]
         drs_obj = get_and_format_drs_object(request, object_uri)
         access_methods = drs_obj.get('access_methods', [])
-        # in our system there is only 1 access method - HTTPS to S3
-        return access_methods[0]['access_url']
+        for access_method in access_methods:
+            if access_method['type'] == 'https':  # prefer https
+                default_method = access_method['access_url']
+            if not default_method and access_method['type'] == 'http':  # allow http
+                default_method = access_method['access_url']
+            if access_method['type'] == requested_download_method:
+                return access_method['access_url']
+        else:
+            if default_method:
+                return default_method
+            raise Exception  # no https default results in exception
     except Exception as e:
         raise HTTPNotFound(f'You accessed a DRS object that either you do not have access to,'
                            f' did not pass valid access_id or does not exist {str(e)}')
