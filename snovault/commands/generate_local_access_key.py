@@ -166,7 +166,7 @@ def main() -> None:
         print(json.dumps(access_key_inserts_file_item, indent=4))
 
 
-def _generate_user_uuid(user: Optional[str], app: TestApp = None) -> Optional[str]:
+def _generate_user_uuid(user: Optional[str], app: TestApp = None) -> str:
     if not user:
         if app:
             _exit_without_action(f"The --user option must specify a UUID or email in {_USER_INSERTS_FILE}")
@@ -248,7 +248,7 @@ def _hash_secret_like_snovault(secret: str, ini_file: str = _DEFAULT_INI_FILE) -
     return CryptContext(**passlib_properties).hash(secret)
 
 
-def _guess_default_app() -> Optional[str]:
+def _guess_default_app() -> str:
     try:
         with open("pyproject.toml", "r") as toml_f:
             toml_contents = toml.loads(toml_f.read())
