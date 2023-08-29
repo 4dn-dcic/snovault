@@ -22,8 +22,8 @@ def captured_output(capture: bool = True):
     of the with-clause with this context manager, pass False as an argument to this context manager. 
     """
 
-    original_stdout = sys.stdout
-    original_stderr = sys.stderr
+    original_stdout = _real_stdout
+    original_stderr = _real_stderr
     captured_output = io.StringIO()
 
     def set_original_output() -> None:
