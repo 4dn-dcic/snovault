@@ -5,8 +5,8 @@ import io
 import sys
 from typing import Optional
 
-_original_stdout = sys.stdout
-_original_stderr = sys.stderr
+_real_stdout = sys.stdout
+_real_stderr = sys.stderr
 
 @contextmanager
 def captured_output(capture: bool = True):
@@ -21,16 +21,19 @@ def captured_output(capture: bool = True):
     troubleshooting purposes. Disable this capture, without having to restructure your code WRT the usage
     of the with-clause with this context manager, pass False as an argument to this context manager. 
     """
-    the_captured_output = io.StringIO()
+
+    original_stdout = sys.stdout
+    original_stderr = sys.stderr
+    captured_output = io.StringIO()
 
     def set_original_output() -> None:
-        sys.stdout = _original_stdout
-        sys.stderr = _original_stderr
+        sys.stdout = original_stdout
+        sys.stderr = original_stderr
 
     def set_captured_output() -> None:
         if capture:
-            sys.stdout = the_captured_output
-            sys.stderr = the_captured_output
+            sys.stdout = captured_output
+            sys.stderr = captured_output
 
     def uncaptured_print(*args, **kwargs) -> None:
         set_original_output()
@@ -44,7 +47,7 @@ def captured_output(capture: bool = True):
         return value
 
     def get_captured_output() -> Optional[str]:
-        return the_captured_output.getvalue() if capture else None
+        return captured_output.getvalue() if capture else None
 
     try:
         set_captured_output()
@@ -52,3 +55,16 @@ def captured_output(capture: bool = True):
         yield Result(get_captured_output, uncaptured_print, uncaptured_input)
     finally:
         set_original_output()
+
+
+@contextmanager
+def uncaptured_output():
+    original_stdout = sys.stdout
+    original_stderr = sys.stderr
+    sys.stdout = _real_stdout
+    sys.stderr = _real_stderr
+    try:
+        yield
+    finally:
+        sys.stdout = original_stdout
+        sys.stderr = original_stderr
