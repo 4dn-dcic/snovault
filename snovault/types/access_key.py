@@ -86,9 +86,10 @@ class AccessKey(Item):
             new_properties = self.properties.copy()
             new_properties.update(properties)
             properties = new_properties
-        # set new expiration
-        properties['expiration_date'] = (datetime.datetime.utcnow() + datetime.timedelta(
-            days=self.ACCESS_KEY_EXPIRATION_TIME)).isoformat()
+        # set new expiration if applicable
+        if app_project().access_key_has_expiration_date():
+            properties['expiration_date'] = (datetime.datetime.utcnow() + datetime.timedelta(
+                days=self.ACCESS_KEY_EXPIRATION_TIME)).isoformat()
         self._update(properties, sheets)
 
     class Collection(Item.Collection):
