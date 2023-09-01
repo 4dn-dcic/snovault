@@ -6,7 +6,7 @@ snovault
 Change Log
 ----------
 
-10.4.0
+10.1.0
 ======
 * Fixed access of user in types/access_key.py in access_key_add WRT request.validated['user'].
 * Added identifyingProperties with just uuid in schemas/access_key.json.
@@ -20,6 +20,18 @@ Change Log
       i.e. do not make it relative to the current working directory if it is fully qualified.
 * Added support for consortia and submission_centers in ingestion_listener.py.
 * Added unique_key to types/access_key.py (helps get rid of this in cgap-portal/fourfront).
+
+10.0.4
+======
+
+* Bug fix in access key refresh to predicate on whether
+expiration is enabled
+
+
+10.0.3
+======
+
+* Update ``drs`` primitive to resolve specific access types with preferential defaulting to https, http
 
 
 10.0.2

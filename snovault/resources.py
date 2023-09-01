@@ -422,8 +422,11 @@ class Item(Resource):
         present, otherwise `self.uuid`
         """
         if self.name_key is None:
-            return str(self.uuid)
-        return self.properties.get(self.name_key, None) or str(self.uuid)
+            return self.uuid
+        properties = self.upgrade_properties()
+        if properties.get('status') == 'replaced':
+            return self.uuid
+        return properties.get(self.name_key, None) or self.uuid
 
     @property
     def properties(self):
