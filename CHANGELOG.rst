@@ -18,6 +18,8 @@ Change Log
     called from dev_server.py; for creating access-keys on the fly after startup for local dev/testing.
     * Enhancement in load_data in loadxl.py to respect a fully qualified data directory path name,
       i.e. do not make it relative to the current working directory if it is fully qualified.
+* Added snovault/commands/view_local_object.py script for dev/testing to retrieve and ouput
+  a given object (UUID) from a locally running portal.
 * Added support for consortia and submission_centers in ingestion_listener.py.
 * Added unique_key to types/access_key.py (helps get rid of this in cgap-portal/fourfront).
 

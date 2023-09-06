@@ -118,10 +118,25 @@ def main() -> None:
         args.update_keys = True
 
     if args.update_database or args.list:
-        # Just FYI the absolute minimal .ini file could look like this:
+        # Just FYI an absolute minimal .ini file looks like this:
         # [app:app]
-        # use = config:base.ini#app
+        # use = egg:encoded
         # sqlalchemy.url = postgresql://postgres@localhost:5441/postgres?host=/tmp/snovault/pgdata
+        # multiauth.groupfinder = encoded.authorization.smaht_groupfinder
+        # multiauth.policies = auth0 session remoteuser accesskey
+        # multiauth.policy.session.namespace = mailto
+        # multiauth.policy.session.use = encoded.authentication.NamespacedAuthenticationPolicy
+        # multiauth.policy.session.base = pyramid.authentication.SessionAuthenticationPolicy
+        # multiauth.policy.remoteuser.namespace = remoteuser
+        # multiauth.policy.remoteuser.use = encoded.authentication.NamespacedAuthenticationPolicy
+        # multiauth.policy.remoteuser.base = pyramid.authentication.RemoteUserAuthenticationPolicy
+        # multiauth.policy.accesskey.namespace = accesskey
+        # multiauth.policy.accesskey.use = encoded.authentication.NamespacedAuthenticationPolicy
+        # multiauth.policy.accesskey.base = encoded.authentication.BasicAuthAuthenticationPolicy
+        # multiauth.policy.accesskey.check = encoded.authentication.basic_auth_check
+        # multiauth.policy.auth0.use = encoded.authentication.NamespacedAuthenticationPolicy
+        # multiauth.policy.auth0.namespace = auth0
+        # multiauth.policy.auth0.base = encoded.authentication.Auth0AuthenticationPolicy
         with captured_output(not args.debug):
             app = create_testapp(args.ini)
     else:
