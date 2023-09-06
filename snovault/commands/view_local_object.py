@@ -79,6 +79,7 @@
 import argparse
 import json
 import sys
+from typing import Optional
 import yaml
 from dcicutils.misc_utils import get_error_message
 from snovault.loadxl import create_testapp
@@ -99,37 +100,39 @@ def main():
     parser.add_argument("--debug", action="store_true", required=False, default=False, help="Debugging output.")
     args = parser.parse_args()
 
-    try:
-        if args.verbose:
-            _print(f"Getting object ({args.uuid}) from local portal ... ", end="")
-        data = _get_local_object(args.uuid, args.ini, args.debug)
-        if args.verbose:
-            _print("OK")
-        if args.yaml:
-            _print(yaml.dump(data))
-        else:
-            _print(json.dumps(data, default=str, indent=4))
-    except Exception as e:
-        _exit_without_action(f"Exception getting object ({args.uuid}) -> {get_error_message(e)}", False)
+    data = _get_local_object(uuid=args.uuid, ini=args.ini, verbose=args.verbose, debug=args.debug)
+
+    if args.yaml:
+        _print(yaml.dump(data))
+    else:
+        _print(json.dumps(data, default=str, indent=4))
 
 
-def _get_local_object(uuid: str, ini: str = _DEFAULT_INI_FILE, debug: bool = False) -> dict:
+def _get_local_object(uuid: str, ini: str = _DEFAULT_INI_FILE, verbose: bool = False, debug: bool = False) -> dict:
+    if verbose:
+        _print(f"Getting object ({uuid}) from local portal ... ", end="")
+    response = None
     try:
-        response = None
         with captured_output(not debug):
             app = create_testapp(ini)
             response = app.get_with_follow(f"/{uuid}")
-        if not response:
-            _exit_without_action(f"Null response getting object {uuid}).")
-        if response.status_code != 200:
-            _exit_without_action(f"Invalid status code ({response.status_code}) getting object {uuid}).")
-        if not response.json:
-            _exit_without_action(f"Invalid JSON getting object {uuid}).")
-        return response.json
     except Exception as e:
         if "404" in str(e) and "not found" in str(e).lower():
-            _exit_without_action(f"Object not found: {uuid}")
-        _exit_without_action(f"Exception getting object ({uuid}) -> {get_error_message(e)}")
+            if verbose:
+                _print("Not found!")
+            else:
+                _print(f"Object ({uuid}) not found!")
+            _exit_without_action()
+        _exit_without_action(f"Exception getting object ({uuid}) -> {get_error_message(e)}", newline=verbose)
+    if not response:
+        _exit_without_action(f"Null response getting object {uuid}).")
+    if response.status_code != 200:
+        _exit_without_action(f"Invalid status code ({response.status_code}) getting object {uuid}).")
+    if not response.json:
+        _exit_without_action(f"Invalid JSON getting object {uuid}).")
+    if verbose:
+        _print("OK")
+    return response.json
 
 
 def _print(*args, **kwargs):
@@ -138,10 +141,11 @@ def _print(*args, **kwargs):
     sys.stdout.flush()
 
 
-def _exit_without_action(message: str, newline: bool = True) -> None:
-    if newline:
-        _print()
-    _print(f"ERROR: {message}")
+def _exit_without_action(message: Optional[str] = None, newline: bool = True) -> None:
+    if message:
+        if newline:
+            _print()
+        _print(f"ERROR: {message}")
     exit(1)
 
 
