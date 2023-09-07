@@ -777,8 +777,6 @@ def create_testapp(ini_or_app_or_testapp: Union[str, Router, TestApp] = "develop
             if not isinstance(raise_exception, bool):
                 raise_exception = True
             try:
-                print(args)
-                print(kwargs)
                 response = self.get(*args, **kwargs)
                 if response and response.status_code in [301, 302, 303, 307, 308]:
                     response = response.follow()
