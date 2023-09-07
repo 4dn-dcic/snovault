@@ -142,7 +142,6 @@ def main() -> None:
     else:
         app = None
 
-    import pdb ; pdb.set_trace()
     if args.list:
         _print_all_access_keys(app, args.verbose)
         return
