@@ -301,12 +301,12 @@ def get_identifying_property(item: dict, item_identifying_properties: list) -> O
 
 
 def get_identifying_path(item: dict, item_identifying_properties: list, item_type: str) -> Optional[str]:
-    if "uuid" in item:
-        return f"/{item['uuid']}"
-    for item_identifying_property in item_identifying_properties:
-        if item_identifying_property in item:
-            return f"/{item_type}/{item[item_identifying_property]}"
-    return None
+    identifying_property = get_identifying_property(item, item_identifying_properties)
+    identifying_value = item[identifying_property]
+    if identifying_property == "uuid":
+        return f"/{identifying_value}"
+    else:
+        return f"/{item_type}/{identifying_value}"
 
 
 def load_all_gen(testapp, inserts, docsdir, overwrite=True, itype=None, from_json=False,
@@ -424,7 +424,6 @@ def load_all_gen(testapp, inserts, docsdir, overwrite=True, itype=None, from_jso
             for an_item in store[a_type]:
                 exists = False
                 if not post_only:
-                    # import pdb ; pdb.set_trace()
                     identifying_path = get_identifying_path(an_item, identifying_properties, a_type)
                     try:
                         # 301 because @id is the existing item path, not uuid
