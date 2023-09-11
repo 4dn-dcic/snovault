@@ -74,6 +74,10 @@
 #    uuid: 74fef71a-dfc1-4aa4-acc0-cedcb7ac1d68
 #  uuid: 3968e38e-c11f-472e-8531-8650e2e296d4
 #  validation-errors: []
+#
+# Note that instead of a uuid you can also actually use a path, for example:
+#   view-local-object /file-formats/vcf_gz_tbi
+#
 # --------------------------------------------------------------------------------------------------
 
 import argparse
@@ -92,7 +96,8 @@ _DEFAULT_INI_FILE = "development.ini"
 def main():
 
     parser = argparse.ArgumentParser(description="Create local portal access-key for dev/testing purposes.")
-    parser.add_argument("uuid", type=str)
+    parser.add_argument("uuid", type=str,
+                        help=f"The uuid (or path) of the object to fetch and view. ")
     parser.add_argument("--ini", type=str, required=False, default=_DEFAULT_INI_FILE,
                         help=f"Name of the application .ini file; default is: {_DEFAULT_INI_FILE}")
     parser.add_argument("--yaml", action="store_true", required=False, default=False, help="YAML output.")
@@ -115,7 +120,11 @@ def _get_local_object(uuid: str, ini: str = _DEFAULT_INI_FILE, verbose: bool = F
     try:
         with captured_output(not debug):
             app = create_testapp(ini)
-            response = app.get_with_follow(f"/{uuid}")
+            if not uuid.startswith("/"):
+                path = f"/{uuid}"
+            else:
+                path = uuid
+            response = app.get_with_follow(path)
     except Exception as e:
         if "404" in str(e) and "not found" in str(e).lower():
             if verbose:

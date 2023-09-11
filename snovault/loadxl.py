@@ -11,7 +11,7 @@ from PIL import Image
 import re
 import structlog
 import traceback
-from typing import Union
+from typing import Optional, Union
 from webtest import TestApp
 import uuid
 from pyramid.paster import get_app
@@ -291,6 +291,24 @@ def load_all(testapp, inserts, docsdir, overwrite=True, itype=None, from_json=Fa
 LOADXL_ALLOW_NONE = environ_bool("LOADXL_ALLOW_NONE", default=True)
 
 
+def get_identifying_property(item: dict, item_identifying_properties: list) -> Optional[str]:
+    if "uuid" in item:
+        return "uuid"
+    for item_identifying_property in item_identifying_properties:
+        if item_identifying_property in item:
+            return item_identifying_property
+    return None
+
+
+def get_identifying_path(item: dict, item_identifying_properties: list, item_type: str) -> Optional[str]:
+    if "uuid" in item:
+        return f"/{item['uuid']}"
+    for item_identifying_property in item_identifying_properties:
+        if item_identifying_property in item:
+            return f"/{item_type}/{item[item_identifying_property]}"
+    return None
+
+
 def load_all_gen(testapp, inserts, docsdir, overwrite=True, itype=None, from_json=False,
                  patch_only=False, post_only=False, skip_types=None, validate_only=False):
     """
@@ -391,7 +409,8 @@ def load_all_gen(testapp, inserts, docsdir, overwrite=True, itype=None, from_jso
                 # minimal schema
                 schema_info = profiles[obj_type]
                 req_fields = schema_info.get('required', [])
-                ids = schema_info.get('identifyingProperties', [])
+                identifying_properties = schema_info.get('identifyingProperties', [])
+                ids = identifying_properties
                 # some schemas did not include aliases
                 if 'aliases' not in ids:
                     ids.append('aliases')
@@ -405,9 +424,15 @@ def load_all_gen(testapp, inserts, docsdir, overwrite=True, itype=None, from_jso
             for an_item in store[a_type]:
                 exists = False
                 if not post_only:
+                    # import pdb ; pdb.set_trace()
+                    identifying_path = get_identifying_path(an_item, identifying_properties, a_type)
                     try:
                         # 301 because @id is the existing item path, not uuid
-                        testapp.get('/'+an_item['uuid'], status=[200, 301])
+                        existing_item = testapp.get(identifying_path, status=[200, 301])
+                        if existing_item.status_code == 301:
+                            existing_item = existing_item.follow()
+                        if "uuid" not in an_item:
+                            an_item["uuid"] = existing_item.json["uuid"]
                         exists = True
                     except Exception:
                         pass
@@ -431,11 +456,15 @@ def load_all_gen(testapp, inserts, docsdir, overwrite=True, itype=None, from_jso
                         res = testapp.post_json(post_request, to_post)  # skip indexing in round 1
                         if not validate_only:
                             assert res.status_code == 201
+                            if "uuid" not in an_item:
+                                an_item["uuid"] = res.json["@graph"][0]["uuid"]
                             posted += 1
                             # yield bytes to work with Response.app_iter
                             yield str.encode('POST: %s\n' % res.json['@graph'][0]['uuid'])
                         else:
                             assert res.status_code == 200
+                            if "uuid" not in an_item:
+                                an_item["uuid"] = res.json["@graph"][0]["uuid"]
                             yield str.encode('CHECK: %s\n' % an_item['uuid'])
                     except Exception as e:
                         print('Posting {} failed. Post body:\n{}\nError Message:{}'
@@ -447,7 +476,9 @@ def load_all_gen(testapp, inserts, docsdir, overwrite=True, itype=None, from_jso
                         # raise StopIteration
             if not validate_only:
                 if not post_only:
-                    second_round_items[a_type] = [i for i in store[a_type] if i['uuid'] not in skip_existing_items]
+                    second_round_items[a_type] = [i for i in store[a_type]
+                                                  if get_identifying_property(i, identifying_properties)
+                                                  not in skip_existing_items]
             else:
                 second_round_items[a_type] = []
             logger.info('{} 1st: {} items posted, {} items exists.'.format(a_type, posted, skip_exist))
