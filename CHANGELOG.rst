@@ -14,10 +14,11 @@ Change Log
 * Added snovault/commands/generate_local_access_key.py script; originally just for
   smaht-portal to create access-key for local dev/testing because doing it via UI
   not yet fully supported; but generally convenient for cgap-portal and fourfront as well.
-  * Mino changes (e.g. create_testapp) to loadxl.py to help load data from a specified directory;
+  * Minor changes (e.g. create_testapp) to loadxl.py to help load data from a specified directory;
     called from dev_server.py; for creating access-keys on the fly after startup for local dev/testing.
     * Enhancement in load_data in loadxl.py to respect a fully qualified data directory path name,
       i.e. do not make it relative to the current working directory if it is fully qualified.
+    * Updates to load_all_gen to allow object create/update with no uuid.
 * Added snovault/commands/view_local_object.py script for dev/testing to retrieve and ouput
   a given object (UUID) from a locally running portal.
 * Added support for consortia and submission_centers in ingestion_listener.py.
