@@ -291,24 +291,38 @@ def load_all(testapp, inserts, docsdir, overwrite=True, itype=None, from_json=Fa
 LOADXL_ALLOW_NONE = environ_bool("LOADXL_ALLOW_NONE", default=True)
 
 
-def get_identifying_property(item: dict, item_identifying_properties: list) -> Optional[str]:
+def get_identifying_property(item: dict, identifying_properties: list) -> Optional[str]:
+    """
+    Returns the first identifying property of the given item which has a value, given its
+    identifying properties (passed in from the identifyingProperties of the item's type schema).
+    We favor the uuid property; no ordering is defined for of other identifying properties.
+    """
     if "uuid" in item:
-        return "uuid"
-    for item_identifying_property in item_identifying_properties:
-        if item_identifying_property in item:
-            return item_identifying_property
+        identifying_value = item["uuid"]
+        if identifying_value:
+            return identifying_property
+    for identifying_property in identifying_properties:
+        if identifying_property in item:
+            identifying_value = item[identifying_property]
+            if identifying_value:
+                return identifying_property
     return None
 
 
-def get_identifying_path(item: dict, item_identifying_properties: list, item_type: str) -> Optional[str]:
-    identifying_property = get_identifying_property(item, item_identifying_properties)
-    if not identifying_property:
-        return None
-    identifying_value = item[identifying_property]
-    if identifying_property == "uuid":
-        return f"/{identifying_value}"
-    else:
-        return f"/{item_type}/{identifying_value}"
+def get_identifying_path(item: dict, identifying_properties: list, item_type: str) -> Optional[str]:
+    """
+    Returns the Portal URL path for the first identifying property of the given item which has a value,
+    given its identifying properties (passed in from the identifyingProperties of the item's type schema).
+    We favor the uuid property; no ordering is defined for of other identifying properties.
+    """
+    identifying_property = get_identifying_property(item, identifying_properties)
+    if identifying_property:
+        identifying_value = item[identifying_property]
+        if identifying_property == "uuid":
+            return f"/{identifying_value}"
+        else:
+            return f"/{item_type}/{identifying_value}"
+    return None
 
 
 def load_all_gen(testapp, inserts, docsdir, overwrite=True, itype=None, from_json=False,
@@ -432,6 +446,12 @@ def load_all_gen(testapp, inserts, docsdir, overwrite=True, itype=None, from_jso
                                         " cannot check existence.")
                     try:
                         # 301 because @id is the existing item path, not uuid
+                        # TODO: We we be able to do this part of the process more efficiently in bulk, up front.
+                        # ALSO: If we could use, for example, "/file-formats/vcf_gz/" (where the trailing slash
+                        # is important) rather than "/file_format/vcf_gz", we don't get a redirect (301) be get
+                        # a direct (200) response; but transformation of "file_format" to "file-formats" isn't
+                        # readily available to us here; and at least in this example (file_format), using the
+                        # uuid does not get us a direct (200) response, but rather a redirect (301); just FYI.
                         existing_item = testapp.get(identifying_path, status=[200, 301])
                         # If we get here then the item exists.
                         if "uuid" not in an_item:
@@ -440,7 +460,7 @@ def load_all_gen(testapp, inserts, docsdir, overwrite=True, itype=None, from_jso
                             # if the response is 301 then we have to follow it to do this.
                             if existing_item.status_code == 301:
                                 existing_item = existing_item.follow()
-                            an_item["uuid"] = existing_item.json["uuid"]
+                            an_item["uuid"] = existing_item.json["uuid"]  # xyzzy
                         exists = True
                     except Exception:
                         # Ignoring exception here on purpose; this happens if the
