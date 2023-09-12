@@ -812,7 +812,7 @@ def load_data_via_ingester(vapp: VirtualApp,
 
 
 def create_testapp(ini_or_app_or_testapp: Union[str, Router, TestApp] = "development.ini",
-                   app_name_or_nothing: str = "app") -> TestApp:
+                   app_name: str = "app") -> TestApp:
     """
     Creates and returns a TestApp.
     Refactored out of above loadxl code (2023-09) to consolidate at a single point,
@@ -824,7 +824,7 @@ def create_testapp(ini_or_app_or_testapp: Union[str, Router, TestApp] = "develop
         if isinstance(ini_or_app_or_testapp, Router):
             app = ini_or_app_or_testapp
         else:
-            app = get_app(ini_or_app_or_testapp, app_name_or_nothing)
+            app = get_app(ini_or_app_or_testapp, app_name)
         testapp = TestApp(app, {"HTTP_ACCEPT": "application/json", "REMOTE_USER": "TEST"})
     if not getattr(testapp, "get_with_follow", None):
         def get_with_follow(self, *args, **kwargs):
