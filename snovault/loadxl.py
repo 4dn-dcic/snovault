@@ -813,6 +813,11 @@ def load_data_via_ingester(vapp: VirtualApp,
 
 def create_testapp(ini_or_app_or_testapp: Union[str, Router, TestApp] = "development.ini",
                    app_name_or_nothing: str = "app") -> TestApp:
+    """
+    Creates and returns a TestApp.
+    Refactored out of above loadxl code (2023-09) to consolidate at a single point,
+    and also for use by the generate_local_access_key and view_local_object scripts.
+    """
     if isinstance(ini_or_app_or_testapp, TestApp):
         testapp = ini_or_app_or_testapp
     else:
