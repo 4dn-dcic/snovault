@@ -13,6 +13,7 @@ import structlog
 import traceback
 from typing import Optional, Union
 from webtest import TestApp
+from webtest.response import TestResponse as TestAppResponse
 import uuid
 from pyramid.paster import get_app
 from pyramid.response import Response
@@ -221,13 +222,13 @@ def format_for_attachment(json_data, docsdir):
                 path = find_doc(docsdir, json_data[field])
                 if not path:
                     del json_data[field]
-                    logger.error('Removing {} form {}, expecting path'.format(field, json_data['uuid']))
+                    logger.error('Removing {} form {}, expecting path'.format(field, json_data["uuid"]))
                 else:
                     json_data[field] = attachment(path)
             else:
                 # malformatted attachment
                 del json_data[field]
-                logger.error('Removing {} form {}, expecting path'.format(field, json_data['uuid']))
+                logger.error('Removing {} form {}, expecting path'.format(field, json_data["uuid"]))
     return json_data
 
 
@@ -300,7 +301,7 @@ def get_identifying_property(item: dict, identifying_properties: list) -> Option
     if "uuid" in item:
         identifying_value = item["uuid"]
         if identifying_value:
-            return identifying_property
+            return "uuid"
     for identifying_property in identifying_properties:
         if identifying_property in item:
             identifying_value = item[identifying_property]
@@ -309,7 +310,7 @@ def get_identifying_property(item: dict, identifying_properties: list) -> Option
     return None
 
 
-def get_identifying_path(item: dict, identifying_properties: list, item_type: str) -> Optional[str]:
+def get_identifying_path(item: dict, item_type: str, identifying_properties: list) -> Optional[str]:
     """
     Returns the Portal URL path for the first identifying property of the given item which has a value,
     given its identifying properties (passed in from the identifyingProperties of the item's type schema).
@@ -323,6 +324,19 @@ def get_identifying_path(item: dict, identifying_properties: list, item_type: st
         else:
             return f"/{item_type}/{identifying_value}"
     return None
+
+
+def get_identifying_value(item: dict, identifying_properties: list) -> Optional[str]:
+    identifying_property = get_identifying_property(item, identifying_properties)
+    return item[identifying_property] if identifying_property else None
+
+
+def get_response_uuid(response: TestAppResponse) -> Optional[str]:
+    if not response:
+        return None
+    if response.status_code == 301:
+        response = response.follow()
+    return response.json.get("uuid") or response.json.get("@graph", [{}])[0].get("uuid")
 
 
 def load_all_gen(testapp, inserts, docsdir, overwrite=True, itype=None, from_json=False,
@@ -413,19 +427,22 @@ def load_all_gen(testapp, inserts, docsdir, overwrite=True, itype=None, from_jso
     # collect schemas
     profiles = testapp.get('/profiles/?frame=raw').json
 
+    def get_schema_info(obj_type: str) -> (list[str], list[str]):
+        def get_camel_case_version_of_type_name(snake_case_version_of_type_name: str) -> str:
+            # This conversion of schema name to object type works for all existing schemas at the moment.
+            return "".join([part.title() for part in snake_case_version_of_type_name.split('_')])
+        schema = profiles[get_camel_case_version_of_type_name(obj_type)]
+        return (schema.get("identifyingProperties", []), schema.get("required", []))
+
     # run step1 - if item does not exist, post with minimal metadata (and skip indexing since we will patch
     # in round 2)
     second_round_items = {}
     if not patch_only:
         for a_type in all_types:
             first_fields = []
+            # minimal schema
+            identifying_properties, req_fields = get_schema_info(a_type)
             if not post_only:
-                # this conversion of schema name to object type works for all existing schemas at the moment
-                obj_type = "".join([i.title() for i in a_type.split('_')])
-                # minimal schema
-                schema_info = profiles[obj_type]
-                req_fields = schema_info.get('required', [])
-                identifying_properties = schema_info.get('identifyingProperties', [])
                 ids = identifying_properties
                 # some schemas did not include aliases
                 if 'aliases' not in ids:
@@ -440,10 +457,9 @@ def load_all_gen(testapp, inserts, docsdir, overwrite=True, itype=None, from_jso
             for an_item in store[a_type]:
                 exists = False
                 if not post_only:
-                    identifying_path = get_identifying_path(an_item, identifying_properties, a_type)
+                    identifying_path = get_identifying_path(an_item, a_type, identifying_properties)
                     if not identifying_path:
-                        raise Exception("Item has no uuid nor any other identifying property;"
-                                        " cannot check existence.")
+                        raise Exception("Item has no uuid nor any other identifying property; cannot GET.")
                     try:
                         # 301 because @id is the existing item path, not uuid
                         # TODO: We we be able to do this part of the process more efficiently in bulk, up front.
@@ -454,13 +470,6 @@ def load_all_gen(testapp, inserts, docsdir, overwrite=True, itype=None, from_jso
                         # uuid does not get us a direct (200) response, but rather a redirect (301); just FYI.
                         existing_item = testapp.get(identifying_path, status=[200, 301])
                         # If we get here then the item exists.
-                        if "uuid" not in an_item:
-                            # If the given item does not have a uuid specified then
-                            # set it from the existing item we just found in the database;
-                            # if the response is 301 then we have to follow it to do this.
-                            if existing_item.status_code == 301:
-                                existing_item = existing_item.follow()
-                            an_item["uuid"] = existing_item.json["uuid"]  # xyzzy
                         exists = True
                     except Exception:
                         # Ignoring exception here on purpose; this happens if the
@@ -470,9 +479,11 @@ def load_all_gen(testapp, inserts, docsdir, overwrite=True, itype=None, from_jso
                 # if overwrite=True, still include them in PATCH round
                 if exists:
                     skip_exist += 1
+                    identifying_value = (get_response_uuid(existing_item) or
+                                         get_identifying_value(an_item, identifying_properties))
                     if not overwrite:
-                        skip_existing_items.add(an_item['uuid'])
-                    yield str.encode('SKIP: %s\n' % an_item['uuid'])
+                        skip_existing_items.add(identifying_value)
+                    yield str.encode('SKIP: %s\n' % identifying_value)
                 else:
                     if post_only:
                         to_post = an_item
@@ -488,23 +499,16 @@ def load_all_gen(testapp, inserts, docsdir, overwrite=True, itype=None, from_jso
                         res = testapp.post_json(post_request, to_post)  # skip indexing in round 1
                         if not validate_only:
                             assert res.status_code == 201
-                            if "uuid" not in an_item:
-                                an_item["uuid"] = res.json["@graph"][0]["uuid"]
                             posted += 1
                             # yield bytes to work with Response.app_iter
-                            yield str.encode('POST: %s\n' % res.json['@graph'][0]['uuid'])
+                            identifying_value = (get_response_uuid(res) or
+                                                 get_identifying_value(an_item, identifying_properties))
+                            yield str.encode('POST: %s\n' % identifying_value)
                         else:
                             assert res.status_code == 200
-                            if "uuid" not in an_item:
-                                # Note that with check_only=true we do not get back a uuid.
-                                an_identifying_property = get_identifying_property(an_item, identifying_properties)
-                                if not an_identifying_property:
-                                    raise Exception("Item has no uuid nor any other identifying property;"
-                                                    " cannot update.")
-                                an_identifying_value = an_item.get(an_identifying_property)
-                            else:
-                                an_identifying_value = an_item["uuid"]
-                            yield str.encode('CHECK: %s\n' % an_identifying_value)
+                            identifying_value = (get_response_uuid(res) or
+                                                 get_identifying_value(an_item, identifying_properties))
+                            yield str.encode('CHECK: %s\n' % identifying_value)
                     except Exception as e:
                         print('Posting {} failed. Post body:\n{}\nError Message:{}'
                               ''.format(a_type, str(first_fields), str(e)))
@@ -516,7 +520,7 @@ def load_all_gen(testapp, inserts, docsdir, overwrite=True, itype=None, from_jso
             if not validate_only:
                 if not post_only:
                     second_round_items[a_type] = [i for i in store[a_type]
-                                                  if get_identifying_property(i, identifying_properties)
+                                                  if get_identifying_value(i, identifying_properties)
                                                   not in skip_existing_items]
             else:
                 second_round_items[a_type] = []
@@ -533,6 +537,7 @@ def load_all_gen(testapp, inserts, docsdir, overwrite=True, itype=None, from_jso
     # Round II - patch the rest of the metadata (ensuring to index by not passing the query param)
     rnd = ' 2nd' if not patch_only else ''
     for a_type in all_types:
+        identifying_properties, _ = get_schema_info(a_type)
         patched = 0
         if not second_round_items[a_type]:
             logger.info('{}{}: no items to patch'.format(a_type, rnd))
@@ -541,11 +546,17 @@ def load_all_gen(testapp, inserts, docsdir, overwrite=True, itype=None, from_jso
             an_item = format_for_attachment(an_item, docsdir)
             try:
                 add_last_modified(an_item, userid=LOADXL_USER_UUID)
-                res = testapp.patch_json('/'+an_item['uuid'], an_item)
+                identifying_path = get_identifying_path(an_item, a_type, identifying_properties)
+                if not identifying_path:
+                    raise Exception("Item has no uuid nor any other identifying property; cannot PATCH.")
+                res = testapp.patch_json(identifying_path, an_item)
                 assert res.status_code == 200
                 patched += 1
                 # yield bytes to work with Response.app_iter
-                yield str.encode('PATCH: %s\n' % an_item['uuid'])
+                identifying_value = (get_response_uuid(res) or
+                                     get_identifying_value(an_item, identifying_properties) or
+                                     "<unidentified>")
+                yield str.encode('PATCH: %s\n' % identifying_value)
             except Exception as e:
                 print('Patching {} failed. Patch body:\n{}\n\nError Message:\n{}'.format(
                       a_type, str(an_item), str(e)))
