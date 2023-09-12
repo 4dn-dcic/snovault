@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "dcicsnovault"
-version = "10.0.4.1b7"  # TODO: To become 10.1.0
+version = "10.0.4.1b8"  # TODO: To become 10.1.0
 description = "Storage support for 4DN Data Portals."
 authors = ["4DN-DCIC Team <support@4dnucleome.org>"]
 license = "MIT"
@@ -42,7 +42,9 @@ boto3 = ">=1.26.133"  # no particular version required, but this speeds up searc
 elasticsearch = "7.13.4"  # versions >= 7.14.0 lock out AWS ES
 elasticsearch_dsl = "^7.4.0"
 #dcicutils = "7.4.4.5b21"
-dcicutils = "^7.5.0"
+#dcicutils = "^7.5.0"
+#dcicutils = "7.10.0.2b14"
+dcicutils = "7.11.0.1b9"
 future = ">=0.15.2,<1"
 html5lib = ">=1.1"  # experimental, should be OK now that we're not using moto server
 humanfriendly = "^1.44.9"

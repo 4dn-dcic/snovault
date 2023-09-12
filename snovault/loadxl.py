@@ -302,6 +302,8 @@ def get_identifying_property(item: dict, item_identifying_properties: list) -> O
 
 def get_identifying_path(item: dict, item_identifying_properties: list, item_type: str) -> Optional[str]:
     identifying_property = get_identifying_property(item, item_identifying_properties)
+    if not identifying_property:
+        return None
     identifying_value = item[identifying_property]
     if identifying_property == "uuid":
         return f"/{identifying_value}"
@@ -425,15 +427,24 @@ def load_all_gen(testapp, inserts, docsdir, overwrite=True, itype=None, from_jso
                 exists = False
                 if not post_only:
                     identifying_path = get_identifying_path(an_item, identifying_properties, a_type)
+                    if not identifying_path:
+                        raise Exception("Item has no uuid nor any other identifying property;"
+                                        " cannot check existence.")
                     try:
                         # 301 because @id is the existing item path, not uuid
                         existing_item = testapp.get(identifying_path, status=[200, 301])
-                        if existing_item.status_code == 301:
-                            existing_item = existing_item.follow()
+                        # If we get here then the item exists.
                         if "uuid" not in an_item:
+                            # If the given item does not have a uuid specified then
+                            # set it from the existing item we just found in the database;
+                            # if the response is 301 then we have to follow it to do this.
+                            if existing_item.status_code == 301:
+                                existing_item = existing_item.follow()
                             an_item["uuid"] = existing_item.json["uuid"]
                         exists = True
                     except Exception:
+                        # Ignoring exception here on purpose; this happens if the
+                        # item does not (yet) exist in the database, which is fine.
                         pass
                 # skip the items that exists
                 # if overwrite=True, still include them in PATCH round
@@ -452,6 +463,8 @@ def load_all_gen(testapp, inserts, docsdir, overwrite=True, itype=None, from_jso
                         post_request += '&check_only=true'
                     to_post = format_for_attachment(to_post, docsdir)
                     try:
+                        # This creates the (as yet non-existent) item to the
+                        # database with just the minimal data (first_fields).
                         res = testapp.post_json(post_request, to_post)  # skip indexing in round 1
                         if not validate_only:
                             assert res.status_code == 201
@@ -463,8 +476,15 @@ def load_all_gen(testapp, inserts, docsdir, overwrite=True, itype=None, from_jso
                         else:
                             assert res.status_code == 200
                             if "uuid" not in an_item:
-                                an_item["uuid"] = res.json["@graph"][0]["uuid"]
-                            yield str.encode('CHECK: %s\n' % an_item['uuid'])
+                                # Note that with check_only=true we do not get back a uuid.
+                                an_identifying_property = get_identifying_property(an_item, identifying_properties)
+                                if not an_identifying_property:
+                                    raise Exception("Item has no uuid nor any other identifying property;"
+                                                    " cannot update.")
+                                an_identifying_value = an_item.get(an_identifying_property)
+                            else:
+                                an_identifying_value = an_item["uuid"]
+                            yield str.encode('CHECK: %s\n' % an_identifying_value)
                     except Exception as e:
                         print('Posting {} failed. Post body:\n{}\nError Message:{}'
                               ''.format(a_type, str(first_fields), str(e)))
