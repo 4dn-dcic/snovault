@@ -295,8 +295,8 @@ LOADXL_ALLOW_NONE = environ_bool("LOADXL_ALLOW_NONE", default=True)
 def get_identifying_property(item: dict, identifying_properties: list) -> Optional[str]:
     """
     Returns the first identifying property of the given item which has a value, given its
-    identifying properties (passed in from the identifyingProperties of the item's type schema).
-    We favor the uuid property; no ordering is defined for of other identifying properties.
+    identifying properties (passed in from the identifyingProperties of the item's type
+    schema). Favor uuid property; no ordering defined for other identifying properties.
     """
     if "uuid" in item:
         identifying_value = item["uuid"]
@@ -312,9 +312,9 @@ def get_identifying_property(item: dict, identifying_properties: list) -> Option
 
 def get_identifying_path(item: dict, item_type: str, identifying_properties: list) -> Optional[str]:
     """
-    Returns the Portal URL path for the first identifying property of the given item which has a value,
-    given its identifying properties (passed in from the identifyingProperties of the item's type schema).
-    We favor the uuid property; no ordering is defined for of other identifying properties.
+    Returns the Portal URL path for the first identifying property of the given item which has a
+    value, given its identifying properties (passed in from the identifyingProperties of the item's
+    type schema). Favor uuid property; no ordering defined for other identifying properties.
     """
     identifying_property = get_identifying_property(item, identifying_properties)
     if identifying_property:
@@ -327,6 +327,11 @@ def get_identifying_path(item: dict, item_type: str, identifying_properties: lis
 
 
 def get_identifying_value(item: dict, identifying_properties: list) -> Optional[str]:
+    """
+    Returns the value of the first identifying property of the given item which has a value,
+    given its identifying properties (passed in from the identifyingProperties of the item's
+    type schema). Favor uuid property; no ordering defined for other identifying properties.
+    """
     identifying_property = get_identifying_property(item, identifying_properties)
     return item[identifying_property] if identifying_property else None
 
@@ -432,7 +437,9 @@ def load_all_gen(testapp, inserts, docsdir, overwrite=True, itype=None, from_jso
             # This conversion of schema name to object type works for all existing schemas at the moment.
             return "".join([part.title() for part in snake_case_version_of_type_name.split('_')])
         schema = profiles[get_camel_case_version_of_type_name(obj_type)]
-        return (schema.get("identifyingProperties", []), schema.get("required", []))
+        identifying_properties = schema.get("identifyingProperties", [])
+        required_properties = schema.get("required", [])
+        return (identifying_properties, required_properties)
 
     # run step1 - if item does not exist, post with minimal metadata (and skip indexing since we will patch
     # in round 2)
