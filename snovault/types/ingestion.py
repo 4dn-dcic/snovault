@@ -206,7 +206,6 @@ class SubmissionFolio:
             PRINT(json.dumps(resolution, indent=2), file=fp)
 
     def process_standard_bundle_results(self, bundle_result: dict, s3_only: bool = False) -> None:
-        #import pdb ; pdb.set_trace()
         """
         If the given bundle_result contains either a result, post_output, or upload_info property,
         then writes the contents of that property to an S3 key with either the name submission.json,
