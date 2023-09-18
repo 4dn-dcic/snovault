@@ -230,6 +230,12 @@ class SubmissionFolio:
                 if not s3_only:
                     self.note_additional_datum('result', from_dict=bundle_result, default={})
 
+        if bundle_result.get('validation_output'):
+            with self.s3_output(key_name='summary.json', key_type='json') as fp:
+                print(json.dumps(bundle_result['validation_output'], indent=2), file=fp)
+                if not s3_only:
+                    self.note_additional_datum('validation_output', from_dict=bundle_result, default={})
+
         if bundle_result.get('post_output'):
             with self.s3_output(key_name='submission_response') as fp:
                 self.show_report_lines(bundle_result['post_output'], fp)
