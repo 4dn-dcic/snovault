@@ -6,8 +6,9 @@ snovault
 Change Log
 ----------
 
-10.1.0
+11.0.0
 ======
+* Upgrade to Python 3.11.
 * Fixed access of user in types/access_key.py in access_key_add WRT request.validated['user'].
 * Added identifyingProperties with just uuid in schemas/access_key.json.
 * Fix in setup_eb.py to handle jsonschema in pyproject.toml like {extras = ..., version = ...}.

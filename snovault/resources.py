@@ -1,6 +1,6 @@
 # See http://docs.pylonsproject.org/projects/pyramid/en/latest/narr/resources.html
 import logging
-from collections import Mapping
+from collections.abc import Mapping
 from copy import deepcopy
 from dcicutils.misc_utils import ignored
 from pyramid.decorator import reify
