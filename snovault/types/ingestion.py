@@ -192,11 +192,8 @@ class SubmissionFolio:
 
             self.patch_item(
                 errors=["%s: %s" % (e.__class__.__name__, e)],
-                processing_status={
-                    "state": "done",
-                    "outcome": "error",
-                    "progress": "incomplete"
-                }
+                processing_status={"state": "done", "outcome": "error", "progress": "incomplete"},
+                **self.other_details
             )
 
         with s3_output_stream(self.s3_client,
