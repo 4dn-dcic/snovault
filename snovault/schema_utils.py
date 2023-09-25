@@ -157,15 +157,7 @@ def resolve_merge_ref(ref, resolver):
         [package_name, path] = ref.split(':')
         [path, ref] = path.split('#')
         schema = fetch_schema_by_package_name(package_name, path)
-        split_fields = ref.split('/')[1:]  # begins with empty /
-        for field in split_fields:
-            resolved = schema[field]
-            schema = resolved
-        if not isinstance(resolved, dict):
-            raise ValueError(
-                f'Schema ref {ref} must resolve dict, not {type(resolved)}'
-            )
-        return resolved
+        return fetch_field_from_schema(schema, ref)
 
 
 def _update_resolved_data(resolved_data, value, resolver):
