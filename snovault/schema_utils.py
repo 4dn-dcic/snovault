@@ -1,16 +1,17 @@
+import os
 import codecs
 import collections
 import io
 import json
 import uuid
+import pkg_resources
 
 from datetime import datetime
 from dcicutils.misc_utils import ignored
 from snovault.schema_validation import SerializingSchemaValidator
 from jsonschema import Draft202012Validator
 from jsonschema import RefResolver
-from jsonschema.exceptions import ValidationError
-import os
+from jsonschema.exceptions import ValidationError, RefResolutionError
 from pyramid.path import AssetResolver, caller_package
 from pyramid.threadlocal import get_current_request
 from pyramid.traversal import find_resource
@@ -115,8 +116,51 @@ def favor_app_specific_schema_ref(schema_ref: str) -> str:
     return schema_ref
 
 
+def fetch_schema_by_package_name(package_name: str, schema_name: str) -> dict:
+    """ Uses the pkg_resources library (good through 3.11) to resolve schemas in other
+        packages """
+    try:
+        schema_data = pkg_resources.resource_string(package_name, schema_name)
+        schema = json.loads(schema_data)
+        return schema
+    except Exception as e:
+        raise RefResolutionError(f"Failed to fetch schema by package name: {str(e)}")
+
+
+def fetch_field_from_schema(schema: dict, ref_identifer: str):
+    """ Fetches a field from a schema given the format in our $merge definitions ie:
+        /properties/access_key_id -> schema.get('properties', {}).get('access_key_id', {})
+    """
+    split_path = ref_identifer.split('/')[1:]
+    resolved = None
+    for subpart in split_path:
+        resolved = schema.get(subpart, {})
+        schema = resolved
+    if not resolved:
+        raise RefResolutionError(f'Could not locate $merge ref {ref_identifer} in schema')
+    if not isinstance(resolved, dict):
+        raise ValueError(
+            f'Schema ref {ref_identifer} must resolve dict, not {type(resolved)}'
+        )
+    return resolved
+
+
 def resolve_merge_ref(ref, resolver):
-    with resolver.resolving(ref) as resolved:
+    try:
+        with resolver.resolving(ref) as resolved:
+            if not isinstance(resolved, dict):
+                raise ValueError(
+                    f'Schema ref {ref} must resolve dict, not {type(resolved)}'
+                )
+            return resolved
+    except (RefResolutionError, ValueError):  # try again under a different method
+        [package_name, path] = ref.split(':')
+        [path, ref] = path.split('#')
+        schema = fetch_schema_by_package_name(package_name, path)
+        split_fields = ref.split('/')[1:]  # begins with empty /
+        for field in split_fields:
+            resolved = schema[field]
+            schema = resolved
         if not isinstance(resolved, dict):
             raise ValueError(
                 f'Schema ref {ref} must resolve dict, not {type(resolved)}'
