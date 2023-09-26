@@ -432,7 +432,7 @@ def load_all_gen(testapp, inserts, docsdir, overwrite=True, itype=None, from_jso
     # collect schemas
     profiles = testapp.get('/profiles/?frame=raw').json
 
-    def get_schema_info(obj_type: str) -> (list[str], list[str]):
+    def get_schema_info(obj_type: str) -> (list, list):
         def get_camel_case_version_of_type_name(snake_case_version_of_type_name: str) -> str:
             # This conversion of schema name to object type works for all existing schemas at the moment.
             return "".join([part.title() for part in snake_case_version_of_type_name.split('_')])
