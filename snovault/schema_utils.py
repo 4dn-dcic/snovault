@@ -175,7 +175,7 @@ def resolve_merge_ref(ref, resolver):
                     f'Schema ref {ref} must resolve dict, not {type(resolved)}'
                 )
             return resolved
-    except (RefResolutionError, ValueError):  # try again under a different method
+    except RefResolutionError:  # try again under a different method
         return extract_schema_from_ref(ref)
 
 
