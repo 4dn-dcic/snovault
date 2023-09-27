@@ -4,6 +4,7 @@ import collections
 import io
 import json
 import uuid
+import re
 import pkg_resources
 
 from datetime import datetime
@@ -145,16 +146,20 @@ def fetch_field_from_schema(schema: dict, ref_identifer: str) -> dict:
     return resolved
 
 
+MERGE_PATTERN = r'^([^:]+):(.+\.json)#/properties/(.+)$'
+
+
+def match_merge_syntax(merge):
+    """ Function that matches possible syntax for merge structure """
+    return re.match(MERGE_PATTERN, merge)
+
+
 def extract_schema_from_ref(ref: str) -> dict:
     """ Implements some special logic for extracting the package_name and path
         of a given $merge ref value
     """
-    if ':' not in ref:
-        raise RefResolutionError(f'Ref {ref} is not formatted correctly - it does not specify'
-                                 f' a package!')
-    if '#' not in ref:
-        raise RefResolutionError(f'Ref {ref} is not formatted correctly - it does not specify'
-                                 f' a field path within the schema!')
+    if not match_merge_syntax(ref):
+        raise RefResolutionError(f'Ref {ref} does match regex {MERGE_PATTERN}')
     [package_name, path] = ref.split(':')
     [path, ref] = path.split('#')
     schema = fetch_schema_by_package_name(package_name, path)
