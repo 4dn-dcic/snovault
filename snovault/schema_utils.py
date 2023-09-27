@@ -145,7 +145,29 @@ def fetch_field_from_schema(schema: dict, ref_identifer: str):
     return resolved
 
 
+def extract_schema_from_ref(ref):
+    """ Implements some special logic for extracting the package_name and path
+        of a given $merge ref value
+    """
+    if ':' not in ref:
+        raise RefResolutionError(f'Ref {ref} is not formatted correctly - it does not specify'
+                                 f' a package!')
+    if '#' not in ref:
+        raise RefResolutionError(f'Ref {ref} is not formatted correctly - it does not specify'
+                                 f' a field path within the schema!')
+    [package_name, path] = ref.split(':')
+    [path, ref] = path.split('#')
+    schema = fetch_schema_by_package_name(package_name, path)
+    return fetch_field_from_schema(schema, ref)
+
+
 def resolve_merge_ref(ref, resolver):
+    """ Resolves fields that have a $merge value - must be formatted like the below:
+        snovault:schemas/access_key.json#/properties/access_key_id
+
+        The ':' character denotes package (always required)
+        The '#' character denotes field path ie: how to traverse once schema is resolved
+    """
     try:
         with resolver.resolving(ref) as resolved:
             if not isinstance(resolved, dict):
@@ -154,10 +176,7 @@ def resolve_merge_ref(ref, resolver):
                 )
             return resolved
     except (RefResolutionError, ValueError):  # try again under a different method
-        [package_name, path] = ref.split(':')
-        [path, ref] = path.split('#')
-        schema = fetch_schema_by_package_name(package_name, path)
-        return fetch_field_from_schema(schema, ref)
+        return extract_schema_from_ref(ref)
 
 
 def _update_resolved_data(resolved_data, value, resolver):
