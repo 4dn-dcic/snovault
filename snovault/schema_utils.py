@@ -127,7 +127,7 @@ def fetch_schema_by_package_name(package_name: str, schema_name: str) -> dict:
         raise RefResolutionError(f"Failed to fetch schema by package name: {str(e)}")
 
 
-def fetch_field_from_schema(schema: dict, ref_identifer: str):
+def fetch_field_from_schema(schema: dict, ref_identifer: str) -> dict:
     """ Fetches a field from a schema given the format in our $merge definitions ie:
         /properties/access_key_id -> schema.get('properties', {}).get('access_key_id', {})
     """
@@ -145,7 +145,7 @@ def fetch_field_from_schema(schema: dict, ref_identifer: str):
     return resolved
 
 
-def extract_schema_from_ref(ref):
+def extract_schema_from_ref(ref: str) -> dict:
     """ Implements some special logic for extracting the package_name and path
         of a given $merge ref value
     """
