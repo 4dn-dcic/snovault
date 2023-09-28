@@ -119,7 +119,7 @@ def load_data_view(context, request):
     inserts = None
     from_json = False
     if fdn_dir:
-        inserts = app_project().project_filename(os.path.join('tests/data/', fdn_dir, '/'))
+        inserts = app_project().project_filename(os.path.join('tests/data/', fdn_dir) + '/')
     elif local_path:
         inserts = local_path
     elif store:
