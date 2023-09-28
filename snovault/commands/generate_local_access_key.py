@@ -69,18 +69,17 @@ from passlib.context import CryptContext
 from passlib.registry import register_crypt_handler
 import pytz
 import requests
-import shutil
-import tempfile
 import toml
-from typing import Optional, Tuple, Union
+from typing import Optional, Tuple
 import uuid
 from webtest import TestApp
+from dcicutils.common import AnyJsonData
 from snovault.authentication import (
     generate_password as generate_access_key_secret,
     generate_user as generate_access_key
 )
 from snovault.edw_hash import EDWHash
-from snovault.loadxl import create_testapp, load_data
+from snovault.loadxl import create_testapp, load_all
 from .captured_output import captured_output
 
 _INSERTS_DIR = "src/encoded/tests/data/master-inserts"
@@ -288,35 +287,15 @@ def _get_local_portal_url(port: int) -> None:
     return f"http://localhost:{port}"
 
 
-def _load_data(app: TestApp, data: Union[dict, list], data_type: str) -> bool:
-
-    def write_json_to_temporary_directory(data: list, data_type: str) -> str:
-        tmp_dir = tempfile.mkdtemp()
-        tmp_file = os.path.join(tmp_dir, f"{data_type}.json")
-        with open(tmp_file, "w") as tmp_f:
-            json.dump(data, tmp_f, indent=4)
-            tmp_f.flush()
-        return tmp_dir
-
-    def delete_json_temporary_directory(path: str) -> bool:
-        def is_path_within_system_temporary_directory(path):
-            system_tmp_dir = tempfile.gettempdir()
-            return os.path.commonpath([path, system_tmp_dir]) == system_tmp_dir
-        if not is_path_within_system_temporary_directory(path):
-            return False
-        shutil.rmtree(path)
-        return True
-
+def _load_data(app: TestApp, data: AnyJsonData, data_type: str) -> bool:
     if isinstance(data, dict):
         data = [data]
     elif not isinstance(data, list):
         return False
     if not data_type:
         return False
-
-    data_directory = write_json_to_temporary_directory(data, data_type)
-    load_data(app, indir=data_directory, overwrite=True, use_master_inserts=False)
-    delete_json_temporary_directory(data_directory)
+    data = {data_type: data}
+    load_all(app, inserts=data, docsdir=None, overwrite=True, itype=[data_type], from_json=True)
     return True
 
 
