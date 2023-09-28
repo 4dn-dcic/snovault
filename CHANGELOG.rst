@@ -6,6 +6,12 @@ snovault
 Change Log
 ----------
 
+10.0.5
+======
+
+* Bug fix in schema reference resolution when the schema is loaded from a file
+
+
 10.0.4
 ======
 
