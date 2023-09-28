@@ -25,7 +25,7 @@ jobs:
     # Build matrix
     strategy:
       matrix:
-        python_version: [3.8]
+        python_version: [3.8, 3.9, 3.11]
         test_type: ['UNIT', 'INDEXING']
 
     # Steps represent a sequence of tasks that will be executed as part of the job
