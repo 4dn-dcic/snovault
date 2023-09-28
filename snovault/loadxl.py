@@ -662,7 +662,7 @@ def load_local_data(app, overwrite=False):
     ]
 
     for test_insert_dir in test_insert_dirs:
-        chk_dir = app_project().project_filename(os.path.joins("tests/data/", test_insert_dir))
+        chk_dir = app_project().project_filename(os.path.join("tests/data/", test_insert_dir))
         for (dirpath, dirnames, filenames) in os.walk(chk_dir):
             if any([fn for fn in filenames if fn.endswith('.json') or fn.endswith('.json.gz')]):
                 logger.info('Loading inserts from "{}" directory.'.format(test_insert_dir))
