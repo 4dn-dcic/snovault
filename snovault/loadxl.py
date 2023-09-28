@@ -47,7 +47,7 @@ LOADXL_USER_UUID = "3202fd57-44d2-44fb-a131-afb1e43d8ae5"
 
 
 # order of items references with linkTo in a field in  'required' in schemas
-def ORDER():
+def loadxl_order():
     # This should be set by the downstream application
     return app_project().loadxl_order()
 
@@ -426,7 +426,7 @@ def load_all_gen(testapp, inserts, docsdir, overwrite=True, itype=None, from_jso
         # raise StopIteration
     # order Items
     all_types = list(store.keys())
-    for ref_item in reversed(ORDER()):
+    for ref_item in reversed(loadxl_order()):
         if ref_item in all_types:
             all_types.insert(0, all_types.pop(all_types.index(ref_item)))
     # collect schemas
