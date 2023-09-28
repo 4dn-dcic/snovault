@@ -8,6 +8,7 @@ Change Log
 
 11.0.0
 ======
+
 * Upgrade to Python 3.11.
 * Fixed access of user in types/access_key.py in access_key_add WRT request.validated['user'].
 * Added identifyingProperties with just uuid in schemas/access_key.json.
@@ -24,6 +25,13 @@ Change Log
   retrieve and output a given object (uuid) from a locally running portal.
 * Added support for consortia and submission_centers in ingestion_listener.py.
 * Added unique_key to types/access_key.py (helps get rid of this in cgap-portal/fourfront).
+
+
+10.0.5
+======
+
+* Bug fix in schema reference resolution when the schema is loaded from a file
+
 
 10.0.4
 ======
