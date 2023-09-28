@@ -9,7 +9,7 @@ from dcicutils.log_utils import set_logging
 from dcicutils.env_utils import is_stg_or_prd_env, is_test_env
 
 # override this order in the downstream portal
-from ..loadxl import loadxl_orde)
+from ..loadxl import loadxl_order
 
 log = structlog.getLogger(__name__)
 EPILOG = __doc__
