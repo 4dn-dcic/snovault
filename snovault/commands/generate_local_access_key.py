@@ -320,6 +320,8 @@ def _get_all_access_keys(app: TestApp) -> list:
     return sorted(response, key=lambda item: item.created, reverse=True)
 
 
+# TODO: Use misc_utils.is_uuid when out of review ...
+# https://github.com/4dn-dcic/utils/blob/kmp_sheet_utils_schema_hinting/dcicutils/misc_utils.py#L1371
 def _is_uuid(s: str) -> bool:
     try:
         return str(uuid.UUID(s)) == s
