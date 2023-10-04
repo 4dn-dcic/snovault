@@ -85,7 +85,7 @@ def load_data_view(context, request):
     expected input data
 
     {'local_path': path to a directory or file in file system
-     'fdn_dir': inserts folder under encoded
+     'fdn_dir': inserts folder under encoded/tests/data
      'store': if not local_path or fdn_dir, look for a dictionary of items here
      'overwrite' (Bool): overwrite if existing data
      'itype': (list or str): only pick some types from the source or specify type in in_file
@@ -222,13 +222,13 @@ def format_for_attachment(json_data, docsdir):
                 path = find_doc(docsdir, json_data[field])
                 if not path:
                     del json_data[field]
-                    logger.error('Removing {} form {}, expecting path'.format(field, json_data["uuid"]))
+                    logger.error(f'Removing {field} form {json_data["uuid"]}, expecting path')
                 else:
                     json_data[field] = attachment(path)
             else:
                 # malformatted attachment
                 del json_data[field]
-                logger.error('Removing {} form {}, expecting path'.format(field, json_data["uuid"]))
+                logger.error(f'Removing {field} form {json_data["uuid"]}, expecting path')
     return json_data
 
 

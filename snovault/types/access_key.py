@@ -121,6 +121,7 @@ def access_key_add(context, request):
             for principal in request.effective_principals
             if principal.startswith('userid.')
         ]
+        # Only (at most) one single user expected from above.
         request.validated['user'] = user[0] if len(user) == 1 else None
 
     password = None
