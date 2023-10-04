@@ -1477,7 +1477,7 @@ def s3_local_file(s3_client, bucket: str, key: str, local_filename: str = None):
     """
     if local_filename:
         tempdir_name = tempfile.mkdtemp()
-        tempfile_name = os.path.join(tempdir_name, local_filename)
+        tempfile_name = os.path.join(tempdir_name, os.path.basename(local_filename))
     else:
         ext = os.path.splitext(key)[-1]
         tempfile_name = tempfile.mktemp() + ext
