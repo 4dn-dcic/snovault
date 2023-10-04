@@ -223,13 +223,13 @@ class SubmissionFolio:
 
         if bundle_result.get('result'):
             with self.s3_output(key_name='submission.json', key_type='json') as fp:
-                print(json.dumps(bundle_result['result'], indent=2), file=fp)
+                PRINT(json.dumps(bundle_result['result'], indent=2), file=fp)
                 if not s3_only:
                     self.note_additional_datum('result', from_dict=bundle_result, default={})
 
         if bundle_result.get('validation_output'):
             with self.s3_output(key_name='summary.json', key_type='json') as fp:
-                print(json.dumps(bundle_result['validation_output'], indent=2), file=fp)
+                PRINT(json.dumps(bundle_result['validation_output'], indent=2), file=fp)
                 if not s3_only:
                     self.note_additional_datum('validation_output', from_dict=bundle_result, default={})
 
@@ -241,7 +241,7 @@ class SubmissionFolio:
 
         if bundle_result.get('upload_info'):
             with self.s3_output(key_name='upload_info') as fp:
-                print(json.dumps(bundle_result['upload_info'], indent=2), file=fp)
+                PRINT(json.dumps(bundle_result['upload_info'], indent=2), file=fp)
                 if not s3_only:
                     self.note_additional_datum('upload_info', from_dict=bundle_result, default=[])
 
@@ -249,12 +249,12 @@ class SubmissionFolio:
     def show_report_lines(lines, fp, default="Nothing to report."):
         for line in lines or ([default] if default else []):
             try:
-                print(line, file=fp)
+                PRINT(line, file=fp)
             except UnicodeEncodeError:
                 ascii_line = line.encode(
                     encoding="ascii", errors="backslashreplace"
                 ).decode(encoding="ascii")
-                print(ascii_line, file=fp)
+                PRINT(ascii_line, file=fp)
 
 
 @collection(
