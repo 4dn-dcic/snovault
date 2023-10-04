@@ -44,7 +44,7 @@
 #       "user": "<your-user-uuid>",
 #       "description": "Manually generated local access-key for testing.",
 #       "access_key_id": "DHU74PRA",
-#       "secret_access_key_hash": "rpcHx3KtfzvHCXTpcINCm0LRvzORXBpviBy6SSJyMssmcKrs6JYqZYGIhLz7jFCD",
+#       "secret_access_key_hash": "SampleHash_pcHx3KtfzvHCXTpcINCm0LRvzORXBpviBy6SSJyMssmcKrsmcKrzs",
 #       "uuid": "c04987b2-42e6-47fc-8247-9de7e417355b"
 #   }
 #
@@ -69,7 +69,6 @@ from passlib.context import CryptContext
 from passlib.registry import register_crypt_handler
 import pytz
 import requests
-import toml
 from typing import Optional, Tuple
 import uuid
 from webtest import TestApp
@@ -80,6 +79,7 @@ from snovault.authentication import (
 )
 from snovault.edw_hash import EDWHash
 from snovault.loadxl import create_testapp, load_all
+from ..project_app import app_project
 from .captured_output import captured_output
 
 _INSERTS_DIR = "src/encoded/tests/data/master-inserts"
@@ -162,7 +162,7 @@ def main() -> None:
             pass
         access_keys_file_json[_ACCESS_KEYS_FILE_ITEM] = access_keys_file_item
         with io.open(_ACCESS_KEYS_FILE, "w") as access_keys_file_f:
-            json.dump(access_keys_file_json, access_keys_file_f, indent=4)
+            json.dump(access_keys_file_json, fp=access_keys_file_f, indent=4)
         print("Done.")
     if not args.update_keys or args.verbose:
         print(f"New local portal access-key record suitable for: {_ACCESS_KEYS_FILE} ...")
@@ -263,17 +263,10 @@ def _hash_secret_like_snovault(secret: str, ini_file: str = _DEFAULT_INI_FILE) -
 
 
 def _guess_default_app() -> str:
-    try:
-        with open("pyproject.toml", "r") as toml_f:
-            toml_contents = toml.loads(toml_f.read())
-            repository = toml_contents["tool"]["poetry"]["repository"]
-            if repository.endswith("cgap-portal"):
-                return "cgap"
-            elif repository.endswith("fourfront"):
-                return "fourfront"
-    except Exception:
-        pass
-    return "smaht"
+    # This should return one of: smaht-portal, cgap-portal, or fourfront
+    # that is, if running within repos: smaht-portal, cgap-portal, or fourfront
+    repository = app_project().REPO_NAME
+    return repository if repository != "cgap-portal" else "cgap"
 
 
 def _is_local_portal_running(port: int) -> None:
