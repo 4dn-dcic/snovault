@@ -15,6 +15,8 @@ _TILDE_MATCH = re.compile(r"[~]([0-9]+[.])([0-9]+)([.].*)?$")
 
 
 def fix_requirement(requirement):
+    if isinstance(requirement, dict) and "version" in requirement:
+        requirement = requirement["version"]
     m = _CARET_MATCH.match(requirement)
     if m:
         return ">=%s%s,<%s" % (m.group(1), m.group(2), int(m.group(1)) + 1)

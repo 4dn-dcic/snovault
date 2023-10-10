@@ -1460,7 +1460,7 @@ def s3_output_stream(s3_client, bucket: str, key: str, s3_encrypt_key_id: Option
 
 
 @contextlib.contextmanager
-def s3_local_file(s3_client, bucket: str, key: str):
+def s3_local_file(s3_client, bucket: str, key: str, local_filename: str = None):
     """
     This context manager allows one to write:
 
@@ -1475,8 +1475,12 @@ def s3_local_file(s3_client, bucket: str, key: str):
         bucket: an S3 bucket name
         key: the name of a key within the given S3 bucket
     """
-    ext = os.path.splitext(key)[-1]
-    tempfile_name = tempfile.mktemp() + ext
+    if local_filename:
+        tempdir_name = tempfile.mkdtemp()
+        tempfile_name = os.path.join(tempdir_name, os.path.basename(local_filename))
+    else:
+        ext = os.path.splitext(key)[-1]
+        tempfile_name = tempfile.mktemp() + ext
     try:
         s3_client.download_file(Bucket=bucket, Key=key, Filename=tempfile_name)
         yield tempfile_name

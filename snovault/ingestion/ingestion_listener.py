@@ -149,6 +149,30 @@ def submit_for_ingestion(context, request):
             # If the "lab" argument was passed, which we no longer require, make sure it's consistent.
             raise SubmissionFailure("'lab' was supplied inconsistently for submit_for_ingestion.")
 
+    if instance.get("consortia"):
+        consortia = instance["consortia"]
+        if isinstance(consortia, list) and len(consortia) > 0:
+            consortium = consortia[0]
+        else:
+            consortium = consortia
+        consortium = consortium["@id"]
+        consortium_arg = get_parameter(parameters, "consortium", default=consortium, update=True)
+        if consortium_arg != consortium:
+            # If the "consortium" argument was passed, which we no longer require, make sure it's consistent.
+            raise SubmissionFailure("'consortium' was supplied inconsistently for submit_for_ingestion.")
+
+    if instance.get("submission_centers"):
+        submission_centers = instance["submission_centers"]
+        if isinstance(submission_centers, list) and len(submission_centers) > 0:
+            submission_center = submission_centers[0]
+        else:
+            submission_center = submission_centers
+        submission_center = submission_center['@id']
+        submission_center_arg = get_parameter(parameters, "submission_center", default=submission_center, update=True)
+        if submission_center_arg != submission_center:
+            # If the "submission_center" argument was passed, which we no longer require, make sure it's consistent.
+            raise SubmissionFailure("'submission_center' was supplied inconsistently for submit_for_ingestion.")
+
     ingestion_type = instance['ingestion_type']
     ingestion_type_arg = get_parameter(parameters, "ingestion_type", default=ingestion_type, update=True)
     if ingestion_type_arg != ingestion_type:

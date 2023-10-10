@@ -36,6 +36,7 @@ from .base import (
 
 @collection(
     name='access-keys',
+    unique_key='access_key:access_key_id',
     properties={
         'title': 'Access keys',
         'description': 'Programmatic access keys',
@@ -110,11 +111,18 @@ def access_key_add(context, request):
         request.validated['access_key_id'] = generate_user()
 
     if 'user' not in request.validated:
-        request.validated['user'], = [
+        # request.validated['user'], = [
+        #    principal.split('.', 1)[1]
+        #    for principal in request.effective_principals
+        #    if principal.startswith('userid.')
+        # ]
+        user = [
             principal.split('.', 1)[1]
             for principal in request.effective_principals
             if principal.startswith('userid.')
         ]
+        # Only (at most) one single user expected from above.
+        request.validated['user'] = user[0] if len(user) == 1 else None
 
     password = None
     if 'secret_access_key_hash' not in request.validated:

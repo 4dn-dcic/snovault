@@ -6,6 +6,27 @@ snovault
 Change Log
 ----------
 
+11.0.0
+======
+
+* Upgrade to Python 3.11.
+* Fixed access of user in types/access_key.py in access_key_add WRT request.validated['user'].
+* Added identifyingProperties with just uuid in schemas/access_key.json.
+* Fix in setup_eb.py to handle jsonschema in pyproject.toml like {extras = ..., version = ...}.
+* Added snovault/commands/generate_local_access_key.py script; originally just for
+  smaht-portal to create access-key for local dev/testing because doing it via UI
+  not yet fully supported; but generally convenient for cgap-portal and fourfront as well.
+  * Minor changes (e.g. create_testapp) to loadxl.py to help load data from a specified directory;
+    called from dev_server.py; for creating access-keys on the fly after startup for local dev/testing.
+    * Enhancement in load_data in loadxl.py to respect a fully qualified data directory path name,
+      i.e. do not make it relative to the current working directory if it is fully qualified.
+    * Updates to load_all_gen to allow object create/update with no uuid.
+* Added snovault/commands/view_local_object.py script for dev/testing to
+  retrieve and output a given object (uuid) from a locally running portal.
+* Added support for consortia and submission_centers in ingestion_listener.py.
+* Added unique_key to types/access_key.py (helps get rid of this in cgap-portal/fourfront).
+
+
 10.0.5
 ======
 
