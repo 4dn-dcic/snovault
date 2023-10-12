@@ -4,7 +4,9 @@
     "$id": "/profiles/ingestion_submission.json",
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "type": "object",
-    "required": [ "ingestion_type" ],
+    "required": [
+        "ingestion_type"
+    ],
     "additionalProperties": false,
     "identifyingProperties": [
         "uuid",
@@ -83,8 +85,7 @@
             "title": "Parameters",
             "description": "A record of explicitly offered form parameters in the submission request.",
             "type": "object",
-            "additionalProperties": true,
-            "properties": {}
+            "additionalProperties": true
         },
         "processing_status": {
             "title": "Processing Status",
@@ -128,28 +129,25 @@
             "title": "Result",
             "description": "An object representing a result if processing ran to completion, whether the outcome was success or failure.",
             "type": "object",
-            "additionalProperties": true,
-            "properties": {},
-            "default": {}
+            "additionalProperties": true
         },
         "errors": {
             "title": "Errors",
             "description": "A list of error messages if processing was aborted before results were obtained.",
             "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
             "items": {
                 "title": "Error Message",
                 "description": "One of possibly several reasons that processing was not completed.",
                 "type": "string"
-            },
-            "default": []
+            }
         },
         "additional_data": {
             "title": "Additional Data",
             "description": "Additional structured information resulting from processing, the nature of which may vary by ingestion_type and other factors.",
             "type": "object",
-            "additionalItems": true,
-            "properties": {},
-            "default": {}
+            "additionalProperties": true
         }
     }
 }
