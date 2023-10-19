@@ -617,3 +617,58 @@ def userid(instance, subschema):  # args required by jsonschema-serialize-fork
 def now(instance, subschema):  # args required by jsonschema-serialize-fork
     ignored(instance, subschema)
     return utc_now_str()
+
+
+def get_identifying_and_required_properties(schema: dict) -> (list, list):
+    """
+    Returns a tuple containing (first) the list of identifying properties
+    and (second) the list of any required properties specified by the given schema.
+
+    This DOES handle a limited version of the "anyOf" construct; namely where it only contains
+    a simple list of objects each specifying a "required" property name or a list of property
+    names; in this call ALL such "required" property names are included; an EXCEPTION is
+    raised if an unsupported usage of this "anyOf" construct is found. 
+
+    This may be slightly confusing in that ALL of the properties specified within an "anyOf"
+    construct are returned from this function as required, which is not technically semantically
+    not correct; only ONE of those would be required; but this function is NOT used for validation,
+    but instead to extract from the actual object the values which must be included on the initial
+    insert into the database, when it is FIRST created, via POST in loadxl.
+    """
+    def get_all_required_properties_from_any_of(schema: dict) -> list:
+        """
+        Returns a list of ALL property names which are specified as "required" within any "anyOf"
+        construct within the given JSON schema. We support ONLY a LIMITED version of "anyOf" construct,
+        in which it must contain ONLY a simple list of objects each specifying a "required" property
+        name or list of property names; if the "anyOf" construct looks like it is anything OTHER
+        than this limited usaage, then an EXCEPTION will be raised.
+        """
+        required_properties = set()
+        any_of_list = schema.get("anyOf")
+        if not any_of_list:
+            return required_properties
+        if not isinstance(any_of_list, list):
+            raise Exception("Unsupported use of anyOf in schema.")
+        for any_of in any_of_list:
+            if not any_of:
+                continue
+            if not isinstance(any_of, dict):
+                raise Exception("Unsupported use of anyOf in schema.")
+            for any_of_key, any_of_value in any_of.items():
+                if any_of_key != "required":
+                    raise Exception("Unsupported use of anyOf in schema.")
+                if not any_of_value:
+                    continue
+                if isinstance(any_of_value, list):
+                    required_properties.update(any_of_value)
+                elif isinstance(any_of_value, str):
+                    required_properties.add(any_of_value)
+                else:
+                    raise Exception("Unsupported use of anyOf in schema.")
+        return list(required_properties)
+
+    identifying_properties = schema.get("identifyingProperties", [])
+    required_properties = set()
+    required_properties.update(schema.get("required", []))
+    required_properties.update(get_all_required_properties_from_any_of(schema))
+    return identifying_properties, list(required_properties)
