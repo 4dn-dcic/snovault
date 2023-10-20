@@ -643,20 +643,22 @@ def get_identifying_and_required_properties(schema: dict) -> (list, list):
         name or list of property names; if the "anyOf" construct looks like it is anything OTHER
         than this limited usaage, then an EXCEPTION will be raised.
         """
+        def raise_unsupported_usage_exception():
+            raise Exception("Unsupported use of anyOf in schema.")
         required_properties = set()
         any_of_list = schema.get("anyOf")
         if not any_of_list:
             return required_properties
         if not isinstance(any_of_list, list):
-            raise Exception("Unsupported use of anyOf in schema.")
+            raise_unsupported_usage_exception()
         for any_of in any_of_list:
             if not any_of:
                 continue
             if not isinstance(any_of, dict):
-                raise Exception("Unsupported use of anyOf in schema.")
+                raise_unsupported_usage_exception()
             for any_of_key, any_of_value in any_of.items():
                 if any_of_key != "required":
-                    raise Exception("Unsupported use of anyOf in schema.")
+                    raise_unsupported_usage_exception()
                 if not any_of_value:
                     continue
                 if isinstance(any_of_value, list):
@@ -664,7 +666,7 @@ def get_identifying_and_required_properties(schema: dict) -> (list, list):
                 elif isinstance(any_of_value, str):
                     required_properties.add(any_of_value)
                 else:
-                    raise Exception("Unsupported use of anyOf in schema.")
+                    raise_unsupported_usage_exception()
         return list(required_properties)
 
     identifying_properties = schema.get("identifyingProperties", [])
