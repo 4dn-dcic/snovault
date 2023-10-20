@@ -8,8 +8,9 @@ Change Log
 
 11.1.0
 ======
-* Merged in Doug's drr_schema_updates branch with new types.
+* Merging in Doug's drr_schema_updates branch with new types.
 * Added limited support to loadxl for required properties within anyOf of data type schemas.
+
 
 11.0.0
 ======
