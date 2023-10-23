@@ -22,6 +22,7 @@ from pyramid.view import view_config
 from dcicutils.misc_utils import ignored, environ_bool, VirtualApp
 from dcicutils.secrets_utils import assume_identity
 from snovault.util import debug_log
+from .schema_utils import get_identifying_and_required_properties
 from .project_app import app_project
 from .server_defaults_misc import add_last_modified
 
@@ -432,14 +433,20 @@ def load_all_gen(testapp, inserts, docsdir, overwrite=True, itype=None, from_jso
     # collect schemas
     profiles = testapp.get('/profiles/?frame=raw').json
 
-    def get_schema_info(obj_type: str) -> (list, list):
-        def get_camel_case_version_of_type_name(snake_case_version_of_type_name: str) -> str:
+    def get_schema_info(type_name: str) -> (list, list):
+        """
+        Returns a tuple containing (first) the list of identifying properties and (second) the list
+        of any required properties specified by the schema associated with the object of the given
+        object type name. The schema is ASSUMED to be contained within the outer profiles dictionary
+        variable, keyed by the camel-case version of the given object type name, which itself is
+        assumed to be the snake-case version of the type name (though okay if already camel-case).
+        See get_identifying_and_required_properties for details of how these fields are extracted.
+        """
+        def get_camel_case_version_of_type_name(type_name: str) -> str:
             # This conversion of schema name to object type works for all existing schemas at the moment.
-            return "".join([part.title() for part in snake_case_version_of_type_name.split('_')])
-        schema = profiles[get_camel_case_version_of_type_name(obj_type)]
-        identifying_properties = schema.get("identifyingProperties", [])
-        required_properties = schema.get("required", [])
-        return (identifying_properties, required_properties)
+            return "".join([part.title() for part in type_name.split("_")])
+        schema = profiles[get_camel_case_version_of_type_name(type_name)]
+        return get_identifying_and_required_properties(schema)
 
     # run step1 - if item does not exist, post with minimal metadata (and skip indexing since we will patch
     # in round 2)

@@ -6,6 +6,13 @@ snovault
 Change Log
 ----------
 
+11.1.0
+======
+* 2023-10-23
+* Added limited/targeted support to loadxl for required properties within anyOf of data type schemas;
+  this in response to Doug's new SMaHT data type related work which makes use of this feature.
+
+
 11.0.0
 ======
 
