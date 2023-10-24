@@ -843,13 +843,13 @@ test-randomorder = ["pytest-randomly"]
 
 [[package]]
 name = "dcicutils"
-version = "8.0.0.1b2"
+version = "8.0.0.1a13"
 description = "Utility package for interacting with the 4DN Data Portal and other 4DN resources"
 optional = false
 python-versions = ">=3.8,<3.12"
 files = [
-    {file = "dcicutils-8.0.0.1b2-py3-none-any.whl", hash = "sha256:75e703a5b0e3992fa95dc7df5ab56efbdf39e1e939e3c4d587225c79e79fffb9"},
-    {file = "dcicutils-8.0.0.1b2.tar.gz", hash = "sha256:41964289982143853bc900930608a80feee21c4996e4431843cb2b9d07d76970"},
+    {file = "dcicutils-8.0.0.1a13-py3-none-any.whl", hash = "sha256:d3f4b6a8825b1674973839405d4cf2d4aa94a6034262a53f96dcf68061525265"},
+    {file = "dcicutils-8.0.0.1a13.tar.gz", hash = "sha256:b63f385834572c2dc200b2b9b5d3aeecd60d43182b121775d3b9ef556d2b787e"},
 ]
 
 [package.dependencies]
@@ -861,6 +861,7 @@ docker = ">=4.4.4,<5.0.0"
 elasticsearch = "7.13.4"
 gitpython = ">=3.1.2,<4.0.0"
 jsonc-parser = ">=1.1.5,<2.0.0"
+jsonschema = ">=4.19.0,<5.0.0"
 openpyxl = ">=3.1.2,<4.0.0"
 opensearch-py = ">=2.0.1,<3.0.0"
 PyJWT = ">=2.6.0,<3.0.0"
@@ -3280,4 +3281,4 @@ test = ["zope.testing"]
 [metadata]
 lock-version = "2.0"
 python-versions = ">=3.8.1,<3.12"
-content-hash = "bb7b9e02257bb1dd9d07dc1d5fc23368a8d09710036f9cede29ff6db1042b026"
+content-hash = "8b776498ece7821d3952421a4f84a30ebb5840ee5b906892ef8bf3f78ec4ff30"
