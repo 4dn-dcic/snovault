@@ -39,8 +39,7 @@
         "user": {
             "title": "User",
             "type": "string",
-            "linkTo": "User",
-            "permission": "restricted_fields"
+            "linkTo": "User"
         },
         "description": {
             "title": "Description",
