@@ -376,6 +376,7 @@ class Item(Resource):
     AbstractCollection = AbstractCollection
     Collection = Collection
     STATUS_ACL = {}  # note that this should ALWAYS be overridden by downstream application
+    ALLOWED_PATH_CHARACTERS = ["_", "-", ":", ",", ".", " ", "@"]
 
     def __init__(self, registry, model):
         self.registry = registry
@@ -630,11 +631,12 @@ class Item(Resource):
         that interfere with the resource_path. Currently, we allow all
         alphanumeric characters and few others
         """
-        also_allowed = ['_', '-', ':', ',', '.', ' ', '@']
         if not isinstance(value, str):  # formerly basestring
             raise ValueError('Identifying property %s must be a string. Value: %s' % (field, value))
-        forbidden = [char for char in value
-                     if (not char.isalnum() and char not in also_allowed)]
+        forbidden = [
+            char for char in value
+            if (not char.isalnum() and char not in self.ALLOWED_PATH_CHARACTERS)
+        ]
         if any(forbidden):
             msg = ("Forbidden character(s) %s are not allowed in field: %s. Value: %s"
                    % (set(forbidden), field, value))
