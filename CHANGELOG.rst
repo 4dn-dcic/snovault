@@ -6,6 +6,13 @@ snovault
 Change Log
 ----------
 
+11.0.1
+======
+
+* Repair reference to ``load_data_by_type`` to resolve correctly when loadxl 
+  is absent entirely from the application repo
+
+
 11.0.0
 ======
 

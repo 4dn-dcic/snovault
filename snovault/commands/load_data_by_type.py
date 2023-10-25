@@ -4,8 +4,8 @@ import structlog
 
 from dcicutils.env_utils import permit_load_data
 from pyramid.paster import get_app
-from pyramid.path import DottedNameResolver
 from .. import configure_dbsession
+from ..loadxl import load_data_by_type
 
 
 log = structlog.getLogger(__name__)
@@ -53,7 +53,6 @@ def main(simulated_args=None):
     env = app.registry.settings.get('env.name', '')
 
     allow_prod = args.prod
-    load_data_by_type = DottedNameResolver().resolve("encoded.loadxl:load_data_by_type")
 
     if load_data_should_proceed(env, allow_prod):
         load_data_by_type(app, args.indir, args.overwrite, args.itype)
