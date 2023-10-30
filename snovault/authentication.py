@@ -468,7 +468,7 @@ def get_jwt(request):
     return token
 
 
-@view_config(route_name='login', request_method=['POST', 'GET'], permission=NO_PERMISSION_REQUIRED)
+@view_config(route_name='login', request_method='POST', permission=NO_PERMISSION_REQUIRED)
 @debug_log
 def login_view(context, request, samesite: str = "strict"):
     return app_project().login(context, request, samesite=samesite)
