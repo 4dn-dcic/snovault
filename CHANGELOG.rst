@@ -11,6 +11,8 @@ Change Log
 * Merging in Doug's drr_schema_updates branch with new types.
 * Added limited support to loadxl for required properties within anyOf of data type schemas.
 * Merged in load_data_fix branch.
+* Update dcicutils to 8.2.0
+* 2023-11-02
 
 
 11.0.1
