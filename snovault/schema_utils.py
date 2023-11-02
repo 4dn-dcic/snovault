@@ -9,6 +9,7 @@ import pkg_resources
 
 from datetime import datetime
 from dcicutils.misc_utils import ignored
+from dcicutils.bundle_utils import SchemaManager
 from snovault.schema_validation import SerializingSchemaValidator
 from jsonschema import Draft202012Validator
 from jsonschema import RefResolver
@@ -669,8 +670,7 @@ def get_identifying_and_required_properties(schema: dict) -> (list, list):
                     raise_unsupported_usage_exception()
         return list(required_properties)
 
-    identifying_properties = schema.get("identifyingProperties", [])
     required_properties = set()
     required_properties.update(schema.get("required", []))
     required_properties.update(get_all_required_properties_from_any_of(schema))
-    return identifying_properties, list(required_properties)
+    return SchemaManager.get_identifying_properties(schema), list(required_properties)
