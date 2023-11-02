@@ -49,36 +49,33 @@
         },
         "email": {
             "title": "Account Email",
-            "description": "Email used to log in to the 4DN Portal.",
+            "description": "Email used to log in to the portal",
             "type": "string",
             "format": "email",
-            "lookup": 20,
             "uniqueKey": true
         },
         "first_name": {
             "title": "First name",
-            "description": "The user's first (given) name.",
+            "description": "The user's first (given) name",
             "type": "string",
             "lookup": 30
         },
         "last_name": {
             "title": "Last name",
-            "description": "The user's last (family) name.",
+            "description": "The user's last (family) name",
             "type": "string",
             "lookup": 40
         },
         "job_title": {
             "title": "Job Title",
             "type": "string",
-            "comment": "Can be user supplied - purely informational",
-            "lookup": 41
+            "comment": "Can be user supplied - purely informational"
         },
         "groups": {
             "title": "Groups",
             "description": "Additional access control groups",
             "note": "USE WITH CAUTION - currently how we add admin access to a user",
             "type": "array",
-            "lookup": 80,
             "uniqueItems": true,
             "permission": "restricted_fields",
             "items": {
@@ -89,44 +86,39 @@
             "title": "Preferred Contact Email",
             "description": "Email to contact by, if different from account/sign-in e-mail address",
             "type": "string",
-            "format": "email",
-            "lookup": 45
+            "format": "email"
         },
         "phone1": {
             "title": "Primary phone number",
-            "description": "The user's primary phone number (with country code).",
+            "description": "The user's primary phone number (with country code)",
             "type": "string",
             "format": "phone",
-            "lookup": 100,
             "pattern": "[+]?[\\d]{10,36}((\\sx|\\sext|\\sextension)(\\s)?[\\d]{1,7})?$"
         },
         "phone2": {
             "title": "Alternate phone number",
-            "description": "The user's secondary phone number (with country code).",
+            "description": "The user's secondary phone number (with country code)",
             "type": "string",
             "format": "phone"
         },
         "fax": {
             "title": "Fax number",
-            "description": "A FAX number for the user (with country code).",
+            "description": "A FAX number for the user (with country code)",
             "type": "string",
             "format": "phone"
         },
         "skype": {
             "title": "Skype ID",
-            "type": "string",
-            "lookup": 110
+            "type": "string"
         },
         "google": {
             "title": "Google ID",
-            "type": "string",
-            "lookup": 120
+            "type": "string"
         },
         "timezone": {
             "title": "Timezone",
-            "description": "The timezone the user is associated with.",
+            "description": "The timezone the user is associated with",
             "type": "string",
-            "lookup": 130,
             "default": "US/Eastern",
             "enum": [
                 "Africa/Abidjan",
