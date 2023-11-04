@@ -33,11 +33,11 @@
             "enum": [
                 "current",
                 "deleted"
-            ]
+            ],
+            "permission": "restricted_fields"
         },
         "user": {
             "title": "User",
-            "comment": "Only admins are allowed to set this value.",
             "type": "string",
             "linkTo": "User"
         },
@@ -50,12 +50,13 @@
             "title": "Access key ID",
             "comment": "Only admins are allowed to set this value.",
             "type": "string",
-            "uniqueKey": true
+            "uniqueKey": true,
+            "permission": "restricted_fields"
         },
         "secret_access_key_hash": {
             "title": "Secret access key Hash",
-            "comment": "Only admins are allowed to set this value.",
-            "type": "string"
+            "type": "string",
+            "permission": "restricted_fields"
         },
         "expiration_date": {
             "title": "Expiration Date",

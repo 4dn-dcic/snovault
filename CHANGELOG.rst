@@ -6,6 +6,26 @@ snovault
 Change Log
 ----------
 
+
+11.3.0
+======
+* Another thug commit to add CHANGELOG for below.
+
+
+11.2.0
+======
+* Thug commit to change dcictuils from 8.2.0 to ^8.2.0.
+
+
+11.1.0
+======
+* Merging in Doug's drr_schema_updates branch with new types.
+* Added limited support to loadxl for required properties within anyOf of data type schemas.
+* Merged in load_data_fix branch.
+* Update dcicutils to 8.2.0
+* 2023-11-02
+
+
 11.0.1
 ======
 
