@@ -1,12 +1,14 @@
 # See http://docs.pylonsproject.org/projects/pyramid/en/latest/narr/resources.html
 import logging
-from collections import Mapping
+from collections.abc import Mapping
 from copy import deepcopy
 from dcicutils.misc_utils import ignored
 from pyramid.decorator import reify
 from pyramid.httpexceptions import HTTPInternalServerError
 from pyramid.security import (
-    # Allow,
+    Allow,
+    Deny,
+    ALL_PERMISSIONS,
     Everyone,
     Authenticated,
     principals_allowed_by_permission
@@ -15,6 +17,8 @@ from pyramid.traversal import (
     resource_path,
     traverse
 )
+from .server_defaults_user import get_userid
+from .types.acl import ONLY_ADMIN_VIEW_ACL
 from .calculated import (
     calculate_properties,
     calculated_property,
@@ -39,7 +43,33 @@ logger = logging.getLogger(__name__)
 
 def includeme(config):
     config.include(auth0_config)
+    config.include(recaptcha_config)
     config.scan(__name__)
+
+
+def acl_from_settings(settings):
+    # XXX Unsure if any of the demo instance still need this
+    acl = []
+    for k, v in settings.items():
+        if k.startswith('allow.'):
+            action = Allow
+            permission = k[len('allow.'):]
+            principals = v.split()
+        elif k.startswith('deny.'):
+            action = Deny
+            permission = k[len('deny.'):]
+            principals = v.split()
+        else:
+            continue
+        if permission == 'ALL_PERMISSIONS':
+            permission = ALL_PERMISSIONS
+        for principal in principals:
+            if principal == 'Authenticated':
+                principal = Authenticated
+            elif principal == 'Everyone':
+                principal = Everyone
+            acl.append((action, principal, permission))
+    return acl
 
 
 class Resource(object):
@@ -71,6 +101,19 @@ class Root(Resource):
 
     def __init__(self, registry):
         self.registry = registry
+
+    @reify
+    def __acl__(self):
+        acl = acl_from_settings(self.registry.settings) + [
+            (Allow, Everyone, ['list', 'search']),
+            (Allow, 'group.admin', ALL_PERMISSIONS),
+            (Allow, 'remoteuser.EMBED', 'restricted_fields'),
+        ] + [
+                  (Allow, 'remoteuser.INDEXER', ['view', 'view_raw', 'list', 'index']),
+                  (Allow, 'remoteuser.EMBED', ['view', 'view_raw', 'expand']),
+                  (Allow, Everyone, ['visible_for_edit'])
+              ]
+        return acl
 
     @reify
     def connection(self):
@@ -145,9 +188,39 @@ def auth0_config(config):
         for config_key, result_key in auth0_config_values.items():
             if config_key in settings:
                 response_dict[result_key] = settings[config_key]
+
+        # If Redis enabled, set the callback value in Auth0Config
+        if 'redis.server' in request.registry.settings:
+            callback = f'{request.host_url}/callback'
+            response_dict['auth0Options']['auth']['redirectUrl'] = callback
         return response_dict
 
     config.add_view(auth0_config_view, route_name='auth0-config')
+
+
+def recaptcha_config(config):
+    """ Route that exposes the recaptcha site key """
+    config.add_route(
+        'recaptcha-config',
+        '/recaptcha_config'
+    )
+    recaptcha_config_values = {  # determines which values are echoed
+        'g.recaptcha.key': 'RecaptchaKey',
+    }
+
+    def recaptcha_config_view(request):
+        response = request.response
+        response.content_type = 'application/json; charset=utf-8'
+        response_dict = {
+            'title': 'Recaptcha Config',
+        }
+        settings = config.registry.settings
+        for config_key, result_key in recaptcha_config_values.items():
+            if config_key in settings:
+                response_dict[result_key] = settings[config_key]
+        return response_dict
+
+    config.add_view(recaptcha_config_view, route_name='recaptcha-config')
 
 
 class AbstractCollection(Resource, Mapping):
@@ -287,7 +360,6 @@ display_title_schema = {
     "type": "string",
 }
 
-
 class Item(Resource):
     """
     Base Item resource that corresponds to a Collection or AbstractCollection
@@ -303,10 +375,22 @@ class Item(Resource):
     schema = None
     AbstractCollection = AbstractCollection
     Collection = Collection
+    STATUS_ACL = {}  # note that this should ALWAYS be overridden by downstream application
+    ALLOWED_PATH_CHARACTERS = ["_", "-", ":", ",", ".", " ", "@"]
 
     def __init__(self, registry, model):
         self.registry = registry
         self.model = model
+
+    def __acl__(self):
+        """This sets the ACL for the item based on mapping of status to ACL.
+           If there is no status or the status is not included in the STATUS_ACL
+           lookup then the access is set to admin only
+        """
+        # Don't finalize to avoid validation here.
+        properties = self.upgrade_properties().copy()
+        status = properties.get('status')
+        return self.STATUS_ACL.get(status, ONLY_ADMIN_VIEW_ACL)
 
     def __repr__(self):
         return '<%s at %s>' % (type(self).__name__, resource_path(self))
@@ -339,8 +423,11 @@ class Item(Resource):
         present, otherwise `self.uuid`
         """
         if self.name_key is None:
-            return str(self.uuid)
-        return self.properties.get(self.name_key, None) or str(self.uuid)
+            return self.uuid
+        properties = self.upgrade_properties()
+        if properties.get('status') == 'replaced':
+            return self.uuid
+        return properties.get(self.name_key, None) or self.uuid
 
     @property
     def properties(self):
@@ -427,11 +514,39 @@ class Item(Resource):
                 request._rev_linked_uuids_by_item[str(self.uuid)] = to_update
         return filtered_uuids
 
+    def rev_link_atids(self, request, rev_name):
+        """
+        Returns the list of reverse linked items given a defined reverse link,
+        which should be formatted like:
+        rev = {
+            '<reverse field name>': ('<reverse item class>', '<reverse field to find>'),
+        }
+
+        """
+        conn = request.registry[CONNECTION]
+        return [request.resource_path(conn[uuid]) for uuid in
+                self.get_filtered_rev_links(request, rev_name)]
+
     def unique_keys(self, properties):
         return {
             name: [v for prop in props for v in ensurelist(properties.get(prop, ()))]
             for name, props in self.type_info.schema_keys.items()
         }
+
+    def add_accession_to_title(self, title):
+        if self.properties.get('accession') is not None:
+            return title + ' - ' + self.properties.get('accession')
+        return title
+
+    def is_update_by_admin_user(self):
+        # determine if the submitter in the properties is an admin user
+        userid = get_userid()
+        users = self.registry['collections']['User']
+        user = users.get(userid)
+        if 'groups' in user.properties:
+            if 'admin' in user.properties['groups']:
+                return True
+        return False
 
     def upgrade_properties(self):
         """
@@ -516,11 +631,12 @@ class Item(Resource):
         that interfere with the resource_path. Currently, we allow all
         alphanumeric characters and few others
         """
-        also_allowed = ['_', '-', ':', ',', '.', ' ', '@']
         if not isinstance(value, str):  # formerly basestring
             raise ValueError('Identifying property %s must be a string. Value: %s' % (field, value))
-        forbidden = [char for char in value
-                     if (not char.isalnum() and char not in also_allowed)]
+        forbidden = [
+            char for char in value
+            if (not char.isalnum() and char not in self.ALLOWED_PATH_CHARACTERS)
+        ]
         if any(forbidden):
             msg = ("Forbidden character(s) %s are not allowed in field: %s. Value: %s"
                    % (set(forbidden), field, value))
@@ -626,5 +742,29 @@ class Item(Resource):
         return allowed
 
     @calculated_property(schema=display_title_schema)
-    def display_title(self):
-        return str(self.uuid)
+    def display_title(self, request=None):
+        """create a display_title field."""
+        display_title = ""
+        look_for = [
+            "title",
+            "name",
+            "location_description",
+            "accession",
+        ]
+        properties = self.upgrade_properties()
+        for field in look_for:
+            # special case for user: concatenate first and last names
+            display_title = properties.get(field, None)
+            if display_title:
+                if field != 'accession':
+                    display_title = self.add_accession_to_title(display_title)
+                return display_title
+        # if none of the existing terms are available, use @type + date_created
+        try:
+            type_date = self.__class__.__name__ + " from " + properties.get("date_created", None)[:10]
+            return type_date
+        # last resort, use uuid
+        except Exception:
+            return properties.get('uuid', None)
+#   def display_title(self):
+#       return str(self.uuid)

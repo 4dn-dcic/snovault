@@ -1,8 +1,6 @@
 import pytest
 
 from dcicutils.qa_utils import notice_pytest_fixtures
-from pyramid.config import Configurator
-from ..interfaces import DBSESSION
 
 
 # Test for storage.keys
@@ -16,16 +14,6 @@ bad_items = [
     {'name': 'one', 'accession': 'BAD1'},
     {'name': 'bad', 'accession': 'TEST1'},
 ]
-
-
-@pytest.fixture(scope='session')
-def app(DBSession):
-    notice_pytest_fixtures(DBSession)
-    config = Configurator()
-    config.registry[DBSESSION] = DBSession
-    config.include('snovault')
-    config.include('.testing_key')
-    return config.make_wsgi_app()
 
 
 @pytest.fixture

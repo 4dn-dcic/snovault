@@ -1,5 +1,6 @@
 {
     "title": "NestedObjectLinkTarget",
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
     "description": "Dummy Schema for testing an embeddable item",
     "type": "object",
     "required": ["title", "description"],
@@ -8,7 +9,7 @@
     ],
     "properties": {
         "schema_version": {
-            "type": "object",
+            "type": "string",
             "default": "1"
         },
         "associates": {

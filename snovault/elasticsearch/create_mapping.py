@@ -15,7 +15,7 @@ import structlog
 import time
 
 from collections import OrderedDict
-from dcicutils.misc_utils import ignored
+from dcicutils.misc_utils import ignored  # , VirtualApp
 from elasticsearch.exceptions import (
     TransportError,
     RequestError,
@@ -30,8 +30,9 @@ from timeit import default_timer as timer
 from ..interfaces import COLLECTIONS, TYPES
 from dcicutils.log_utils import set_logging
 from dcicutils.misc_utils import as_seconds
-from ..commands.es_index_data import run as run_index_data
+# from ..commands.es_index_data import run as run_index_data
 from ..schema_utils import combine_schemas
+from ..tools import make_indexer_testapp
 from ..util import (
     add_default_embeds, IndexSettings,
     NUM_SHARDS, NUM_REPLICAS, SEARCH_MAX, KW_IGNORE_ABOVE, MIN_NGRAM,
@@ -43,6 +44,7 @@ from .indexer_utils import (
     get_uuids_for_types,
     SCAN_PAGE_SIZE,
 )
+from ..schema_utils import load_schema
 from .interfaces import ELASTIC_SEARCH, INDEXER_QUEUE
 from ..settings import Settings
 
@@ -103,6 +105,8 @@ def schema_mapping(field, schema, top_level=False, from_array=False):
     TODO: rename 'lower_case_sort' to 'lowercase' and adjust search code
     """
     ignored(top_level)  # TODO: maybe wants to be used below, but isn't yet?
+    if '$merge' in schema:
+        schema = load_schema(schema)
     type_ = schema['type']
 
     # Elasticsearch handles multiple values for a field
@@ -714,6 +718,8 @@ def type_mapping(types, item_type, embed=True):
     #       to relevant fields so that they are not mapped into full_text, for example.
     properties = schema['properties']
     for _, sub_mapping in properties.items():
+        if '$merge' in sub_mapping:
+            sub_mapping = load_schema(sub_mapping)
         if sub_mapping['type'] == 'text':
             sub_mapping['copy_to'] = ['full_text']
     return mapping
@@ -1169,14 +1175,15 @@ def flatten_and_sort_uuids(registry, uuids_to_index, item_order):
         to_index_list.extend(uuids_to_index[itype])
     return to_index_list
 
-
-def run_indexing(app, indexing_uuids):
-    """
-    indexing_uuids is a set of uuids that should be reindexed. If global args
-    are available, then this will spawn a new process to run indexing with.
-    Otherwise, run with the current INDEXER
-    """
-    run_index_data(app, uuids=indexing_uuids)
+# Will thinks this is no longer needed. -kmp 11-Mar-2023
+#
+# def run_indexing(app, indexing_uuids):
+#     """
+#     indexing_uuids is a set of uuids that should be reindexed. If global args
+#     are available, then this will spawn a new process to run indexing with.
+#     Otherwise, run with the current INDEXER
+#     """
+#     run_index_data(app, uuids=indexing_uuids)
 
 
 def run(app, collections=None, dry_run=False, check_first=False, skip_indexing=False,
@@ -1194,7 +1201,7 @@ def run(app, collections=None, dry_run=False, check_first=False, skip_indexing=F
         that exist in db but not in es or that need upgrading and reindex those.
         Takes precedence over check_first
     strict: if True, do not include associated items when considering what
-        items to reindex. Only takes affect with index_diff or when specific
+        items to reindex. Only takes effect with index_diff or when specific
         item_types are specified, since otherwise a complete reindex will
         occur anyways.
     sync_index: if True, synchronously run reindexing rather than queueing.
@@ -1337,9 +1344,14 @@ def run(app, collections=None, dry_run=False, check_first=False, skip_indexing=F
                 log.error('___SYNC INDEXING WITH STRICT=FALSE MAY CAUSE REV_LINK INCONSISTENCY___')
             # sort by-type uuids into one list and index synchronously
             to_index_list = flatten_and_sort_uuids(app.registry, uuids_to_index, item_order)
-            log.info('\n___UUIDS TO INDEX (SYNC)___: %s\n' % len(to_index_list),
+            log.info(f'\n___UUIDS TO INDEX (SYNC)___: {to_index_list}\n',
                      cat='uuids to index', count=len(to_index_list))
-            run_indexing(app, to_index_list)
+
+            # Will suggested this substitute way to implement this indexing action. -kmp 11-Mar-2023
+            vapp = make_indexer_testapp(app)
+            vapp.post_json('/index', {'record': True, 'uuids': to_index_list})
+            # run_indexing(app, to_index_list)
+
         else:
             # if non-strict and attempting to reindex a ton, it is faster
             # just to strictly reindex all items

@@ -4,6 +4,7 @@ import hashlib
 import json
 import os
 import psycopg2
+import psycopg2.extensions
 import subprocess
 import zope.sqlalchemy
 
@@ -12,8 +13,8 @@ from pyramid.config import Configurator
 from pyramid.path import AssetResolver, caller_package
 from pyramid.session import SignedCookieSessionFactory
 from pyramid.settings import asbool
-from pyramid_localroles import LocalRolesAuthorizationPolicy
-from sqlalchemy import engine_from_config, event, orm
+from .local_roles import LocalRolesAuthorizationPolicy
+from sqlalchemy import engine_from_config, event, orm  # , text as psql_text
 from webob.cookies import JSONSerializer
 
 from .interfaces import DBSESSION
@@ -61,17 +62,34 @@ def configure_engine(settings):
     return engine
 
 
-def set_postgresql_statement_timeout(engine, timeout=20 * 1000):
+def set_postgresql_statement_timeout(engine, timeout: int = 20 * 1000):
     """
     Prevent Postgres waiting indefinitely for a lock.
+
+    :param engine: a database engine
+    :param timeout: a number of milliseconds to set for as statement_timeout
     """
 
     @event.listens_for(engine, 'connect')
     def connect(dbapi_connection, connection_record):
         ignored(connection_record)
+        timeout_ms = timeout
+        if not isinstance(timeout_ms, int):
+            # This coercion will truncate 3.5 to 3, but so would the %d below,
+            # and we have long used that. But the real purpose of introducing
+            # this coercion is to get a ValueError if a string other than a
+            # representation of a number slips through, to seal out accidental injection.
+            # -kmp 6-Apr-2023
+            timeout_ms = int(timeout_ms)
         cursor = dbapi_connection.cursor()
         try:
-            cursor.execute("SET statement_timeout TO %d" % timeout)
+            # cursor: psycopg2.extensions.cursor
+            # This call to psycopg2.extensions.cursor.execute expects a real string. Giving it an sqlalchemy.text
+            # object will fail because something will try to do a boolean test, probably "if thing_to_execute:..."
+            # and __bool__ is not defined on sqlalchemy.txt
+            # Bottom line: Cannot wrap this string with psql_text(...) like we do elsewhere. It's not ready.
+            # Might be we could do such a wrapper if we called execute on some other object.
+            cursor.execute("SET statement_timeout = %d;" % timeout_ms)
         except psycopg2.Error:
             dbapi_connection.rollback()
         finally:

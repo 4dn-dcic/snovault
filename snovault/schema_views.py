@@ -41,7 +41,7 @@ def _annotated_schema(type_info, request):
     schema['rdfs:seeAlso'] = urlparse(jsonld_base).path + type_info.name
     # add links to profiles of children schemas
     schema['children'] = [
-        '/profiles/' +  t_name + '.json' for t_name in type_info.child_types
+        '/profiles/' + t_name + '.json' for t_name in type_info.child_types
     ]
 
     if type_info.factory is None:
