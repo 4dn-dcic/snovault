@@ -1,5 +1,6 @@
 {
   "title": "Testing Biogroup Sno",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
   "description": "Biogroup integrated testing type. This item contains a linkTo biosource.",
   "type": "object",
   "required": ["name"],

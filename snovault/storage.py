@@ -1,46 +1,21 @@
-from pyramid.httpexceptions import (
-    HTTPConflict,
-    HTTPLocked,
-    HTTPInternalServerError
-)
-from sqlalchemy import (
-    Column,
-    # DDL,
-    ForeignKey,
-    bindparam,
-    # event,
-    func,
-    # null,
-    orm,
-    schema,
-    # text,
-    types,
-)
+import boto3
+import structlog
+import uuid
+
+from botocore.client import Config
+from dcicutils.misc_utils import ignored, get_error_message
+from pyramid.httpexceptions import HTTPConflict, HTTPLocked, HTTPInternalServerError
+from pyramid.threadlocal import get_current_request
+from sqlalchemy import Column, ForeignKey, bindparam, func, orm, schema, types
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.dialects.postgresql import JSONB as JSON
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext import baked
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import (
-    collections,
-    backref
-)
-from sqlalchemy.orm.exc import (
-    FlushError,
-    NoResultFound,
-    MultipleResultsFound,
-)
-from .interfaces import (
-    BLOBS,
-    DBSESSION,
-    STORAGE,
-)
-from dcicutils.misc_utils import ignored
-from pyramid.threadlocal import get_current_request
-import boto3
-from botocore.client import Config
-import uuid
-import structlog
+from sqlalchemy.orm import backref, collections
+from sqlalchemy.orm.exc import FlushError, MultipleResultsFound, NoResultFound
+from .interfaces import BLOBS, DBSESSION, STORAGE
+
 
 log = structlog.getLogger(__name__)
 
@@ -105,6 +80,10 @@ def register_storage(registry, write_override=None, read_override=None):
                        if blob_bucket
                        else RDBBlobStorage(registry[DBSESSION]))
 
+
+# These 3 versions are known to be compatible, older versions should not be
+# used, odds are 14 can be used as well - Will Sept 13 2022
+POSTGRES_COMPATIBLE_MAJOR_VERSIONS = ['11', '12', '13', '14']
 
 Base = declarative_base()
 
@@ -396,7 +375,9 @@ class RDBStorage(object):
         try:
             # baked query seem to not work with json
             query = (session.query(CurrentPropertySheet)
-                     .join(CurrentPropertySheet.propsheet, CurrentPropertySheet.resource)
+                     # Rewrittent to use two separate joins per SQLAlchemy 2.0 requirements. -kmp 10-Apr-2023
+                     .join(CurrentPropertySheet.propsheet)
+                     .join(CurrentPropertySheet.resource)
                      .filter(Resource.item_type == item_type,
                              PropertySheet.properties[key].astext == value)
                      )
@@ -484,10 +465,9 @@ class RDBStorage(object):
             if unique_keys is not None:
                 keys_add, keys_remove = self._update_keys(model, unique_keys)
             sp.commit()
+            return
         except (IntegrityError, FlushError):
             sp.rollback()
-        else:
-            return
 
         # Try again more carefully
         try:
@@ -496,11 +476,14 @@ class RDBStorage(object):
             if links is not None:
                 self._update_rels(model, links)
             session.flush()
-        except (IntegrityError, FlushError):
-            msg = 'UUID conflict'
+        except (IntegrityError, FlushError) as e:
+            raw_error_msg = get_error_message(e)
+            log.error(raw_error_msg)
+            msg = 'Cannot update because of one or more conflicting (or undefined) UUIDs'
             raise HTTPConflict(msg)
         assert unique_keys is not None
-        conflicts = [pk for pk in keys_add if session.query(Key).get(pk) is not None]
+        # Formerly session.query(Key).get(pk), rewritten for SA2.0
+        conflicts = [pk for pk in keys_add if session.get(Key, pk) is not None]
         assert conflicts
         msg = 'Keys conflict: %r' % conflicts
         raise HTTPConflict(msg)
@@ -544,7 +527,7 @@ class RDBStorage(object):
 
         session = self.DBSession()
         for pk in to_remove:
-            key = session.query(Key).get(pk)
+            key = session.get(Key, pk)  # formerly session.query(Key).get(pk), rewritten for SA2.0
             session.delete(key)
 
         for name, value in to_add:
@@ -568,7 +551,8 @@ class RDBStorage(object):
         to_add = rels - existing
 
         for rel, target in to_remove:
-            link = session.query(Link).get((source, rel, target))
+            # formerly link = session.query(Link).get((source, rel, target)), rewritten for SA2.0
+            link = session.get(Link, (source, rel, target))
             session.delete(link)
 
         for rel, target in to_add:
@@ -660,7 +644,7 @@ class RDBBlobStorage(object):
         if isinstance(blob_id, str):
             blob_id = uuid.UUID(blob_id)
         session = self.DBSession()
-        blob = session.query(Blob).get(blob_id)
+        blob = session.get(Blob, blob_id)  # was session.query(Blob).get(blob_id), rewritten for SA2.0
         return blob.data
 
 

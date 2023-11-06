@@ -414,8 +414,8 @@ def compute_invalidation_scope(context, request):
     # Note 'type' is desired here because concrete types have literal type TypeInfo
     # vs. abstract types have literal type AbstractTypeInfo
     # isinstance() will return True (wrong) since TypeInfo inherits from AbstractTypeInfo
-    if type(request.registry[TYPES][source_type]) == AbstractTypeInfo or \
-            type(request.registry[TYPES][target_type]) == AbstractTypeInfo:
+    if type(request.registry[TYPES][source_type]) is AbstractTypeInfo or \
+            type(request.registry[TYPES][target_type]) is AbstractTypeInfo:
         raise HTTPBadRequest('One or more of your types is abstract! %s/%s' % (source_type, target_type))
     source_type_schema = request.registry[TYPES][source_type].schema
     result = {

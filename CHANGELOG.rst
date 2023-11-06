@@ -7,6 +7,287 @@ Change Log
 ----------
 
 
+11.3.0
+======
+* Another thug commit to add CHANGELOG for below.
+
+
+11.2.0
+======
+* Thug commit to change dcictuils from 8.2.0 to ^8.2.0.
+
+
+11.1.0
+======
+* Merging in Doug's drr_schema_updates branch with new types.
+* Added limited support to loadxl for required properties within anyOf of data type schemas.
+* Merged in load_data_fix branch.
+* Update dcicutils to 8.2.0
+* 2023-11-02
+
+
+11.0.1
+======
+
+* Repair reference to ``load_data_by_type`` to resolve correctly when loadxl 
+  is absent entirely from the application repo
+
+
+11.0.0
+======
+
+* Upgrade to Python 3.11.
+* Fixed access of user in types/access_key.py in access_key_add WRT request.validated['user'].
+* Added identifyingProperties with just uuid in schemas/access_key.json.
+* Fix in setup_eb.py to handle jsonschema in pyproject.toml like {extras = ..., version = ...}.
+* Added snovault/commands/generate_local_access_key.py script; originally just for
+  smaht-portal to create access-key for local dev/testing because doing it via UI
+  not yet fully supported; but generally convenient for cgap-portal and fourfront as well.
+  * Minor changes (e.g. create_testapp) to loadxl.py to help load data from a specified directory;
+    called from dev_server.py; for creating access-keys on the fly after startup for local dev/testing.
+    * Enhancement in load_data in loadxl.py to respect a fully qualified data directory path name,
+      i.e. do not make it relative to the current working directory if it is fully qualified.
+    * Updates to load_all_gen to allow object create/update with no uuid.
+* Added snovault/commands/view_local_object.py script for dev/testing to
+  retrieve and output a given object (uuid) from a locally running portal.
+* Added support for consortia and submission_centers in ingestion_listener.py.
+* Added unique_key to types/access_key.py (helps get rid of this in cgap-portal/fourfront).
+
+
+10.0.5
+======
+
+* Bug fix in schema reference resolution when the schema is loaded from a file
+
+
+10.0.4
+======
+
+* Bug fix in access key refresh to predicate on whether
+expiration is enabled
+
+
+10.0.3
+======
+
+* Update ``drs`` primitive to resolve specific access types with preferential defaulting to https, http
+
+
+10.0.2
+======
+
+* Repair bug in ``permission`` implementation involving restricted fields
+* Repair bug in user registration, allowing customization through ``app_project`` definition
+
+
+10.0.1
+======
+
+* Extend ``FormatChecker`` to ensure date and date-time validation
+
+
+10.0.0
+======
+
+* Updates ``jsonschema`` version, removing dependency on ``jsonschema-serialize-fork`` and allowing
+  us to use ``$merge`` refs.
+  * Breaking Change: dependencies --> dependentRequired in schema
+  * Breaking Change: object serialization in schema no longer valid
+
+
+  9.1.1
+=====
+
+* Small fix for JWT Decode incompatible change
+
+9.1.0
+=====
+
+* Fix for MIME type ordering in renderers.py (differs between cgap and fourfront).
+
+
+9.0.0
+=====
+
+* Merge/unify ingestion and other code from cgap-portal and fourfront.
+
+
+8.1.0
+=====
+
+* Add several modules/commands from upstream portals that are generic enough to live in
+  this repository (to reduce code/library maintenace overhead)
+
+* Port support for ``make deploy1`` from the portals:
+
+  * In ``Makefile``:
+
+    * Support for ``make deploy1``
+
+    * Support for ``make psql-dev``
+
+    * Support for ``make psql-test``
+
+    * Support for ``make kibana-start`` (commented out for now, pending testing)
+
+    * Support for ``make kibana-start-test`` (commented out)
+
+    * Support for ``make kibana-stop`` (commented out)
+
+  * In ``pyproject.toml``:
+
+    * Template file ``development.ini.template``
+
+    * Template file ``test.ini.template``
+
+    * Support for ``prepare-local-dev`` script,
+      which creates ``development.ini`` from ``development.ini.template``
+      and ``test.ini`` from ``test.ini.template``.
+
+ * Port the ``dev_servers.py`` support from CGAP.
+
+ * In the ``scripts/`` dir:
+
+   * Add ``scripts/psql-start``
+     in support of ``make psql-dev`` and ``make psql-test``.
+
+
+8.0.1
+=====
+
+* Fix some warnings from ``pytest``
+
+  * If a method has "test" in its name but isn't a test, it needs a prefix "_"
+
+* Fix some warnings from ``sqlalchemy``
+
+  * ``session.connection()`` doesn't need to ``.connect()``
+  * ``.join(x, y, ...)`` should be ``.join(x).join(y)...``
+  * ``session.query(Foo).get(bar)`` should be ``session.get(Foo, bar)``
+
+
+8.0.0
+=====
+
+* Redis support, adding /callback info to /auth0_config if a Redis server is configured
+
+
+7.3.1
+=====
+
+* Change ``pytest.yield_fixture`` to ``pytest.yield``. This is techinically incompatible since it would break downstream portals if they were below ``pytest`` 6, but they are both at ``pytest 7`` now, so they should be unaffected.
+* Address some places involving ``.execute(raw_string)`` that should be ``.execute(text(raw_string))``.
+
+
+7.3.0
+=====
+
+* In ``Makefile``:
+
+  * Make sure ``make test`` and ``make test-full`` also run ``make test-static``.
+
+* In ``snovault/storage.py``:
+
+  * Add ``POSTGRES_COMPATIBLE_MAJOR_VERSIONS`` (moved from ``snovault/tests/test_storage.py``)
+
+* In ``snovault/elasticsearch/create_mapping.py``:
+
+  * Per Will's direction, replace a call to ``run_index_data`` with a ``vapp`` creation and
+    a call to an index post with given uuids.
+
+* In ``snovault/elasticsearch/mpindexer.py``:
+
+  * Very minor syntactic refactor to make a use of ``global`` more clear.
+
+* In ``snovault/tools.py``:
+
+  * Reimplement ``index_n_items_for_testing`` for better clarity and to fix a potential bug.
+
+* In ``snovault/tests/test_indexing.py``
+
+  * Various test optimizations using better synchronization for robustness.
+
+
+7.2.1
+=====
+
+* In ``Makefile``:
+
+  * New ``make`` target ``test-one``.
+
+
+  * Separate testing of indexing tests from other unit tests,
+    renaming the "npm" tests to "indexing" tests.
+
+* Make github workflow ``main.yml`` consistent with ``Makefile`` changes.
+
+* In ``pyproject.toml``:
+
+  * Use ``pytest 7.2.2``.
+
+
+7.2.0
+=====
+
+* In ``Makefile``:
+
+  * Add ``make test-full`` to test like ``make test`` but without the ``instafail`` option.
+
+  * Add ``make test-static`` to run static checks.
+
+  * Add ``make test-one TEST_NAME=<test_name_or_filename_base>`` so you can test a single file or test from ``make``.
+    This is not so important in ``snovault`` as in ``cgap-portal`` but I want the interface to be uniform.
+
+  * In all testing, added ``SQLALCHEMY_WARN_20=1`` at start of command line to enable SQLAlchemy 2.0
+    compatibility warnings, since we're using ``SQLAlchemy 1.4``, which has those warnings.
+
+* In ``pyproject.toml``:
+  * Require ``dcicutils 6,7`` for fixes to ``Eventually``.
+
+  * Include ``pipdeptree`` as a dev dependency for debugging.
+
+  * Remove "backports.statistics", needed for Python 3.3 support and earlier.
+
+  * Bump python_magic foothold (no effective change, just faster locking)
+
+  * Update some comments.
+
+* In ``snovault/updater.py``:
+
+  * Better error message for UUID integrity errors, noting they might not be conflits but just maybe also UUID missing.
+
+  * Rearrange imports for clarity.
+
+* In new file ``snovault/tools.py``:
+
+  * New functions ``make_testapp``, ``make_htmltestapp``, ``make_authenticated_testapp``,
+    ``make_submitter_testapp``, ``make_indexer_testapp``, and ``make_embed_testapp``.
+
+  * New context managers ``being_nested`` and ``local_collections``.
+
+  * New function ``index_n_items_for_testing``.
+
+  These functions are potentially useful in the portal repos, so are not part of the test files.
+
+* In file ``snovault/tests/serverfixtures.py``:
+
+  * New fixture ``engine``
+
+* In file ``snovault/tests/test_indexing.py``:
+
+  * Material changes to testing to use better storage synchronization (semaphor-style rather than sleep-style),
+    hopefully achieving fewer intermittent errors in testing both locally and in GA.
+
+  * Bug fixes in a few tests that were assigning settings or other dictionary structures but not assuring an
+    undo was done if the test failed.
+
+* In files ``snovault/util.py``, ``snovault/tests/test_embedding.py``, ``snovault/tests/test_storage.py``:
+
+  * Various changes for PEP8 or other readability reasons, including to satisfy ``PyCharm`` linters.
+
+  * Allow Postgres 14 to be used.
+
+
 7.1.3
 =====
 

@@ -1,23 +1,24 @@
+import os
 import codecs
 import collections
-import uuid
+import io
 import json
-import requests
+import uuid
+import re
+import pkg_resources
 
 from datetime import datetime
 from dcicutils.misc_utils import ignored
-from jsonschema_serialize_fork import (
-    Draft4Validator,
-    FormatChecker,
-    RefResolver,
-)
-# TODO (C4-177): remove these imports (urlsplit, urlopen) when RefResolverOrdered is removed
-from jsonschema_serialize_fork.compat import urlsplit, urlopen
-from jsonschema_serialize_fork.exceptions import ValidationError
+from dcicutils.bundle_utils import SchemaManager
+from snovault.schema_validation import SerializingSchemaValidator
+from jsonschema import Draft202012Validator
+from jsonschema import RefResolver
+from jsonschema.exceptions import ValidationError, RefResolutionError
 from pyramid.path import AssetResolver, caller_package
 from pyramid.threadlocal import get_current_request
 from pyramid.traversal import find_resource
 from uuid import UUID
+from .project_app import app_project
 from .util import ensurelist
 
 # This was originally an internal import from "." (__init__.py), but I have replaced that reference
@@ -28,68 +29,209 @@ from .resources import Item, COLLECTIONS
 SERVER_DEFAULTS = {}
 
 
+# TODO: Shouldn't this return func? Otherwise this:
+#           @server_default
+#           def foo(instance, subschema):
+#               return ...something...
+#       does (approximately):
+#           SERVER_DEFAULTS['foo'] = lambda(instance, subschema): ...something...
+#           server_default = None
+#       It feels like the function should still get defined. -kmp 17-Feb-2023
 def server_default(func):
     SERVER_DEFAULTS[func.__name__] = func
 
 
-class RefResolverOrdered(RefResolver):
-    """
-    Overwrite the resolve_remote method in the RefResolver class, written
-    by lrowe. See:
-    https://github.com/lrowe/jsonschema_serialize_fork/blob/master/jsonschema_serialize_fork/validators.py
-    With python <3.6, json.loads was losing schema order for properties, facets,
-    and columns. Pass in the object_pairs_hook=collections.OrderedDict
-    argument to fix this.
-    WHEN ELASTICBEANSTALK IS RUNNING PY 3.6 WE CAN REMOVE THIS
-    """
-    # TODO (C4-177): The stated condition is now met. We are reliably in Python 3.6, so this code should be removed.
-
+class NoRemoteResolver(RefResolver):
     def resolve_remote(self, uri):
+        """ Resolves remote uri for files so we can cross reference across our own
+            repos, which now contain base schemas we may want to use
         """
-        Resolve a remote ``uri``.
-        Does not check the store first, but stores the retrieved document in
-        the store if :attr:`RefResolver.cache_remote` is True.
-        .. note::
-            If the requests_ library is present, ``jsonschema`` will use it to
-            request the remote ``uri``, so that the correct encoding is
-            detected and used.
-            If it isn't, or if the scheme of the ``uri`` is not ``http`` or
-            ``https``, UTF-8 is assumed.
-        :argument str uri: the URI to resolve
-        :returns: the retrieved document
-        .. _requests: http://pypi.python.org/pypi/requests/
-        """
-        scheme = urlsplit(uri).scheme
-
-        if scheme in self.handlers:
-            result = self.handlers[scheme](uri)
-        elif (
-            scheme in ["http", "https"] and
-            # TODO (C4-177): PyCharm flagged free references to 'requests' in this file as undefined,
-            #                so I've added an import at top of file. However, that suggests this 'elif'
-            #                branch is never entered. When this tangled code is removed, I'll be happier.
-            #                Meanwhile having a definition seems safer than not. -kmp 9-Jun-2020
-            requests and
-            getattr(requests.Response, "json", None) is not None
-        ):
-            # Requests has support for detecting the correct encoding of
-            # json over http
-            if callable(requests.Response.json):
-                result = collections.OrderedDict(requests.get(uri).json())
-            else:
-                result = collections.OrderedDict(requests.get(uri).json)
+        if any(s in uri for s in ['http', 'https', 'ftp', 'sftp']):
+            raise ValueError(f'Resolution disallowed for: {uri}')
         else:
-            # Otherwise, pass off to urllib and assume utf-8
-            result = json.loads(urlopen(uri).read().decode("utf-8"), object_pairs_hook=collections.OrderedDict)
-
-        if self.cache_remote:
-            self.store[uri] = result
-        return result
+            return load_schema(uri)
 
 
-class NoRemoteResolver(RefResolverOrdered):
-    def resolve_remote(self, uri):
-        raise ValueError('Resolution disallowed for: %s' % uri)
+def favor_app_specific_schema(schema: str) -> str:
+    """
+    If the given schema refers to a schema (file) which exists in the app-specific schemas
+    package/directory then favor that version of the file over the local version by returning
+    a reference to that schema; otherwise just returns the given schema.
+
+    For example, IF the given schema is snovault:access_key.json AND the current app is fourfront AND
+    if the file encoded/schemas/access_key.json exists THEN returns: encoded:schemas/access_key.json
+
+    This uses the dcicutils.project_utils mechanism to get the app-specific file/path name.
+    """
+    if isinstance(schema, str):
+        schema_parts = schema.split(":")
+        schema_project = schema_parts[0] if len(schema_parts) > 1 else None
+        if schema_project != app_project().PACKAGE_NAME:
+            schema_filename = schema_parts[1] if len(schema_parts) > 1 else schema_parts[0]
+            app_specific_schema_filename = app_project().project_filename(f"/{schema_filename}")
+            if os.path.exists(app_specific_schema_filename):
+                schema = f"{app_project().PACKAGE_NAME}:{schema_filename}"
+    return schema
+
+
+def favor_app_specific_schema_ref(schema_ref: str) -> str:
+    """
+    If the given schema_ref refers to a schema (file) which exists in the app-specific schemas
+    directory, AND it contains the specified element, then favor that version of the file over the
+    local version by returning a reference to that schema; otherwise just returns the given schema_ref.
+
+    For example, IF the given schema is mixins.json#/modified AND the current app is fourfront
+    AND if the file encoded/schemas/mixins.json exists AND if that file contains the modified
+    element THEN returns: file:///full-path-to/encoded/schemas/mixins.json#/modified
+
+    This uses the dcicutils.project_utils mechanism to get the app-specific file/path name.
+    """
+    def json_file_contains_element(json_filename: str, json_element: str) -> bool:
+        """
+        If the given JSON file exists and contains the given JSON element name then
+        returns True; otherwise returns False. The given JSON element may or may
+        not begin with a slash. Currently only looks at one single top-level element.
+        """
+        if json_filename and json_element:
+            try:
+                with io.open(json_filename, "r") as json_f:
+                    json_content = json.load(json_f)
+                    json_element = json_element.strip("/")
+                    if json_element:
+                        if json_content.get(json_element):
+                            return True
+            except Exception:
+                pass
+        return False
+
+    if isinstance(schema_ref, str):
+        schema_parts = schema_ref.split("#")
+        schema_filename = schema_parts[0]
+        app_specific_schema_filename = app_project().project_filename(f"/schemas/{schema_filename}")
+        if os.path.exists(app_specific_schema_filename):
+            schema_element = schema_parts[1] if len(schema_parts) > 1 else None
+            if schema_element:
+                if json_file_contains_element(app_specific_schema_filename, schema_element):
+                    schema_ref = f"file://{app_specific_schema_filename}#{schema_element}"
+            else:
+                schema_ref = f"file://{app_specific_schema_filename}"
+    return schema_ref
+
+
+def fetch_schema_by_package_name(package_name: str, schema_name: str) -> dict:
+    """ Uses the pkg_resources library (good through 3.11) to resolve schemas in other
+        packages """
+    try:
+        schema_data = pkg_resources.resource_string(package_name, schema_name)
+        schema = json.loads(schema_data)
+        return schema
+    except Exception as e:
+        raise RefResolutionError(f"Failed to fetch schema by package name: {str(e)}")
+
+
+def fetch_field_from_schema(schema: dict, ref_identifer: str) -> dict:
+    """ Fetches a field from a schema given the format in our $merge definitions ie:
+        /properties/access_key_id -> schema.get('properties', {}).get('access_key_id', {})
+    """
+    split_path = ref_identifer.split('/')[1:]
+    resolved = None
+    for subpart in split_path:
+        resolved = schema.get(subpart, {})
+        schema = resolved
+    if not resolved:
+        raise RefResolutionError(f'Could not locate $merge ref {ref_identifer} in schema')
+    if not isinstance(resolved, dict):
+        raise ValueError(
+            f'Schema ref {ref_identifer} must resolve dict, not {type(resolved)}'
+        )
+    return resolved
+
+
+MERGE_PATTERN = r'^([^:]+):(.+[.]json)#/properties/(.+)$'
+
+
+def match_merge_syntax(merge):
+    """ Function that matches possible syntax for merge structure """
+    return re.match(MERGE_PATTERN, merge)
+
+
+def extract_schema_from_ref(ref: str) -> dict:
+    """ Implements some special logic for extracting the package_name and path
+        of a given $merge ref value
+    """
+    if not match_merge_syntax(ref):
+        raise RefResolutionError(f'Ref {ref} does match regex {MERGE_PATTERN}')
+    [package_name, path] = ref.split(':')
+    [path, ref] = path.split('#')
+    schema = fetch_schema_by_package_name(package_name, path)
+    return fetch_field_from_schema(schema, ref)
+
+
+def resolve_merge_ref(ref, resolver):
+    """ Resolves fields that have a $merge value - must be formatted like the below:
+        snovault:schemas/access_key.json#/properties/access_key_id
+
+        The ':' character denotes package (always required)
+        The '#' character denotes field path ie: how to traverse once schema is resolved
+    """
+    try:
+        with resolver.resolving(ref) as resolved:
+            if not isinstance(resolved, dict):
+                raise ValueError(
+                    f'Schema ref {ref} must resolve dict, not {type(resolved)}'
+                )
+            return resolved
+    except RefResolutionError:  # try again under a different method
+        return extract_schema_from_ref(ref)
+
+
+def _update_resolved_data(resolved_data, value, resolver):
+    # Assumes resolved value is dictionary.
+    resolved_data.update(
+        # Recurse here in case the resolved value has refs.
+        resolve_merge_refs(
+            # Actually get the ref value.
+            resolve_merge_ref(value, resolver),
+            resolver
+        )
+    )
+
+
+def _handle_list_or_string_value(resolved_data, value, resolver):
+    if isinstance(value, list):
+        for v in value:
+            _update_resolved_data(resolved_data, v, resolver)
+    else:
+        _update_resolved_data(resolved_data, value, resolver)
+
+
+def resolve_merge_refs(data, resolver):
+    if isinstance(data, dict):
+        # Return copy.
+        resolved_data = {}
+        for k, v in data.items():
+            if k == '$merge':
+                _handle_list_or_string_value(resolved_data, v, resolver)
+            else:
+                resolved_data[k] = resolve_merge_refs(v, resolver)
+    elif isinstance(data, list):
+        # Return copy.
+        resolved_data = [
+            resolve_merge_refs(v, resolver)
+            for v in data
+        ]
+    else:
+        # Assumes we're only dealing with other JSON types
+        # like string, number, boolean, null, not other
+        # types like tuples, sets, functions, classes, etc.,
+        # which would require a deep copy.
+        resolved_data = data
+    return resolved_data
+
+
+def fill_in_schema_merge_refs(schema, resolver):
+    """ Resolves $merge properties, custom $ref implementation from IGVF SNO2-6 """
+    return resolve_merge_refs(schema, resolver)
 
 
 def mixinSchemas(schema, resolver, key_name='properties'):
@@ -102,6 +244,10 @@ def mixinSchemas(schema, resolver, key_name='properties'):
     for mixin in reversed(mixins):
         ref = mixin.get('$ref')
         if ref is not None:
+            # For mixins check if there is an associated app-specific
+            # schema file and favor that over the local one if any.
+            # TODO: This may be controversial and up for discussion. 2023-05-27
+            ref = favor_app_specific_schema_ref(ref)
             with resolver.resolving(ref) as resolved:
                 mixin = resolved
         bases.append(mixin)
@@ -187,10 +333,6 @@ def linkTo(validator, linkTo, instance, schema):
                 yield ValidationError(error)
                 return
 
-    # And normalize the value to a uuid
-    if validator._serialize:
-        validator._validated[-1] = str(item.uuid)
-
 
 class IgnoreUnchanged(ValidationError):
     pass
@@ -202,7 +344,6 @@ def requestMethod(validator, requestMethod, instance, schema):
         requestMethod = [requestMethod]
     elif not validator.is_type(requestMethod, "array"):
         raise Exception("Bad schema")  # raise some sort of schema error
-
     request = get_current_request()
     if request.method not in requestMethod:
         reprs = ', '.join(repr(it) for it in requestMethod)
@@ -264,8 +405,8 @@ def calculatedProperty(validator, linkTo, instance, schema):
         yield ValidationError('submission of calculatedProperty disallowed')
 
 
-class SchemaValidator(Draft4Validator):
-    VALIDATORS = Draft4Validator.VALIDATORS.copy()
+class SchemaValidator(SerializingSchemaValidator):
+    VALIDATORS = SerializingSchemaValidator.VALIDATORS.copy()
     VALIDATORS['calculatedProperty'] = calculatedProperty
     VALIDATORS['linkTo'] = linkTo
     VALIDATORS['permission'] = permission
@@ -274,19 +415,18 @@ class SchemaValidator(Draft4Validator):
     SERVER_DEFAULTS = SERVER_DEFAULTS
 
 
-format_checker = FormatChecker()
-
-
 def load_schema(filename):
     if isinstance(filename, dict):
         schema = filename
         resolver = NoRemoteResolver.from_schema(schema)
     else:
+        if ':' not in filename:  # no repo in filename path, favor the app then fallthrough
+            filename = favor_app_specific_schema(filename)
         utf8 = codecs.getreader("utf-8")
         asset = AssetResolver(caller_package()).resolve(filename)
         schema = json.load(utf8(asset.stream()),
                            object_pairs_hook=collections.OrderedDict)
-        resolver = RefResolverOrdered('file://' + asset.abspath(), schema)
+        resolver = RefResolver('file://' + asset.abspath(), schema)
     # use mixinProperties, mixinFacets, mixinAggregations, and mixinColumns (if provided)
     schema = mixinSchemas(
         mixinSchemas(
@@ -296,10 +436,23 @@ def load_schema(filename):
         ),
         resolver, 'columns'
     )
+    schema = fill_in_schema_merge_refs(schema, resolver)
 
     # SchemaValidator is not thread safe for now
-    SchemaValidator(schema, resolver=resolver, serialize=True)
+    SchemaValidator(schema, resolver=resolver)
     return schema
+
+
+def extract_schema_default(schema, path):
+    """ Extracts a schema default given a schema and an array path """
+    if 'properties' in schema:
+        schema = schema['properties']
+    try:
+        for key in path:
+            obj = schema[key]
+        return obj['default']
+    except Exception:
+        return None
 
 
 def validate(schema, data, current=None, validate_current=False):
@@ -320,7 +473,7 @@ def validate(schema, data, current=None, validate_current=False):
         dict validated contents, list of errors
     """
     resolver = NoRemoteResolver.from_schema(schema)
-    sv = SchemaValidator(schema, resolver=resolver, serialize=True, format_checker=format_checker)
+    sv = SchemaValidator(schema, resolver=resolver, format_checker=Draft202012Validator.FORMAT_CHECKER)
     validated, errors = sv.serialize(data)
     # validate against current contents if validate_current is set
     if current and validate_current:
@@ -357,6 +510,30 @@ def validate(schema, data, current=None, validate_current=False):
                 #       Right now those other arms set seemingly-unused variables. -kmp 7-Aug-2022
                 if validated_value == current_value:
                     continue  # value is unchanged between data/current; ignore
+        # Also ignore requestMethod and permission errors from defaults.
+        if isinstance(error, IgnoreUnchanged):
+            new_value = data
+            try:
+                for key in error.path:
+                    # If it's in original data then either user passed it in
+                    # or it's from PATCH object with unchanged data. If it's
+                    # unchanged then it's already been skipped above.
+                    new_value = new_value[key]
+                    # XXX: the below I think creates a vulnerability where a user can revert
+                    # a protected field to it's default?
+                    # default = extract_schema_default(schema, error.path)
+                    # if new_value == default:
+                    #     continue
+            except KeyError:
+                # always True for us
+                if current and validate_current:
+                    for key in error.path:
+                        val = current.get(key)
+                    default = extract_schema_default(schema, error.path)
+                    if val == default:
+                        continue
+                else:
+                    continue
         filtered_errors.append(error)
 
     return validated, filtered_errors
@@ -428,7 +605,6 @@ def combine_schemas(a, b):
 
 # for integrated tests
 def utc_now_str():
-    # from jsonschema_serialize_fork date-time format requires a timezone
     return datetime.utcnow().isoformat() + '+00:00'
 
 
@@ -442,3 +618,59 @@ def userid(instance, subschema):  # args required by jsonschema-serialize-fork
 def now(instance, subschema):  # args required by jsonschema-serialize-fork
     ignored(instance, subschema)
     return utc_now_str()
+
+
+def get_identifying_and_required_properties(schema: dict) -> (list, list):
+    """
+    Returns a tuple containing (first) the list of identifying properties
+    and (second) the list of any required properties specified by the given schema.
+
+    This DOES handle a limited version of the "anyOf" construct; namely where it only contains
+    a simple list of objects each specifying a "required" property name or a list of property
+    names; in this call ALL such "required" property names are included; an EXCEPTION is
+    raised if an unsupported usage of this "anyOf" construct is found. 
+
+    This may be slightly confusing in that ALL of the properties specified within an "anyOf"
+    construct are returned from this function as required, which is not technically semantically
+    not correct; only ONE of those would be required; but this function is NOT used for validation,
+    but instead to extract from the actual object the values which must be included on the initial
+    insert into the database, when it is FIRST created, via POST in loadxl.
+    """
+    def get_all_required_properties_from_any_of(schema: dict) -> list:
+        """
+        Returns a list of ALL property names which are specified as "required" within any "anyOf"
+        construct within the given JSON schema. We support ONLY a LIMITED version of "anyOf" construct,
+        in which it must contain ONLY a simple list of objects each specifying a "required" property
+        name or list of property names; if the "anyOf" construct looks like it is anything OTHER
+        than this limited usaage, then an EXCEPTION will be raised.
+        """
+        def raise_unsupported_usage_exception():
+            raise Exception("Unsupported use of anyOf in schema.")
+        required_properties = set()
+        any_of_list = schema.get("anyOf")
+        if not any_of_list:
+            return required_properties
+        if not isinstance(any_of_list, list):
+            raise_unsupported_usage_exception()
+        for any_of in any_of_list:
+            if not any_of:
+                continue
+            if not isinstance(any_of, dict):
+                raise_unsupported_usage_exception()
+            for any_of_key, any_of_value in any_of.items():
+                if any_of_key != "required":
+                    raise_unsupported_usage_exception()
+                if not any_of_value:
+                    continue
+                if isinstance(any_of_value, list):
+                    required_properties.update(any_of_value)
+                elif isinstance(any_of_value, str):
+                    required_properties.add(any_of_value)
+                else:
+                    raise_unsupported_usage_exception()
+        return list(required_properties)
+
+    required_properties = set()
+    required_properties.update(schema.get("required", []))
+    required_properties.update(get_all_required_properties_from_any_of(schema))
+    return SchemaManager.get_identifying_properties(schema), list(required_properties)

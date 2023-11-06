@@ -1,5 +1,6 @@
 {
   "title": "Testing Biosample Sno",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
   "description": "Biosample integrated testing type.",
   "type": "object",
   "required": ["identifier"],

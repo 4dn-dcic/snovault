@@ -1,18 +1,31 @@
+import boto3
 import contextlib
 import datetime as datetime_module
 import functools
+import gzip
+import io
 import json
 import os
+import re
+import structlog
 import sys
+import tempfile
+import time
+from typing import Optional
+
+from botocore.client import Config
 from copy import copy
 from datetime import datetime, timedelta
-
-import structlog
-from pyramid.httpexceptions import HTTPForbidden
+from io import BytesIO
+from pyramid.httpexceptions import HTTPUnprocessableEntity, HTTPForbidden
 from pyramid.threadlocal import manager as threadlocal_manager
+from dcicutils.ecs_utils import ECSUtils
+from dcicutils.misc_utils import ignored, PRINT, VirtualApp, count_if, identity
+from dcicutils.secrets_utils import assume_identity
 
 from .interfaces import CONNECTION, STORAGE, TYPES
 from .settings import Settings
+
 
 log = structlog.getLogger(__name__)
 
@@ -39,9 +52,9 @@ NESTED_ENABLED = 'enable_nested'
 REFRESH_INTERVAL = '1s'
 
 # Schema keys to ignore when finding embeds
-SCHEMA_KEYS_TO_IGNORE_FOR_EMBEDS = set([
+SCHEMA_KEYS_TO_IGNORE_FOR_EMBEDS = {
     "items", "properties", "additionalProperties", "patternProperties"
-])
+}
 
 
 class IndexSettings:
@@ -97,6 +110,74 @@ class IndexSettings:
         }
 
 
+def create_empty_s3_file(s3_client, bucket: str, key: str, s3_encrypt_key_id: Optional[str] = None):
+    """
+    Args:
+        s3_client: a client object that results from a boto3.client('s3', ...) call.
+        bucket: an S3 bucket name
+        key: the name of a key within the given S3 bucket
+        s3_encrypt_key_id: the name of a KMS encrypt key id, or None
+    """
+    empty_file = "/dev/null"
+
+    extra_kwargs = extra_kwargs_for_s3_encrypt_key_id(s3_encrypt_key_id=s3_encrypt_key_id,
+                                                      client_name='create_empty_s3_file')
+
+    s3_client.upload_file(empty_file, Bucket=bucket, Key=key, **extra_kwargs)
+
+
+def get_trusted_email(request, context=None, raise_errors=True):
+    """
+    Get an email address on behalf of which we can issue other requests.
+
+    If auth0 has authenticated user info to offer, return that.
+    Otherwise, look for a userid.xxx among request.effective_principals and get the email from that.
+
+    This will raise HTTPUnprocessableEntity if there's a problem obtaining the mail.
+    """
+    try:
+        context = context or "Requirement"
+        email = getattr(request, '_auth0_authenticated', None)
+        if not email:
+            user_uuid = None
+            for principal in request.effective_principals:
+                if principal.startswith('userid.'):
+                    user_uuid = principal[7:]
+                    break
+            if not user_uuid:
+                raise HTTPUnprocessableEntity('%s: Must provide authentication' % context)
+            user_props = get_item_or_none(request, user_uuid)
+            if not user_props:
+                raise HTTPUnprocessableEntity('%s: User profile missing' % context)
+            if 'email' not in user_props:
+                raise HTTPUnprocessableEntity('%s: Entry for "email" missing in user profile.' % context)
+            email = user_props['email']
+        return email
+    except Exception:
+        if raise_errors:
+            raise
+        return None
+
+
+def beanstalk_env_from_request(request):
+    return beanstalk_env_from_registry(request.registry)
+
+
+def beanstalk_env_from_registry(registry):
+    return registry.settings.get('env.name')
+
+
+def customized_delay_rerun(sleep_seconds=1):
+    def parameterized_delay_rerun(*args):
+        """ Rerun function for flaky """
+        ignored(args)
+        time.sleep(sleep_seconds)
+        return True
+    return parameterized_delay_rerun
+
+
+delay_rerun = customized_delay_rerun(sleep_seconds=1)
+
 @contextlib.contextmanager
 def mappings_use_nested(value=True):
     """ Context manager that sets the MAPPINGS_USE_NESTED setting with the given value, default True """
@@ -132,6 +213,55 @@ def dictionary_lookup(dictionary, key):
         # raise DictionaryKeyError(dictionary=dictionary, key=key)  this causes MPIndexer exception - will 3/10/2020
     else:
         return dictionary[key]
+
+
+def deduplicate_list(lst):
+    """ De-duplicates the given list by converting it to a set then back to a list.
+
+    NOTES:
+    * The list must contain 'hashable' type elements that can be used in sets.
+    * The result list might not be ordered the same as the input list.
+    * This will also take tuples as input, though the result will be a list.
+
+    :param lst: list to de-duplicate
+    :return: de-duplicated list
+    """
+    return list(set(lst))
+
+
+def gunzip_content(content):
+    """ Helper that will gunzip content (into memory) """
+    f_in = BytesIO()
+    f_in.write(content)
+    f_in.seek(0)
+    with gzip.GzipFile(fileobj=f_in, mode='rb') as f:
+        gunzipped_content = f.read()
+    return gunzipped_content.decode('utf-8')
+
+
+DEBUGLOG = os.environ.get('DEBUGLOG', "")
+
+
+def debuglog(*args):
+    """
+    As the name implies, this is a low-tech logging facility for temporary debugging info.
+    Prints info to a file in user's home directory.
+
+    The debuglog facility allows simple debugging for temporary debugging of disparate parts of the system.
+    It takes arguments like print or one of the logging operations and outputs to ~/DEBUGLOG-yyyymmdd.txt.
+    Each line in the log is timestamped.
+    """
+    if DEBUGLOG:
+        try:
+            nowstr = str(datetime.datetime.now())
+            dateid = nowstr[:10].replace('-', '')
+            with io.open(os.path.expanduser(os.path.join(DEBUGLOG, "DEBUGLOG-%s.txt" % dateid)), "a+") as fp:
+                PRINT(nowstr, *args, file=fp)
+        except Exception:
+            # There are many things that could go wrong, but none of them are important enough to fuss over.
+            # Maybe it was a bad pathname? Out of disk space? Network error?
+            # It doesn't really matter. Just continue...
+            pass
 
 
 _skip_fields = ['@type', 'principals_allowed']  # globally accessible if need be in the future
@@ -414,7 +544,7 @@ def secure_embed(request, item_path, addition='@@object'):
             res = ''
         return res
     except HTTPForbidden:
-        print("you don't have access to this object")
+        PRINT("you don't have access to this object")
 
     return res
 
@@ -641,7 +771,7 @@ def expand_embedded_list(item_type, types, embeds, schema, processed_embeds):
             # be cases of fields that are not valid for default embeds
             # but are still themselves valid fields
             processed_embeds.remove(embed_path)
-            print(error_message, file=sys.stderr)
+            PRINT(error_message, file=sys.stderr)
         else:
             embeds_to_add.extend(path_embeds_to_add)
     return embeds_to_add, processed_embeds
@@ -720,7 +850,7 @@ def crawl_schemas_by_embeds(item_type, types, split_path, schema):
         element = split_path[idx]
         # schema_cursor should always be a dictionary if we have more split_fields
         if not isinstance(schema_cursor, dict):
-            error_message = '{} has a bad embed: {} does not have valid schemas throughout.'.format(item_type, linkTo_path)
+            error_message = f'{item_type} has a bad embed: {linkTo_path} does not have valid schemas throughout.'
             return error_message, embeds_to_add
         if element == '*':
             linkTo_path = '.'.join(split_path[:-1])
@@ -875,11 +1005,19 @@ def recursively_process_field(item, split_fields):
 ###########################
 
 
+def _sid_cache(request):
+    return request._sid_cache  # noQA. Centrally ignore that it's an access to a protected member.
+
+
+def _sid_cache_update(request, new_value):
+    request._sid_cache.update(new_value)  # noQA. Centrally ignore that it's an access to a protected member.
+
+
 def check_es_and_cache_linked_sids(context, request, view='embedded'):
     """
     For the given context and request, see if the desired item is present in
     Elasticsearch and, if so, retrieve it cache all sids of the linked objects
-    that correspond to the given view. Store these in request._sid_cacheself.
+    that correspond to the given view. Store these in request's sid cache.
 
     Args:
         context: current Item
@@ -896,9 +1034,9 @@ def check_es_and_cache_linked_sids(context, request, view='embedded'):
     es_links_field = 'linked_uuids_object' if view == 'object' else 'linked_uuids_embedded'
     if es_res and es_res.get(es_links_field):
         linked_uuids = [link['uuid'] for link in es_res[es_links_field]
-                        if link['uuid'] not in request._sid_cache]
+                        if link['uuid'] not in _sid_cache(request)]
         to_cache = request.registry[STORAGE].write.get_sids_by_uuids(linked_uuids)
-        request._sid_cache.update(to_cache)
+        _sid_cache_update(request, to_cache)
         return es_res
     return None
 
@@ -938,11 +1076,12 @@ def validate_es_content(context, request, es_res, view='embedded'):
             return False
     for linked in linked_es_sids:
         # infrequently, may need to add sids from the db to the _sid_cache
-        if linked['uuid'] not in request._sid_cache:
+        cached = _sid_cache(request)
+        found_sid = cached.get(linked['uuid'])
+        if not found_sid:
             db_res = request.registry[STORAGE].write.get_by_uuid(linked['uuid'])
             if db_res:
-                request._sid_cache[linked['uuid']] = db_res.sid
-        found_sid = request._sid_cache.get(linked['uuid'])
+                cached[linked['uuid']] = found_sid = db_res.sid
         if found_sid is None or linked['sid'] < found_sid:
             use_es_result = False
             break
@@ -1054,3 +1193,368 @@ def generate_indexer_namespace_for_testing(prefix='sno'):
 
 
 INDEXER_NAMESPACE_FOR_TESTING = generate_indexer_namespace_for_testing()
+
+
+def is_admin_request(request):
+    """ Checks for 'group.admin' in effective_principals on request - if present we know this
+        request was submitted by an admin
+    """
+    return 'group.admin' in request.effective_principals
+
+
+def get_item_or_none(request, value, itype=None, frame='object'):
+    """
+    Return the view of an item with given frame. Can specify different types
+    of `value` for item lookup
+
+    Args:
+        request: the current Request
+        value (str): String item identifier or a dict containing @id/uuid
+        itype (str): Optional string collection name for the item (e.g. /file-formats/)
+        frame (str): Optional frame to return. Defaults to 'object'
+
+    Returns:
+        dict: given view of the item or None on failure
+    """
+    item = None
+
+    if isinstance(value, dict):
+        if 'uuid' in value:
+            value = value['uuid']
+        elif '@id' in value:
+            value = value['@id']
+
+    svalue = str(value)
+
+    # Below case is for UUIDs & unique_keys such as accessions, but not @ids
+    if not svalue.startswith('/') and not svalue.endswith('/'):
+        svalue = '/' + svalue + '/'
+        if itype is not None:
+            svalue = '/' + itype + svalue
+
+    # Request.embed will attempt to get from ES for frame=object/embedded
+    # If that fails, get from DB. Use '@@' syntax instead of 'frame=' because
+    # these paths are cached in indexing
+    try:
+        item = request.embed(svalue, '@@' + frame)
+    except Exception:
+        pass
+
+    # could lead to unexpected errors if == None
+    return item
+
+
+CONTENT_TYPE_SPECIAL_CASES = {
+    'application/x-www-form-urlencoded': [
+        # Single legacy special case to allow us to POST to metadata TSV requests via form submission.
+        # All other special case values should be added using register_path_content_type.
+        '/metadata/',
+        '/variant-sample-search-spreadsheet/',
+        re.compile(r'/variant-sample-lists/[\da-z-]+/@@spreadsheet/'),
+    ]
+}
+
+
+def register_path_content_type(*, path, content_type):
+    """
+    Registers that endpoints that begin with the specified path use the indicated content_type.
+
+    This is part of an inelegant workaround for an issue in renderers.py that maybe we can make go away in the future.
+    See the 'implementation note' in ingestion/common.py for more details.
+    """
+    exceptions = CONTENT_TYPE_SPECIAL_CASES.get(content_type, None)
+    if exceptions is None:
+        CONTENT_TYPE_SPECIAL_CASES[content_type] = exceptions = []
+    if path not in exceptions:
+        exceptions.append(path)
+
+
+compiled_regexp_class = type(re.compile("foo.bar"))  # Hides that it's _sre.SRE_Pattern in 3.6, but re.Pattern in 3.7
+
+
+def content_type_allowed(request):
+    """
+    Returns True if the current request allows the requested content type.
+
+    This is part of an inelegant workaround for an issue in renderers.py that maybe we can make go away in the future.
+    See the 'implementation note' in ingestion/common.py for more details.
+    """
+    if request.content_type == "application/json":
+        # For better or worse, we always allow this.
+        return True
+
+    exceptions = CONTENT_TYPE_SPECIAL_CASES.get(request.content_type)
+
+    if exceptions:
+        for path_condition in exceptions:
+            if isinstance(path_condition, str):
+                if path_condition in request.path:
+                    return True
+            elif isinstance(path_condition, compiled_regexp_class):
+                if path_condition.match(request.path):
+                    return True
+            else:
+                raise NotImplementedError(f"Unrecognized path_condition: {path_condition}")
+
+    return False
+
+
+def check_user_is_logged_in(request):
+    """ Raises HTTPForbidden if the request did not come from a logged in user. """
+    for principal in request.effective_principals:
+        if principal.startswith('userid.') or principal == 'group.admin':  # allow if logged in OR has admin
+            break
+    else:
+        raise HTTPForbidden(title="Not logged in.")
+
+
+
+EMAIL_PATTERN = re.compile(r'[^@]+[@][^@]+')
+
+
+def make_vapp_for_email(*, email, app=None, registry=None, context=None):
+    app = _app_from_clues(app=app, registry=registry, context=context)
+    if not isinstance(email, str) or not EMAIL_PATTERN.match(email):
+        # It's critical to check that the pattern has an '@' so we know it's not a system account (injection).
+        raise RuntimeError("Expected email to be a string of the form 'user@host'.")
+    user_environ = {
+        'HTTP_ACCEPT': 'application/json',
+        'REMOTE_USER': email,
+    }
+    vapp = VirtualApp(app, user_environ)
+    return vapp
+
+
+@contextlib.contextmanager
+def vapp_for_email(email, app=None, registry=None, context=None):
+    yield make_vapp_for_email(email=email, app=app, registry=registry, context=context)
+
+
+def make_vapp_for_ingestion(*, app=None, registry=None, context=None):
+    app = _app_from_clues(app=app, registry=registry, context=context)
+    user_environ = {
+        'HTTP_ACCEPT': 'application/json',
+        'REMOTE_USER': 'INGESTION',
+    }
+    vapp = VirtualApp(app, user_environ)
+    return vapp
+
+
+@contextlib.contextmanager
+def vapp_for_ingestion(app=None, registry=None, context=None):
+    yield make_vapp_for_ingestion(app=app, registry=registry, context=context)
+
+
+def _app_from_clues(app=None, registry=None, context=None):
+    if count_if(identity, [app, registry, context]) != 1:
+        raise RuntimeError("Expected exactly one of app, registry, or context.")
+    if not app:
+        app = (registry or context).app
+    return app
+
+
+def make_s3_client():
+    s3_client_extra_args = {}
+    if 'IDENTITY' in os.environ:
+        identity = assume_identity()
+        s3_client_extra_args['aws_access_key_id'] = key_id = identity.get('S3_AWS_ACCESS_KEY_ID')
+        s3_client_extra_args['aws_secret_access_key'] = identity.get('S3_AWS_SECRET_ACCESS_KEY')
+        s3_client_extra_args['region_name'] = ECSUtils.REGION
+        log.warning(f"make_s3_client using S3 entity ID {key_id[:10]} arguments in `boto3 client creation call.")
+        if 'ENCODED_S3_ENCRYPT_KEY_ID' in identity:
+            # This setting is required when testing locally and encrypted buckets need to be accessed.
+            s3_client_extra_args['config'] = Config(signature_version='s3v4')
+    else:
+        log.warning(f'make_s3_client called with no identity')
+
+    s3_client = boto3.client('s3', **s3_client_extra_args)
+    return s3_client
+
+
+def build_s3_presigned_get_url(*, params):
+    """ Helper function that builds a presigned URL. """
+    s3_client = make_s3_client()
+    return s3_client.generate_presigned_url(
+        ClientMethod='get_object',
+        Params=params,
+        ExpiresIn=36 * 60 * 60
+    )
+
+
+def convert_integer_to_comma_string(value):
+    """Convert integer to comma-formatted string for displaying SV
+    position.
+
+    :param value: Value to format.
+    :type value: int
+    :returns: Comma-formatted integer or None
+    :rtype: str or None
+    """
+    result = None
+    if isinstance(value, int):
+        result = format(value, ",d")
+    return result
+
+
+ENCODED_ROOT_DIR = os.path.dirname(__file__)
+
+
+def resolve_file_path(path, file_loc=None, root_dir=ENCODED_ROOT_DIR):
+    """ Takes a relative path from this file location and returns an absolute path to
+        the desired file, needed for WSGI to resolve embed files.
+
+    :param path: relative path to be converted
+    :param file_loc: absolute path to location path is relative to, by default path/to/encoded/src/
+    :return: absolute path to location specified by path
+    """
+    if path.startswith("~"):
+        # Really this shouldn't happen, so we could instead raise an error, but at least this is semantically correct.
+        path = os.path.expanduser(path)
+    if file_loc:
+        if file_loc.startswith("~"):
+            file_loc = os.path.expanduser(file_loc)
+        path_to_this_file = os.path.abspath(os.path.dirname(file_loc))
+    else:
+        path_to_this_file = os.path.abspath(root_dir)
+    return os.path.join(path_to_this_file, path)
+
+
+# These next few could be in dcicutils.s3_utils as part of s3Utils, but details of interfaces would have to change.
+# For now, for expedience, they can live here and we can refactor later. -kmp 25-Jul-2020
+
+@contextlib.contextmanager
+def s3_output_stream(s3_client, bucket: str, key: str, s3_encrypt_key_id: Optional[str] = None):
+    """
+    This context manager allows one to write:
+
+        with s3_output_stream(s3_client, bucket, key) as fp:
+            ... fp.write("foo") ...
+
+    to do output to an s3 bucket.
+
+    In fact, an intermediate local file is involved, so this function yields a file pointer (fp) to a
+    temporary local file that is open for write. That fp should be used to supply content to the file
+    during the dynamic scope of the context manager. Once the context manager's body executes, the
+    file will be closed, its contents will be copied to s3, and finally the temporary local file will
+    be deleted.
+
+    Args:
+        s3_client: a client object that results from a boto3.client('s3', ...) call.
+        bucket: an S3 bucket name
+        key: the name of a key within the given S3 bucket
+        s3_encrypt_key_id: a KMS encryption key id or None
+    """
+
+    tempfile_name = tempfile.mktemp()
+    try:
+        with io.open(tempfile_name, 'w') as fp:
+            yield fp
+        extra_kwargs = extra_kwargs_for_s3_encrypt_key_id(s3_encrypt_key_id=s3_encrypt_key_id,
+                                                          client_name='s3_output_stream')
+        s3_client.upload_file(Filename=tempfile_name, Bucket=bucket, Key=key, **extra_kwargs)
+    finally:
+        try:
+            os.remove(tempfile_name)
+        except Exception:
+            pass
+
+
+@contextlib.contextmanager
+def s3_local_file(s3_client, bucket: str, key: str, local_filename: str = None):
+    """
+    This context manager allows one to write:
+
+        with s3_local_file(s3_client, bucket, key) as file:
+            with io.open(local_file, 'r') as fp:
+                dictionary = json.load(fp)
+
+    to do input from an s3 bucket.
+
+    Args:
+        s3_client: a client object that results from a boto3.client('s3', ...) call.
+        bucket: an S3 bucket name
+        key: the name of a key within the given S3 bucket
+    """
+    if local_filename:
+        tempdir_name = tempfile.mkdtemp()
+        tempfile_name = os.path.join(tempdir_name, os.path.basename(local_filename))
+    else:
+        ext = os.path.splitext(key)[-1]
+        tempfile_name = tempfile.mktemp() + ext
+    try:
+        s3_client.download_file(Bucket=bucket, Key=key, Filename=tempfile_name)
+        yield tempfile_name
+    finally:
+        try:
+            os.remove(tempfile_name)
+        except Exception:
+            pass
+
+
+@contextlib.contextmanager
+def s3_input_stream(s3_client, bucket: str, key: str, mode: str = 'r'):
+    """
+    This context manager allows one to write:
+
+        with s3_input_stream(s3_client, bucket, key) as fp:
+            dictionary = json.load(fp)
+
+    to do input from an s3 bucket.
+
+    In fact, an intermediate local file is created, copied, and deleted.
+
+    Args:
+        s3_client: a client object that results from a boto3.client('s3', ...) call.
+        bucket: an S3 bucket name
+        key: the name of a key within the given S3 bucket
+        mode: an input mode acceptable to io.open
+    """
+
+    with s3_local_file(s3_client, bucket, key) as file:
+        with io.open(file, mode=mode) as fp:
+            yield fp
+
+
+class SettingsKey:
+    APPLICATION_BUCKET_PREFIX = 'application_bucket_prefix'
+    BLOB_BUCKET = 'blob_bucket'
+    EB_APP_VERSION = 'eb_app_version'
+    ELASTICSEARCH_SERVER = 'elasticsearch.server'
+    ENCODED_VERSION = 'encoded_version'
+    FILE_UPLOAD_BUCKET = 'file_upload_bucket'
+    FILE_WFOUT_BUCKET = 'file_wfout_bucket'
+    FOURSIGHT_BUCKET_PREFIX = 'foursight_bucket_prefix'
+    IDENTITY = 'identity'
+    INDEXER = 'indexer'
+    INDEXER_NAMESPACE = 'indexer.namespace'
+    INDEX_SERVER = 'index_server'
+    LOAD_TEST_DATA = 'load_test_data'
+    METADATA_BUNDLES_BUCKET = 'metadata_bundles_bucket'
+    S3_ENCRYPT_KEY_ID = 's3_encrypt_key_id'
+    SNOVAULT_VERSION = 'snovault_version'
+    SQLALCHEMY_URL = 'sqlalchemy.url'
+    SYSTEM_BUCKET = 'system_bucket'
+    TIBANNA_CWLS_BUCKET = 'tibanna_cwls_bucket'
+    TIBANNA_OUTPUT_BUCKET = 'tibanna_output_bucket'
+    UTILS_VERSION = 'utils_version'
+
+
+class ExtraArgs:
+    SERVER_SIDE_ENCRYPTION = "ServerSideEncryption"
+    SSE_KMS_KEY_ID = "SSEKMSKeyId"
+
+
+def extra_kwargs_for_s3_encrypt_key_id(s3_encrypt_key_id, client_name):
+
+    extra_kwargs = {}
+    if s3_encrypt_key_id:
+        log.error(f"{client_name} adding SSEKMSKeyId ({s3_encrypt_key_id}) arguments in upload_fileobj call.")
+        extra_kwargs["ExtraArgs"] = {
+            ExtraArgs.SERVER_SIDE_ENCRYPTION: "aws:kms",
+            ExtraArgs.SSE_KMS_KEY_ID: s3_encrypt_key_id,
+        }
+    else:
+        log.error(f"{client_name} found no s3 encrypt key id ({SettingsKey.S3_ENCRYPT_KEY_ID})"
+                  f" in request.registry.settings.")
+
+    return extra_kwargs
