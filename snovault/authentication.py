@@ -775,16 +775,51 @@ def create_unauthorized_user(context, request):
     recaptcha_resp = request.json.get('g-recaptcha-response')
     if not recaptcha_resp:
         raise LoginDenied(f'Did not receive response from recaptcha!')
+    
+    registry = request.registry
 
-    email = request._auth0_authenticated  # equal to: jwt_info['email'].lower()
+    # old method for retrieving auth'd email - request object should have _auth0_authenticated set
+    # NOTE: it is not obvious to me how this works... probably should be looked into - Will March 29 2023
+    if not redis_is_active(request):
+        email = "<no auth0 authenticated e-mail supplied>"
+        if hasattr(request, "_auth0_authenticated"):
+            email = request._auth0_authenticated # equal to: jwt_info['email'].lower()
+
+    # new method for retrieving auth'd email - request should have transmitted a session token
+    # from which we can get the JWT and the email they auth'd with
+    else:
+        id_token = get_jwt(request)
+        redis_handler = registry[REDIS]
+        env_name = registry.settings['env.name']
+        auth0_domain = request.registry.settings['auth0.domain']
+        if 'auth0' in auth0_domain:
+            secret = request.registry.settings['auth0.secret']
+            algorithms = JWT_DECODING_ALGORITHMS
+        else:
+            # RAS
+            secret = request.registry.settings['auth0.public.key']
+            algorithms = ['RS256']
+
+        redis_session_token = RedisSessionToken.from_redis(
+            redis_handler=redis_handler,
+            namespace=env_name,
+            token=id_token
+        )
+        jwt_info = redis_session_token.decode_jwt(
+                audience=request.registry.settings['auth0.client'],
+                secret=secret,
+                algorithms=algorithms
+        )
+        if jwt_info.get('email') is None:
+            jwt_info['email'] = redis_session_token.get_email()
+        email = jwt_info.get('email', '<no e-mail supplied>').lower()
+
     user_props = request.json
     user_props_email = user_props.get("email", "<no e-mail supplied>").lower()
     if user_props_email != email:
         raise HTTPUnauthorized(
             title="Provided email {} not validated with Auth0. Try logging in again.".format(user_props_email),
-            headers={
-                'WWW-Authenticate':
-                    "Bearer realm=\"{}\"; Basic realm=\"{}\"".format(request.domain, request.domain)}
+            headers={'WWW-Authenticate': "Bearer realm=\"{}\"; Basic realm=\"{}\"".format(request.domain, request.domain)}
         )
 
     # set user insert props
@@ -802,8 +837,9 @@ def create_unauthorized_user(context, request):
     # validate recaptcha_resp
     # https://developers.google.com/recaptcha/docs/verify
     recap_url = 'https://www.google.com/recaptcha/api/siteverify'
+    recap_secret = request.registry.settings['g.recaptcha.secret']
     recap_values = {
-        'secret': request.registry.settings['g.recaptcha.secret'],
+        'secret': recap_secret,
         'response': recaptcha_resp
     }
     data = urlencode(recap_values).encode()
