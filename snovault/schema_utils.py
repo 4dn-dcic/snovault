@@ -147,7 +147,7 @@ def fetch_field_from_schema(schema: dict, ref_identifer: str) -> dict:
     return resolved
 
 
-MERGE_PATTERN = r'^([^:]+):(.+[.]json)#/properties/(.+)$'
+MERGE_PATTERN = r'^([^:]+):(.+[.]json)#/(.+)$'
 
 
 def match_merge_syntax(merge):
