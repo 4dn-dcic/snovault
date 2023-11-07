@@ -150,7 +150,7 @@ def callback(context, request):
         passport_headers = {'Authorization': f'Bearer {auth0_response_json["access_token"]}'}
         passport_response = requests.post(passport_post_url, headers=passport_headers)
         passport_response_json = passport_response.json()
-        email = passport_response_json.get('email')
+        email = passport_response_json.get('email', '').lower()
 
     if not email:
         raise LoginDenied('No email extracted from JWT, not possible to continue')
