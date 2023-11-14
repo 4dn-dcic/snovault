@@ -427,7 +427,8 @@ def test_schema_utils_validates_date_times(testapp, invalid_date_time):
     'snovault:schemas/access_key.json#/properties/access_key_id',
     'snovault:schemas/access_key2.json#/properties/access_key_id',
     'snovault:schemas/access_key.json#/properties/access_key_id2',
-    'snovault:schemas/schema_one/access_key.json#/properties/object/access_key_id'
+    'snovault:schemas/schema_one/access_key.json#/properties/object/access_key_id',
+    'snovault:schemas/mixins.json#/access_key_id',
     ]
 )
 def test_schema_utils_merge_regex_matches(ref):
@@ -442,7 +443,6 @@ def test_schema_utils_merge_regex_matches(ref):
     'snovault:schemas/schema_one',
     'missing-package.json#/properties/schema',
     'snovault:schemas/access_key.jsn#/properties/access_key_id',
-    'snovault:schemas/access_key.json#/propertie/access_key_id',
     ]
 )
 def test_schema_utils_merge_regex_no_match(ref):
