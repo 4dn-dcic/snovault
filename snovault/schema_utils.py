@@ -640,9 +640,9 @@ def get_identifying_and_required_properties(schema: dict) -> (list, list):
         """
         Returns a list of ALL property names which are specified as "required" within any "anyOf"
         construct within the given JSON schema. We support ONLY a LIMITED version of "anyOf" construct,
-        in which it must contain ONLY a simple list of objects each specifying a "required" property
-        name or list of property names; if the "anyOf" construct looks like it is anything OTHER
-        than this limited usaage, then an EXCEPTION will be raised.
+        in which it must be either ONLY a LIST of OBJECTs each specifying a "required" property which
+        is a property name or a LIST of property names; if the "anyOf" construct looks like it is
+        anything OTHER than this limited usaage, then an EXCEPTION will be raised.
         """
         def raise_unsupported_usage_exception():
             raise Exception("Unsupported use of anyOf in schema.")
@@ -657,10 +657,8 @@ def get_identifying_and_required_properties(schema: dict) -> (list, list):
                 continue
             if not isinstance(any_of, dict):
                 raise_unsupported_usage_exception()
-            for any_of_key, any_of_value in any_of.items():
-                if any_of_key != "required":
-                    raise_unsupported_usage_exception()
-                if not any_of_value:
+            if "required" in any_of:
+                if not (any_of_value := any_of["required"]):
                     continue
                 if isinstance(any_of_value, list):
                     required_properties.update(any_of_value)
