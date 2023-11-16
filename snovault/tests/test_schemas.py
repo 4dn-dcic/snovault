@@ -31,3 +31,18 @@ def test_schemas_etag(testapp):
     etag = testapp.get('/profiles/', status=200).etag
     assert etag
     testapp.get('/profiles/', headers={'If-None-Match': etag}, status=304)
+
+
+def test_submittable(testapp, registry):
+    test_uri = '/can-submit/access_key.json'
+    res = testapp.get(test_uri)
+    import pdb; pdb.set_trace()
+    print(res)
+
+
+def test_submittables(testapp, registry):
+    test_uri = '/can-submit/'
+    res = testapp.get(test_uri)
+    #import pdb; pdb.set_trace()
+    print(res)
+
