@@ -188,7 +188,7 @@ def _schema_submittable_fields(schema, request, is_embedded_obj=False):
     
     # begin to filter and annotate the schema
     required_props = schema.get('required', [])
-    oneof_info = schema.get('OneOf', [])
+    oneof_info = schema.get('oneOf', [])
     oneof_props = _get_propnames_from_oneof(oneof_info)
     req_deps = schema.get('dependent_required', {})
 
@@ -199,13 +199,32 @@ def _schema_submittable_fields(schema, request, is_embedded_obj=False):
     submittable_schema['properties'] = {}
 
     for propname, propinfo in schema_props.items():
+        emb_obj = None
         # determine if prop should be submittable - inclusion trumps exclusion
         if propname in included_props:  # independent of any other attribute
             pass
         elif propname in excluded_props:  # explicity excluded by name
             continue
+        elif propinfo.get('type') == 'array':  # need to check the attributes of the items
+            list_item = propinfo.get('items')
+            if list_item.get('type') == 'object':  # very rare case of list of embedded objects
+                emb_obj = _schema_submittable_fields(list_item, request, is_embedded_obj=True)
+                if not emb_obj:
+                    continue
+                else:
+                    propinfo['items'] = emb_obj.copy()
+                    emb_obj = None
+            elif _has_attr(list_item, include_attrs):
+                pass
+            elif _has_attr(list_item, exclude_attrs):
+                continue
         elif propinfo.get('type') == 'object':  # infrequent case of embedded object
+            #import pdb; pdb.set_trace()
             emb_obj = _schema_submittable_fields(propinfo, request, is_embedded_obj=True)
+            if emb_obj.get('properties'):
+                submittable_schema['properties'][propname] = emb_obj
+            #import pdb; pdb.set_trace()
+            continue
         elif _has_attr(propinfo, include_attrs):  # check for explicit attr that indicate inclusion
             pass
         elif _has_attr(propinfo, exclude_attrs):
@@ -218,16 +237,19 @@ def _schema_submittable_fields(schema, request, is_embedded_obj=False):
             propinfo['required_if_not'] = [p for p in oneof_props if p != propname][0]
         if propname in req_deps:
             propinfo['also_requires'] = req_deps[propname]
-
+        import pdb; pdb.set_trace()
+        if not propinfo:
+            continue
         submittable_schema['properties'][propname] = propinfo
-    
-    return submittable_schema
-
+    if submittable_schema.get('properties'):    
+        return submittable_schema
+    return {}
 
 @view_config(route_name='submittable', request_method='GET',
              decorator=etag_app_version_effective_principals)
 @debug_log
 def submittable(context, request):
+    # import pdb; pdb.set_trace()
     type_name = request.matchdict['type_name']
     schema = load_schema(f"schemas/{type_name}.json")
     return _schema_submittable_fields(schema, request)
@@ -238,15 +260,16 @@ def submittable(context, request):
              decorator=etag_app_version_effective_principals)
 @debug_log
 def submittables(context, request):
-    types = request.registry[TYPES]
-    schemas = {}
-    all_item_types = chain(types.by_item_type.values())
-    for type_info in all_item_types:
-        import pdb; pdb.set_trace()
-        filename = favor_app_specific_schema(f"{type_info.item_type}.json")
-        if Path(filename).is_file():
-            schema = load_schema(f"schemas/{type_info.item_type}.json")
-            schemas[type_info.name] = _schema_submittable_fields(schema, request)
+    #types = request.registry[TYPES]
+    all_schemas = schemas(context, request)
+    import pdb; pdb.set_trace()
+    #all_item_types = chain(types.by_item_type.values())
+    #for type_info in all_item_types:
+    #    import pdb; pdb.set_trace()
+    #    filename = favor_app_specific_schema(f"{type_info.item_type}.json")
+    #    if Path(filename).is_file():
+    for schema in all_schemas:
+         _schema_submittable_fields(schema, request)
     return schemas
 
 

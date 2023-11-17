@@ -7,15 +7,15 @@ class SnovaultProjectSchemaViews:
         return None
     
     def get_properties_for_exclusion(self):
-        # return ['last_modified', 'date_created', 'submitted_by', 'uuid', 'schema_version']
-        return []
+        return ['schema_version']
+        #return []
     
     def get_properties_for_inclusion(self):
         return []
     
     def get_attributes_for_exclusion(self):
-        #return {'permission':['restricted_fields']}
-        return {}
+        return {'permission':['restricted_fields']}
+        # return {}
 
     def get_attributes_for_inclusion(self):
         return {}
