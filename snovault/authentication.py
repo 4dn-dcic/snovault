@@ -119,6 +119,7 @@ def callback(context, request):
         'code': auth0_code,
         'redirect_uri': auth0_redirect_uri
     }
+    auth0_response = None
     if 'auth0' in auth0_domain:
         auth0_post_url = f'https://{auth0_domain}/oauth/token'
         auth0_payload_json = json.dumps(auth0_payload)
