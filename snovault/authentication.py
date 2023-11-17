@@ -1,5 +1,6 @@
 import base64
 import datetime
+import json
 import jwt
 import os
 import requests
@@ -26,6 +27,8 @@ from snovault.util import debug_log
 from snovault.validation import ValidationFailure
 from snovault.validators import no_validate_item_content_post
 from urllib.parse import urlencode
+from snovault.redis.interfaces import REDIS
+from dcicutils.redis_tools import RedisSessionToken
 
 
 log = structlog.getLogger(__name__)
@@ -54,6 +57,10 @@ JWT_ALL_ALGORITHMS = ['ES512', 'RS384', 'HS512', 'ES256', 'none',
 
 JWT_DECODING_ALGORITHMS = [JWT_ENCODING_ALGORITHM] + remove_element(JWT_ENCODING_ALGORITHM, JWT_ALL_ALGORITHMS)
 
+CONTENT_TYPE = "Content-Type"
+JSON_CONTENT_TYPE = "application/json"
+STANDARD_HEADERS = {CONTENT_TYPE: JSON_CONTENT_TYPE}
+
 
 def includeme(config):
     config.include('.edw_hash')
@@ -75,8 +82,125 @@ def includeme(config):
     config.add_route('impersonate-user', '/impersonate-user')
     config.add_route('session-properties', '/session-properties')
     config.add_route('create-unauthorized-user', '/create-unauthorized-user')
+    config.add_route('callback', '/callback')
     config.scan(__name__)
 
+def redis_is_active(request):
+    """ Quick helper to standardize detecting whether redis is in use """
+    return 'redis.server' in request.registry.settings
+
+@view_config(route_name='callback', request_method='GET', permission=NO_PERMISSION_REQUIRED)
+def callback(context, request):
+    """ /callback for Fourfront that will result in a session token
+        Note that this sets jwtToken as to not break the front-end
+    """
+    if not redis_is_active(request):
+        raise HTTPForbidden('Calls to /callback are not allowed when Redis not in use - check your ini file')
+    auth0_code = request.params.get('code', None)
+    if not auth0_code:
+        raise HTTPForbidden('No code sent back from Auth0')
+    is_https = request.scheme == "https"
+
+    # Acquire Auth0 configuration
+    registry = request.registry
+    auth0_domain = registry.settings.get('auth0.domain')
+    auth0_client = registry.settings.get('auth0.client')
+    auth0_secret = registry.settings.get('auth0.secret')
+    auth0_options = registry.settings.get('auth0.options')
+    if not (auth0_domain and auth0_client and auth0_secret and auth0_options):
+        raise HTTPForbidden('Auth0 not configured, no callback possible')
+
+    # Create auth0 payload, send and get JWT back
+    auth0_redirect_uri = f'{request.host_url}'
+    auth0_payload = {
+        'grant_type': 'authorization_code',
+        'client_id': auth0_client,
+        'client_secret': auth0_secret,
+        'code': auth0_code,
+        'redirect_uri': auth0_redirect_uri
+    }
+    auth0_response = None
+    if 'auth0' in auth0_domain:
+        auth0_post_url = f'https://{auth0_domain}/oauth/token'
+        auth0_payload_json = json.dumps(auth0_payload)
+        auth0_headers = STANDARD_HEADERS
+        auth0_response_json = auth0_response.json()
+        auth0_response = requests.post(auth0_post_url, data=auth0_payload_json, headers=auth0_headers)
+    elif 'nih.gov' in auth0_domain:
+        # RAS
+        auth0_payload['scope'] = auth0_options.get('auth', {}).get('params', {}).get('scope', 'openid profile email ga4gh_passport_v1')
+        auth0_payload['redirect_uri'] += '/callback'
+        auth0_post_url = f'https://{auth0_domain}/auth/oauth/v2/token'
+        auth0_headers = {'Content-Type': 'application/x-www-form-urlencoded; charset=utf-8'}
+        auth0_response = requests.post(auth0_post_url, data=auth0_payload, headers=auth0_headers)
+    else:
+        raise HTTPForbidden('Unknown authentication domain, no callback possible')
+   
+    auth0_response_json = auth0_response.json()
+    auth0_jwt = auth0_response_json.get('id_token')
+    if not auth0_jwt:
+        raise LoginDenied('No JWT returned from Auth0, check Auth0 configuration')
+    
+    # email
+    if 'auth0' in auth0_domain:
+        # Check that the user exists in our database, if they do not, redirect them to /registration
+        email = Auth0AuthenticationPolicy.get_token_info(auth0_jwt, request).get('email', '').lower()
+    elif 'nih.gov' in auth0_domain:
+        # In RAS authentication, user info is not included in the JWT token, but in a passport that requires an extra request.
+        passport_post_url = f'https://{auth0_domain}/openid/connect/v1/userinfo'
+        passport_headers = {'Authorization': f'Bearer {auth0_response_json["access_token"]}'}
+        passport_response = requests.post(passport_post_url, headers=passport_headers)
+        passport_response_json = passport_response.json()
+        email = passport_response_json.get('email', '').lower()
+
+    if not email:
+        raise LoginDenied('No email extracted from JWT, not possible to continue')
+    
+    # Generate a session from Redis
+    redis_handler = registry[REDIS]
+    env_name = registry.settings['env.name']
+    redis_session_token = RedisSessionToken(
+        namespace=env_name,
+        jwt=auth0_jwt,
+        email=email
+    )
+
+    try:
+        Auth0AuthenticationPolicy.get_user_info(request, email, redis_session_token.get_session_token())
+    except HTTPUnauthorized:
+        # in this case return a different response that the UI can interpret to pull up the registration modal
+        resp_json = {
+            '@type': ['registration'],
+            '@context': '/callback',
+            'title': 'registration',
+            '@graph': [
+                email  # this is needed by the front-end to render the UserRegistrationModal
+            ]
+        }
+    except Exception as e:
+        raise LoginDenied(f'Unknown error encountered trying to extract user from DB {str(e)}')
+    else:
+        resp_json = {
+            '@type': ['callback'],
+            '@context': '/callback',
+            'title': 'callback'
+    }
+
+    # Give a session token unconditionally so we can retrieve JWT later on
+    # in the registration scenario (if an unknown user) or make auth'd requests
+    # as an existing user
+    redis_session_token.store_session_token(redis_handler=redis_handler)
+    request.response.set_cookie(
+        'jwtToken',  # note that although we are setting jwtToken, it is NOT a JWT when going through this route
+        value=redis_session_token.get_session_token(),
+        domain=request.domain,
+        path='/',
+        httponly=True,
+        samesite='lax',
+        overwrite=True,
+        secure=is_https
+    )
+    return resp_json
 
 class NamespacedAuthenticationPolicy(object):
     """ Wrapper for authentication policy classes
@@ -229,6 +353,21 @@ class Auth0AuthenticationPolicy(CallbackAuthenticationPolicy):
         app_project().note_auth0_authentication_policy_unauthenticated_userid(self, request, email, id_token)
 
         return email
+
+    @staticmethod
+    def get_user_info(request, email, id_token):
+        """
+        Previously an inner method, redefined here so can be used outside, but can only be used within a route
+        Allow access basic user credentials from request obj after authenticating & saving request
+        """
+        user_props = request.embed('/session-properties', as_user=email)  # Performs an authentication against DB for user.
+        if not user_props.get('details'):
+            raise HTTPUnauthorized(
+                title="Could not find user info for {}".format(email),
+                headers={'WWW-Authenticate': "Bearer realm=\"{}\"; Basic realm=\"{}\"".format(request.domain, request.domain) }
+            )
+        user_props['id_token'] = id_token
+        return user_props
 
     @staticmethod
     def email_is_partners_or_hms(payload):
@@ -637,16 +776,51 @@ def create_unauthorized_user(context, request):
     recaptcha_resp = request.json.get('g-recaptcha-response')
     if not recaptcha_resp:
         raise LoginDenied(f'Did not receive response from recaptcha!')
+    
+    registry = request.registry
 
-    email = request._auth0_authenticated  # equal to: jwt_info['email'].lower()
+    # old method for retrieving auth'd email - request object should have _auth0_authenticated set
+    # NOTE: it is not obvious to me how this works... probably should be looked into - Will March 29 2023
+    if not redis_is_active(request):
+        email = "<no auth0 authenticated e-mail supplied>"
+        if hasattr(request, "_auth0_authenticated"):
+            email = request._auth0_authenticated # equal to: jwt_info['email'].lower()
+
+    # new method for retrieving auth'd email - request should have transmitted a session token
+    # from which we can get the JWT and the email they auth'd with
+    else:
+        id_token = get_jwt(request)
+        redis_handler = registry[REDIS]
+        env_name = registry.settings['env.name']
+        auth0_domain = request.registry.settings['auth0.domain']
+        if 'auth0' in auth0_domain:
+            secret = request.registry.settings['auth0.secret']
+            algorithms = JWT_DECODING_ALGORITHMS
+        else:
+            # RAS
+            secret = request.registry.settings['auth0.public.key']
+            algorithms = ['RS256']
+
+        redis_session_token = RedisSessionToken.from_redis(
+            redis_handler=redis_handler,
+            namespace=env_name,
+            token=id_token
+        )
+        jwt_info = redis_session_token.decode_jwt(
+                audience=request.registry.settings['auth0.client'],
+                secret=secret,
+                algorithms=algorithms
+        )
+        if jwt_info.get('email') is None:
+            jwt_info['email'] = redis_session_token.get_email()
+        email = jwt_info.get('email', '<no e-mail supplied>').lower()
+
     user_props = request.json
     user_props_email = user_props.get("email", "<no e-mail supplied>").lower()
     if user_props_email != email:
         raise HTTPUnauthorized(
             title="Provided email {} not validated with Auth0. Try logging in again.".format(user_props_email),
-            headers={
-                'WWW-Authenticate':
-                    "Bearer realm=\"{}\"; Basic realm=\"{}\"".format(request.domain, request.domain)}
+            headers={'WWW-Authenticate': "Bearer realm=\"{}\"; Basic realm=\"{}\"".format(request.domain, request.domain)}
         )
 
     # set user insert props
@@ -664,8 +838,9 @@ def create_unauthorized_user(context, request):
     # validate recaptcha_resp
     # https://developers.google.com/recaptcha/docs/verify
     recap_url = 'https://www.google.com/recaptcha/api/siteverify'
+    recap_secret = request.registry.settings['g.recaptcha.secret']
     recap_values = {
-        'secret': request.registry.settings['g.recaptcha.secret'],
+        'secret': recap_secret,
         'response': recaptcha_resp
     }
     data = urlencode(recap_values).encode()

@@ -6,18 +6,32 @@ snovault
 Change Log
 ----------
 
-11.4.0
+11.5.0
 ======
 * More work related to SMaHT ingestion.
 
 
+11.4.0
+======
+
+* RAS updates
+
+
+11.3.1
+======
+
+* Broaden schema ``$merge`` regex to allow mixin and other references
+
+
 11.3.0
 ======
+
 * Another thug commit to add CHANGELOG for below.
 
 
 11.2.0
 ======
+
 * Thug commit to change dcictuils from 8.2.0 to ^8.2.0.
 
 
@@ -99,7 +113,7 @@ expiration is enabled
   * Breaking Change: object serialization in schema no longer valid
 
 
-  9.1.1
+9.1.1
 =====
 
 * Small fix for JWT Decode incompatible change
