@@ -6,6 +6,11 @@ snovault
 Change Log
 ----------
 
+11.4.0
+======
+
+* RAS updates
+
 
 11.3.1
 ======
@@ -103,7 +108,7 @@ expiration is enabled
   * Breaking Change: object serialization in schema no longer valid
 
 
-  9.1.1
+9.1.1
 =====
 
 * Small fix for JWT Decode incompatible change

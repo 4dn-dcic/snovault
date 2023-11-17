@@ -129,7 +129,7 @@ def callback(context, request):
         # RAS
         auth0_payload['scope'] = auth0_options.get('auth', {}).get('params', {}).get('scope', 'openid profile email ga4gh_passport_v1')
         auth0_payload['redirect_uri'] += '/callback'
-        auth0_post_url = f'{auth0_domain}/auth/oauth/v2/token'
+        auth0_post_url = f'https://{auth0_domain}/auth/oauth/v2/token'
         auth0_headers = {'Content-Type': 'application/x-www-form-urlencoded; charset=utf-8'}
         auth0_response = requests.post(auth0_post_url, data=auth0_payload, headers=auth0_headers)
     else:
@@ -146,7 +146,7 @@ def callback(context, request):
         email = Auth0AuthenticationPolicy.get_token_info(auth0_jwt, request).get('email', '').lower()
     elif 'nih.gov' in auth0_domain:
         # In RAS authentication, user info is not included in the JWT token, but in a passport that requires an extra request.
-        passport_post_url = f'{auth0_domain}/openid/connect/v1/userinfo'
+        passport_post_url = f'https://{auth0_domain}/openid/connect/v1/userinfo'
         passport_headers = {'Authorization': f'Bearer {auth0_response_json["access_token"]}'}
         passport_response = requests.post(passport_post_url, headers=passport_headers)
         passport_response_json = passport_response.json()
