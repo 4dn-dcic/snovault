@@ -129,6 +129,7 @@ PyYAML = "^6.0.1"
 wheel = ">=0.40.0"
 
 [tool.poetry.scripts]
+check-local-portal-creds = "snovault.commands.check_local_portal_creds:main"
 dev-servers-snovault = "snovault.dev_servers:main"
 list-db-tables = "snovault.commands.list_db_tables:main"
 prepare-local-dev = "snovault.commands.prepare_template:prepare_local_dev_main"

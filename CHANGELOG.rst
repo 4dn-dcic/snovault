@@ -18,6 +18,15 @@ Change Log
 * Broaden schema ``$merge`` regex to allow mixin and other references
 
 
+11.4.0
+======
+
+* Add command ``check-local-portal-creds``.
+* In ``Makefile``:
+  * Add ``test-full`` (like ``test``, but not instafail)
+  * Enable compatibility warnings about SQLAlchemy 2.0 transition.
+
+
 11.3.0
 ======
 
