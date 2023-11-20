@@ -43,6 +43,6 @@ def test_submittable(testapp, registry):
 def test_submittables(testapp, registry):
     test_uri = '/can-submit/'
     res = testapp.get(test_uri)
-    #import pdb; pdb.set_trace()
+    import pdb; pdb.set_trace()
     print(res)
 

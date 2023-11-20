@@ -164,7 +164,9 @@ def _schema_submittable_fields(schema, request, is_embedded_obj=False):
 
     schema_id = schema.get('$id')
     schema_props = schema.get('properties')
-
+    if not schema_props:
+        return
+    #import pdb; pdb.set_trace()
     # first determine if the schema is submittable
     if is_embedded_obj:  # infrequent case from recursive call
         pass
@@ -177,8 +179,8 @@ def _schema_submittable_fields(schema, request, is_embedded_obj=False):
             return {}
     elif key_prop:
         # a property that if in the schema identifies the schema for a submittable item
-        if not schema_props:
-            return {}
+        # if not schema_props:
+        #    return {}
         prop_names = schema_props.keys()
         if key_prop not in prop_names:
             return {}
@@ -197,7 +199,6 @@ def _schema_submittable_fields(schema, request, is_embedded_obj=False):
         submittable_schema['$id'] = schema_id
     submittable_schema['title'] = schema.get('title')
     submittable_schema['properties'] = {}
-
     for propname, propinfo in schema_props.items():
         emb_obj = None
         # determine if prop should be submittable - inclusion trumps exclusion
@@ -205,9 +206,15 @@ def _schema_submittable_fields(schema, request, is_embedded_obj=False):
             pass
         elif propname in excluded_props:  # explicity excluded by name
             continue
+        elif _has_attr(propinfo, include_attrs):  # check for explicit attr that indicate inclusion
+            pass
+        elif _has_attr(propinfo, exclude_attrs):
+            continue
         elif propinfo.get('type') == 'array':  # need to check the attributes of the items
             list_item = propinfo.get('items')
             if list_item.get('type') == 'object':  # very rare case of list of embedded objects
+                if 'properties' not in list_item:
+                    continue
                 emb_obj = _schema_submittable_fields(list_item, request, is_embedded_obj=True)
                 if not emb_obj:
                     continue
@@ -219,16 +226,14 @@ def _schema_submittable_fields(schema, request, is_embedded_obj=False):
             elif _has_attr(list_item, exclude_attrs):
                 continue
         elif propinfo.get('type') == 'object':  # infrequent case of embedded object
-            #import pdb; pdb.set_trace()
+            if 'properties' not in propinfo:
+                continue
             emb_obj = _schema_submittable_fields(propinfo, request, is_embedded_obj=True)
             if emb_obj.get('properties'):
                 submittable_schema['properties'][propname] = emb_obj
             #import pdb; pdb.set_trace()
             continue
-        elif _has_attr(propinfo, include_attrs):  # check for explicit attr that indicate inclusion
-            pass
-        elif _has_attr(propinfo, exclude_attrs):
-            continue
+
 
         # if we get here annotate and add prop to result
         if propname in required_props:
@@ -237,7 +242,6 @@ def _schema_submittable_fields(schema, request, is_embedded_obj=False):
             propinfo['required_if_not'] = [p for p in oneof_props if p != propname][0]
         if propname in req_deps:
             propinfo['also_requires'] = req_deps[propname]
-        import pdb; pdb.set_trace()
         if not propinfo:
             continue
         submittable_schema['properties'][propname] = propinfo
@@ -260,17 +264,14 @@ def submittable(context, request):
              decorator=etag_app_version_effective_principals)
 @debug_log
 def submittables(context, request):
-    #types = request.registry[TYPES]
+    submittable_schemas = {}
     all_schemas = schemas(context, request)
-    import pdb; pdb.set_trace()
-    #all_item_types = chain(types.by_item_type.values())
-    #for type_info in all_item_types:
-    #    import pdb; pdb.set_trace()
-    #    filename = favor_app_specific_schema(f"{type_info.item_type}.json")
-    #    if Path(filename).is_file():
-    for schema in all_schemas:
-         _schema_submittable_fields(schema, request)
-    return schemas
+    # import pdb; pdb.set_trace()
+    for name, schema in all_schemas.items():
+         submittable_schema = _schema_submittable_fields(schema, request)
+         if submittable_schema:
+             submittable_schemas[name] = submittable_schema
+    return submittable_schemas
 
 
 
