@@ -35,14 +35,11 @@ def test_schemas_etag(testapp):
 
 def test_submittable(testapp, registry):
     test_uri = '/can-submit/access_key.json'
-    res = testapp.get(test_uri)
-    import pdb; pdb.set_trace()
-    print(res)
-
+    res = testapp.get(test_uri, status=200)
+    assert not res.json
 
 def test_submittables(testapp, registry):
     test_uri = '/can-submit/'
-    res = testapp.get(test_uri)
-    import pdb; pdb.set_trace()
-    print(res)
+    res = testapp.get(test_uri, status=200)
+    assert not res.json
 
