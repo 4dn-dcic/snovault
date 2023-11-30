@@ -6,6 +6,11 @@ snovault
 Change Log
 ----------
 
+11.5.0
+======
+* More work related to SMaHT ingestion.
+
+
 11.4.0
 ======
 

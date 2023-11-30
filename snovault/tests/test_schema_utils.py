@@ -463,19 +463,21 @@ def test_get_identifying_and_required_properties():
         "identifyingProperties": ["uuid", "another_id"],
         "required": ["some_required_property_a", "some_required_property_b"],
         "anyOf": [
-            {"required": ["either_require_this_property_a"]},
+            {"required": ["either_require_this_property_a", "or_this_one"]},
             {"required": ["or_require_this_property_a"]}
          ]
     }
     identifying_properties, required_properties = get_identifying_and_required_properties(schema)
     assert set(identifying_properties) == {"another_id", "uuid"}
-    assert set(required_properties) == {"some_required_property_a", "some_required_property_b", "either_require_this_property_a", "or_require_this_property_a"}
+    assert set(required_properties) == {"some_required_property_a", "some_required_property_b",
+                                        "either_require_this_property_a", "or_require_this_property_a", "or_this_one"}
 
     schema = {
         "identifyingProperties": ["uuid", "another_id"],
         "anyOf": [
-            {"required": "either_require_this_property_a"},
-            {"required": "or_require_this_property_a"}
+            {"required": "either_require_this_property_a", "junk_to_ignore": "abc"},
+            {"required": "or_require_this_property_a"},
+            {"junk_to_ignore": 123}
          ]
     }
     identifying_properties, required_properties = get_identifying_and_required_properties(schema)
