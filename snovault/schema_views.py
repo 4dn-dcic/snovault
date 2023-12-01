@@ -152,65 +152,61 @@ def _get_item_name_from_schema_id(schema_id):
     return schema_id.replace('/profiles/', '').replace('.json', '')
             
 
-def _schema_submittable_fields(schema, request, is_embedded_obj=False):
+def _is_submittable_schema(schema_id, schema_props):
     """
-    helper function to take a schema and determine whether it is submittable
-    and if so parse info so only submittable fields are included along with hints
-    and doc on those fields
+    helper to determine if the schema has potentially submittable fields
     """
-    # an explicit list of submittable items can also be provided
+    # an explicit list of submittable items may be provided
     item_list = app_project().get_submittable_item_names()
-    # if defined a field in a schema that indicates this schema is submittable
+    # a property in a schema that indicates this schema is submittable
     # eg. submmitter_id
     key_prop = app_project().get_prop_for_submittable_items()
 
-    # explicit list of propnames to exclude eg. 'last_modified'
-    excluded_props = app_project().get_properties_for_exclusion()
-    # if a property has an attribute present exclude that property from submit props
-    # because there could be different values of an attribute this a dictionary
-    # keyed by attribute name with a list of values
-    # eg. {'permission':['restricted_field']}
-    exclude_attrs = app_project().get_attributes_for_exclusion()
-
-    schema_id = schema.get('$id')
-    schema_props = schema.get('properties')
-    if not schema_props:
-        return {}
-
-    # first determine if the schema is submittable
-    is_submittable = False
-    if is_embedded_obj:  # infrequent case from recursive call
-        is_submittable = True
-
-    if item_list and not is_submittable:
-        # an explicit item list takes preference over a identifying field to determine submittableness
-        # if item is in the list it is considered submittable    
+    if item_list:
         if schema_id:
             item_name = _get_item_name_from_schema_id(schema_id)
             if item_name in item_list:
-                is_submittable = True
+                return True  # explicitly named item found
     
     if key_prop:
-        # a property that if in the schema identifies the schema for a submittable item
         prop_names = schema_props.keys()
         if key_prop in prop_names:
-            is_submittable = True
+            return True  # the property that designates a schema as submittable was found
     
-    if not is_submittable:
-        return{}
-    
-    # begin to filter and annotate the schema
-    required_props = schema.get('required', [])
-    
-    oneof_props = _get_required_propnames_from_oneof(schema)
-    req_deps = schema.get('dependent_required', {})
+    return False
 
-    submittable_schema = {}
-    if schema_id:
-        submittable_schema['$id'] = schema_id
-    submittable_schema['title'] = schema.get('title')
-    submittable_schema['properties'] = {}
-    for propname, propinfo in schema_props.items():
+
+def _annotate_submittable_props(schema, props):
+    """
+    add annotations for requirements and dependencies to 
+    submittable props based on the schema info
+    """
+    required_props = schema.get('required', [])    
+    oneof_props = _get_required_propnames_from_oneof(schema)
+    req_deps = schema.get('dependentRequired', {})
+    
+    for propname, propinfo in props.items():
+        if propname in required_props:
+            propinfo['is_required'] = True
+        if propname in oneof_props:  # this a bit wonky (assumes only 2 items in oneof_props)
+            propinfo['required_if_not'] = [p for p in oneof_props if p != propname][0]
+        if propname in req_deps:
+            propinfo['also_requires'] = req_deps[propname]
+    return props
+
+
+def _get_submittable_props(schema, props):
+    """
+    Use appproject provided info on properties and properties with certain attributes
+    to exclude from submittable properties.  Excluded properties is a list of prop names
+    and excluded attibutes is a dictionary of attribute names and values
+    """
+    excluded_props = app_project().get_properties_for_exclusion()
+    exclude_attrs = app_project().get_attributes_for_exclusion()
+
+    submittable_props = {}
+    
+    for propname, propinfo in props.items():
         emb_obj = None
         # determine if prop should be submittable
         if propname in excluded_props:  # explicity excluded by name
@@ -222,36 +218,55 @@ def _schema_submittable_fields(schema, request, is_embedded_obj=False):
             if list_item.get('type') == 'object':  # very rare case of list of embedded objects
                 if 'properties' not in list_item:
                     continue
-                emb_obj = _schema_submittable_fields(list_item, request, is_embedded_obj=True)
+                emb_obj = _get_submittable_props(schema, list_item.get('properties'))
                 if not emb_obj:
                     continue
                 else:
-                    propinfo['items'] = emb_obj.copy()
+                    propinfo['items'] = _annotate_submittable_props(schema, emb_obj.copy())
+                    submittable_props[propname] = propinfo
                     emb_obj = None
             elif _has_property_attr_with_val(list_item, exclude_attrs):
                 continue
         elif propinfo.get('type') == 'object':  # infrequent case of embedded object
             if 'properties' not in propinfo:
                 continue
-            emb_obj = _schema_submittable_fields(propinfo, request, is_embedded_obj=True)
+            emb_obj = _get_submittable_props(schema, propinfo.get('properties'))
             if emb_obj.get('properties'):
-                submittable_schema['properties'][propname] = emb_obj
-            continue
+                submittable_props[propname] = _annotate_submittable_props(schema, emb_obj)
+        else:
+            submittable_props[propname] = propinfo
+    return submittable_props
 
 
-        # if we get here annotate and add prop to result
-        if propname in required_props:
-            propinfo['is_required'] = True
-        if propname in oneof_props:  # this a bit wonky (assumes only 2 items in oneof_props)
-            propinfo['required_if_not'] = [p for p in oneof_props if p != propname][0]
-        if propname in req_deps:
-            propinfo['also_requires'] = req_deps[propname]
-        if not propinfo:
-            continue
-        submittable_schema['properties'][propname] = propinfo
-    if submittable_schema.get('properties'):    
-        return submittable_schema
-    return {}
+def _get_submittable_schema(schema):
+    """
+    helper function to take a schema and determine whether it is submittable
+    and if so parse info so only submittable fields are included along with hints
+    and doc on those fields
+    """
+    schema_id = schema.get('$id')
+    schema_props = schema.get('properties')
+    submittable_schema = {}
+    if not schema_props:
+        return {}
+
+    if not _is_submittable_schema(schema_id, schema_props):
+        return {}
+    
+    submittable_props = _get_submittable_props(schema, schema_props)
+
+    if not submittable_props:
+        return {}
+    
+    submittable_props = _annotate_submittable_props(schema, submittable_props)
+
+    if schema_id:
+        submittable_schema['$id'] = schema_id
+    submittable_schema['title'] = schema.get('title')
+    submittable_schema['properties'] = submittable_props
+
+    return submittable_schema
+    
 
 @view_config(route_name='submittable', request_method='GET',
              decorator=etag_app_version_effective_principals)
@@ -260,7 +275,7 @@ def submittable(context, request):
     # import pdb; pdb.set_trace()
     type_name = request.matchdict['type_name']
     schema = load_schema(f"schemas/{type_name}.json")
-    return _schema_submittable_fields(schema, request)
+    return _get_submittable_schema(schema)
 
 
 
@@ -272,7 +287,7 @@ def submittables(context, request):
     all_schemas = schemas(context, request)
     # import pdb; pdb.set_trace()
     for name, schema in all_schemas.items():
-         submittable_schema = _schema_submittable_fields(schema, request)
+         submittable_schema = _get_submittable_schema(schema)
          if submittable_schema:
              submittable_schemas[name] = submittable_schema
     return submittable_schemas
