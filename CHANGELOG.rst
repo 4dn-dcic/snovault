@@ -6,6 +6,11 @@ snovault
 Change Log
 ----------
 
+11.5.1
+======
+* Updated dcicutils to 8.4.1 (with structured_data).
+
+
 11.5.0
 ======
 * More work related to SMaHT ingestion.
