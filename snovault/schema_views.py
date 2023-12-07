@@ -1,7 +1,6 @@
 from collections import OrderedDict
 from itertools import chain
 from urllib.parse import urlparse
-from pathlib import Path
 
 from pyramid.httpexceptions import HTTPNotFound
 from pyramid.view import view_config
@@ -12,7 +11,7 @@ from .interfaces import (
     TYPES,
 )
 from .util import debug_log
-from .schema_utils import load_schema, favor_app_specific_schema
+from .schema_utils import load_schema
 from .project_app import app_project
 
 def includeme(config):
@@ -140,15 +139,21 @@ def _has_property_attr_with_val(propinfo, attrs_to_chk):
     given a property with it's attributes will check against
     a dictionary of attribute names and values and returns true
     if the property has any of the attributes name/values in the dict
+    Note: also works if the attr value is a list
     """
     for aname, avalues in attrs_to_chk.items():
         if aname in propinfo:
-            if propinfo.get(aname) in avalues:
+            propval = propinfo.get(aname)
+            if isinstance(propval, list):
+                if [pval for pval in propval if pval in avalues]:
+                    return True
+            elif propval in avalues:
                 return True
     return False
 
 
 def _get_item_name_from_schema_id(schema_id):
+    """ this assumes a validly formatted $id value from a schema"""
     return schema_id.replace('/profiles/', '').replace('.json', '')
             
 
@@ -272,7 +277,6 @@ def _get_submittable_schema(schema):
              decorator=etag_app_version_effective_principals)
 @debug_log
 def submittable(context, request):
-    # import pdb; pdb.set_trace()
     type_name = request.matchdict['type_name']
     schema = load_schema(f"schemas/{type_name}.json")
     return _get_submittable_schema(schema)
@@ -285,7 +289,6 @@ def submittable(context, request):
 def submittables(context, request):
     submittable_schemas = {}
     all_schemas = schemas(context, request)
-    # import pdb; pdb.set_trace()
     for name, schema in all_schemas.items():
          submittable_schema = _get_submittable_schema(schema)
          if submittable_schema:
