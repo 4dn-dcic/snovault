@@ -2,7 +2,8 @@ import pytest
 from unittest import mock
 import contextlib
 
-from .. import project_app
+from ..project_defs import SnovaultProject
+from ..project_app import app_project
 from ..interfaces import TYPES
 from ..schema_utils import load_schema
 from .test_views import PARAMETERIZED_NAMES
@@ -46,7 +47,7 @@ def test_schemas_etag(testapp):
     testapp.get('/profiles/', headers={'If-None-Match': etag}, status=304)
 
 
-class MockedAppProject:
+class MockedSnovaultProjectSchemaViews:
     def __init__(self, sub_item_names=[], sub_prop=None, excl_props=[], excl_attrs={}):
         self.sub_item_names = sub_item_names
         self.sub_prop = sub_prop
@@ -54,7 +55,7 @@ class MockedAppProject:
         self.excl_attrs = excl_attrs
 
     def get_submittable_item_names(self):
-         return self.sub_item_names
+        return self.sub_item_names
     
     def get_prop_for_submittable_items(self):
         return self.sub_prop
@@ -66,13 +67,17 @@ class MockedAppProject:
         return self.excl_attrs
 
 
+class MockedSnovaultProject(MockedSnovaultProjectSchemaViews):
+    pass
+
 @contextlib.contextmanager
 def mocked_app_project(sub_item_names=[], sub_prop=None, excl_props=[], excl_attrs={}):
-    yield MockedAppProject(sub_item_names, sub_prop, excl_props, excl_attrs)
+    # yield MockedSnovaultProject(sub_item_names, sub_prop, excl_props, excl_attrs)
+    yield mock.patch.object(SnovaultProject, "app_project", MockedSnovaultProject)
 
 def test_is_submittable_schema_given_item_name(schema_for_testing):
     with mocked_app_project(sub_item_names=['tester']):
-        with mock.patch.object(project_app, "app_project", mocked_app_project):
+#        with mock.patch.object(SnovaultProject, "app_project", mocked_app_project):
             import pdb; pdb.set_trace()
             ans = _is_submittable_schema(schema_for_testing.get('$id'), schema_for_testing.get('properties'))
             assert ans is True
