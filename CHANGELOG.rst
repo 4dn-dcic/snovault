@@ -6,7 +6,7 @@ snovault
 Change Log
 ----------
 
-11.5.1
+11.6.0
 ======
 * Updated dcicutils to 8.4.1 (with structured_data).
 * Updated loadxl to pass "filename" in yields (for smaht-portal/ingester).
