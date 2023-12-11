@@ -565,7 +565,11 @@ def load_all_gen(testapp, inserts, docsdir, overwrite=True, itype=None, from_jso
                     #                      get_identifying_value(an_item, identifying_properties))
                     if not overwrite:
                         skip_existing_items.add(identifying_value)
-                    yield str.encode(f'SKIP: {identifying_value}{" " + a_type if verbose else ""}\n')
+                    if verbose and (filename := an_item.get("filename", "")):
+                        filename = " " + filename
+                    else:
+                        filename = ""
+                    yield str.encode(f'SKIP: {identifying_value}{" " + a_type if verbose else ""}{filename}\n')
                 else:
                     if post_only:
                         to_post = an_item
@@ -587,7 +591,11 @@ def load_all_gen(testapp, inserts, docsdir, overwrite=True, itype=None, from_jso
                             if uuid and "uuid" not in an_item:
                                 an_item["uuid"] = uuid  # update our item with the new uuid; maybe controversial?
                             identifying_value = (uuid or get_identifying_value(an_item, identifying_properties))
-                            yield str.encode(f'POST: {identifying_value}{" " + a_type if verbose else ""}\n')
+                            if verbose and (filename := an_item.get("filename", "")):
+                                filename = " " + filename
+                            else:
+                                filename = ""
+                            yield str.encode(f'POST: {identifying_value}{" " + a_type if verbose else ""}{filename}\n')
                         else:
                             assert res.status_code == 200
                             identifying_value = (get_response_uuid(res) or
@@ -640,7 +648,11 @@ def load_all_gen(testapp, inserts, docsdir, overwrite=True, itype=None, from_jso
                 identifying_value = (get_response_uuid(res) or
                                      get_identifying_value(an_item, identifying_properties) or
                                      "<unidentified>")
-                yield str.encode(f'PATCH: {identifying_value}{" " + a_type if verbose else ""}\n')
+                if verbose and (filename := an_item.get("filename", "")):
+                    filename = " " + filename
+                else:
+                    filename = ""
+                yield str.encode(f'PATCH: {identifying_value}{" " + a_type if verbose else ""}{filename}\n')
             except Exception as e:
                 print('Patching {} failed. Patch body:\n{}\n\nError Message:\n{}'.format(
                       a_type, str(an_item), str(e)))

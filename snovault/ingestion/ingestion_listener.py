@@ -193,8 +193,14 @@ def submit_for_ingestion(context, request):
     #                            institution=institution, project=project)
 
     # submission_id = str(uuid.uuid4())
-    _, ext = os.path.splitext(filename)
-    object_name = "{id}/datafile{ext}".format(id=submission_id, ext=ext) if datafile is not None else submission_id
+    if filename.endswith(".gz"):
+        # Maintain the real file suffix is .gz file.
+        _, ext = os.path.splitext(filename[:-3])
+        gz = ".gz"
+    else:
+        _, ext = os.path.splitext(filename)
+        gz = ""
+    object_name = "{id}/datafile{ext}{gz}".format(id=submission_id, ext=ext, gz=gz) if datafile is not None else submission_id
     manifest_name = "{id}/manifest.json".format(id=submission_id)
 
     # We might need to extract some additional information from the GAC
