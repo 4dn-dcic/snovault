@@ -86,6 +86,7 @@ import sys
 from typing import Optional
 import yaml
 from dcicutils.misc_utils import get_error_message
+from dcicutils.portal_utils import Portal
 from snovault.loadxl import create_testapp
 from snovault.commands.captured_output import captured_output, uncaptured_output
 
@@ -119,12 +120,12 @@ def _get_local_object(uuid: str, ini: str = _DEFAULT_INI_FILE, verbose: bool = F
     response = None
     try:
         with captured_output(not debug):
-            app = create_testapp(ini)
+            portal = Portal(ini)
             if not uuid.startswith("/"):
                 path = f"/{uuid}"
             else:
                 path = uuid
-            response = app.get_with_follow(path)
+            response = portal.get(path)
     except Exception as e:
         if "404" in str(e) and "not found" in str(e).lower():
             if verbose:
@@ -141,7 +142,7 @@ def _get_local_object(uuid: str, ini: str = _DEFAULT_INI_FILE, verbose: bool = F
         _exit_without_action(f"Invalid JSON getting object {uuid}).")
     if verbose:
         _print("OK")
-    return response.json
+    return response.json()
 
 
 def _print(*args, **kwargs):

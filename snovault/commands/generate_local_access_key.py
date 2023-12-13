@@ -73,6 +73,7 @@ from typing import Optional, Tuple
 import uuid
 from webtest import TestApp
 from dcicutils.common import AnyJsonData
+from dcicutils.portal_utils import Portal
 from snovault.authentication import (
     generate_password as generate_access_key_secret,
     generate_user as generate_access_key
@@ -137,16 +138,16 @@ def main() -> None:
         # multiauth.policy.auth0.namespace = auth0
         # multiauth.policy.auth0.base = encoded.authentication.Auth0AuthenticationPolicy
         with captured_output(not args.debug):
-            app = create_testapp(args.ini)
+            portal = Portal(args.ini)
     else:
-        app = None
+        portal = None
 
     if args.list:
-        _print_all_access_keys(app, args.verbose)
+        _print_all_access_keys(portal, args.verbose)
         return
 
     print(f"Creating a new local portal access-key for {args.app} ... ", end="")
-    access_key_user_uuid = _generate_user_uuid(args.user, app)
+    access_key_user_uuid = _generate_user_uuid(args.user, portal)
     access_key_id, access_key_secret, access_key_secret_hash = _generate_access_key(args.ini)
     access_key_inserts_file_item = _generate_access_key_inserts_item(access_key_id, access_key_secret_hash, access_key_user_uuid)
     access_keys_file_item = _generate_access_keys_file_item(access_key_id, access_key_secret, args.port)
@@ -173,16 +174,16 @@ def main() -> None:
             _exit_without_action(f"Portal must be running locally ({_get_local_portal_url(args.port)}) to do an insert.")
         print(f"Writing new local portal access-key to locally running portal database ... ", end="")
         with captured_output(not args.debug):
-            _load_data(app, access_key_inserts_file_item, data_type="access_key")
+            _load_data(portal, access_key_inserts_file_item, data_type="access_key")
         print("Done.")
     if not args.update_database or args.verbose:
         print(f"New local portal access-key insert record suitable for: {_INSERTS_DIR}/access_key.json ...")
         print(json.dumps(access_key_inserts_file_item, indent=4))
 
 
-def _generate_user_uuid(user: Optional[str], app: TestApp = None) -> str:
+def _generate_user_uuid(user: Optional[str], portal: Optional[Portal] = None) -> str:
     if not user:
-        if app:
+        if portal:
             _exit_without_action(f"The --user option must specify a UUID or email in {_USER_INSERTS_FILE}")
         return "<your-user-uuid>"
     user_uuid = None
@@ -195,8 +196,8 @@ def _generate_user_uuid(user: Optional[str], app: TestApp = None) -> str:
                 _exit_without_action(f"The given user ({user}) was not found as an email"
                                      f" in: {_USER_INSERTS_FILE}; and it is not a UUID.")
             user_uuid = user_uuid_from_inserts[0]["uuid"]
-    if user_uuid and app:
-        user = app.get_with_follow(f"/{user_uuid}", raise_exception=False)
+    if user_uuid and portal:
+        user = portal.get(f"/{user_uuid}", raise_exception=False)
         if not user or user.status_code != 200:
             _exit_without_action(f"The given user ({user_uuid}) was not found in the locally running portal database.")
     return user_uuid
@@ -280,7 +281,7 @@ def _get_local_portal_url(port: int) -> None:
     return f"http://localhost:{port}"
 
 
-def _load_data(app: TestApp, data: AnyJsonData, data_type: str) -> bool:
+def _load_data(portal: Portal, data: AnyJsonData, data_type: str) -> bool:
     if isinstance(data, dict):
         data = [data]
     elif not isinstance(data, list):
@@ -288,13 +289,13 @@ def _load_data(app: TestApp, data: AnyJsonData, data_type: str) -> bool:
     if not data_type:
         return False
     data = {data_type: data}
-    load_all(app, inserts=data, docsdir=None, overwrite=True, itype=[data_type], from_json=True)
+    load_all(portal.vapp, inserts=data, docsdir=None, overwrite=True, itype=[data_type], from_json=True)
     return True
 
 
-def _print_all_access_keys(app: TestApp, verbose: bool = False) -> None:
+def _print_all_access_keys(portal: Portal, verbose: bool = False) -> None:
     print("All access-keys defined for locally running portal:")
-    for item in _get_all_access_keys(app):
+    for item in _get_all_access_keys(portal):
         print(f"{item.id}", end="")
         if item.created:
             print(f" | Created: {item.created}", end="")
@@ -305,11 +306,11 @@ def _print_all_access_keys(app: TestApp, verbose: bool = False) -> None:
         print()
 
 
-def _get_all_access_keys(app: TestApp) -> list:
+def _get_all_access_keys(portal: Portal) -> list:
     response = []
     try:
         AccessKey = namedtuple("AccessKey", ["id", "uuid", "created", "expires"])
-        for access_key in app.get_with_follow(f"/access-keys").json["@graph"]:
+        for access_key in portal.get(f"/access-keys").json()["@graph"]:
             response.append(AccessKey(
                 id=access_key.get("access_key_id"),
                 uuid=access_key.get("uuid"),
