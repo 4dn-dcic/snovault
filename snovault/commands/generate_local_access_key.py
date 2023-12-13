@@ -71,7 +71,6 @@ import pytz
 import requests
 from typing import Optional, Tuple
 import uuid
-from webtest import TestApp
 from dcicutils.common import AnyJsonData
 from dcicutils.portal_utils import Portal
 from snovault.authentication import (
@@ -79,7 +78,7 @@ from snovault.authentication import (
     generate_user as generate_access_key
 )
 from snovault.edw_hash import EDWHash
-from snovault.loadxl import create_testapp, load_all
+from snovault.loadxl import load_all
 from ..project_app import app_project
 from .captured_output import captured_output
 

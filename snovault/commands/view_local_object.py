@@ -87,7 +87,6 @@ from typing import Optional
 import yaml
 from dcicutils.misc_utils import get_error_message
 from dcicutils.portal_utils import Portal
-from snovault.loadxl import create_testapp
 from snovault.commands.captured_output import captured_output, uncaptured_output
 
 
