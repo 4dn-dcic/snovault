@@ -98,14 +98,16 @@ def main():
     parser = argparse.ArgumentParser(description="Create local portal access-key for dev/testing purposes.")
     parser.add_argument("uuid", type=str,
                         help=f"The uuid (or path) of the object to fetch and view. ")
-    parser.add_argument("--ini", type=str, required=False, default=_DEFAULT_INI_FILE,
+    parser.add_argument("--ini", type=str, required=False, default=None,
                         help=f"Name of the application .ini file; default is: {_DEFAULT_INI_FILE}")
+    parser.add_argument("--env", type=str, required=False, default=None,
+                        help=f"Environment name (key from ~/.smaht-keys.json).")
     parser.add_argument("--yaml", action="store_true", required=False, default=False, help="YAML output.")
     parser.add_argument("--verbose", action="store_true", required=False, default=False, help="Verbose output.")
     parser.add_argument("--debug", action="store_true", required=False, default=False, help="Debugging output.")
     args = parser.parse_args()
 
-    data = _get_local_object(uuid=args.uuid, ini=args.ini, verbose=args.verbose, debug=args.debug)
+    data = _get_local_object(uuid=args.uuid, ini=args.ini, env=args.env, verbose=args.verbose, debug=args.debug)
 
     if args.yaml:
         _print(yaml.dump(data))
@@ -113,13 +115,13 @@ def main():
         _print(json.dumps(data, default=str, indent=4))
 
 
-def _get_local_object(uuid: str, ini: str = _DEFAULT_INI_FILE, verbose: bool = False, debug: bool = False) -> dict:
+def _get_local_object(uuid: str, ini: str = _DEFAULT_INI_FILE, env: Optional[str] = None, verbose: bool = False, debug: bool = False) -> dict:
     if verbose:
         _print(f"Getting object ({uuid}) from local portal ... ", end="")
     response = None
     try:
         with captured_output(not debug):
-            portal = Portal(ini)
+            portal = Portal(ini or env)
             if not uuid.startswith("/"):
                 path = f"/{uuid}"
             else:
