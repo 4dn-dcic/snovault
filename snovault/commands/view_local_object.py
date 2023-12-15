@@ -121,7 +121,7 @@ def _get_local_object(uuid: str, ini: str = _DEFAULT_INI_FILE, env: Optional[str
     response = None
     try:
         with captured_output(not debug):
-            portal = Portal(ini or env)
+            portal = Portal(ini or env or _DEFAULT_INI_FILE)
             if not uuid.startswith("/"):
                 path = f"/{uuid}"
             else:
