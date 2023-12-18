@@ -14,6 +14,7 @@ from .util import debug_log
 from .schema_utils import load_schema
 from .project_app import app_project
 
+
 def includeme(config):
     config.add_route('schemas', '/profiles/')
     config.add_route('schema', '/profiles/{type_name}.json')
@@ -122,7 +123,7 @@ def schemas(context, request):
 
 def _get_required_propnames_from_oneof(schema):
     """
-    helper to look for the oneOf declaration in the schema - which is currently 
+    helper to look for the oneOf declaration in the schema - which is currently
     and either/or for required properties and return a list of those conditionally
     required property]
     """
@@ -135,7 +136,7 @@ def _get_required_propnames_from_oneof(schema):
 
 
 def _has_property_attr_with_val(propinfo, attrs_to_chk):
-    """ 
+    """
     given a property with it's attributes will check against
     a dictionary of attribute names and values and returns true
     if the property has any of the attributes name/values in the dict
@@ -155,7 +156,7 @@ def _has_property_attr_with_val(propinfo, attrs_to_chk):
 def _get_item_name_from_schema_id(schema_id):
     """ this assumes a validly formatted $id value from a schema"""
     return schema_id.replace('/profiles/', '').replace('.json', '')
-            
+
 
 def _is_submittable_schema(schema_id, schema_props):
     """
@@ -172,24 +173,24 @@ def _is_submittable_schema(schema_id, schema_props):
             item_name = _get_item_name_from_schema_id(schema_id)
             if item_name in item_list:
                 return True  # explicitly named item found
-    
+
     if key_prop:
         prop_names = schema_props.keys()
         if key_prop in prop_names:
             return True  # the property that designates a schema as submittable was found
-    
+
     return False
 
 
 def _annotate_submittable_props(schema, props):
     """
-    add annotations for requirements and dependencies to 
+    add annotations for requirements and dependencies to
     submittable props based on the schema info
     """
-    required_props = schema.get('required', [])    
+    required_props = schema.get('required', [])
     oneof_props = _get_required_propnames_from_oneof(schema)
     req_deps = schema.get('dependentRequired', {})
-    
+
     for propname, propinfo in props.items():
         if propname in required_props:
             propinfo['is_required'] = True
@@ -210,7 +211,7 @@ def _get_submittable_props(schema, props):
     exclude_attrs = app_project().get_attributes_for_exclusion()
 
     submittable_props = {}
-    
+
     for propname, propinfo in props.items():
         emb_obj = None
         # determine if prop should be submittable
@@ -257,12 +258,12 @@ def _get_submittable_schema(schema):
 
     if not _is_submittable_schema(schema_id, schema_props):
         return {}
-    
+
     submittable_props = _get_submittable_props(schema, schema_props)
 
     if not submittable_props:
         return {}
-    
+
     submittable_props = _annotate_submittable_props(schema, submittable_props)
 
     if schema_id:
@@ -271,7 +272,7 @@ def _get_submittable_schema(schema):
     submittable_schema['properties'] = submittable_props
 
     return submittable_schema
-    
+
 
 @view_config(route_name='submittable', request_method='GET',
              decorator=etag_app_version_effective_principals)

@@ -1,9 +1,8 @@
 import pytest
 from unittest import mock
 import contextlib
+from ..project.schema_views import SnovaultProjectSchemaViews
 
-from ..project_defs import SnovaultProject
-from ..project_app import app_project
 from ..interfaces import TYPES
 from ..schema_utils import load_schema
 from .test_views import PARAMETERIZED_NAMES
@@ -47,46 +46,59 @@ def test_schemas_etag(testapp):
     testapp.get('/profiles/', headers={'If-None-Match': etag}, status=304)
 
 
-class MockedSnovaultProjectSchemaViews:
-    def __init__(self, sub_item_names=[], sub_prop=None, excl_props=[], excl_attrs={}):
-        self.sub_item_names = sub_item_names
-        self.sub_prop = sub_prop
-        self.excl_props = excl_props
-        self.excl_attrs = excl_attrs
+@contextlib.contextmanager
+def mock_get_submittable_item_names(sub_item_names):
+    with mock.patch.object(SnovaultProjectSchemaViews, 'get_submittable_item_names', lambda x: sub_item_names):
+        yield
 
-    def get_submittable_item_names(self):
-        return self.sub_item_names
-    
-    def get_prop_for_submittable_items(self):
-        return self.sub_prop
-    
-    def get_properties_for_exclusion(self):
-        return self.excl_props
-    
-    def get_attributes_for_exclusion(self):
-        return self.excl_attrs
-
-
-class MockedSnovaultProject(MockedSnovaultProjectSchemaViews):
-    pass
 
 @contextlib.contextmanager
-def mocked_app_project(sub_item_names=[], sub_prop=None, excl_props=[], excl_attrs={}):
-    # yield MockedSnovaultProject(sub_item_names, sub_prop, excl_props, excl_attrs)
-    yield mock.patch.object(SnovaultProject, "app_project", MockedSnovaultProject)
+def mock_get_prop_for_submittable_items(sub_prop):
+    with mock.patch.object(SnovaultProjectSchemaViews, 'get_prop_for_submittable_items', lambda x: sub_prop):
+        yield
+
+
+@contextlib.contextmanager
+def mock_get_properties_for_exclusion(excl_props):
+    with mock.patch.object(SnovaultProjectSchemaViews, 'get_properties_for_exclusion', lambda x: excl_props):
+        yield
+
+
+@contextlib.contextmanager
+def mock_get_attributes_for_exclusion(excl_attrs):
+    with mock.patch.object(SnovaultProjectSchemaViews, 'get_attributes_for_exclusion', lambda x: excl_attrs):
+        yield
+
+
+@contextlib.contextmanager
+def composite_mocker_for_schema_utils(sub_item_names=[], sub_prop=None, excl_props=[], excl_attrs={}):
+    """ This function is generally repurposable but has been customized for a conditional contextmanager
+        that will handle any combination """
+    conditions_managers = [
+        (sub_item_names, mock_get_submittable_item_names),
+        (sub_prop, mock_get_prop_for_submittable_items),
+        (excl_props, mock_get_properties_for_exclusion),
+        (excl_attrs, mock_get_attributes_for_exclusion)
+    ]
+
+    with contextlib.ExitStack() as stack:
+        for condition, context_manager in conditions_managers:
+            if condition:
+                stack.enter_context(context_manager(condition))
+        yield
+
 
 def test_is_submittable_schema_given_item_name(schema_for_testing):
-    with mocked_app_project(sub_item_names=['tester']):
-#        with mock.patch.object(SnovaultProject, "app_project", mocked_app_project):
-            import pdb; pdb.set_trace()
+    with composite_mocker_for_schema_utils(sub_item_names=['tester']):
             ans = _is_submittable_schema(schema_for_testing.get('$id'), schema_for_testing.get('properties'))
             assert ans is True
+
 
 @pytest.fixture
 def schema_for_testing():
     return {
         "title": "Tester",
-        "$id": "/profiles/tester.json",
+        "$id": "/profiles/tester.json",  # note for Andy: the name here is checked against sub_item_names, is that desired? vs. checking 'title' field
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
         "required": ["name"],
@@ -115,10 +127,10 @@ def schema_for_testing():
                 "title": "Last Modified",
                 "exclude_from": ["FFedit-create"],
                 "type": "object",
-                "additionalProperties": False, 
+                "additionalProperties": False,
                 "properties": {
                     "date_modified": {
-                        "title": "Date Modified", 
+                        "title": "Date Modified",
                         "description": "Do not submit, value is assigned by the server. The date the object is modified.",
                         "type": "string",
                         "anyOf": [{"format": "date-time"}, {"format": "date"}],
@@ -132,7 +144,7 @@ def schema_for_testing():
                         "permission": "non_restricted"
                     }
                 }
-            },   
+            },
             "date_created": {
                 "rdfs:subPropertyOf": "dc:created",
                 "title": "Date Created",
@@ -147,8 +159,8 @@ def schema_for_testing():
             },
             "schema_version": {
                 "title": "Schema Version",
-                "type": "string", 
-                "pattern": "^\\d+(\\.\\d+)*$", 
+                "type": "string",
+                "pattern": "^\\d+(\\.\\d+)*$",
                 "default": "1"
             },
             "submitted_id": {
@@ -174,15 +186,14 @@ def schema_for_testing():
             },
             "test_prop_A": {
                 "title": "A",
-                "type": "stirng"
+                "type": "string"
             },
             "test_prop_B": {
                 "title": "B",
-                "type": "stirng"
+                "type": "string"
             },
         }
     }
-
 
 
 @pytest.fixture
@@ -260,7 +271,7 @@ def test_has_property_attr_with_val_diff_val(props_with_attrs, attrs_to_check):
 
 def test_get_item_name_from_schema_id():
     name = 'access_key'
-    ak_strings = ['/profiles/access_key.json', '/profiles/access_key', 
+    ak_strings = ['/profiles/access_key.json', '/profiles/access_key',
                   'access_key.json', 'access_key']
     other_strings = ['profiles/access_key.jsonbgood', '']
 
@@ -275,6 +286,7 @@ def test_submittable(testapp, registry):
     res = testapp.get(test_uri, status=200)
     import pdb; pdb.set_trace()
     assert not res.json
+
 
 def test_submittables(testapp, registry):
     test_uri = '/can-submit/'
