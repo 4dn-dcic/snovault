@@ -23,6 +23,12 @@ def test_load_schema(schema):
     assert load_schema('snovault:test_schemas/%s' % (schema + '.json'))
 
 
+@pytest.fixture
+def loaded_test_schemas():
+    return {schema: load_schema(f'snovault:test_schemas/{schema}.json')
+        for schema in PARAMETERIZED_NAMES}
+
+
 def test_dependencies(testapp):
     collection_url = '/testing-dependencies/'
     testapp.post_json(collection_url, {'dep1': 'dep1', 'dep2': 'dep2'}, status=201)
@@ -305,7 +311,7 @@ def test_is_not_submittable_schema_wo_info(schema_for_testing):
         assert ans is False
 
 
-def test_submittable_no_info(testapp, registry):
+def test_submittable_no_app_info(testapp):
     """ without providing item name or key prop we expect 
         a 200 response but no json
     """
@@ -314,7 +320,7 @@ def test_submittable_no_info(testapp, registry):
     assert not res.json
 
 
-def test_submittable_given_item_name(testapp, registry):
+def test_submittable_given_item_name(testapp):
     schema_name = 'testing_note'
     test_schema = load_schema('snovault:test_schemas/TestingNoteSno.json')
     test_uri = f'/can-submit/{schema_name}.json'
@@ -334,7 +340,7 @@ def test_submittable_given_item_name(testapp, registry):
                     assert res_props[tpname] == tpval
 
 
-def test_submittable_with_excluded_attrs(testapp, registry):
+def test_submittable_with_excluded_attrs(testapp):
     schema_name = 'testing_note'
     test_schema = load_schema('snovault:test_schemas/TestingNoteSno.json')
     test_uri = f'/can-submit/{schema_name}.json'
@@ -354,11 +360,19 @@ def test_submittable_with_excluded_attrs(testapp, registry):
             assert 'classification' in assess_props
             assert 'date_call_made' not in assess_props
             assert 'call_made_by' not in assess_props
-            
 
-def test_submittables(testapp, registry):
+
+def test_submittables_no_app_info(testapp):
     test_uri = '/can-submit/'
     res = testapp.get(test_uri, status=200)
-    import pdb; pdb.set_trace()
     assert not res.json
 
+
+def test_submittables_w_uuid(testapp, loaded_test_schemas):
+    test_uri = '/can-submit/'
+    with composite_mocker_for_schema_utils(sub_prop='uuid'):
+        with mock.patch('snovault.schema_views.schemas',
+                        return_value=loaded_test_schemas):
+            res = testapp.get(test_uri, status=200).json
+            for sn in res.keys():
+                assert sn in PARAMETERIZED_NAMES
