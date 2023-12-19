@@ -88,12 +88,6 @@ def composite_mocker_for_schema_utils(sub_item_names=[], sub_prop=None, excl_pro
         yield
 
 
-def test_is_submittable_schema_given_item_name(schema_for_testing):
-    with composite_mocker_for_schema_utils(sub_item_names=['tester']):
-            ans = _is_submittable_schema(schema_for_testing.get('$id'), schema_for_testing.get('properties'))
-            assert ans is True
-
-
 @pytest.fixture
 def schema_for_testing():
     return {
@@ -281,12 +275,86 @@ def test_get_item_name_from_schema_id():
         assert name != _get_item_name_from_schema_id(os)
 
 
-def test_submittable(testapp, registry):
+def test_is_submittable_schema_given_item_name(schema_for_testing):
+    with composite_mocker_for_schema_utils(sub_item_names=['tester']):
+        ans = _is_submittable_schema(schema_for_testing.get('$id'), schema_for_testing.get('properties'))
+        assert ans is True
+
+
+def test_is_not_submittable_schema_given_item_name(schema_for_testing):
+    with composite_mocker_for_schema_utils(sub_item_names=['not_tester']):
+        ans = _is_submittable_schema(schema_for_testing.get('$id'), schema_for_testing.get('properties'))
+        assert ans is False
+
+
+def test_is_submittable_schema_given_key_prop(schema_for_testing):
+    with composite_mocker_for_schema_utils(sub_prop='submitted_id'):
+        ans = _is_submittable_schema(schema_for_testing.get('$id'), schema_for_testing.get('properties'))
+        assert ans is True
+
+
+def test_is_not_submittable_schema_wo_key_prop(schema_for_testing):
+    with composite_mocker_for_schema_utils(sub_prop='other_id'):
+        ans = _is_submittable_schema(schema_for_testing.get('$id'), schema_for_testing.get('properties'))
+        assert ans is False
+
+
+def test_is_not_submittable_schema_wo_info(schema_for_testing):
+    with composite_mocker_for_schema_utils():
+        ans = _is_submittable_schema(schema_for_testing.get('$id'), schema_for_testing.get('properties'))
+        assert ans is False
+
+
+def test_submittable_no_info(testapp, registry):
+    """ without providing item name or key prop we expect 
+        a 200 response but no json
+    """
     test_uri = '/can-submit/access_key.json'
     res = testapp.get(test_uri, status=200)
-    import pdb; pdb.set_trace()
     assert not res.json
 
+
+def test_submittable_given_item_name(testapp, registry):
+    schema_name = 'testing_note'
+    test_schema = load_schema('snovault:test_schemas/TestingNoteSno.json')
+    test_uri = f'/can-submit/{schema_name}.json'
+    with composite_mocker_for_schema_utils(sub_item_names=[schema_name]):
+        with mock.patch('snovault.schema_views.load_schema',
+                        return_value=test_schema):
+            res = testapp.get(test_uri, status=200).json
+            assert res['$id'] == test_schema['$id']
+            assert res['title'] == test_schema['title']
+            test_props = test_schema['properties']
+            res_props = res['properties']
+            for tpname, tpval in test_props.items():
+                if tpval.get('type') == 'object':
+                    assert res_props[tpname].get('title') == tpval.get('title')
+                    assert res_props[tpname].get('properties') == tpval.get('properties')
+                else:
+                    assert res_props[tpname] == tpval
+
+
+def test_submittable_with_excluded_attrs(testapp, registry):
+    schema_name = 'testing_note'
+    test_schema = load_schema('snovault:test_schemas/TestingNoteSno.json')
+    test_uri = f'/can-submit/{schema_name}.json'
+    with composite_mocker_for_schema_utils(sub_item_names=[schema_name],
+                                           excl_attrs={'permission': 'restricted_fields'}):
+        with mock.patch('snovault.schema_views.load_schema',
+                        return_value=test_schema):
+            res = testapp.get(test_uri, status=200).json
+            assert res['$id'] == test_schema['$id']
+            assert res['title'] == test_schema['title']
+            res_props = res['properties']
+            assert 'review' not in res_props
+            assessment = res_props.get('assessment')
+            assert assessment.get('title') == 'Call Assessment'
+            assess_props = assessment.get('properties')
+            assert 'call' in assess_props
+            assert 'classification' in assess_props
+            assert 'date_call_made' not in assess_props
+            assert 'call_made_by' not in assess_props
+            
 
 def test_submittables(testapp, registry):
     test_uri = '/can-submit/'

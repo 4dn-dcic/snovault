@@ -201,6 +201,18 @@ def _annotate_submittable_props(schema, props):
     return props
 
 
+def _build_embedded_obj(schema, embedded_obj):
+    obj_info = {}
+    obj_title = embedded_obj.get('title')
+    obj_props = _get_submittable_props(schema, embedded_obj.get('properties', {}))
+    obj_props = _annotate_submittable_props(schema, obj_props)
+    if obj_props:
+        obj_info['properties'] = obj_props
+        if obj_title:
+            obj_info['title'] = obj_title
+    return obj_info
+
+
 def _get_submittable_props(schema, props):
     """
     Use appproject provided info on properties and properties with certain attributes
@@ -222,23 +234,19 @@ def _get_submittable_props(schema, props):
         elif propinfo.get('type') == 'array':  # need to check the attributes of the items
             list_item = propinfo.get('items')
             if list_item.get('type') == 'object':  # very rare case of list of embedded objects
-                if 'properties' not in list_item:
-                    continue
-                emb_obj = _get_submittable_props(schema, list_item.get('properties'))
+                emb_obj = _build_embedded_obj(schema, list_item)
                 if not emb_obj:
                     continue
                 else:
-                    propinfo['items'] = _annotate_submittable_props(schema, emb_obj.copy())
+                    propinfo['items'] = emb_obj
                     submittable_props[propname] = propinfo
                     emb_obj = None
             elif _has_property_attr_with_val(list_item, exclude_attrs):
                 continue
         elif propinfo.get('type') == 'object':  # infrequent case of embedded object
-            if 'properties' not in propinfo:
-                continue
-            emb_obj = _get_submittable_props(schema, propinfo.get('properties'))
-            if emb_obj.get('properties'):
-                submittable_props[propname] = _annotate_submittable_props(schema, emb_obj)
+            emb_obj = _build_embedded_obj(schema, propinfo)
+            if emb_obj:
+                submittable_props[propname] = emb_obj
         else:
             submittable_props[propname] = propinfo
     return submittable_props
@@ -250,6 +258,7 @@ def _get_submittable_schema(schema):
     and if so parse info so only submittable fields are included along with hints
     and doc on those fields
     """
+    #import pdb; pdb.set_trace()
     schema_id = schema.get('$id')
     schema_props = schema.get('properties')
     submittable_schema = {}
