@@ -102,12 +102,17 @@ def main():
                         help=f"Name of the application .ini file; default is: {_DEFAULT_INI_FILE}")
     parser.add_argument("--env", type=str, required=False, default=None,
                         help=f"Environment name (key from ~/.smaht-keys.json).")
+    parser.add_argument("--server", type=str, required=False, default=None,
+                        help=f"Environment server name (server from key in ~/.smaht-keys.json).")
+    parser.add_argument("--app", type=str, required=False, default=None,
+                        help=f"Application name (one of: smaht, cgap, fourfront).")
     parser.add_argument("--yaml", action="store_true", required=False, default=False, help="YAML output.")
     parser.add_argument("--verbose", action="store_true", required=False, default=False, help="Verbose output.")
     parser.add_argument("--debug", action="store_true", required=False, default=False, help="Debugging output.")
     args = parser.parse_args()
 
-    data = _get_local_object(uuid=args.uuid, ini=args.ini, env=args.env, verbose=args.verbose, debug=args.debug)
+    portal = _create_portal(ini=args.ini, env=args.env, server=args.server, app=args.app, debug=args.debug)
+    data = _get_local_object(portal=portal, uuid=args.uuid, verbose=args.verbose)
 
     if args.yaml:
         _print(yaml.dump(data))
@@ -115,18 +120,22 @@ def main():
         _print(json.dumps(data, default=str, indent=4))
 
 
-def _get_local_object(uuid: str, ini: str = _DEFAULT_INI_FILE, env: Optional[str] = None, verbose: bool = False, debug: bool = False) -> dict:
+def _create_portal(ini: str = _DEFAULT_INI_FILE, env: Optional[str] = None,
+                   server: Optional[str] = None, app: Optional[str] = None, debug: bool = False) -> dict:
+    with captured_output(not debug):
+        return Portal(env, server=server, app=app) if env or app else Portal(ini or _DEFAULT_INI_FILE)
+
+
+def _get_local_object(portal: Portal, uuid: str, verbose: bool = False) -> dict:
     if verbose:
         _print(f"Getting object ({uuid}) from local portal ... ", end="")
     response = None
     try:
-        with captured_output(not debug):
-            portal = Portal(ini or env or _DEFAULT_INI_FILE)
-            if not uuid.startswith("/"):
-                path = f"/{uuid}"
-            else:
-                path = uuid
-            response = portal.get(path)
+        if not uuid.startswith("/"):
+            path = f"/{uuid}"
+        else:
+            path = uuid
+        response = portal.get(path)
     except Exception as e:
         if "404" in str(e) and "not found" in str(e).lower():
             if verbose:
