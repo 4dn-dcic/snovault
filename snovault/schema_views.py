@@ -102,7 +102,6 @@ def schema(context, request):
     return _annotated_schema(type_info, request)
 
 
-
 @view_config(route_name='schemas', request_method='GET',
              decorator=etag_app_version_effective_principals)
 @debug_log
@@ -120,6 +119,7 @@ def schemas(context, request):
         name = type_info.name
         schemas[name] = _annotated_schema(type_info, request)
     return schemas
+
 
 def _get_required_propnames_from_oneof(schema):
     """
@@ -258,7 +258,6 @@ def _get_submittable_schema(schema):
     and if so parse info so only submittable fields are included along with hints
     and doc on those fields
     """
-    #import pdb; pdb.set_trace()
     schema_id = schema.get('$id')
     schema_props = schema.get('properties')
     submittable_schema = {}
@@ -292,7 +291,6 @@ def submittable(context, request):
     return _get_submittable_schema(schema)
 
 
-
 @view_config(route_name='submittables', request_method='GET',
              decorator=etag_app_version_effective_principals)
 @debug_log
@@ -300,10 +298,7 @@ def submittables(context, request):
     submittable_schemas = {}
     all_schemas = schemas(context, request)
     for name, schema in all_schemas.items():
-         submittable_schema = _get_submittable_schema(schema)
-         if submittable_schema:
-             submittable_schemas[name] = submittable_schema
+        submittable_schema = _get_submittable_schema(schema)
+        if submittable_schema:
+            submittable_schemas[name] = submittable_schema
     return submittable_schemas
-
-
-

@@ -6,15 +6,12 @@ from ..project.schema_views import SnovaultProjectSchemaViews
 from ..interfaces import TYPES
 from ..schema_utils import load_schema
 from .test_views import PARAMETERIZED_NAMES
-from snovault import schema_views
+# from snovault import schema_views
 from snovault.schema_views import (
     _get_required_propnames_from_oneof,
     _has_property_attr_with_val,
     _get_item_name_from_schema_id,
     _is_submittable_schema,
-    _annotate_submittable_props,
-    _get_submittable_props,
-    _get_submittable_schema
 )
 
 
@@ -26,7 +23,7 @@ def test_load_schema(schema):
 @pytest.fixture
 def loaded_test_schemas():
     return {schema: load_schema(f'snovault:test_schemas/{schema}.json')
-        for schema in PARAMETERIZED_NAMES}
+            for schema in PARAMETERIZED_NAMES}
 
 
 def test_dependencies(testapp):
@@ -98,7 +95,7 @@ def composite_mocker_for_schema_utils(sub_item_names=[], sub_prop=None, excl_pro
 def schema_for_testing():
     return {
         "title": "Tester",
-        "$id": "/profiles/tester.json",  # note for Andy: the name here is checked against sub_item_names, is that desired? vs. checking 'title' field
+        "$id": "/profiles/tester.json",  # note for Andy: the name here is checked against sub_item_names.
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
         "required": ["name"],
@@ -312,7 +309,7 @@ def test_is_not_submittable_schema_wo_info(schema_for_testing):
 
 
 def test_submittable_no_app_info(testapp):
-    """ without providing item name or key prop we expect 
+    """ without providing item name or key prop we expect
         a 200 response but no json
     """
     test_uri = '/can-submit/access_key.json'
@@ -338,6 +335,26 @@ def test_submittable_given_item_name(testapp):
                     assert res_props[tpname].get('properties') == tpval.get('properties')
                 else:
                     assert res_props[tpname] == tpval
+
+
+def test_submittable_with_excluded_prop(testapp):
+    schema_name = 'testing_note'
+    test_schema = load_schema('snovault:test_schemas/TestingNoteSno.json')
+    test_uri = f'/can-submit/{schema_name}.json'
+    inc_props = ['uuid', 'identifier', 'previous_note', 'superseding_note']
+    ex_props = ['status', 'schema_version', 'assessment', 'review']
+    with composite_mocker_for_schema_utils(sub_item_names=[schema_name],
+                                           excl_props=ex_props):
+        with mock.patch('snovault.schema_views.load_schema',
+                        return_value=test_schema):
+            res = testapp.get(test_uri, status=200).json
+            assert res['$id'] == test_schema['$id']
+            assert res['title'] == test_schema['title']
+            res_props = res['properties']
+            for pr in inc_props:
+                assert pr in res_props
+            for pr in ex_props:
+                assert pr not in res_props
 
 
 def test_submittable_with_excluded_attrs(testapp):
