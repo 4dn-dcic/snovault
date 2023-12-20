@@ -95,7 +95,7 @@ def composite_mocker_for_schema_utils(sub_item_names=[], sub_prop=None, excl_pro
 def schema_for_testing():
     return {
         "title": "Tester",
-        "$id": "/profiles/tester.json",  # note for Andy: the name here is checked against sub_item_names.
+        "$id": "/profiles/tester.json",
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
         "required": ["name"],
