@@ -18,8 +18,8 @@ from .project_app import app_project
 def includeme(config):
     config.add_route('schemas', '/profiles/')
     config.add_route('schema', '/profiles/{type_name}.json')
-    config.add_route('submittables', '/can-submit/')
-    config.add_route('submittable', '/can-submit/{type_name}.json')
+    config.add_route('submittables', '/submission-schemas/')
+    config.add_route('submittable', '/submission-schemas/{type_name}.json')
     config.scan(__name__)
 
 
@@ -121,17 +121,17 @@ def schemas(context, request):
     return schemas
 
 
-def _get_required_propnames_from_oneof(schema):
+def _get_conditionally_required_propnames(schema, keyword):
     """
-    helper to look for the oneOf declaration in the schema - which is currently
-    and either/or for required properties and return a list of those conditionally
-    required property]
+    helper to look for the oneOf/anyOf declarations in the schema -
+    for required properties and return a list of those conditionally
+    required properties
     """
     propnames = []
-    oneof_info = schema.get('oneOf', [])
-    for oneof in oneof_info:
+    keyword_info = schema.get(keyword, [])
+    for info in keyword_info:
         # is a list but examples so far have only one member?
-        propnames.extend(oneof.get('required', []))
+        propnames.extend(info.get('required', []))
     return propnames
 
 
@@ -188,14 +188,22 @@ def _annotate_submittable_props(schema, props):
     submittable props based on the schema info
     """
     required_props = schema.get('required', [])
-    oneof_props = _get_required_propnames_from_oneof(schema)
+    oneof_props = _get_conditionally_required_propnames(schema, 'oneOf')
+    anyof_props = _get_conditionally_required_propnames(schema, 'anyOf')
     req_deps = schema.get('dependentRequired', {})
 
     for propname, propinfo in props.items():
         if propname in required_props:
             propinfo['is_required'] = True
-        if propname in oneof_props:  # this a bit wonky (assumes only 2 items in oneof_props)
-            propinfo['required_if_not'] = [p for p in oneof_props if p != propname][0]
+        if propname in oneof_props:
+            lprops = [p for p in oneof_props if p != propname]
+            propinfo.setdefault('required_if_not_one_of', []).extend(lprops)
+            # propinfo['required_if_not_one_of'] = lprops
+            propinfo['prohibited_if_one_of'] = lprops
+        if propname in anyof_props:
+            lprops = [p for p in anyof_props if p != propname]
+            propinfo.setdefault('required_if_not_one_of', []).extend(lprops)
+            # propinfo['required_if_not_one_of'] = lprops
         if propname in req_deps:
             propinfo['also_requires'] = req_deps[propname]
     return props

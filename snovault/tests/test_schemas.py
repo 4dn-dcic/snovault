@@ -8,7 +8,7 @@ from ..schema_utils import load_schema
 from .test_views import PARAMETERIZED_NAMES
 # from snovault import schema_views
 from snovault.schema_views import (
-    _get_required_propnames_from_oneof,
+    _get_conditionally_required_propnames,
     _has_property_attr_with_val,
     _get_item_name_from_schema_id,
     _is_submittable_schema,
@@ -234,16 +234,16 @@ def props_with_attrs():
     }
 
 
-def test_get_required_propnames_from_oneof(schema_for_testing):
+def test_get_conditionally_required_propnames(schema_for_testing):
     expected_props = ['aliases', 'submitted_id']
-    fetched_props = _get_required_propnames_from_oneof(schema_for_testing)
+    fetched_props = _get_conditionally_required_propnames(schema_for_testing, 'oneOf')
     assert set(expected_props) == set(fetched_props)
 
 
-def test_get_required_propnames_from_oneof_without_oneof(schema_for_testing):
+def test_get_conditionally_required_propnames_with_no_condition(schema_for_testing):
     """ checks that if no oneOf stanza empty list is result"""
     del schema_for_testing['oneOf']
-    fetched_props = _get_required_propnames_from_oneof(schema_for_testing)
+    fetched_props = _get_conditionally_required_propnames(schema_for_testing, 'oneOf')
     assert not fetched_props
 
 
@@ -312,7 +312,7 @@ def test_submittable_no_app_info(testapp):
     """ without providing item name or key prop we expect
         a 200 response but no json
     """
-    test_uri = '/can-submit/access_key.json'
+    test_uri = '/submission-schemas/access_key.json'
     res = testapp.get(test_uri, status=200)
     assert not res.json
 
@@ -320,7 +320,7 @@ def test_submittable_no_app_info(testapp):
 def test_submittable_given_item_name(testapp):
     schema_name = 'testing_note'
     test_schema = load_schema('snovault:test_schemas/TestingNoteSno.json')
-    test_uri = f'/can-submit/{schema_name}.json'
+    test_uri = f'/submission-schemas/{schema_name}.json'
     with composite_mocker_for_schema_utils(sub_item_names=[schema_name]):
         with mock.patch('snovault.schema_views.load_schema',
                         return_value=test_schema):
@@ -340,7 +340,7 @@ def test_submittable_given_item_name(testapp):
 def test_submittable_with_excluded_prop(testapp):
     schema_name = 'testing_note'
     test_schema = load_schema('snovault:test_schemas/TestingNoteSno.json')
-    test_uri = f'/can-submit/{schema_name}.json'
+    test_uri = f'/submission-schemas/{schema_name}.json'
     inc_props = ['uuid', 'identifier', 'previous_note', 'superseding_note']
     ex_props = ['status', 'schema_version', 'assessment', 'review']
     with composite_mocker_for_schema_utils(sub_item_names=[schema_name],
@@ -360,7 +360,7 @@ def test_submittable_with_excluded_prop(testapp):
 def test_submittable_with_excluded_attrs(testapp):
     schema_name = 'testing_note'
     test_schema = load_schema('snovault:test_schemas/TestingNoteSno.json')
-    test_uri = f'/can-submit/{schema_name}.json'
+    test_uri = f'/submission-schemas/{schema_name}.json'
     with composite_mocker_for_schema_utils(sub_item_names=[schema_name],
                                            excl_attrs={'permission': 'restricted_fields'}):
         with mock.patch('snovault.schema_views.load_schema',
@@ -380,13 +380,13 @@ def test_submittable_with_excluded_attrs(testapp):
 
 
 def test_submittables_no_app_info(testapp):
-    test_uri = '/can-submit/'
+    test_uri = '/submission-schemas/'
     res = testapp.get(test_uri, status=200)
     assert not res.json
 
 
 def test_submittables_w_uuid(testapp, loaded_test_schemas):
-    test_uri = '/can-submit/'
+    test_uri = '/submission-schemas/'
     with composite_mocker_for_schema_utils(sub_prop='uuid'):
         with mock.patch('snovault.schema_views.schemas',
                         return_value=loaded_test_schemas):
