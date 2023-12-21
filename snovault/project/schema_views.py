@@ -10,7 +10,7 @@ class SnovaultProjectSchemaViews:
         """
         optional property name when if found as a top level property in a schema indicates it is submittable
         """
-        return None
+        return ""
     
     def get_properties_for_exclusion(self):
         """
