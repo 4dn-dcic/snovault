@@ -86,7 +86,7 @@ import sys
 from typing import Optional
 import yaml
 from dcicutils.misc_utils import get_error_message
-from snovault.loadxl import create_testapp
+from dcicutils.portal_utils import Portal
 from snovault.commands.captured_output import captured_output, uncaptured_output
 
 
@@ -98,14 +98,21 @@ def main():
     parser = argparse.ArgumentParser(description="Create local portal access-key for dev/testing purposes.")
     parser.add_argument("uuid", type=str,
                         help=f"The uuid (or path) of the object to fetch and view. ")
-    parser.add_argument("--ini", type=str, required=False, default=_DEFAULT_INI_FILE,
+    parser.add_argument("--ini", type=str, required=False, default=None,
                         help=f"Name of the application .ini file; default is: {_DEFAULT_INI_FILE}")
+    parser.add_argument("--env", type=str, required=False, default=None,
+                        help=f"Environment name (key from ~/.smaht-keys.json).")
+    parser.add_argument("--server", type=str, required=False, default=None,
+                        help=f"Environment server name (server from key in ~/.smaht-keys.json).")
+    parser.add_argument("--app", type=str, required=False, default=None,
+                        help=f"Application name (one of: smaht, cgap, fourfront).")
     parser.add_argument("--yaml", action="store_true", required=False, default=False, help="YAML output.")
     parser.add_argument("--verbose", action="store_true", required=False, default=False, help="Verbose output.")
     parser.add_argument("--debug", action="store_true", required=False, default=False, help="Debugging output.")
     args = parser.parse_args()
 
-    data = _get_local_object(uuid=args.uuid, ini=args.ini, verbose=args.verbose, debug=args.debug)
+    portal = _create_portal(ini=args.ini, env=args.env, server=args.server, app=args.app, debug=args.debug)
+    data = _get_local_object(portal=portal, uuid=args.uuid, verbose=args.verbose)
 
     if args.yaml:
         _print(yaml.dump(data))
@@ -113,18 +120,22 @@ def main():
         _print(json.dumps(data, default=str, indent=4))
 
 
-def _get_local_object(uuid: str, ini: str = _DEFAULT_INI_FILE, verbose: bool = False, debug: bool = False) -> dict:
+def _create_portal(ini: str = _DEFAULT_INI_FILE, env: Optional[str] = None,
+                   server: Optional[str] = None, app: Optional[str] = None, debug: bool = False) -> dict:
+    with captured_output(not debug):
+        return Portal(env, server=server, app=app) if env or app else Portal(ini or _DEFAULT_INI_FILE)
+
+
+def _get_local_object(portal: Portal, uuid: str, verbose: bool = False) -> dict:
     if verbose:
         _print(f"Getting object ({uuid}) from local portal ... ", end="")
     response = None
     try:
-        with captured_output(not debug):
-            app = create_testapp(ini)
-            if not uuid.startswith("/"):
-                path = f"/{uuid}"
-            else:
-                path = uuid
-            response = app.get_with_follow(path)
+        if not uuid.startswith("/"):
+            path = f"/{uuid}"
+        else:
+            path = uuid
+        response = portal.get(path)
     except Exception as e:
         if "404" in str(e) and "not found" in str(e).lower():
             if verbose:
@@ -141,7 +152,7 @@ def _get_local_object(uuid: str, ini: str = _DEFAULT_INI_FILE, verbose: bool = F
         _exit_without_action(f"Invalid JSON getting object {uuid}).")
     if verbose:
         _print("OK")
-    return response.json
+    return response.json()
 
 
 def _print(*args, **kwargs):
