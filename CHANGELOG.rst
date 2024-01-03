@@ -7,6 +7,11 @@ Change Log
 ----------
 
 
+11.8.0
+======
+* Added support for an optional gitinfo.json file (deployed via portal buildspec.yml).
+
+
 11.7.0
 ======
 * Updated dcicutils to 8.6.0 (with minor fixes related to structured_data and SMaHT ingestion).

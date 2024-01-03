@@ -1,3 +1,5 @@
+from functools import lru_cache
+import json
 import sys
 import uptime
 
@@ -143,12 +145,22 @@ def health_check(config):
             h.TIBANNA_OUTPUT_BUCKET: settings.get(s.TIBANNA_OUTPUT_BUCKET),
             h.UPTIME: uptime_info(),
             h.UTILS_VERSION: settings.get(s.UTILS_VERSION),
+            "git": _get_gitinfo()
 
         }
 
         return response_dict
 
     config.add_view(health_page_view, route_name='health-check')
+
+
+@lru_cache(maxsize=1)
+def _get_gitinfo() -> dict:
+    try:
+        with open("gitinfo.json") as f:
+            return json.load(f)
+    except Exception as e:
+        return {"error": str(e)}
 
 
 def build_warn_string(db_count, es_count):
