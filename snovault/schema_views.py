@@ -11,7 +11,7 @@ from .interfaces import (
     TYPES,
 )
 from .util import debug_log
-from .schema_utils import load_schema
+# from .schema_utils import load_schema
 from .project_app import app_project
 
 
@@ -158,12 +158,15 @@ def _get_item_name_from_schema_id(schema_id):
     return schema_id.replace('/profiles/', '').replace('.json', '')
 
 
-def _is_submittable_schema(schema_id, schema_props):
+def _is_submittable_schema(schema_id, schema):
     """
     helper to determine if the schema has potentially submittable fields
+    exclude abstract schemas by default
     """
+    if schema.get('isAbstract'):
+        return False
     # an explicit list of submittable items may be provided
-    item_list = app_project().get_submittable_item_names()
+    item_list = app_project().get_submittable_schema_names()
     # a property in a schema that indicates this schema is submittable
     # eg. submmitter_id
     key_prop = app_project().get_prop_for_submittable_items()
@@ -173,7 +176,7 @@ def _is_submittable_schema(schema_id, schema_props):
             item_name = _get_item_name_from_schema_id(schema_id)
             if item_name in item_list:
                 return True  # explicitly named item found
-
+    schema_props = schema.get('properties')
     if key_prop:
         prop_names = schema_props.keys()
         if key_prop in prop_names:
@@ -198,12 +201,10 @@ def _annotate_submittable_props(schema, props):
         if propname in oneof_props:
             lprops = [p for p in oneof_props if p != propname]
             propinfo.setdefault('required_if_not_one_of', []).extend(lprops)
-            # propinfo['required_if_not_one_of'] = lprops
             propinfo['prohibited_if_one_of'] = lprops
         if propname in anyof_props:
             lprops = [p for p in anyof_props if p != propname]
             propinfo.setdefault('required_if_not_one_of', []).extend(lprops)
-            # propinfo['required_if_not_one_of'] = lprops
         if propname in req_deps:
             propinfo['also_requires'] = req_deps[propname]
     return props
@@ -251,6 +252,8 @@ def _get_submittable_props(schema, props):
                     emb_obj = None
             elif _has_property_attr_with_val(list_item, exclude_attrs):
                 continue
+            else:
+                submittable_props[propname] = propinfo
         elif propinfo.get('type') == 'object':  # infrequent case of embedded object
             emb_obj = _build_embedded_obj(schema, propinfo)
             if emb_obj:
@@ -272,7 +275,7 @@ def _get_submittable_schema(schema):
     if not schema_props:
         return {}
 
-    if not _is_submittable_schema(schema_id, schema_props):
+    if not _is_submittable_schema(schema_id, schema):
         return {}
 
     submittable_props = _get_submittable_props(schema, schema_props)
@@ -294,9 +297,11 @@ def _get_submittable_schema(schema):
              decorator=etag_app_version_effective_principals)
 @debug_log
 def submittable(context, request):
-    type_name = request.matchdict['type_name']
-    schema = load_schema(f"schemas/{type_name}.json")
-    return _get_submittable_schema(schema)
+    schema2chk = schema(context, request)
+    submittable_schema = _get_submittable_schema(schema2chk)
+    if not submittable_schema:
+        raise HTTPNotFound(f'The schema you requested with {request.url} is not submittable or has no submittable fields')
+    return submittable_schema
 
 
 @view_config(route_name='submittables', request_method='GET',
@@ -309,4 +314,6 @@ def submittables(context, request):
         submittable_schema = _get_submittable_schema(schema)
         if submittable_schema:
             submittable_schemas[name] = submittable_schema
+    if not submittable_schemas:
+        raise HTTPNotFound("No submittable schemas found")
     return submittable_schemas
