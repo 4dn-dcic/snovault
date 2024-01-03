@@ -11,6 +11,9 @@
     "mixinProperties": [
         {
             "$ref": "mixins.json#/status"
+        },
+        {
+            "$ref": "mixins.json#/tags"
         }
     ],
     "properties": {
