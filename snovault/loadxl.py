@@ -11,7 +11,7 @@ from PIL import Image
 import re
 import structlog
 import traceback
-from typing import Optional, Union
+from typing import List, Optional, Union
 from webtest import TestApp
 from webtest.response import TestResponse as TestAppResponse
 import uuid
@@ -19,7 +19,7 @@ from pyramid.paster import get_app
 from pyramid.response import Response
 from pyramid.router import Router
 from pyramid.view import view_config
-from dcicutils.misc_utils import ignored, environ_bool, VirtualApp
+from dcicutils.misc_utils import ignored, environ_bool, to_camel_case, VirtualApp
 from dcicutils.secrets_utils import assume_identity
 from snovault.util import debug_log
 from .schema_utils import get_identifying_and_required_properties
@@ -292,49 +292,93 @@ def load_all(testapp, inserts, docsdir, overwrite=True, itype=None, from_json=Fa
 
 LOADXL_ALLOW_NONE = environ_bool("LOADXL_ALLOW_NONE", default=True)
 
-
-def get_identifying_property(item: dict, identifying_properties: list) -> Optional[str]:
+def get_identifying_properties(item: dict, identifying_properties: list) -> List[str]:
     """
-    Returns the first identifying property of the given item which has a value, given its
-    identifying properties (passed in from the identifyingProperties of the item's type
-    schema). Favor uuid property; no ordering defined for other identifying properties.
+    Returns the list of all identifying properties of the given item which have a value,
+    given its identifying properties (passed in from the identifyingProperties of the item's
+    type schema). Favor uuid property and defavor aliases; no other ordering defined.
     """
-    if "uuid" in item:
-        identifying_value = item["uuid"]
-        if identifying_value:
-            return "uuid"
+    results = []
+    if item.get("uuid"):
+        results.append("uuid")
     for identifying_property in identifying_properties:
-        if identifying_property in item:
-            identifying_value = item[identifying_property]
-            if identifying_value:
-                return identifying_property
-    return None
+        if identifying_property not in ["aliases", "uuid"] and item.get(identifying_property) is not None:
+            results.append(identifying_property)
+    if "aliases" in identifying_properties and item.get("aliases") is not None:
+        results.append("aliases")
+    return results
 
 
-def get_identifying_path(item: dict, item_type: str, identifying_properties: list) -> Optional[str]:
+def get_identifying_paths(item: dict, item_type: str, identifying_properties: list) -> List[str]:
     """
     Returns the Portal URL path for the first identifying property of the given item which has a
     value, given its identifying properties (passed in from the identifyingProperties of the item's
     type schema). Favor uuid property; no ordering defined for other identifying properties.
     """
-    identifying_property = get_identifying_property(item, identifying_properties)
-    if identifying_property:
-        identifying_value = item[identifying_property]
-        if identifying_property == "uuid":
-            return f"/{identifying_value}"
-        else:
-            return f"/{item_type}/{identifying_value}"
-    return None
+    results = []
+    for identifying_property in get_identifying_properties(item, identifying_properties):
+        if (identifying_value := item.get(identifying_property)):
+            if isinstance(identifying_value, list):
+                for identifying_value_item in identifying_value:
+                    results.append(f"/{item_type}/{identifying_value_item}")
+            elif identifying_property == "uuid":
+                results.append(f"/{identifying_value}")
+            else:
+                results.append(f"/{item_type}/{identifying_value}")
+    return results
+
+
+def get_identifying_property(item: dict, identifying_properties: list) -> Optional[str]:
+    """
+    Returns the first identifying property of the given item which has a value, given its
+    identifying properties (passed in from the identifyingProperties of the item's type
+    schema). Favor uuid property and defavor aliases; no other ordering defined.
+    """
+    identifying_properties = get_identifying_properties(item, identifying_properties)
+    return identifying_properties[0] if len(identifying_properties) > 0 else None
+
+
+def get_identifying_path(item: dict, item_type: str, identifying_properties: list) -> Optional[str]:
+    identifying_paths = get_identifying_paths(item, item_type, identifying_properties)
+    return identifying_paths[0] if identifying_paths else None
 
 
 def get_identifying_value(item: dict, identifying_properties: list) -> Optional[str]:
     """
     Returns the value of the first identifying property of the given item which has a value,
     given its identifying properties (passed in from the identifyingProperties of the item's
-    type schema). Favor uuid property; no ordering defined for other identifying properties.
+    type schema). Favor uuid property and defavor aliases; no other ordering defined.
     """
     identifying_property = get_identifying_property(item, identifying_properties)
-    return item[identifying_property] if identifying_property else None
+    if identifying_property:
+        identifying_property_value = item.get(identifying_property)
+        if isinstance(identifying_property_value, list) and len(identifying_property_value) > 0:
+            return identifying_property_value[0]
+        return identifying_property_value
+    return None
+
+def item_exists(app, an_item: dict, a_type: str, identifying_properties: list) -> Optional[str]:
+    identifying_paths = get_identifying_paths(an_item, a_type, identifying_properties)
+    if not identifying_paths:
+        raise Exception("Item has no uuid nor any other identifying property; cannot GET.")
+    for identifying_path in identifying_paths:
+        try:
+            # 301 because @id is the existing item path, not uuid
+            # TODO: We we be able to do this part of the process more efficiently in bulk, up front.
+            # ALSO: If we could use, for example, "/file-formats/vcf_gz/" (where the trailing slash
+            # is important) rather than "/file_format/vcf_gz", we don't get a redirect (301) be get
+            # a direct (200) response; but transformation of "file_format" to "file-formats" isn't
+            # readily available to us here; and at least in this example (file_format), using the
+            # uuid does not get us a direct (200) response, but rather a redirect (301); just FYI.
+            existing_item = app.get(identifying_path, status=[200, 301])
+            # If we get here then the item exists.
+            existing_uuid = get_response_uuid(existing_item)
+            return existing_uuid or get_identifying_value(an_item, identifying_properties)
+        except Exception:
+            # Ignoring exception here on purpose; this happens if the
+            # item does not (yet) exist in the database, which is fine.
+            pass
+    return None
 
 
 def get_response_uuid(response: TestAppResponse) -> Optional[str]:
@@ -346,7 +390,7 @@ def get_response_uuid(response: TestAppResponse) -> Optional[str]:
 
 
 def load_all_gen(testapp, inserts, docsdir, overwrite=True, itype=None, from_json=False,
-                 patch_only=False, post_only=False, skip_types=None, validate_only=False):
+                 patch_only=False, post_only=False, skip_types=None, validate_only=False, verbose=False):
     """
     Generator function that yields bytes information about each item POSTed/PATCHed.
     Is the base functionality of load_all function.
@@ -392,7 +436,7 @@ def load_all_gen(testapp, inserts, docsdir, overwrite=True, itype=None, from_jso
         else:  # cannot get the file
             err_msg = 'Failure loading inserts from %s. Could not find matching file or directory.' % inserts
             print(err_msg)
-            yield str.encode('ERROR: %s\n' % err_msg)
+            yield str.encode(f'ERROR: {err_msg}\n')
             return
             # raise StopIteration
         # load from the directory/file
@@ -422,7 +466,7 @@ def load_all_gen(testapp, inserts, docsdir, overwrite=True, itype=None, from_jso
         if itype:
             err_msg += ' for item type(s) %s' % itype
         print(err_msg)
-        yield str.encode('ERROR: %s' % err_msg)
+        yield str.encode(f'ERROR: {err_msg}')
         return
         # raise StopIteration
     # order Items
@@ -442,10 +486,7 @@ def load_all_gen(testapp, inserts, docsdir, overwrite=True, itype=None, from_jso
         assumed to be the snake-case version of the type name (though okay if already camel-case).
         See get_identifying_and_required_properties for details of how these fields are extracted.
         """
-        def get_camel_case_version_of_type_name(type_name: str) -> str:
-            # This conversion of schema name to object type works for all existing schemas at the moment.
-            return "".join([part.title() for part in type_name.split("_")])
-        schema = profiles[get_camel_case_version_of_type_name(type_name)]
+        schema = profiles[to_camel_case(type_name)]
         return get_identifying_and_required_properties(schema)
 
     # run step1 - if item does not exist, post with minimal metadata (and skip indexing since we will patch
@@ -469,8 +510,33 @@ def load_all_gen(testapp, inserts, docsdir, overwrite=True, itype=None, from_jso
             posted = 0
             skip_exist = 0
             for an_item in store[a_type]:
-                exists = False
+                existing_item_identifying_value = None
                 if not post_only:
+                    existing_item_identifying_value = item_exists(testapp, an_item, a_type, identifying_properties)
+                    """
+                    identifying_paths = get_identifying_paths(an_item, a_type, identifying_properties)
+                    if not identifying_paths:
+                        raise Exception("Item has no uuid nor any other identifying property; cannot GET.")
+                    for identifying_path in identifying_paths:
+                        try:
+                            # 301 because @id is the existing item path, not uuid
+                            # TODO: We we be able to do this part of the process more efficiently in bulk, up front.
+                            # ALSO: If we could use, for example, "/file-formats/vcf_gz/" (where the trailing slash
+                            # is important) rather than "/file_format/vcf_gz", we don't get a redirect (301) be get
+                            # a direct (200) response; but transformation of "file_format" to "file-formats" isn't
+                            # readily available to us here; and at least in this example (file_format), using the
+                            # uuid does not get us a direct (200) response, but rather a redirect (301); just FYI.
+                            existing_item = testapp.get(identifying_path, status=[200, 301])
+                            # If we get here then the item exists.
+                            exists = True
+                            break
+                        except Exception:
+                            # Ignoring exception here on purpose; this happens if the
+                            # item does not (yet) exist in the database, which is fine.
+                            pass
+                    """
+
+                    """
                     identifying_path = get_identifying_path(an_item, a_type, identifying_properties)
                     if not identifying_path:
                         raise Exception("Item has no uuid nor any other identifying property; cannot GET.")
@@ -489,15 +555,21 @@ def load_all_gen(testapp, inserts, docsdir, overwrite=True, itype=None, from_jso
                         # Ignoring exception here on purpose; this happens if the
                         # item does not (yet) exist in the database, which is fine.
                         pass
+                    """
                 # skip the items that exists
                 # if overwrite=True, still include them in PATCH round
-                if exists:
+                if existing_item_identifying_value:
                     skip_exist += 1
-                    identifying_value = (get_response_uuid(existing_item) or
-                                         get_identifying_value(an_item, identifying_properties))
+                    identifying_value = existing_item_identifying_value
+                    # identifying_value = (get_response_uuid(existing_item) or
+                    #                      get_identifying_value(an_item, identifying_properties))
                     if not overwrite:
                         skip_existing_items.add(identifying_value)
-                    yield str.encode('SKIP: %s\n' % identifying_value)
+                    if verbose and (filename := an_item.get("filename", "")):
+                        filename = " " + filename
+                    else:
+                        filename = ""
+                    yield str.encode(f'SKIP: {identifying_value}{" " + a_type if verbose else ""}{filename}\n')
                 else:
                     if post_only:
                         to_post = an_item
@@ -515,20 +587,26 @@ def load_all_gen(testapp, inserts, docsdir, overwrite=True, itype=None, from_jso
                             assert res.status_code == 201
                             posted += 1
                             # yield bytes to work with Response.app_iter
-                            identifying_value = (get_response_uuid(res) or
-                                                 get_identifying_value(an_item, identifying_properties))
-                            yield str.encode('POST: %s\n' % identifying_value)
+                            uuid = get_response_uuid(res)
+                            if uuid and "uuid" not in an_item:
+                                an_item["uuid"] = uuid  # update our item with the new uuid; maybe controversial?
+                            identifying_value = (uuid or get_identifying_value(an_item, identifying_properties))
+                            if verbose and (filename := an_item.get("filename", "")):
+                                filename = " " + filename
+                            else:
+                                filename = ""
+                            yield str.encode(f'POST: {identifying_value}{" " + a_type if verbose else ""}{filename}\n')
                         else:
                             assert res.status_code == 200
                             identifying_value = (get_response_uuid(res) or
                                                  get_identifying_value(an_item, identifying_properties))
-                            yield str.encode('CHECK: %s\n' % identifying_value)
+                            yield str.encode(f'CHECK: {identifying_value}{" " + a_type if verbose else ""}\n')
                     except Exception as e:
                         print('Posting {} failed. Post body:\n{}\nError Message:{}'
                               ''.format(a_type, str(first_fields), str(e)))
                         # remove newlines from error, since they mess with generator output
                         e_str = str(e).replace('\n', '')
-                        yield str.encode('ERROR: %s\n' % e_str)
+                        yield str.encode(f'ERROR: {e_str}\n')
                         return
                         # raise StopIteration
             if not validate_only:
@@ -570,13 +648,17 @@ def load_all_gen(testapp, inserts, docsdir, overwrite=True, itype=None, from_jso
                 identifying_value = (get_response_uuid(res) or
                                      get_identifying_value(an_item, identifying_properties) or
                                      "<unidentified>")
-                yield str.encode('PATCH: %s\n' % identifying_value)
+                if verbose and (filename := an_item.get("filename", "")):
+                    filename = " " + filename
+                else:
+                    filename = ""
+                yield str.encode(f'PATCH: {identifying_value}{" " + a_type if verbose else ""}{filename}\n')
             except Exception as e:
                 print('Patching {} failed. Patch body:\n{}\n\nError Message:\n{}'.format(
                       a_type, str(an_item), str(e)))
                 print('Full error: %s' % traceback.format_exc())
                 e_str = str(e).replace('\n', '')
-                yield str.encode('ERROR: %s\n' % e_str)
+                yield str.encode(f'ERROR: {e_str}\n')
                 return
                 # raise StopIteration
         logger.info('{}{}: {} items patched .'.format(a_type, rnd, patched))
