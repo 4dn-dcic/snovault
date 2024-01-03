@@ -11,7 +11,14 @@ from .interfaces import (
     TYPES,
 )
 from .util import debug_log
-# from .schema_utils import load_schema
+from dcicutils.schema_utils import (
+    SchemaConstants as sc,
+    get_properties,
+    get_required,
+    get_items,
+    is_array_schema,
+    is_object_schema
+)
 from .project_app import app_project
 
 
@@ -131,7 +138,7 @@ def _get_conditionally_required_propnames(schema, keyword):
     keyword_info = schema.get(keyword, [])
     for info in keyword_info:
         # is a list but examples so far have only one member?
-        propnames.extend(info.get('required', []))
+        propnames.extend(info.get(sc.REQUIRED, []))
     return propnames
 
 
@@ -176,7 +183,7 @@ def _is_submittable_schema(schema_id, schema):
             item_name = _get_item_name_from_schema_id(schema_id)
             if item_name in item_list:
                 return True  # explicitly named item found
-    schema_props = schema.get('properties')
+    schema_props = get_properties(schema)
     if key_prop:
         prop_names = schema_props.keys()
         if key_prop in prop_names:
@@ -190,9 +197,9 @@ def _annotate_submittable_props(schema, props):
     add annotations for requirements and dependencies to
     submittable props based on the schema info
     """
-    required_props = schema.get('required', [])
-    oneof_props = _get_conditionally_required_propnames(schema, 'oneOf')
-    anyof_props = _get_conditionally_required_propnames(schema, 'anyOf')
+    required_props = get_required(schema)
+    oneof_props = _get_conditionally_required_propnames(schema, sc.ONE_OF)
+    anyof_props = _get_conditionally_required_propnames(schema, sc.ANY_OF)
     req_deps = schema.get('dependentRequired', {})
 
     for propname, propinfo in props.items():
@@ -213,10 +220,10 @@ def _annotate_submittable_props(schema, props):
 def _build_embedded_obj(schema, embedded_obj):
     obj_info = {}
     obj_title = embedded_obj.get('title')
-    obj_props = _get_submittable_props(schema, embedded_obj.get('properties', {}))
+    obj_props = _get_submittable_props(schema, get_properties(embedded_obj))
     obj_props = _annotate_submittable_props(schema, obj_props)
     if obj_props:
-        obj_info['properties'] = obj_props
+        obj_info[sc.PROPERTIES] = obj_props
         if obj_title:
             obj_info['title'] = obj_title
     return obj_info
@@ -240,21 +247,21 @@ def _get_submittable_props(schema, props):
             continue
         elif _has_property_attr_with_val(propinfo, exclude_attrs):
             continue
-        elif propinfo.get('type') == 'array':  # need to check the attributes of the items
-            list_item = propinfo.get('items')
-            if list_item.get('type') == 'object':  # very rare case of list of embedded objects
+        elif is_array_schema(propinfo):  # need to check the attributes of the items
+            list_item = get_items(propinfo)
+            if is_object_schema(list_item):  # very rare case of list of embedded objects
                 emb_obj = _build_embedded_obj(schema, list_item)
                 if not emb_obj:
                     continue
                 else:
-                    propinfo['items'] = emb_obj
+                    propinfo[sc.ITEMS] = emb_obj
                     submittable_props[propname] = propinfo
                     emb_obj = None
             elif _has_property_attr_with_val(list_item, exclude_attrs):
                 continue
             else:
                 submittable_props[propname] = propinfo
-        elif propinfo.get('type') == 'object':  # infrequent case of embedded object
+        elif is_object_schema(propinfo):  # infrequent case of embedded object
             emb_obj = _build_embedded_obj(schema, propinfo)
             if emb_obj:
                 submittable_props[propname] = emb_obj
@@ -270,7 +277,7 @@ def _get_submittable_schema(schema):
     and doc on those fields
     """
     schema_id = schema.get('$id')
-    schema_props = schema.get('properties')
+    schema_props = get_properties(schema)
     submittable_schema = {}
     if not schema_props:
         return {}
@@ -288,7 +295,7 @@ def _get_submittable_schema(schema):
     if schema_id:
         submittable_schema['$id'] = schema_id
     submittable_schema['title'] = schema.get('title')
-    submittable_schema['properties'] = submittable_props
+    submittable_schema[sc.PROPERTIES] = submittable_props
 
     return submittable_schema
 
