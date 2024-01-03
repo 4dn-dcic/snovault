@@ -166,7 +166,7 @@ def _is_submittable_schema(schema_id, schema):
     if schema.get('isAbstract'):
         return False
     # an explicit list of submittable items may be provided
-    item_list = app_project().get_submittable_schema_names()
+    item_list = app_project().get_submittable_item_names()
     # a property in a schema that indicates this schema is submittable
     # eg. submmitter_id
     key_prop = app_project().get_prop_for_submittable_items()
