@@ -145,7 +145,7 @@ def health_check(config):
             h.TIBANNA_OUTPUT_BUCKET: settings.get(s.TIBANNA_OUTPUT_BUCKET),
             h.UPTIME: uptime_info(),
             h.UTILS_VERSION: settings.get(s.UTILS_VERSION),
-            "git": _get_gitinfo()
+            h.GIT: _get_gitinfo()
 
         }
 
