@@ -7,9 +7,16 @@ Change Log
 ----------
 
 
+11.9.0
+======
+
+* Added support for an optional gitinfo.json file (deployed via portal buildspec.yml).
+
+
 11.8.0
 ======
-* Added support for an optional gitinfo.json file (deployed via portal buildspec.yml).
+
+* Add submission-schemas api
 
 
 11.7.0
