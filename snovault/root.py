@@ -160,7 +160,7 @@ def _get_gitinfo() -> Optional[dict]:
     try:
         with open("gitinfo.json") as f:
             return json.load(f)
-    except Exception as e:
+    except Exception:
         return None
 
 
