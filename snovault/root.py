@@ -1,6 +1,7 @@
 from functools import lru_cache
 import json
 import sys
+from typing import Optional
 import uptime
 
 from collections import OrderedDict
@@ -155,12 +156,12 @@ def health_check(config):
 
 
 @lru_cache(maxsize=1)
-def _get_gitinfo() -> dict:
+def _get_gitinfo() -> Optional[dict]:
     try:
         with open("gitinfo.json") as f:
             return json.load(f)
     except Exception as e:
-        return {"error": str(e)}
+        return None
 
 
 def build_warn_string(db_count, es_count):
