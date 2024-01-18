@@ -100,9 +100,9 @@ def main():
                         help=f"The uuid (or path) of the object to fetch and view. ")
     parser.add_argument("--ini", type=str, required=False, default=None,
                         help=f"Name of the application .ini file; default is: {_DEFAULT_INI_FILE}")
-    parser.add_argument("--env", type=str, required=False, default=None,
+    parser.add_argument("--env", "-e", type=str, required=False, default=None,
                         help=f"Environment name (key from ~/.smaht-keys.json).")
-    parser.add_argument("--server", type=str, required=False, default=None,
+    parser.add_argument("--server", "-s", type=str, required=False, default=None,
                         help=f"Environment server name (server from key in ~/.smaht-keys.json).")
     parser.add_argument("--app", type=str, required=False, default=None,
                         help=f"Application name (one of: smaht, cgap, fourfront).")
