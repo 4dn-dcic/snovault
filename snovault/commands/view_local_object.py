@@ -106,13 +106,15 @@ def main():
                         help=f"Environment server name (server from key in ~/.smaht-keys.json).")
     parser.add_argument("--app", type=str, required=False, default=None,
                         help=f"Application name (one of: smaht, cgap, fourfront).")
+    parser.add_argument("--raw", action="store_true", required=False, default=False, help="Raw output.")
+    parser.add_argument("--database", action="store_true", required=False, default=False, help="Read from database output.")
     parser.add_argument("--yaml", action="store_true", required=False, default=False, help="YAML output.")
     parser.add_argument("--verbose", action="store_true", required=False, default=False, help="Verbose output.")
     parser.add_argument("--debug", action="store_true", required=False, default=False, help="Debugging output.")
     args = parser.parse_args()
 
     portal = _create_portal(ini=args.ini, env=args.env, server=args.server, app=args.app, debug=args.debug)
-    data = _get_local_object(portal=portal, uuid=args.uuid, verbose=args.verbose)
+    data = _get_local_object(portal=portal, uuid=args.uuid, raw=args.raw, database=args.database, verbose=args.verbose)
 
     if args.yaml:
         _print(yaml.dump(data))
@@ -126,7 +128,8 @@ def _create_portal(ini: str = _DEFAULT_INI_FILE, env: Optional[str] = None,
         return Portal(env, server=server, app=app) if env or app else Portal(ini or _DEFAULT_INI_FILE)
 
 
-def _get_local_object(portal: Portal, uuid: str, verbose: bool = False) -> dict:
+def _get_local_object(portal: Portal, uuid: str,
+                      raw: bool = False, database: bool = False, verbose: bool = False) -> dict:
     if verbose:
         _print(f"Getting object ({uuid}) from local portal ... ", end="")
     response = None
@@ -135,7 +138,7 @@ def _get_local_object(portal: Portal, uuid: str, verbose: bool = False) -> dict:
             path = f"/{uuid}"
         else:
             path = uuid
-        response = portal.get(path)
+        response = portal.get(path, raw=raw, database=database)
     except Exception as e:
         if "404" in str(e) and "not found" in str(e).lower():
             if verbose:
