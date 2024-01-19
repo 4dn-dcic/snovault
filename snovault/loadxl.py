@@ -390,7 +390,8 @@ def get_response_uuid(response: TestAppResponse) -> Optional[str]:
 
 
 def load_all_gen(testapp, inserts, docsdir, overwrite=True, itype=None, from_json=False,
-                 patch_only=False, post_only=False, skip_types=None, validate_only=False, verbose=False):
+                 patch_only=False, post_only=False, skip_types=None, validate_only=False,
+                 continue_on_exception: bool = False, verbose=False):
     """
     Generator function that yields bytes information about each item POSTed/PATCHed.
     Is the base functionality of load_all function.
@@ -607,7 +608,8 @@ def load_all_gen(testapp, inserts, docsdir, overwrite=True, itype=None, from_jso
                         # remove newlines from error, since they mess with generator output
                         e_str = str(e).replace('\n', '')
                         yield str.encode(f'ERROR: {e_str}\n')
-                        return
+                        if not continue_on_exception:
+                            return
                         # raise StopIteration
             if not validate_only:
                 if not post_only:
@@ -659,7 +661,8 @@ def load_all_gen(testapp, inserts, docsdir, overwrite=True, itype=None, from_jso
                 print('Full error: %s' % traceback.format_exc())
                 e_str = str(e).replace('\n', '')
                 yield str.encode(f'ERROR: {e_str}\n')
-                return
+                if not continue_on_exception:
+                    return
                 # raise StopIteration
         logger.info('{}{}: {} items patched .'.format(a_type, rnd, patched))
 
