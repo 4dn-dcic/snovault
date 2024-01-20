@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "dcicsnovault"
-version = "11.8.0.1b24"  # TODO: To become 11.9.0
+version = "11.8.0.1b25"  # TODO: To become 11.9.0
 description = "Storage support for 4DN Data Portals."
 authors = ["4DN-DCIC Team <support@4dnucleome.org>"]
 license = "MIT"
@@ -43,7 +43,7 @@ boto3 = ">=1.28.62"  # no particular version required, but this speeds up search
 botocore = ">=1.31.62"  # no particular version required, but this speeds up search
 elasticsearch = "7.13.4"  # versions >= 7.14.0 lock out AWS ES
 elasticsearch_dsl = "^7.4.0"
-dcicutils = "^8.7.0.1b32"
+dcicutils = "^8.7.0.1b33"
 future = ">=0.15.2,<1"
 html5lib = ">=1.1"  # experimental, should be OK now that we're not using moto server
 humanfriendly = "^1.44.9"
