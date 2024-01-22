@@ -18,7 +18,7 @@
 # to your locally running instance of the portal, which (obviously) needs to be up/running.
 #
 # If the --update-keys option is given, then your ~/.smaht-keys.json file will be automatically
-# updated with the new access-key (for the "smaht-localhost" property).
+# updated with the new access-key (for the "smaht-local" property).
 #
 # The --update option may be used to specify both --update-database and --update-keys.
 #
@@ -97,7 +97,7 @@ def main() -> None:
     parser.add_argument("--update-database", action="store_true", required=False, default=False,
                         help=f"Updates the database of your locally running portal with the new access-key.")
     parser.add_argument("--update-keys", action="store_true", required=False, default=False,
-                        help=f"Updates your access-keys file (e.g. ~/.smaht-keys.json) with the new access-key (e.g. smaht-localhost).")
+                        help=f"Updates your access-keys file (e.g. ~/.smaht-keys.json) with the new access-key (e.g. smaht-local).")
     parser.add_argument("--port", type=int, required=False, default=8000,
                         help="Port for localhost on which your local portal is running.")
     parser.add_argument("--ini", type=str, required=False, default=_DEFAULT_INI_FILE,
@@ -110,7 +110,7 @@ def main() -> None:
     args = parser.parse_args()
 
     _ACCESS_KEYS_FILE = os.path.expanduser(f"~/.{args.app}-keys.json")
-    _ACCESS_KEYS_FILE_ITEM = f"{args.app}-localhost"
+    _ACCESS_KEYS_FILE_ITEM = f"{args.app}-local"
 
     if args.update:
         args.update_database = True
