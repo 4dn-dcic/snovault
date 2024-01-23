@@ -11,7 +11,7 @@ from PIL import Image
 import re
 import structlog
 import traceback
-from typing import List, Optional, Union
+from typing import List, Optional, Tuple, Union
 from webtest import TestApp
 from webtest.response import TestResponse as TestAppResponse
 import uuid
@@ -19,6 +19,7 @@ from pyramid.paster import get_app
 from pyramid.response import Response
 from pyramid.router import Router
 from pyramid.view import view_config
+from dcicutils.data_readers import RowReader
 from dcicutils.misc_utils import ignored, environ_bool, to_camel_case, VirtualApp
 from dcicutils.secrets_utils import assume_identity
 from snovault.util import debug_log
@@ -389,6 +390,17 @@ def get_response_uuid(response: TestAppResponse) -> Optional[str]:
     return response.json.get("uuid") or response.json.get("@graph", [{}])[0].get("uuid")
 
 
+def normalize_deleted_properties(data: dict) -> Tuple[dict, List[str]]:
+    normalized_data = {}
+    deleted_properties = []
+    for property_name, property_value in data.items():
+        if property_value == RowReader.CELL_DELETION_SENTINEL:
+            deleted_properties.append(property_name)
+        else:
+            normalized_data[property_name] = property_value
+    return normalized_data, deleted_properties
+
+
 def load_all_gen(testapp, inserts, docsdir, overwrite=True, itype=None, from_json=False,
                  patch_only=False, post_only=False, skip_types=None, validate_only=False,
                  continue_on_exception: bool = False, verbose=False):
@@ -572,6 +584,7 @@ def load_all_gen(testapp, inserts, docsdir, overwrite=True, itype=None, from_jso
                         filename = ""
                     yield str.encode(f'SKIP: {identifying_value}{" " + a_type if verbose else ""}{filename}\n')
                 else:
+                    an_item, _ = normalize_deleted_properties(an_item)
                     if post_only:
                         to_post = an_item
                     else:
@@ -643,7 +656,10 @@ def load_all_gen(testapp, inserts, docsdir, overwrite=True, itype=None, from_jso
                 identifying_path = get_identifying_path(an_item, a_type, identifying_properties)
                 if not identifying_path:
                     raise Exception("Item has no uuid nor any other identifying property; cannot PATCH.")
-                res = testapp.patch_json(identifying_path, an_item)
+                normalized_item, deleted_properties = normalize_deleted_properties(an_item)
+                if deleted_properties:
+                    identifying_path += f"?delete_fields={','.join(deleted_properties)}"
+                res = testapp.patch_json(identifying_path, normalized_item)
                 assert res.status_code == 200
                 patched += 1
                 # yield bytes to work with Response.app_iter
