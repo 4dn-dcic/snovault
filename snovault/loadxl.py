@@ -393,6 +393,7 @@ def get_response_uuid(response: TestAppResponse) -> Optional[str]:
 def normalize_deleted_properties(data: dict) -> Tuple[dict, List[str]]:
     normalized_data = {}
     deleted_properties = []
+    # TODO: This is not doing it recursively ...
     for property_name, property_value in data.items():
         if property_value == RowReader.CELL_DELETION_SENTINEL:
             deleted_properties.append(property_name)
