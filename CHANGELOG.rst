@@ -6,6 +6,11 @@ snovault
 Change Log
 ----------
 
+11.9.0.0b0
+==========
+
+* Removes strip of ``role.`` permissions so smaht-portal roles work
+
 
 11.9.0
 ======
@@ -71,7 +76,7 @@ Change Log
 11.0.1
 ======
 
-* Repair reference to ``load_data_by_type`` to resolve correctly when loadxl 
+* Repair reference to ``load_data_by_type`` to resolve correctly when loadxl
   is absent entirely from the application repo
 
 
