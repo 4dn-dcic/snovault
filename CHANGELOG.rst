@@ -6,7 +6,7 @@ snovault
 Change Log
 ----------
 
-11.9.0.0b0
+11.9.1.0b0
 ==========
 
 * Removes strip of ``role.`` permissions so smaht-portal roles work
