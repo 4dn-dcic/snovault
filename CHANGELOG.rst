@@ -6,10 +6,17 @@ snovault
 Change Log
 ----------
 
-11.9.1.0b0
-==========
+11.11.0
+=======
 
 * Removes strip of ``role.`` permissions so smaht-portal roles work
+
+
+11.10.0
+=======
+
+* Version updates to dcicutils.
+  Changes to itemize SMaHT submission ingestion create/update/diff situation.
 
 
 11.9.0

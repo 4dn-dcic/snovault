@@ -149,8 +149,9 @@ def _get_local_object(portal: Portal, uuid: str,
         _exit_without_action(f"Exception getting object ({uuid}) -> {get_error_message(e)}", newline=verbose)
     if not response:
         _exit_without_action(f"Null response getting object {uuid}).")
-    if response.status_code != 200:
-        _exit_without_action(f"Invalid status code ({response.status_code}) getting object {uuid}).")
+    if response.status_code not in [200, 307]:
+        # TODO: Understand why the /me endpoin returns HTTP status code 307, which is only why we mention it above.
+        _exit_without_action(f"Invalid status code ({response.status_code}) getting object: {uuid}")
     if not response.json:
         _exit_without_action(f"Invalid JSON getting object {uuid}).")
     if verbose:
