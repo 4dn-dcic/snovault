@@ -736,8 +736,11 @@ class Item(Resource):
             elif Authenticated in principals:
                 principals = [Authenticated]
             # Filter our roles
+            # NOTE: previously, we removed things that began with role. however this
+            # breaks how smaht-portal permissioning is implemented, so we are no longer
+            # suppressing them - Will Jan 31 2024
             allowed[permission] = [
-                p for p in sorted(principals) if not p.startswith('role.')
+                p for p in sorted(principals)  # if not p.startswith('role.')
             ]
         return allowed
 
