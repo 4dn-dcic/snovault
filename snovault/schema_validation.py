@@ -40,8 +40,12 @@ def normalize_links(validator, links, linkTo):
                 str(find_resource(resource_base, link.replace(':', '%3A')).uuid)
             )
         except KeyError:
+            try:
+                message = f"Unable to resolve  link: /{resource_base.type_info.name}/{link}"
+            except Exception:
+                message = f"Unable to resolve link: {link}"
             errors.append(
-                ValidationError(f'Unable to resolve link: {link}')
+                ValidationError(message)
             )
             normalized_links.append(
                 link

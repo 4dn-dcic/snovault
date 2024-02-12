@@ -6,6 +6,14 @@ snovault
 Change Log
 ----------
 
+11.12.0
+=======
+
+* Change the exception message for a unresolved object reference (linkTo)
+  in schema_validation.normalize_links; this was in support of reference
+  integrity validation code within smaht-submitr.
+
+
 11.11.0
 =======
 
