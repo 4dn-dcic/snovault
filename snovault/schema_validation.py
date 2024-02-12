@@ -41,7 +41,7 @@ def normalize_links(validator, links, linkTo):
             )
         except KeyError:
             try:
-                message = f"Unable to resolve  link: /{resource_base.type_info.name}/{link}"
+                message = f"Unable to resolve link: /{resource_base.type_info.name}/{link}"
             except Exception:
                 message = f"Unable to resolve link: {link}"
             errors.append(
