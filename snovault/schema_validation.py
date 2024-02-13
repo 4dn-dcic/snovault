@@ -40,10 +40,9 @@ def normalize_links(validator, links, linkTo):
                 str(find_resource(resource_base, link.replace(':', '%3A')).uuid)
             )
         except KeyError:
-            try:
-                message = f"Unable to resolve link: /{resource_base.type_info.name}/{link}"
-            except Exception:
-                message = f"Unable to resolve link: {link}"
+            # 2024-02-13: To help out smaht-submitr refererential integrity checking,
+            # include the schema type name (linkTo) as well as the idenitifying value (link).
+            message = f"Unable to resolve link: /{linkTo}/{link}"
             errors.append(
                 ValidationError(message)
             )

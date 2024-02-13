@@ -621,7 +621,13 @@ def load_all_gen(testapp, inserts, docsdir, overwrite=True, itype=None, from_jso
                               ''.format(a_type, str(first_fields), str(e)))
                         # remove newlines from error, since they mess with generator output
                         e_str = str(e).replace('\n', '')
-                        yield str.encode(f'ERROR: {e_str}\n')
+                        try:
+                            # 2024-02-13: To help out smaht-submitr refererential integrity
+                            # checking, include the identifying path of the problematic object
+                            message = f"ERROR: {get_identifying_path(an_item, a_type, identifying_properties)} {e_str}"
+                        except Exception:
+                            message = f"ERROR: {e_str}"
+                        yield str.encode(f'{message}\n')
                         if not continue_on_exception:
                             return
                         # raise StopIteration
@@ -677,7 +683,13 @@ def load_all_gen(testapp, inserts, docsdir, overwrite=True, itype=None, from_jso
                       a_type, str(an_item), str(e)))
                 print('Full error: %s' % traceback.format_exc())
                 e_str = str(e).replace('\n', '')
-                yield str.encode(f'ERROR: {e_str}\n')
+                try:
+                    # 2024-02-13: To help out smaht-submitr refererential integrity
+                    # checking, include the identifying path of the problematic object
+                    message = f"ERROR: {get_identifying_path(an_item, a_type, identifying_properties)} {e_str}"
+                except Exception:
+                    message = f"ERROR: {e_str}"
+                yield str.encode(f'{message}\n')
                 if not continue_on_exception:
                     return
                 # raise StopIteration
