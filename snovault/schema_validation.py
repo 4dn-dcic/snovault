@@ -42,9 +42,8 @@ def normalize_links(validator, links, linkTo):
         except KeyError:
             # 2024-02-13: To help out smaht-submitr refererential integrity checking,
             # include the schema type name (linkTo) as well as the idenitifying value (link).
-            message = f"Unable to resolve link: /{linkTo}/{link}"
             errors.append(
-                ValidationError(message)
+                ValidationError(f"Unable to resolve link: /{linkTo}/{link}")
             )
             normalized_links.append(
                 link
