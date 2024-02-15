@@ -6,6 +6,14 @@ snovault
 Change Log
 ----------
 
+11.12.0
+=======
+
+* Change the exception message for a unresolved object reference (linkTo) in schema_validation.normalize_links.
+* Added instance info to ERROR in loadxl.load_all_gen.
+* Both of above in support of reference integrity validation code within smaht-submitr.
+
+
 11.11.0
 =======
 
