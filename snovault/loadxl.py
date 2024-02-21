@@ -583,6 +583,21 @@ def load_all_gen(testapp, inserts, docsdir, overwrite=True, itype=None, from_jso
                         filename = " " + filename
                     else:
                         filename = ""
+                    if validate_only:
+                        # 2024-02-21
+                        # Discovered that in validation_only mode, if an item already exists,
+                        # then it will not hit post_json (because it exists) and will not
+                        # hit patch_json (because, well, because this fix was not here); it
+                        # would not have made it into second_round_items because validate_only.
+                        if validate_patch_path := get_identifying_path(an_item, a_type, identifying_properties):
+                            validate_patch_path += "?check_only=true"
+                            try:
+                                testapp.patch_json(validate_patch_path, an_item)
+                            except Exception as e:
+                                e_str = str(e).replace('\n', '')
+                                yield str.encode(f"ERROR: {validate_patch_path} {e_str}")
+                                if not continue_on_exception:
+                                    return
                     yield str.encode(f'SKIP: {identifying_value}{" " + a_type if verbose else ""}{filename}\n')
                 else:
                     an_item, _ = normalize_deleted_properties(an_item)

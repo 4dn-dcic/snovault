@@ -6,6 +6,13 @@ snovault
 Change Log
 ----------
 
+11.13.0
+=======
+
+* Fix in loadxl to PATCH on validate_only for items which already exist;
+  discovered during smaht-submitr testing.
+
+
 11.12.0
 =======
 
