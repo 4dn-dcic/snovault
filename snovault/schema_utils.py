@@ -15,6 +15,7 @@ from jsonschema import Draft202012Validator
 from jsonschema import RefResolver
 from jsonschema.exceptions import ValidationError, RefResolutionError
 from pyramid.path import AssetResolver, caller_package
+from pyramid.settings import asbool
 from pyramid.threadlocal import get_current_request
 from pyramid.traversal import find_resource
 from uuid import UUID
@@ -274,6 +275,11 @@ def mixinSchemas(schema, resolver, key_name='properties'):
 
 
 def linkTo(validator, linkTo, instance, schema):
+    # 2024-02-21/dmichaels: EXPERIMENTAL ...
+    # MAYBE for check_only we should just skip this altogether;
+    # AND/OR maybe better to only do this skip for check_only
+    # if it is on behalf of smaht-submitr (i.e. e.g. create special/new
+    # ignore_refs=true flag to control this, and used only by smaht-submitr).
     if not validator.is_type(instance, "string"):
         return
 
@@ -290,8 +296,18 @@ def linkTo(validator, linkTo, instance, schema):
     try:
         item = find_resource(base, instance.replace(':', '%3A'))
     except KeyError:
-        error = "%r not found" % instance
-        yield ValidationError(error)
+        # 2024-02-21/dmichaels: EXPERIMENTAL ...
+        # If check_only mode then ignore reference/linkTo errors (?).
+        # But the downside of this, is that we do not actually check that this
+        # reference, which was not found in the database, is actually in the
+        # submitted data; to do that we need this exception and processing in
+        # smaht-portal//ingestion/loadxl_extensions._get_ref_error_info_from_exception_string.
+        # But that SHOULD be OK because submitr is doing its own reference integrity checking.
+        # See also: schema_validation.normalize_links
+        check_only = (request := get_current_request()) and asbool(request.params.get('check_only', False))
+        if not check_only:
+            error = "%r not found" % instance
+            yield ValidationError(error)
         return
 
     if not isinstance(item, Item):

@@ -43,9 +43,15 @@ def normalize_links(validator, links, linkTo):
         except KeyError:
             # 2024-02-13: To help out smaht-submitr refererential integrity checking,
             # include the schema type name (linkTo) as well as the idenitifying value (link).
-            #
+
             # 2024-02-21/dmichaels: EXPERIMENTAL ...
             # If check_only mode then ignore reference/linkTo errors (?).
+            # But the downside of this, is that we do not actually check that this
+            # reference, which was not found in the database, is actually in the
+            # submitted data; to do that we need this exception and processing in
+            # smaht-portal//ingestion/loadxl_extensions._get_ref_error_info_from_exception_string.
+            # But that SHOULD be OK because submitr is doing its own reference integrity checking.
+            # See also: schema_utils.linkTo
             check_only = (request := get_current_request()) and asbool(request.params.get('check_only', False))
             if not check_only:
                 errors.append(
