@@ -2,6 +2,7 @@ from copy import deepcopy
 from jsonschema import Draft202012Validator
 from jsonschema import validators
 from jsonschema.exceptions import ValidationError
+from pyramid.settings import asbool
 from pyramid.threadlocal import get_current_request
 from pyramid.traversal import find_resource
 
@@ -43,13 +44,10 @@ def normalize_links(validator, links, linkTo):
             # 2024-02-13: To help out smaht-submitr refererential integrity checking,
             # include the schema type name (linkTo) as well as the idenitifying value (link).
             #
-            # 2024-02-21/dmichaels: EXPERIMENTAL/TEMPORARY ...
-            # If check_only=true then ignore reference/linkTo errors (?);
-            # and obviously cleanup up the "check_only=true" in ... stuff.
-            skip_unresolved_link_error = False
-            if (request := get_current_request()) and request.url and "check_only=true" in request.url:
-                skip_unresolved_link_error = True
-            if not skip_unresolved_link_error:
+            # 2024-02-21/dmichaels: EXPERIMENTAL ...
+            # If check_only mode then ignore reference/linkTo errors (?).
+            check_only = (request := get_current_request()) and asbool(request.params.get('check_only', False))
+            if not check_only:
                 errors.append(
                     ValidationError(f"Unable to resolve link: /{linkTo}/{link}")
                 )
