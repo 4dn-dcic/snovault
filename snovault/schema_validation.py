@@ -42,9 +42,17 @@ def normalize_links(validator, links, linkTo):
         except KeyError:
             # 2024-02-13: To help out smaht-submitr refererential integrity checking,
             # include the schema type name (linkTo) as well as the idenitifying value (link).
-            errors.append(
-                ValidationError(f"Unable to resolve link: /{linkTo}/{link}")
-            )
+            #
+            # 2024-02-21/dmichaels: EXPERIMENTAL/TEMPORARY ...
+            # If check_only=true then ignore reference/linkTo errors (?);
+            # and obviously cleanup up the "check_only=true" in ... stuff.
+            skip_unresolved_link_error = False
+            if (request := get_current_request()) and request.url and "check_only=true" in request.url:
+                skip_unresolved_link_error = True
+            if not skip_unresolved_link_error:
+                errors.append(
+                    ValidationError(f"Unable to resolve link: /{linkTo}/{link}")
+                )
             normalized_links.append(
                 link
             )
