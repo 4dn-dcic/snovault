@@ -2,7 +2,6 @@ from copy import deepcopy
 from jsonschema import Draft202012Validator
 from jsonschema import validators
 from jsonschema.exceptions import ValidationError
-from pyramid.settings import asbool
 from pyramid.threadlocal import get_current_request
 from pyramid.traversal import find_resource
 
@@ -52,11 +51,22 @@ def normalize_links(validator, links, linkTo):
             # smaht-portal//ingestion/loadxl_extensions._get_ref_error_info_from_exception_string.
             # But that SHOULD be OK because submitr is doing its own reference integrity checking.
             # See also: schema_utils.linkTo
+            # No ...
+            # Decided instead of this to add skip_links feature to loadxl which is only
+            # set by smaht-portal/.../ingestion/loadxl_extensions.py; and which will
+            # skip reference/link integrity checking altogether (in schema_utils.linkTo),
+            # since smaht-submitr (structured_data) does reference integrity checking anyways.
+            # TODO: Remove all this 2024-02-21 stuff including these comments once tested ...
+            """
             check_only = (request := get_current_request()) and asbool(request.params.get('check_only', False))
             if not check_only:
                 errors.append(
                     ValidationError(f"Unable to resolve link: /{linkTo}/{link}")
                 )
+            """
+            errors.append(
+                ValidationError(f"Unable to resolve link: /{linkTo}/{link}")
+            )
             normalized_links.append(
                 link
             )

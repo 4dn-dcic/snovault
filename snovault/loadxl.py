@@ -404,7 +404,7 @@ def normalize_deleted_properties(data: dict) -> Tuple[dict, List[str]]:
 
 def load_all_gen(testapp, inserts, docsdir, overwrite=True, itype=None, from_json=False,
                  patch_only=False, post_only=False, skip_types=None, validate_only=False,
-                 continue_on_exception: bool = False, verbose=False):
+                 skip_links=False, continue_on_exception: bool = False, verbose=False):
     """
     Generator function that yields bytes information about each item POSTed/PATCHed.
     Is the base functionality of load_all function.
@@ -591,6 +591,8 @@ def load_all_gen(testapp, inserts, docsdir, overwrite=True, itype=None, from_jso
                         # would not have made it into second_round_items because validate_only.
                         if validate_patch_path := get_identifying_path(an_item, a_type, identifying_properties):
                             validate_patch_path += "?check_only=true"
+                            if skip_links:
+                                validate_patch_path += "&skip_links=true"
                             try:
                                 testapp.patch_json(validate_patch_path, an_item)
                             except Exception as e:
@@ -608,6 +610,8 @@ def load_all_gen(testapp, inserts, docsdir, overwrite=True, itype=None, from_jso
                     post_request = f'/{a_type}?skip_indexing=true'
                     if validate_only:
                         post_request += '&check_only=true'
+                        if skip_links:
+                            post_request += "&skip_links=true"
                     to_post = format_for_attachment(to_post, docsdir)
                     try:
                         # This creates the (as yet non-existent) item to the

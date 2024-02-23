@@ -280,6 +280,9 @@ def linkTo(validator, linkTo, instance, schema):
     # AND/OR maybe better to only do this skip for check_only
     # if it is on behalf of smaht-submitr (i.e. e.g. create special/new
     # ignore_refs=true flag to control this, and used only by smaht-submitr).
+    skip_links = (request := get_current_request()) and asbool(request.params.get('skip_links', False))
+    if skip_links:
+        return
     if not validator.is_type(instance, "string"):
         return
 
@@ -304,6 +307,12 @@ def linkTo(validator, linkTo, instance, schema):
         # smaht-portal//ingestion/loadxl_extensions._get_ref_error_info_from_exception_string.
         # But that SHOULD be OK because submitr is doing its own reference integrity checking.
         # See also: schema_validation.normalize_links
+        # No ...
+        # Decided instead of this to add skip_links feature to loadxl which is only
+        # set by smaht-portal/.../ingestion/loadxl_extensions.py; and which
+        # will skip reference/link integrity checking altogether here/above,
+        # since smaht-submitr (structured_data) does reference integrity checking anyways.
+        # TODO: Remove all this 2024-02-21 stuff including these comments once tested ...
         check_only = (request := get_current_request()) and asbool(request.params.get('check_only', False))
         if not check_only:
             error = "%r not found" % instance

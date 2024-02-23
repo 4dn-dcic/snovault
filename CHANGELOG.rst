@@ -11,7 +11,10 @@ Change Log
 
 * Fix in loadxl to PATCH on validate_only for items which already exist;
   discovered during smaht-submitr testing.
-
+* Added skip_links feature to loadxl which will cause reference/link integrity
+  checking to be skipped altogether; this is (currently) only set by smaht-portal/
+  ingestion/loadxl_extensions.py for smaht-submitr, since that process already
+  does thorough reference integrity checking anyways (via structured_data).
 
 11.12.0
 =======
