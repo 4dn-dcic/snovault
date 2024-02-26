@@ -591,8 +591,10 @@ def load_all_gen(testapp, inserts, docsdir, overwrite=True, itype=None, from_jso
                         # would not have made it into second_round_items because validate_only.
                         if validate_patch_path := get_identifying_path(an_item, a_type, identifying_properties):
                             validate_patch_path += "?check_only=true"
-                            if skip_links:
-                                validate_patch_path += "&skip_links=true"
+                            # To be safe we will unconditionally do skip_links in this case;
+                            # to get away with not doing this would require more analysis.
+                            # See: https://github.com/4dn-dcic/snovault/pull/283
+                            validate_patch_path += "&skip_links=true"
                             try:
                                 testapp.patch_json(validate_patch_path, an_item)
                             except Exception as e:
