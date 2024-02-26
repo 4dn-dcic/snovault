@@ -2,6 +2,7 @@ from copy import deepcopy
 from jsonschema import Draft202012Validator
 from jsonschema import validators
 from jsonschema.exceptions import ValidationError
+from pyramid.settings import asbool
 from pyramid.threadlocal import get_current_request
 from pyramid.traversal import find_resource
 
@@ -21,6 +22,7 @@ def get_resource_base(validator, linkTo):
 
 
 def normalize_links(validator, links, linkTo):
+    skip_links = (request := get_current_request()) and asbool(request.params.get('skip_links', False))
     resource_base = get_resource_base(validator, linkTo)
     normalized_links = []
     errors = []
@@ -40,33 +42,18 @@ def normalize_links(validator, links, linkTo):
                 str(find_resource(resource_base, link.replace(':', '%3A')).uuid)
             )
         except KeyError:
+
             # 2024-02-13: To help out smaht-submitr refererential integrity checking,
             # include the schema type name (linkTo) as well as the idenitifying value (link).
 
-            # 2024-02-21/dmichaels: EXPERIMENTAL ...
-            # If check_only mode then ignore reference/linkTo errors (?).
-            # But the downside of this, is that we do not actually check that this
-            # reference, which was not found in the database, is actually in the
-            # submitted data; to do that we need this exception and processing in
-            # smaht-portal//ingestion/loadxl_extensions._get_ref_error_info_from_exception_string.
-            # But that SHOULD be OK because submitr is doing its own reference integrity checking.
-            # See also: schema_utils.linkTo
-            # No ...
-            # Decided instead of this to add skip_links feature to loadxl which is only
-            # set by smaht-portal/.../ingestion/loadxl_extensions.py; and which will
-            # skip reference/link integrity checking altogether (in schema_utils.linkTo),
-            # since smaht-submitr (structured_data) does reference integrity checking anyways.
-            # TODO: Remove all this 2024-02-21 stuff including these comments once tested ...
-            """
-            check_only = (request := get_current_request()) and asbool(request.params.get('check_only', False))
-            if not check_only:
+            # 2024-02-21/dmichaels:
+            # If skip_links then ignore reference/linkTo errors.
+            # Currently ONLY used by smaht-submitr (via smaht-portal/loadxl_extensions.py).
+
+            if not skip_links:
                 errors.append(
                     ValidationError(f"Unable to resolve link: /{linkTo}/{link}")
                 )
-            """
-            errors.append(
-                ValidationError(f"Unable to resolve link: /{linkTo}/{link}")
-            )
             normalized_links.append(
                 link
             )
