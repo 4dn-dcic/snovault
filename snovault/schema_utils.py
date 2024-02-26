@@ -275,11 +275,8 @@ def mixinSchemas(schema, resolver, key_name='properties'):
 
 
 def linkTo(validator, linkTo, instance, schema):
-    # 2024-02-21/dmichaels: EXPERIMENTAL ...
-    # MAYBE for check_only we should just skip this altogether;
-    # AND/OR maybe better to only do this skip for check_only
-    # if it is on behalf of smaht-submitr (i.e. e.g. create special/new
-    # ignore_refs=true flag to control this, and used only by smaht-submitr).
+    # 2024-02-21/dmichaels:
+    # New skip_links functionality for smaht-submitr since it does link integrity checking.
     skip_links = (request := get_current_request()) and asbool(request.params.get('skip_links', False))
     if skip_links:
         return
@@ -299,20 +296,6 @@ def linkTo(validator, linkTo, instance, schema):
     try:
         item = find_resource(base, instance.replace(':', '%3A'))
     except KeyError:
-        # 2024-02-21/dmichaels: EXPERIMENTAL ...
-        # If check_only mode then ignore reference/linkTo errors (?).
-        # But the downside of this, is that we do not actually check that this
-        # reference, which was not found in the database, is actually in the
-        # submitted data; to do that we need this exception and processing in
-        # smaht-portal//ingestion/loadxl_extensions._get_ref_error_info_from_exception_string.
-        # But that SHOULD be OK because submitr is doing its own reference integrity checking.
-        # See also: schema_validation.normalize_links
-        # No ...
-        # Decided instead of this to add skip_links feature to loadxl which is only
-        # set by smaht-portal/.../ingestion/loadxl_extensions.py; and which
-        # will skip reference/link integrity checking altogether here/above,
-        # since smaht-submitr (structured_data) does reference integrity checking anyways.
-        # TODO: Remove all this 2024-02-21 stuff including these comments once tested ...
         check_only = (request := get_current_request()) and asbool(request.params.get('check_only', False))
         if not check_only:
             error = "%r not found" % instance
