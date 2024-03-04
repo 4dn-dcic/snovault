@@ -610,7 +610,9 @@ class SearchBuilder:
                 ('type', {'title': 'Data Type'})
             ]
         else:
-            facets = []
+            facets = [
+                ('type', {'title': 'Data Type', 'hide_from_view': True})
+            ]
 
         append_facets = [
             # Facets which will be appended after those which are in & added to `facets`
