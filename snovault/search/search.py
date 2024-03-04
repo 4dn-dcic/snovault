@@ -611,6 +611,8 @@ class SearchBuilder:
             ]
         else:
             facets = [
+                # adds default 'type' facet with hide_from_view=True
+                # Note that the 'hide_from_view=True' facet is included in context.facets whereas the 'default_hidden=True' is ignored 
                 ('type', {'title': 'Data Type', 'hide_from_view': True})
             ]
 
