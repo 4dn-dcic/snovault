@@ -391,15 +391,14 @@ def get_response_uuid(response: TestAppResponse) -> Optional[str]:
 
 
 def normalize_deleted_properties(data: dict) -> Tuple[dict, List[str]]:
-    normalized_data = {}
-    deleted_properties = []
-    # TODO: This is not doing it recursively ...
+    deleted_property_names = []
+    # TODO: This is not doing it recursively; probably not needed.
     for property_name, property_value in data.items():
         if property_value == RowReader.CELL_DELETION_SENTINEL:
-            deleted_properties.append(property_name)
-        else:
-            normalized_data[property_name] = property_value
-    return normalized_data, deleted_properties
+            deleted_property_names.append(property_name)
+    for deleted_property_name in deleted_property_names:
+        del data[deleted_property_name]
+    return data, deleted_property_names
 
 
 def load_all_gen(testapp, inserts, docsdir, overwrite=True, itype=None, from_json=False,
