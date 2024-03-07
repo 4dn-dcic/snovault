@@ -1,6 +1,6 @@
 import re
 
-from schema_utils import format_checker
+from .schema_utils import format_checker
 from .server_defaults import (
     ACCESSION_PREFIX,
     ACCESSION_TEST_PREFIX,
