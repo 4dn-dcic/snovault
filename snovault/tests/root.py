@@ -14,8 +14,8 @@ from ..resources import Root
 from ..config import root
 
 
-accession_re = re.compile(r'^SNO(SS|FL|AB)[0-9][0-9][0-9][A-Z][A-Z][A-Z]$')
-test_accession_re = re.compile(r'^TST(SS|FL|AB)[0-9][0-9][0-9]([0-9][0-9][0-9][0-9]|[A-Z][A-Z][A-Z][A-Z])$')
+accession_re = re.compile(r'^SNO[A-Z]{2}[0-9]{3}[A-Z]{3}$')
+test_accession_re = re.compile(r'^TST[A-Z]{2}[0-9]{3}([0-9]{4}|[A-Z]{4})$')
 
 
 def includeme(config):
