@@ -1,6 +1,6 @@
 import re
 
-from jsonschema import FormatChecker
+from schema_utils import format_checker
 from .server_defaults import (
     ACCESSION_PREFIX,
     ACCESSION_TEST_PREFIX,
@@ -18,7 +18,7 @@ test_accession_re = re.compile(r'^%s(%s)[0-9]{4}([0-9][0-9][0-9]|[A-Z][A-Z][A-Z]
 uuid_re = re.compile(r'(?i)[{]?(?:[0-9a-f]{4}-?){8}[}]?')
 
 
-@FormatChecker.cls_checks("uuid")
+@format_checker.checks("uuid")
 def is_uuid(instance):
     # Python's UUID ignores all dashes, whereas Postgres is more strict
     # http://www.postgresql.org/docs/9.2/static/datatype-uuid.html

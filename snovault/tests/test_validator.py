@@ -307,3 +307,35 @@ def test_validator_extend_with_server_default_and_serialize():
         'name': 'other thing',
     }
     assert not errors
+
+
+@pytest.mark.parametrize('obj, expected', [
+    ({
+        'accession': 'not valid'
+    }, False),
+    ({
+        'accession': 'SNOnotvalid'
+    }, False),
+    ({
+        'accession': 'TSTnotvalid'
+    }, False),
+    ({
+        'accession': 'TSTabcclose'
+    }, False),
+    ({
+         'accession': 'TSTAB439abcd'  # lowercase fails
+     }, False),
+    ({
+         'accession': 'TSTAB4399428'  # real one that matches
+     }, True),
+    ({
+         'accession': 'TSTAB439ABCD'  # real one that matches (can be trailing characters)
+     }, True),
+    ({}, True),  # serverDefault should work
+])
+def test_custom_validator_with_real_type(testapp, obj, expected):
+    """ Tests that we can validate accessions (or other nonstandard format fields) """
+    if not expected:
+        testapp.post_json('/TestingServerDefault', obj, status=422)
+    else:
+        testapp.post_json('/TestingServerDefault', obj, status=201)
