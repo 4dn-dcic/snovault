@@ -6,6 +6,12 @@ snovault
 Change Log
 ----------
 
+11.12.1
+=======
+
+* Repairs schema format validation
+
+
 11.12.0
 =======
 
