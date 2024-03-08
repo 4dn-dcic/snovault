@@ -215,7 +215,7 @@ class QueueManager(object):
         # local development
         if not self.env_name:
             # make sure it's something aws likes
-            backup = socket.gethostname()[:80].replace('.', '-')
+            backup = self.generate_clean_env_namespace()
             # last case scenario
             self.env_name = backup if backup else 'fourfront-backup'
 
@@ -266,6 +266,12 @@ class QueueManager(object):
             ('secondary', self.second_queue_url),
             ('dlq', self.dlq_url),
         ])
+
+    @staticmethod
+    def generate_clean_env_namespace():
+        """ Helper that ensures the env namespace for queues is short, does not contain
+            spaces or punctuation typically seen in the host """
+        return socket.gethostname()[:80].replace('.', '-').replace(' ', '').replace("’", '')
 
     def add_uuids(self, registry, uuids, strict=False, target_queue='primary',
                   sid=None, telemetry_id=None):

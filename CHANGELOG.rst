@@ -9,7 +9,7 @@ Change Log
 11.12.1
 =======
 
-* Gets total results from ES, then try to get exact count if total hits ES_MAX_HIT_TOTAL limitation
+* Repairs schema format validation
 
 
 11.12.0
