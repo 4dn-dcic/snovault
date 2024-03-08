@@ -6,6 +6,12 @@ snovault
 Change Log
 ----------
 
+11.12.2
+=======
+
+* Gets total results from ES, then try to get exact count if total hits ES_MAX_HIT_TOTAL limitation
+
+
 11.12.1
 =======
 
