@@ -1215,13 +1215,16 @@ class SearchBuilder:
             for entry in self.response['facets']:
                 field = entry.get('field')
                 terms = entry.get('terms')
-                if field == 'type' and terms:
-                    for term in terms:
-                        term_key = term.get('key')
-                        doc_count = term.get('doc_count', 0)
-                        if term_key == 'Item' and doc_count > total:
-                            return doc_count
-
+                # bypass
+                if field != 'type' or not terms:
+                    continue
+                # iterate to find type=Item
+                for term in terms:
+                    term_key = term.get('key')
+                    doc_count = term.get('doc_count', 0)
+                    if term_key == 'Item':
+                        return doc_count if doc_count > total else total
+        # fallback
         return total
 
     def get_response(self):
