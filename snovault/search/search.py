@@ -42,6 +42,8 @@ def includeme(config):
 
 sanitize_search_string_re = re.compile(r'[\\\+\-\&\|\!\(\)\{\}\[\]\^\~\:\/\\\*\?]')
 
+ES_MAX_HIT_TOTAL = 10000
+
 
 class SearchBuilder:
     """ A monolithic object that encapsulates information needed to perform searches.
@@ -608,7 +610,11 @@ class SearchBuilder:
                 ('type', {'title': 'Data Type'})
             ]
         else:
-            facets = []
+            facets = [
+                # adds default 'type' facet with hide_from_view=True
+                # Note that the 'hide_from_view=True' facet is included in context.facets whereas the 'default_hidden=True' is ignored 
+                ('type', {'title': 'Data Type', 'hide_from_view': True})
+            ]
 
         append_facets = [
             # Facets which will be appended after those which are in & added to `facets`
@@ -1123,8 +1129,8 @@ class SearchBuilder:
         """
         # Response formatting
         self.response['notification'] = 'Success'
-        self.response['total'] = es_results['hits']['total']['value']
         self.response['facets'] = self.format_facets(es_results)
+        self.response['total'] = self.get_total(es_results)
         self.response['aggregations'] = self.format_extra_aggregations(es_results)
         self.response['actions'] = self.get_collection_actions()
         columns = self.build_table_columns()
@@ -1195,6 +1201,31 @@ class SearchBuilder:
                     unsorted_terms = entry.get('terms', [])
                     entry['terms'] = sorted(unsorted_terms, key=lambda d: field_terms_override_order.get(d['key'],
                                                                                                          default))
+
+    def get_total(self, es_results):
+        '''
+        Gets total results from ES, then try to get exact count if total hits ES_MAX_HIT_TOTAL limitation
+        '''
+        # default value returned by ES
+        total = es_results['hits']['total']['value']
+        
+        # After ES7 upgrade, 'total' does not return the exact count if it is >10000. To get a more precise result, it
+        # loops through the facet terms. (currently, type=Item's doc_count is calculated correctly)
+        if total == ES_MAX_HIT_TOTAL and 'facets' in self.response:
+            for entry in self.response['facets']:
+                field = entry.get('field')
+                terms = entry.get('terms')
+                # bypass
+                if field != 'type' or not terms:
+                    continue
+                # iterate to find type=Item
+                for term in terms:
+                    term_key = term.get('key')
+                    doc_count = term.get('doc_count', 0)
+                    if term_key == 'Item':
+                        return doc_count if doc_count > total else total
+        # fallback
+        return total
 
     def get_response(self):
         """ Gets the response for this search, setting 404 status if necessary. """
