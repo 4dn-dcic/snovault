@@ -1220,7 +1220,7 @@ class SearchBuilder:
                         term_key = term.get('key')
                         doc_count = term.get('doc_count', 0)
                         if term_key == 'Item' and doc_count > total:
-                            total = doc_count
+                            return doc_count
 
         return total
 
