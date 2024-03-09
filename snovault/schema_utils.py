@@ -11,7 +11,7 @@ from datetime import datetime
 from dcicutils.misc_utils import ignored
 from dcicutils.bundle_utils import SchemaManager
 from snovault.schema_validation import SerializingSchemaValidator
-from jsonschema import Draft202012Validator
+from jsonschema import FormatChecker
 from jsonschema import RefResolver
 from jsonschema.exceptions import ValidationError, RefResolutionError
 from pyramid.path import AssetResolver, caller_package
@@ -463,6 +463,9 @@ def extract_schema_default(schema, path):
         return None
 
 
+format_checker = FormatChecker()
+
+
 def validate(schema, data, current=None, validate_current=False):
     """
     Validate the given data using a schema. Optionally provide current data
@@ -481,7 +484,7 @@ def validate(schema, data, current=None, validate_current=False):
         dict validated contents, list of errors
     """
     resolver = NoRemoteResolver.from_schema(schema)
-    sv = SchemaValidator(schema, resolver=resolver, format_checker=Draft202012Validator.FORMAT_CHECKER)
+    sv = SchemaValidator(schema, resolver=resolver, format_checker=format_checker)
     validated, errors = sv.serialize(data)
     # validate against current contents if validate_current is set
     if current and validate_current:

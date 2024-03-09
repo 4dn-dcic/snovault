@@ -19,6 +19,7 @@ _app_settings = {
     'g.recaptcha.key': 'dummy-recaptcha',
     'auth0.client': 'dummy-client',
     'auth0.domain': 'dummy.domain',
+    'accession_factory': 'snovault.server_defaults.test_accession',
     'auth0.options': {
         'auth': {
             'sso': False,
