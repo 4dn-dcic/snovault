@@ -20,6 +20,15 @@ Change Log
   ingestion/loadxl_extensions.py for smaht-submitr, since that process already
   does thorough reference integrity checking anyways (via structured_data).
 
+
+11.12.3
+=======
+
+* Changed ACCESSION_PREFIX in server_defaults.py to GET_ACCESSION_PREFIX() function;
+  called only within snovault (and only from schema_formats.py); to get around
+  app_project call at file scope (came up as circular import in smaht ingester).
+
+
 11.12.2
 =======
 
