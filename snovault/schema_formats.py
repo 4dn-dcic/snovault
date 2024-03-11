@@ -2,15 +2,15 @@ import re
 
 from .schema_utils import format_checker
 from .server_defaults import (
-    ACCESSION_PREFIX,
     ACCESSION_TEST_PREFIX,
+    GET_ACCESSION_PREFIX
 )
 
 
 # Codes we allow for testing go here.
 ACCESSION_TEST_CODES = "BS|ES|EX|FI|FS|IN|SR|WF"
 
-accession_re = re.compile(r'^%s[1-9A-Z]{9}$' % ACCESSION_PREFIX)
+accession_re = re.compile(r'^%s[1-9A-Z]{9}$' % GET_ACCESSION_PREFIX())
 
 test_accession_re = re.compile(r'^%s(%s)[0-9]{4}([0-9][0-9][0-9]|[A-Z][A-Z][A-Z])$' % (
     ACCESSION_TEST_PREFIX, ACCESSION_TEST_CODES))
