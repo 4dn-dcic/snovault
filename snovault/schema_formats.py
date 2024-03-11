@@ -3,6 +3,7 @@ import re
 from .schema_utils import format_checker
 from .server_defaults import (
     ACCESSION_TEST_PREFIX,
+    GET_ACCESSION_PREFIX
 )
 
 
