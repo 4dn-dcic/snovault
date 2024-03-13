@@ -21,6 +21,12 @@ Change Log
   does thorough reference integrity checking anyways (via structured_data).
 
 
+11.12.4
+=======
+
+* Remove restricted permissions for AccessKey status to enable non-admins to delete access keys
+
+
 11.12.3
 =======
 
