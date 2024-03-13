@@ -33,8 +33,7 @@
             "enum": [
                 "current",
                 "deleted"
-            ],
-            "permission": "restricted_fields"
+            ]
         },
         "user": {
             "title": "User",
