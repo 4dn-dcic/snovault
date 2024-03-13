@@ -6,6 +6,12 @@ snovault
 Change Log
 ----------
 
+11.12.4
+=======
+
+* Remove restricted permissions for AccessKey status to enable non-admins to delete access keys
+
+
 11.12.3
 =======
 
