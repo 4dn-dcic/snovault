@@ -6,6 +6,21 @@ snovault
 Change Log
 ----------
 
+11.13.0
+=======
+
+* Fix in loadxl to PATCH on validate_only for items which already exist;
+  discovered during smaht-submitr testing.
+* Fix in loadxl.normalize_deleted_properties which was creating/returning
+  a new (an_item) item, which was messing up determination of identifying
+  path for patch (as second_round_items comes from store but we had set uuid
+  in an_item which, without this fix, became a different object).
+* Added skip_links feature to loadxl which will cause reference/link integrity
+  checking to be skipped altogether; this is (currently) only set by smaht-portal/
+  ingestion/loadxl_extensions.py for smaht-submitr, since that process already
+  does thorough reference integrity checking anyways (via structured_data).
+
+
 11.12.4
 =======
 

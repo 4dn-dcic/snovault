@@ -15,6 +15,7 @@ from jsonschema import FormatChecker
 from jsonschema import RefResolver
 from jsonschema.exceptions import ValidationError, RefResolutionError
 from pyramid.path import AssetResolver, caller_package
+from pyramid.settings import asbool
 from pyramid.threadlocal import get_current_request
 from pyramid.traversal import find_resource
 from uuid import UUID
@@ -274,6 +275,11 @@ def mixinSchemas(schema, resolver, key_name='properties'):
 
 
 def linkTo(validator, linkTo, instance, schema):
+    # 2024-02-21/dmichaels:
+    # New skip_links functionality for smaht-submitr since it does link integrity checking.
+    skip_links = (request := get_current_request()) and asbool(request.params.get('skip_links', False))
+    if skip_links:
+        return
     if not validator.is_type(instance, "string"):
         return
 
@@ -290,8 +296,10 @@ def linkTo(validator, linkTo, instance, schema):
     try:
         item = find_resource(base, instance.replace(':', '%3A'))
     except KeyError:
-        error = "%r not found" % instance
-        yield ValidationError(error)
+        check_only = (request := get_current_request()) and asbool(request.params.get('check_only', False))
+        if not check_only:
+            error = "%r not found" % instance
+            yield ValidationError(error)
         return
 
     if not isinstance(item, Item):

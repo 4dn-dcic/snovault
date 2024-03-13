@@ -391,20 +391,19 @@ def get_response_uuid(response: TestAppResponse) -> Optional[str]:
 
 
 def normalize_deleted_properties(data: dict) -> Tuple[dict, List[str]]:
-    normalized_data = {}
-    deleted_properties = []
-    # TODO: This is not doing it recursively ...
+    deleted_property_names = []
+    # TODO: This is not doing it recursively; probably not needed.
     for property_name, property_value in data.items():
         if property_value == RowReader.CELL_DELETION_SENTINEL:
-            deleted_properties.append(property_name)
-        else:
-            normalized_data[property_name] = property_value
-    return normalized_data, deleted_properties
+            deleted_property_names.append(property_name)
+    for deleted_property_name in deleted_property_names:
+        del data[deleted_property_name]
+    return data, deleted_property_names
 
 
 def load_all_gen(testapp, inserts, docsdir, overwrite=True, itype=None, from_json=False,
                  patch_only=False, post_only=False, skip_types=None, validate_only=False,
-                 continue_on_exception: bool = False, verbose=False):
+                 skip_links=False, continue_on_exception: bool = False, verbose=False):
     """
     Generator function that yields bytes information about each item POSTed/PATCHed.
     Is the base functionality of load_all function.
@@ -583,6 +582,25 @@ def load_all_gen(testapp, inserts, docsdir, overwrite=True, itype=None, from_jso
                         filename = " " + filename
                     else:
                         filename = ""
+                    if validate_only:
+                        # 2024-02-21
+                        # Discovered that in validation_only mode, if an item already exists,
+                        # then it will not hit post_json (because it exists) and will not
+                        # hit patch_json (because, well, because this fix was not here); it
+                        # would not have made it into second_round_items because validate_only.
+                        if validate_patch_path := get_identifying_path(an_item, a_type, identifying_properties):
+                            validate_patch_path += "?check_only=true"
+                            # To be safe we will unconditionally do skip_links in this case;
+                            # to get away with not doing this would require more analysis.
+                            # See: https://github.com/4dn-dcic/snovault/pull/283
+                            validate_patch_path += "&skip_links=true"
+                            try:
+                                testapp.patch_json(validate_patch_path, an_item)
+                            except Exception as e:
+                                e_str = str(e).replace('\n', '')
+                                yield str.encode(f"ERROR: {validate_patch_path} {e_str}")
+                                if not continue_on_exception:
+                                    return
                     yield str.encode(f'SKIP: {identifying_value}{" " + a_type if verbose else ""}{filename}\n')
                 else:
                     an_item, _ = normalize_deleted_properties(an_item)
@@ -593,6 +611,8 @@ def load_all_gen(testapp, inserts, docsdir, overwrite=True, itype=None, from_jso
                     post_request = f'/{a_type}?skip_indexing=true'
                     if validate_only:
                         post_request += '&check_only=true'
+                        if skip_links:
+                            post_request += "&skip_links=true"
                     to_post = format_for_attachment(to_post, docsdir)
                     try:
                         # This creates the (as yet non-existent) item to the
@@ -665,7 +685,12 @@ def load_all_gen(testapp, inserts, docsdir, overwrite=True, itype=None, from_jso
                     raise Exception("Item has no uuid nor any other identifying property; cannot PATCH.")
                 normalized_item, deleted_properties = normalize_deleted_properties(an_item)
                 if deleted_properties:
-                    identifying_path += f"?delete_fields={','.join(deleted_properties)}"
+                    if validate_only and skip_links:
+                        identifying_path += f"?delete_fields={','.join(deleted_properties)}&skip_links=true"
+                    else:
+                        identifying_path += f"?delete_fields={','.join(deleted_properties)}"
+                elif validate_only and skip_links:
+                    identifying_path += f"?skip_links=true"
                 res = testapp.patch_json(identifying_path, normalized_item)
                 assert res.status_code == 200
                 patched += 1
