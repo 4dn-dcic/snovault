@@ -6,6 +6,7 @@ from .project.ingestion import SnovaultProjectIngestion
 from .project.loadxl import SnovaultProjectLoadxl
 from .project.renderers import SnovaultProjectRenderers
 from .project.schema_views import SnovaultProjectSchemaViews
+from .project.health import SnovaultProjectHealthValue
 
 
 @C4ProjectRegistry.register("dcicsnovault")
@@ -16,6 +17,7 @@ class SnovaultProject(SnovaultProjectAccessKey,
                       SnovaultProjectLoadxl,
                       SnovaultProjectRenderers,
                       SnovaultProjectSchemaViews,
+                      SnovaultProjectHealthValue,
                       C4Project):
     NAMES = {"NAME": "snovault", "PYPI_NAME": "dcicsnovault"}
     ACCESSION_PREFIX = "SNO"

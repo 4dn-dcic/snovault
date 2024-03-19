@@ -6,6 +6,7 @@ from ..interfaces import DBSESSION
 from .. import main  # Function main actually defined in __init__.py (should maybe be defined elsewhere)
 
 _app_settings = {
+    'env.name': 'snovault',
     'collection_datastore': 'database',
     'item_datastore': 'database',
     'load_test_only': True,

@@ -6,6 +6,12 @@ snovault
 Change Log
 ----------
 
+11.14.0
+=======
+
+* Allow customization of health page title
+
+
 11.13.0
 =======
 

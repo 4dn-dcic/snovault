@@ -14,6 +14,7 @@ from . import Root, calculated_property, root, COLLECTIONS, STORAGE
 from .appdefs import APP_VERSION_REGISTRY_KEY, ITEM_INDEX_ORDER
 from .schema_formats import is_accession
 from .util import SettingsKey
+from .project_app import app_project
 
 
 def includeme(config):
@@ -111,7 +112,10 @@ def health_check(config):
         settings = request.registry.settings
 
         env_name = settings.get('env.name')
-        foursight_url = infer_foursight_url_from_env(request=request, envname=env_name)
+        try:
+            foursight_url = infer_foursight_url_from_env(request=request, envname=env_name)
+        except Exception:  # this can fail in unit testing depending on env_name
+            foursight_url = 'Could-not-resolve-foursight'
 
         response_dict = {
 
@@ -124,8 +128,8 @@ def health_check(config):
             h.BEANSTALK_APP_VERSION: settings.get(s.EB_APP_VERSION),
             h.BEANSTALK_ENV: env_name,
             h.BLOB_BUCKET: settings.get(s.BLOB_BUCKET),
-            h.DATABASE: settings.get(s.SQLALCHEMY_URL).split('@')[1],  # don't show user /password
-            h.DISPLAY_TITLE: "ENCODED Portal Status and Foursight Monitoring",
+            h.DATABASE: settings.get(s.SQLALCHEMY_URL, 'dummy@postgres').split('@')[1],  # don't show user /password
+            h.DISPLAY_TITLE: f"{app_project().get_app_namespace()} Portal Status and Foursight Monitoring",
             h.ELASTICSEARCH: settings.get(s.ELASTICSEARCH_SERVER),
             h.FILE_UPLOAD_BUCKET: settings.get(s.FILE_UPLOAD_BUCKET),
             h.FOURSIGHT: foursight_url,
