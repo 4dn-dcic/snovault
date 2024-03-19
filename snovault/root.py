@@ -112,7 +112,10 @@ def health_check(config):
         settings = request.registry.settings
 
         env_name = settings.get('env.name')
-        foursight_url = infer_foursight_url_from_env(request=request, envname=env_name)
+        try:
+            foursight_url = infer_foursight_url_from_env(request=request, envname=env_name)
+        except Exception:  # this can fail in unit testing depending on env_name
+            foursight_url = 'Could-not-resolve-foursight'
 
         response_dict = {
 
