@@ -61,6 +61,7 @@ jobs:
         if: ${{ matrix.test_type == 'INDEXING' }}
         env:
           S3_ENCRYPT_KEY: ${{ secrets.S3_ENCRYPT_KEY }}
+          GLOBAL_ENV_BUCKET: "foursight-prod-envs"
           # # The need for this old environment variable name will go away soon.
           # TRAVIS_JOB_ID: sno-x-test-${{ github.run_number }}-
           # This will be the new environment variable name.
@@ -72,6 +73,7 @@ jobs:
         if: ${{ matrix.test_type == 'UNIT' }}
         env:
           S3_ENCRYPT_KEY: ${{ secrets.S3_ENCRYPT_KEY }}
+          GLOBAL_ENV_BUCKET: "foursight-prod-envs"
           # # The need for this old environment variable name will go away soon.
           # TRAVIS_JOB_ID: sno-x-test-${{ github.run_number }}-
           # This will be the new environment variable name.
@@ -83,6 +85,7 @@ jobs:
         if: ${{ always() && matrix.test_type == 'INDEXING' }}
         env:
           S3_ENCRYPT_KEY: ${{ secrets.S3_ENCRYPT_KEY }}
+          GLOBAL_ENV_BUCKET: "foursight-prod-envs"
           # The need for this old environment variable name will go away soon.
           # TRAVIS_JOB_ID: sno-x-test-${{ github.run_number }}-
           # This will be the new environment variable name.
@@ -94,6 +97,7 @@ jobs:
         if: ${{ always() && matrix.test_type == 'UNIT' }}
         env:
           S3_ENCRYPT_KEY: ${{ secrets.S3_ENCRYPT_KEY }}
+          GLOBAL_ENV_BUCKET: "foursight-prod-envs"
           # The need for this old environment variable name will go away soon.
           # TRAVIS_JOB_ID: sno-x-test-${{ github.run_number }}-
           # This will be the new environment variable name.
