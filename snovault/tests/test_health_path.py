@@ -1,4 +1,8 @@
 import pytest
+from dcicutils.misc_utils import ignored
+
+
+ignored(pytest)
 
 
 def test_health_page_basic(testapp):
