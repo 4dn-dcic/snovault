@@ -8,6 +8,7 @@ from pyramid.security import (
     Deny,
     Everyone,
 )
+from ..root import health_check
 from ..schema_utils import format_checker
 from ..calculated import calculated_property
 from ..resources import Root
@@ -19,6 +20,7 @@ test_accession_re = re.compile(r'^TST[A-Z]{2}[0-9]{3}([0-9]{4}|[A-Z]{4})$')
 
 
 def includeme(config):
+    config.include(health_check)
     config.scan(__name__)
 
 
