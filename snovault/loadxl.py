@@ -33,15 +33,15 @@ text = type(u'')
 logger = structlog.getLogger(__name__)
 
 class PROGRESS(Enum):
-    START = "start"
-    START_SECOND_ROUND = "start_second_round"
-    ITEM = "item"
-    ITEM_SECOND_ROUND = "item_second_round"
-    GET = "lookup"
-    POST = "post"
-    PATCH = "patch"
-    ERROR = "error"
-    DONE = "done"
+    START = "loadxl_start"
+    START_SECOND_ROUND = "loadxl_start_second_round"
+    ITEM = "loadxl_item"
+    ITEM_SECOND_ROUND = "loadxl_item_second_round"
+    GET = "loadxl_lookup"
+    POST = "loadxl_post"
+    PATCH = "loadxl_patch"
+    ERROR = "loadxl_error"
+    DONE = "loadxl_done"
 
 
 def includeme(config):
