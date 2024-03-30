@@ -91,9 +91,11 @@ def extract_submission_id(request):
 def submit_for_ingestion(context, request):
     ignored(context)
 
-    app_project().note_submit_for_ingestion(extract_submission_id(request))
     check_true(request.content_type == 'multipart/form-data',  # even though we can't declare we accept this
                "Expected request to have content_type 'multipart/form-data'.", error_class=SubmissionFailure)
+
+    if submission_id := extract_submission_id(request):
+        app_project().note_submit_for_ingestion(extract_submission_id(request), request)
 
     bs_env = beanstalk_env_from_request(request)
     bundles_bucket = metadata_bundles_bucket(request.registry)
