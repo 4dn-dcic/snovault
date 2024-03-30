@@ -62,14 +62,23 @@ register_path_content_type(path='/submit_for_ingestion', content_type='multipart
 
 
 def extract_submission_info(request):
-    matched = SUBMISSION_PATTERN.match(request.path_info)
-    if matched:
-        submission_id = matched.group(1)
-    else:
-        raise SubmissionFailure("request.path_info is not in the expected form: %s" % request.path_info)
+    # matched = SUBMISSION_PATTERN.match(request.path_info)
+    # if matched:
+    #     submission_id = matched.group(1)
+    # else:
+    #     raise SubmissionFailure("request.path_info is not in the expected form: %s" % request.path_info)
 
+    if not (submission_id := extract_submission_id(request)):
+        raise SubmissionFailure("request.path_info is not in the expected form: %s" % request.path_info)
     instance = subrequest_object(request, submission_id)
     return submission_id, instance
+
+
+def extract_submission_id(request):
+    matched = SUBMISSION_PATTERN.match(request.path_info)
+    if matched:
+        return matched.group(1)
+    return None
 
 
 @view_config(name='submit_for_ingestion', request_method='POST', context=IngestionSubmission,
@@ -82,6 +91,7 @@ def extract_submission_info(request):
 def submit_for_ingestion(context, request):
     ignored(context)
 
+    app_project().note_submit_for_ingestion(extract_submission_id(request))
     check_true(request.content_type == 'multipart/form-data',  # even though we can't declare we accept this
                "Expected request to have content_type 'multipart/form-data'.", error_class=SubmissionFailure)
 
