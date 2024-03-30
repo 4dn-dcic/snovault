@@ -2,7 +2,6 @@
 """Load collections and determine the order."""
 
 from base64 import b64encode
-from enum import Enum
 import gzip
 import json
 import magic
@@ -22,6 +21,7 @@ from pyramid.router import Router
 from pyramid.view import view_config
 from dcicutils.data_readers import RowReader
 from dcicutils.misc_utils import ignored, environ_bool, to_camel_case, VirtualApp
+from dcicutils.progress_constants import PROGRESS_LOADXL as PROGRESS
 from dcicutils.secrets_utils import assume_identity
 from snovault.util import debug_log
 from .schema_utils import get_identifying_and_required_properties
@@ -31,17 +31,6 @@ from .server_defaults_misc import add_last_modified
 
 text = type(u'')
 logger = structlog.getLogger(__name__)
-
-class PROGRESS(Enum):
-    START = "loadxl_start"
-    START_SECOND_ROUND = "loadxl_start_second_round"
-    ITEM = "loadxl_item"
-    ITEM_SECOND_ROUND = "loadxl_item_second_round"
-    GET = "loadxl_lookup"
-    POST = "loadxl_post"
-    PATCH = "loadxl_patch"
-    ERROR = "loadxl_error"
-    DONE = "loadxl_done"
 
 
 def includeme(config):
@@ -443,6 +432,7 @@ def load_all_gen(testapp, inserts, docsdir, overwrite=True, itype=None, from_jso
     Returns:
         None if successful, otherwise a bytes error message
     """
+    progress(PROGRESS.INITIATE) if progress else None
     if docsdir is None:
         docsdir = []
     progress = progress if callable(progress) else None
