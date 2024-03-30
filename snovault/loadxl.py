@@ -432,7 +432,6 @@ def load_all_gen(testapp, inserts, docsdir, overwrite=True, itype=None, from_jso
     Returns:
         None if successful, otherwise a bytes error message
     """
-    progress(PROGRESS.INITIATE) if progress else None
     if docsdir is None:
         docsdir = []
     progress = progress if callable(progress) else None
