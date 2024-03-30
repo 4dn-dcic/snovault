@@ -6,5 +6,5 @@ class SnovaultProjectIngestion:
     def note_ingestion_enqueue_uuids_for_request(self, ingestion_type, request, uuids):
         pass
 
-    def note_submit_for_ingestion(self, submission_uuid, request):
+    def note_submit_for_ingestion(self, submission_uuid, context):
         pass
