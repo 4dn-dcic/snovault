@@ -466,7 +466,7 @@ class IngestionListener(IngestionListenerBase):
             }              # from we assume the msg has sufficient info to work backwards from - Will 4/9/21
         ]
 
-    def run(self):
+    def run(self, vapp=None):
         """ Main process for this class. Runs forever doing ingestion as needed.
 
             HIGH LEVEL LOGIC:
@@ -512,6 +512,7 @@ class IngestionListener(IngestionListenerBase):
                 if call_ingestion_message_handler(message, self):
                     # Here one of our message handlers was called and it processed this message.
                     discard(message)
+                app_project().note_post_ingestion(message, context=vapp)
 
             # This is just fallback cleanup in case messages weren't cleaned up within the loop.
             # In normal operation, they will be.
@@ -522,7 +523,7 @@ def run(vapp=None, _queue_manager=None, _update_status=None):
     """ Entry-point for the ingestion listener for waitress. """
     ingestion_listener = IngestionListener(vapp, _queue_manager=_queue_manager, _update_status=_update_status)
     try:
-        ingestion_listener.run()
+        ingestion_listener.run(vapp=vapp)
     except Exception as e:
         debuglog(str(e))
         raise

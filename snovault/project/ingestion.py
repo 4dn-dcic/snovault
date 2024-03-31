@@ -8,3 +8,6 @@ class SnovaultProjectIngestion:
 
     def note_submit_for_ingestion(self, submission_uuid, context):
         pass
+
+    def note_post_ingestion(self, message, context):
+        pass
