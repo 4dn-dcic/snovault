@@ -21,7 +21,7 @@ from pyramid.router import Router
 from pyramid.view import view_config
 from dcicutils.data_readers import RowReader
 from dcicutils.misc_utils import ignored, environ_bool, to_camel_case, VirtualApp
-from dcicutils.progress_constants import PROGRESS_LOADXL as PROGRESS
+from dcicutils.submitr.progress_constants import PROGRESS_LOADXL as PROGRESS
 from dcicutils.secrets_utils import assume_identity
 from snovault.util import debug_log
 from .schema_utils import get_identifying_and_required_properties
