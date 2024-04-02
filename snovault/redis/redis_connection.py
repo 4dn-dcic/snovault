@@ -12,6 +12,7 @@ def includeme(config):
         registry[REDIS] = RedisBase(create_redis_client(url=registry.settings['redis.server']))
     except Exception as e:
         log.error(f"Cannot create RedisBase object: {registry.settings.get('redis.server')}")
+        log.error(str(e))
         registry[REDIS] = None
 
 
