@@ -11,7 +11,7 @@ from PIL import Image
 import re
 import structlog
 import traceback
-from typing import List, Optional, Tuple, Union
+from typing import Callable, List, Optional, Tuple, Union
 from webtest import TestApp
 from webtest.response import TestResponse as TestAppResponse
 import uuid
@@ -21,6 +21,7 @@ from pyramid.router import Router
 from pyramid.view import view_config
 from dcicutils.data_readers import RowReader
 from dcicutils.misc_utils import ignored, environ_bool, to_camel_case, VirtualApp
+from dcicutils.submitr.progress_constants import PROGRESS_LOADXL as PROGRESS
 from dcicutils.secrets_utils import assume_identity
 from snovault.util import debug_log
 from .schema_utils import get_identifying_and_required_properties
@@ -358,7 +359,8 @@ def get_identifying_value(item: dict, identifying_properties: list) -> Optional[
         return identifying_property_value
     return None
 
-def item_exists(app, an_item: dict, a_type: str, identifying_properties: list) -> Optional[str]:
+def item_exists(app, an_item: dict, a_type: str, identifying_properties: list,
+                progress: Optional[Callable] = None) -> Optional[str]:
     identifying_paths = get_identifying_paths(an_item, a_type, identifying_properties)
     if not identifying_paths:
         raise Exception("Item has no uuid nor any other identifying property; cannot GET.")
@@ -371,6 +373,7 @@ def item_exists(app, an_item: dict, a_type: str, identifying_properties: list) -
             # a direct (200) response; but transformation of "file_format" to "file-formats" isn't
             # readily available to us here; and at least in this example (file_format), using the
             # uuid does not get us a direct (200) response, but rather a redirect (301); just FYI.
+            progress(PROGRESS.GET) if progress else None
             existing_item = app.get(identifying_path, status=[200, 301])
             # If we get here then the item exists.
             existing_uuid = get_response_uuid(existing_item)
@@ -403,7 +406,8 @@ def normalize_deleted_properties(data: dict) -> Tuple[dict, List[str]]:
 
 def load_all_gen(testapp, inserts, docsdir, overwrite=True, itype=None, from_json=False,
                  patch_only=False, post_only=False, skip_types=None, validate_only=False,
-                 skip_links=False, continue_on_exception: bool = False, verbose=False):
+                 skip_links=False, continue_on_exception: bool = False, verbose=False,
+                 progress=None):
     """
     Generator function that yields bytes information about each item POSTed/PATCHed.
     Is the base functionality of load_all function.
@@ -430,6 +434,7 @@ def load_all_gen(testapp, inserts, docsdir, overwrite=True, itype=None, from_jso
     """
     if docsdir is None:
         docsdir = []
+    progress = progress if callable(progress) else None
     # Collect Items
     store = {}
     if from_json:  # we are directly loading json
@@ -502,6 +507,7 @@ def load_all_gen(testapp, inserts, docsdir, overwrite=True, itype=None, from_jso
         schema = profiles[to_camel_case(type_name)]
         return get_identifying_and_required_properties(schema)
 
+    progress(PROGRESS.START) if progress else None
     # run step1 - if item does not exist, post with minimal metadata (and skip indexing since we will patch
     # in round 2)
     second_round_items = {}
@@ -523,9 +529,11 @@ def load_all_gen(testapp, inserts, docsdir, overwrite=True, itype=None, from_jso
             posted = 0
             skip_exist = 0
             for an_item in store[a_type]:
+                progress(PROGRESS.ITEM) if progress else None
                 existing_item_identifying_value = None
                 if not post_only:
-                    existing_item_identifying_value = item_exists(testapp, an_item, a_type, identifying_properties)
+                    existing_item_identifying_value = item_exists(testapp, an_item, a_type,
+                                                                  identifying_properties, progress=progress)
                     """
                     identifying_paths = get_identifying_paths(an_item, a_type, identifying_properties)
                     if not identifying_paths:
@@ -595,11 +603,14 @@ def load_all_gen(testapp, inserts, docsdir, overwrite=True, itype=None, from_jso
                             # See: https://github.com/4dn-dcic/snovault/pull/283
                             validate_patch_path += "&skip_links=true"
                             try:
+                                progress(PROGRESS.PATCH) if progress else None
                                 testapp.patch_json(validate_patch_path, an_item)
                             except Exception as e:
+                                progress(PROGRESS.ERROR) if progress else None
                                 e_str = str(e).replace('\n', '')
                                 yield str.encode(f"ERROR: {validate_patch_path} {e_str}")
                                 if not continue_on_exception:
+                                    progress(PROGRESS.DONE) if progress else None
                                     return
                     yield str.encode(f'SKIP: {identifying_value}{" " + a_type if verbose else ""}{filename}\n')
                 else:
@@ -617,6 +628,7 @@ def load_all_gen(testapp, inserts, docsdir, overwrite=True, itype=None, from_jso
                     try:
                         # This creates the (as yet non-existent) item to the
                         # database with just the minimal data (first_fields).
+                        progress(PROGRESS.POST) if progress else None
                         res = testapp.post_json(post_request, to_post)  # skip indexing in round 1
                         if not validate_only:
                             assert res.status_code == 201
@@ -637,6 +649,7 @@ def load_all_gen(testapp, inserts, docsdir, overwrite=True, itype=None, from_jso
                                                  get_identifying_value(an_item, identifying_properties))
                             yield str.encode(f'CHECK: {identifying_value}{" " + a_type if verbose else ""}\n')
                     except Exception as e:
+                        progress(PROGRESS.ERROR) if progress else None
                         print('Posting {} failed. Post body:\n{}\nError Message:{}'
                               ''.format(a_type, str(first_fields), str(e)))
                         # remove newlines from error, since they mess with generator output
@@ -649,6 +662,7 @@ def load_all_gen(testapp, inserts, docsdir, overwrite=True, itype=None, from_jso
                             message = f"ERROR: {e_str}"
                         yield str.encode(f'{message}\n')
                         if not continue_on_exception:
+                            progress(PROGRESS.DONE) if progress else None
                             return
                         # raise StopIteration
             if not validate_only:
@@ -668,6 +682,7 @@ def load_all_gen(testapp, inserts, docsdir, overwrite=True, itype=None, from_jso
             logger.info('{}: {} items will be patched in second round'
                         .format(a_type, str(len(second_round_items.get(a_type, [])))))
 
+    progress(PROGRESS.START_SECOND_ROUND) if progress else None
     # Round II - patch the rest of the metadata (ensuring to index by not passing the query param)
     rnd = ' 2nd' if not patch_only else ''
     for a_type in all_types:
@@ -677,6 +692,7 @@ def load_all_gen(testapp, inserts, docsdir, overwrite=True, itype=None, from_jso
             logger.info('{}{}: no items to patch'.format(a_type, rnd))
             continue
         for an_item in second_round_items[a_type]:
+            progress(PROGRESS.ITEM_SECOND_ROUND) if progress else None
             an_item = format_for_attachment(an_item, docsdir)
             try:
                 add_last_modified(an_item, userid=LOADXL_USER_UUID)
@@ -691,6 +707,7 @@ def load_all_gen(testapp, inserts, docsdir, overwrite=True, itype=None, from_jso
                         identifying_path += f"?delete_fields={','.join(deleted_properties)}"
                 elif validate_only and skip_links:
                     identifying_path += f"?skip_links=true"
+                progress(PROGRESS.PATCH) if progress else None
                 res = testapp.patch_json(identifying_path, normalized_item)
                 assert res.status_code == 200
                 patched += 1
@@ -704,6 +721,7 @@ def load_all_gen(testapp, inserts, docsdir, overwrite=True, itype=None, from_jso
                     filename = ""
                 yield str.encode(f'PATCH: {identifying_value}{" " + a_type if verbose else ""}{filename}\n')
             except Exception as e:
+                progress(PROGRESS.ERROR) if progress else None
                 print('Patching {} failed. Patch body:\n{}\n\nError Message:\n{}'.format(
                       a_type, str(an_item), str(e)))
                 print('Full error: %s' % traceback.format_exc())
@@ -716,11 +734,13 @@ def load_all_gen(testapp, inserts, docsdir, overwrite=True, itype=None, from_jso
                     message = f"ERROR: {e_str}"
                 yield str.encode(f'{message}\n')
                 if not continue_on_exception:
+                    progress(PROGRESS.DONE) if progress else None
                     return
                 # raise StopIteration
         logger.info('{}{}: {} items patched .'.format(a_type, rnd, patched))
 
     # explicit return upon finish
+    progress(PROGRESS.DONE) if progress else None
     return None
 
 

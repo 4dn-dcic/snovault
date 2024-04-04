@@ -62,14 +62,23 @@ register_path_content_type(path='/submit_for_ingestion', content_type='multipart
 
 
 def extract_submission_info(request):
-    matched = SUBMISSION_PATTERN.match(request.path_info)
-    if matched:
-        submission_id = matched.group(1)
-    else:
-        raise SubmissionFailure("request.path_info is not in the expected form: %s" % request.path_info)
+    # matched = SUBMISSION_PATTERN.match(request.path_info)
+    # if matched:
+    #     submission_id = matched.group(1)
+    # else:
+    #     raise SubmissionFailure("request.path_info is not in the expected form: %s" % request.path_info)
 
+    if not (submission_id := extract_submission_id(request)):
+        raise SubmissionFailure("request.path_info is not in the expected form: %s" % request.path_info)
     instance = subrequest_object(request, submission_id)
     return submission_id, instance
+
+
+def extract_submission_id(request):
+    matched = SUBMISSION_PATTERN.match(request.path_info)
+    if matched:
+        return matched.group(1)
+    return None
 
 
 @view_config(name='submit_for_ingestion', request_method='POST', context=IngestionSubmission,
@@ -84,6 +93,9 @@ def submit_for_ingestion(context, request):
 
     check_true(request.content_type == 'multipart/form-data',  # even though we can't declare we accept this
                "Expected request to have content_type 'multipart/form-data'.", error_class=SubmissionFailure)
+
+    if submission_id := extract_submission_id(request):
+        app_project().note_submit_for_ingestion(extract_submission_id(request), context)
 
     bs_env = beanstalk_env_from_request(request)
     bundles_bucket = metadata_bundles_bucket(request.registry)
@@ -454,7 +466,7 @@ class IngestionListener(IngestionListenerBase):
             }              # from we assume the msg has sufficient info to work backwards from - Will 4/9/21
         ]
 
-    def run(self):
+    def run(self, vapp=None):
         """ Main process for this class. Runs forever doing ingestion as needed.
 
             HIGH LEVEL LOGIC:
@@ -500,6 +512,7 @@ class IngestionListener(IngestionListenerBase):
                 if call_ingestion_message_handler(message, self):
                     # Here one of our message handlers was called and it processed this message.
                     discard(message)
+                app_project().note_post_ingestion(message, context=vapp)
 
             # This is just fallback cleanup in case messages weren't cleaned up within the loop.
             # In normal operation, they will be.
@@ -510,7 +523,7 @@ def run(vapp=None, _queue_manager=None, _update_status=None):
     """ Entry-point for the ingestion listener for waitress. """
     ingestion_listener = IngestionListener(vapp, _queue_manager=_queue_manager, _update_status=_update_status)
     try:
-        ingestion_listener.run()
+        ingestion_listener.run(vapp=vapp)
     except Exception as e:
         debuglog(str(e))
         raise

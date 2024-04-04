@@ -6,6 +6,13 @@ snovault
 Change Log
 ----------
 
+11.14.0
+=======
+* 2024-03-25
+* Changes to loadxl to support tracking ingestion progess for smaht-submitr (via Redis).
+* Changed dev_servers.py
+
+
 11.13.0
 =======
 
