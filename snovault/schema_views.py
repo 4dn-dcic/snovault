@@ -22,11 +22,23 @@ from dcicutils.schema_utils import (
 from .project_app import app_project
 
 
+class SubmissionSchemaConstants:
+
+    ENDPOINT = "/submission-schemas/"
+
+    ALSO_REQUIRES = "also_requires"
+    IS_REQUIRED = "is_required"
+    PROHIBITED_IF_ONE_OF = "prohibited_if_one_of"
+    REQUIRED_IF_NOT_ONE_OF = "required_if_not_one_of"
+
+
 def includeme(config):
     config.add_route('schemas', '/profiles/')
     config.add_route('schema', '/profiles/{type_name}.json')
-    config.add_route('submittables', '/submission-schemas/')
-    config.add_route('submittable', '/submission-schemas/{type_name}.json')
+    config.add_route('submittables', SubmissionSchemaConstants.ENDPOINT)
+    config.add_route(
+        'submittable', SubmissionSchemaConstants.ENDPOINT + '{type_name}.json'
+    )
     config.scan(__name__)
 
 
