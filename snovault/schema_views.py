@@ -216,16 +216,20 @@ def _annotate_submittable_props(schema, props):
 
     for propname, propinfo in props.items():
         if propname in required_props:
-            propinfo['is_required'] = True
+            propinfo[SubmissionSchemaConstants.IS_REQUIRED] = True
         if propname in oneof_props:
             lprops = [p for p in oneof_props if p != propname]
-            propinfo.setdefault('required_if_not_one_of', []).extend(lprops)
-            propinfo['prohibited_if_one_of'] = lprops
+            propinfo.setdefault(
+                SubmissionSchemaConstants.REQUIRED_IF_NOT_ONE_OF, []
+            ).extend(lprops)
+            propinfo[SubmissionSchemaConstants.PROHIBITED_IF_ONE_OF] = lprops
         if propname in anyof_props:
             lprops = [p for p in anyof_props if p != propname]
-            propinfo.setdefault('required_if_not_one_of', []).extend(lprops)
+            propinfo.setdefault(
+                SubmissionSchemaConstants.REQUIRED_IF_NOT_ONE_OF, []
+            ).extend(lprops)
         if propname in req_deps:
-            propinfo['also_requires'] = req_deps[propname]
+            propinfo[SubmissionSchemaConstants.ALSO_REQUIRES] = req_deps[propname]
     return props
 
 
