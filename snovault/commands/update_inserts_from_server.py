@@ -197,20 +197,6 @@ def get_item(uuid: str, auth_key: Dict[str, str], frame: str = "raw") -> Dict[st
     return get_metadata(uuid, key=auth_key, add_on=add_on)
 
 
-#    hashable_auth_key = tuple(auth_key.items())
-#    return get_cached_metadata(uuid, hashable_auth_key, frame)
-#
-#
-# @functools.lru_cache(maxsize=None)
-# def get_cached_metadata(
-#    uuid: str, auth_key: Tuple[str, str], frame: str
-# ) -> Dict[str, Any]:
-#    """Memoized version of get_metadata."""
-#    unhashed_auth_key = dict(auth_key)
-#    add_on = f"frame={frame}"
-#    return get_metadata(uuid, key=unhashed_auth_key, add_on=add_on)
-
-
 def get_insert(uuid: str, auth_key: Dict[str, str], ignore_fields: Set[str]) -> Insert:
     """Get insert for a given item."""
     item = get_item(uuid, auth_key)
@@ -447,8 +433,8 @@ def main():
     ignore_fields = get_ignore_fields(args.ignore_field)
     auth_key = get_auth_key(args.portal, args.env)
     inserts_path = INSERTS_LOCATION.joinpath(args.dest)
-    #    if not inserts_path.exists():
-    #        inserts_path.mkdir()
+    if not inserts_path.exists():
+        inserts_path.mkdir()
     existing_inserts_to_update = get_existing_inserts_to_update(
         inserts_path, args.item_type
     )
