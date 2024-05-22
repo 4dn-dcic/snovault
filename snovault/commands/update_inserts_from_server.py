@@ -12,7 +12,7 @@ from typing import Any, Dict, Iterable, Iterator, List, Optional, Set, Tuple, Un
 
 from dcicutils import creds_utils
 from dcicutils.ff_utils import get_metadata, search_metadata
-from dcicutils.misc_utils import to_camel_case
+from dcicutils.misc_utils import to_snake_case
 
 from snovault.commands.utils import get_auth_key
 
@@ -245,7 +245,7 @@ def get_insert(uuid: str, auth_key: Dict[str, str], ignore_fields: Set[str]) -> 
 def get_item_type(item: Dict[str, Any], auth_key: Dict[str, str]) -> str:
     """Get item type for a given item."""
     item = get_item(get_uuid(item), auth_key, frame="object")
-    return to_camel_case(item["@type"][0])
+    return to_snake_case(item["@type"][0])
 
 
 def get_insert_properties(
@@ -377,8 +377,8 @@ def are_inserts_equal(insert1: Insert, insert2: Insert) -> bool:
 def write_inserts(inserts: Iterable[Insert], inserts_path: Path) -> None:
     """Write all inserts to given directory."""
     for item_type, inserts_for_type in group_inserts_by_type(inserts):
-        logger.info(f"Writing {item_type} inserts")
         write_inserts_for_type(item_type, inserts_for_type, inserts_path)
+        logger.info(f"Wrote {len(inserts_for_type)} {item_type} inserts")
 
 
 def get_insert_item_type(insert: Insert) -> str:
@@ -396,7 +396,12 @@ def group_inserts_by_type(
 ) -> Iterator[Tuple[str, Iterator[Insert]]]:
     """Group all inserts by item type."""
     sorted_inserts = sorted(inserts, key=get_insert_item_type_and_index)
-    return itertools.groupby(sorted_inserts, key=get_insert_item_type)
+    return (
+        (item_type, list(inserts))
+        for item_type, inserts in itertools.groupby(
+            sorted_inserts, key=get_insert_item_type
+        )
+    )
 
 
 def write_inserts_for_type(
@@ -405,11 +410,12 @@ def write_inserts_for_type(
     inserts_path: Path,
 ) -> None:
     """Write all inserts for a given item type to given directory."""
-    insert_file = inserts_path.joinpath(f"{to_camel_case(item_type)}.json")
+    insert_file = inserts_path.joinpath(f"{item_type}.json")
     with insert_file.open("w") as file_handle:
         json.dump(
             [insert.properties for insert in inserts_for_type],
             file_handle,
+            indent=4,
         )
 
 
