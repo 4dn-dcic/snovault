@@ -58,14 +58,29 @@ def update_inserts_from_server(
 ) -> None:
     """Update inserts for given server."""
     existing_inserts_to_update = get_existing_inserts_to_update(inserts, item_types)
+    if existing_inserts_to_update:
+        logger.info(
+            f"Found {len(existing_inserts_to_update)} existing inserts to update"
+        )
+    else:
+        logger.info("No existing inserts to update")
     search_uuids = get_uuids_from_search(from_search, auth_key)
+    if search_uuids:
+        logger.info(f"Found {len(search_uuids)} items from search")
     base_uuids_to_get = get_base_uuids_to_get(existing_inserts_to_update, search_uuids)
     inserts_from_portal = get_inserts_from_portal(
         base_uuids_to_get, auth_key, ignore_fields
     )
+    if inserts_from_portal:
+        logger.info(f"Fetched {len(inserts_from_portal)} inserts from portal")
+    else:
+        logger.warning("No inserts retrieved from portal. Exiting.")
+        return
     inserts_to_write = get_inserts_to_write(
         inserts_from_portal, existing_inserts_to_update
     )
+    if inserts_to_write:
+        logger.info(f"Writing {len(inserts_to_write)} inserts to {inserts}")
     write_inserts(inserts_to_write, inserts)
 
 
@@ -362,9 +377,7 @@ def are_inserts_equal(insert1: Insert, insert2: Insert) -> bool:
 def write_inserts(inserts: Iterable[Insert], inserts_path: Path) -> None:
     """Write all inserts to given directory."""
     for item_type, inserts_for_type in group_inserts_by_type(inserts):
-        import pdb
-
-        pdb.set_trace()
+        logger.info(f"Writing {item_type} inserts")
         write_inserts_for_type(item_type, inserts_for_type, inserts_path)
 
 
