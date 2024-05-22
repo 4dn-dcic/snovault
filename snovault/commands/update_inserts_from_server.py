@@ -1,166 +1,466 @@
-import structlog
-import logging
+from __future__ import annotations
+
 import argparse
+import itertools
 import json
-from os import walk
-# use ff_utils to find inserts and write data
-from dcicutils.ff_utils import search_metadata, expand_es_metadata, dump_results_to_json
-# use this function to read inserts
-from .run_upgrader_on_inserts import get_inserts
+import logging
+import re
+import structlog
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any, Dict, Iterable, Iterator, List, Optional, Set, Tuple, Union
+
+from dcicutils import creds_utils
+from dcicutils.ff_utils import get_metadata, search_metadata
+from dcicutils.misc_utils import to_camel_case
+
+from snovault.commands.utils import get_auth_key
+
 
 logger = structlog.getLogger(__name__)
 EPILOG = __doc__
 
+DEFAULT_IGNORE_FIELDS = [
+    "submitted_by",
+    "date_created",
+    "last_modified",
+    "schema_version",
+]
+INSERT_DIRECTORIES = [
+    "inserts",
+    "master-inserts",
+    "perf-testing",
+    "workbook-inserts",
+    "temp-local-inserts",
+    "deploy-inserts",
+]
+INSERTS_LOCATION = Path("src/encoded/tests/data/")
+KEYS_TO_IGNORE_FOR_LINKS = set(  # Either UUIDs not needed or can look like UUIDs
+    ["uuid", "title", "blob_id", "md5sum", "content_md5sum"]
+)
+UUID_IDENTIFIER = re.compile(
+    r"^[a-f0-9]{8}-?[a-f0-9]{4}-?4[a-f0-9]{3}-?[a-f0-9]{4}-?[a-f0-9]{12}\Z",
+    re.I,
+)
 
-def read_local_inserts_dir(dir_name, path, target_types=[]):
-    """
-    Given path string path, read local inserts directory and return a
-    dictionary of all inserts keyed by item type, as well as a list of all
-    found uuids
 
-    Args:
-        dir_name (str): string name of the inserts directory
-        path (str): string path to the inserts directory
-        target_types (list): list of item types to load. Empty means all types
+def get_ignore_fields(ignore_fields: List[str]) -> Set[str]:
+    """Get all fields to ignore when pulling inserts."""
+    return set(DEFAULT_IGNORE_FIELDS + ignore_fields)
 
-    Returns:
-        dict of inserts, list of item uuids
-    """
-    item_types = []
-    item_uuids = []
-    local_inserts = {}
-    # find item types that are represented in the given inserts path
-    for (dirpath, dirnames, filenames) in walk(path):
-        item_types = [it[:-5] for it in filenames if it.endswith('.json')]
+
+@dataclass(frozen=True)
+class Insert:
+    DEFAULT_INDEX = 10000  # Default to high number for sorting
+
+    item_type: str
+    uuid: str
+    properties: Dict[str, Any]
+    index: int = DEFAULT_INDEX
+
+    def __hash__(self):
+        return hash(self.uuid)
+
+    def __eq__(self, other: Any):
+        if not isinstance(other, Insert):
+            return False
+        return self.uuid == other.uuid
+
+    def __repr__(self):
+        return f"Insert({self.item_type}, {self.uuid})"
+
+    def update(
+        self,
+        properties: Optional[Dict[str, Any]] = None,
+        index: int = DEFAULT_INDEX,
+    ) -> Insert:
+        """Update insert attributes."""
+        if not properties and index is None:
+            return self
+        if properties == self.properties and index == self.index:
+            return self
+        return Insert(
+            item_type=self.item_type,
+            uuid=self.uuid,
+            properties=properties or self.properties,
+            index=index or self.index,
+        )
+
+
+def get_existing_inserts_to_update(
+    inserts_path: Path,
+    target_types: Optional[List[str]] = None,
+) -> List[Insert]:
+    """Get all existing inserts to update from given directory."""
+    existing_inserts = get_existing_inserts(inserts_path)
+    return get_inserts_to_update(existing_inserts, target_types)
+
+
+def get_existing_inserts(inserts_path: Path) -> List[Insert]:
+    """Get all existing inserts from given directory."""
+    inserts_files = inserts_path.glob("*.json")
+    return [
+        insert for insert_file in inserts_files for insert in get_inserts(insert_file)
+    ]
+
+
+def get_inserts(insert_file: Path) -> List[Insert]:
+    """Get all inserts from given file."""
+    item_type = insert_file.stem
+    with insert_file.open("r") as f:
+        inserts = json.load(f)
+    return [
+        Insert(
+            item_type=item_type,
+            uuid=get_uuid(insert),
+            properties=insert,
+            index=idx,
+        )
+        for idx, insert in enumerate(inserts)
+    ]
+
+
+def get_uuid(item: Dict[str, Any]) -> str:
+    return item.get("uuid", "")
+
+
+def get_inserts_to_update(
+    existing_inserts: List[Insert],
+    target_types: Optional[List[str]] = None,
+) -> List[Insert]:
+    """Get all inserts to update from given directory."""
     if target_types:
-        bad_item_types = [it for it in target_types if it not in item_types]
-        if bad_item_types:
-            raise Exception('update_inserts: Specified item type(s) %s are not found in '
-                            'the inserts dir. Found: %s' % (bad_item_types, item_types))
-    # update item_types if user specified specific ones
-    fetch_item_types = target_types if target_types else item_types
-    # load current insert contents from json file
-    for item_type in item_types:
-        local_inserts[item_type] = {}  # key these by uuid for now
-        for it_item in get_inserts(dir_name, item_type):
-            # only fetch items for specified fetch_item_types
-            if item_type in fetch_item_types:
-                item_uuids.append(it_item['uuid'])
-            local_inserts[item_type][it_item['uuid']] = it_item
-    return local_inserts, item_uuids
+        return [
+            insert for insert in existing_inserts if insert.item_type in target_types
+        ]
+    return existing_inserts
+
+
+def get_uuids_from_search(
+    search_query: Union[str, None], auth_key: Dict[str, str]
+) -> List[str]:
+    """Get all uuids from a given search query."""
+    if not search_query:
+        return []
+    query = format_search_query(search_query)
+    return [get_uuid(item) for item in search_metadata(query, key=auth_key)]
+
+
+def format_search_query(search_query: str) -> str:
+    """Format provided search query.
+
+    Include UUID add-on to limit response size and use heuristics to
+    format query as needed (e.g. so no need to add boilerplate start of
+    "search/").
+    """
+    if "field=uuid" not in search_query:
+        search_query += "&field=uuid"
+    if "/" in search_query:  # Likely formatted appropriately
+        return search_query
+    if not search_query.startswith("?"):
+        return f"search/?{search_query}"
+    return f"search/{search_query}"
+
+
+def get_base_uuids_to_get(
+    existing_inserts: Iterable[Insert],
+    search_uuids: Set[str],
+) -> List[str]:
+    """Get all base uuids to get from given existing inserts and search uuids."""
+    return set([insert.uuid for insert in existing_inserts]) | set(search_uuids)
+
+
+def get_inserts_from_portal(
+    uuids: Iterable[str], auth_key: Dict[str, str], ignore_fields: Set[str]
+) -> Set[Insert]:
+    """Get all inserts to write.
+
+    Start from base UUIDs and branch to all linked items.
+    """
+    result = set()
+    seen = set()
+    uuids_to_get = set(uuids)
+    while uuids_to_get:
+        current_uuids_to_get = uuids_to_get - seen
+        uuids_to_get = set()
+        for uuid in current_uuids_to_get:
+            insert = get_insert(uuid, auth_key, ignore_fields)
+            result |= {insert}
+            seen |= {uuid}
+            uuids_to_get |= get_links(insert) - seen
+    return result
+
+
+def get_item(uuid: str, auth_key: Dict[str, str], frame: str = "raw") -> Dict[str, Any]:
+    """Get item for a given UUID."""
+    add_on = f"frame={frame}" if frame else ""
+    return get_metadata(uuid, key=auth_key, add_on=add_on)
+
+
+#    hashable_auth_key = tuple(auth_key.items())
+#    return get_cached_metadata(uuid, hashable_auth_key, frame)
+#
+#
+# @functools.lru_cache(maxsize=None)
+# def get_cached_metadata(
+#    uuid: str, auth_key: Tuple[str, str], frame: str
+# ) -> Dict[str, Any]:
+#    """Memoized version of get_metadata."""
+#    unhashed_auth_key = dict(auth_key)
+#    add_on = f"frame={frame}"
+#    return get_metadata(uuid, key=unhashed_auth_key, add_on=add_on)
+
+
+def get_insert(uuid: str, auth_key: Dict[str, str], ignore_fields: Set[str]) -> Insert:
+    """Get insert for a given item."""
+    item = get_item(uuid, auth_key)
+    return Insert(
+        item_type=get_item_type(item, auth_key),
+        uuid=get_uuid(item),
+        properties=get_insert_properties(item, ignore_fields),
+    )
+
+
+def get_item_type(item: Dict[str, Any], auth_key: Dict[str, str]) -> str:
+    """Get item type for a given item."""
+    item = get_item(get_uuid(item), auth_key, frame="object")
+    return to_camel_case(item["@type"][0])
+
+
+def get_insert_properties(
+    item: Dict[str, Any], ignore_fields: Set[str]
+) -> Dict[str, Any]:
+    """Get all properties for a given item."""
+    return {key: value for key, value in item.items() if key not in ignore_fields}
+
+
+def get_links(item: Any) -> Set[str]:
+    """Get all links for a given item."""
+    if isinstance(item, Insert):
+        return get_links_from_insert(item)
+    if isinstance(item, dict):
+        return get_links_from_dict(item)
+    if isinstance(item, list):
+        return get_links_from_list(item)
+    if isinstance(item, str):
+        if is_uuid(item):
+            return {item}
+    return set()
+
+
+def get_links_from_insert(item: Insert) -> Set[str]:
+    """Get all links for a given insert."""
+    return get_links_from_dict(item.properties)
+
+
+def get_links_from_dict(item: Dict[str, Any]) -> Set[str]:
+    """Get all links for a given dictionary."""
+    return {
+        link
+        for key, value in item.items()
+        if key not in KEYS_TO_IGNORE_FOR_LINKS
+        for link in get_links(value)
+    }
+
+
+def get_links_from_list(item: List[Any]) -> Set[str]:
+    """Get all links for a given list."""
+    return {link for value in item for link in get_links(value)}
+
+
+def is_uuid(value: str) -> bool:
+    """Check if a given value is a UUID."""
+    return bool(UUID_IDENTIFIER.match(value))
+
+
+def get_inserts_to_write(
+    inserts_from_portal: Iterable[Insert],
+    existing_inserts_to_update: Iterable[Insert],
+) -> Iterable[Insert]:
+    """Get all inserts to write.
+
+    Update portal inserts with existing inserts information, if present,
+    and remove conflicts with master-inserts.
+    """
+    inserts_updated_with_existing = get_inserts_with_existing_data(
+        inserts_from_portal, existing_inserts_to_update
+    )
+    return get_inserts_without_conflicts(inserts_updated_with_existing)
+
+
+def get_inserts_with_existing_data(
+    inserts_from_portal: Iterable[Insert],
+    existing_inserts_to_update: Iterable[Insert],
+) -> Iterable[Insert]:
+    """Update portal inserts with existing inserts data, if present."""
+    if not existing_inserts_to_update:
+        return inserts_from_portal
+    existing_inserts_map = {
+        insert.uuid: insert for insert in existing_inserts_to_update
+    }
+    return [
+        get_updated_insert(insert, existing_inserts_map[insert.uuid])
+        if insert.uuid in existing_inserts_map
+        else insert
+        for insert in inserts_from_portal
+    ]
+
+
+def get_updated_insert(insert: Insert, existing_insert: Insert) -> Insert:
+    """Update portal insert with data from existing insert.
+
+    Preserve existing index and properties not present in portal insert.
+    """
+    return insert.update(
+        properties={**existing_insert.properties, **insert.properties},
+        index=existing_insert.index,
+    )
+
+
+def get_inserts_without_conflicts(inserts: Iterable[Insert]) -> Iterable[Insert]:
+    """Remove all conflicts with master-inserts."""
+    master_inserts = get_existing_inserts(INSERTS_LOCATION.joinpath("master-inserts"))
+    master_inserts_map = {insert.uuid: insert for insert in master_inserts}
+    return [
+        insert
+        for insert in inserts
+        if not is_conflict_with_master_insert(insert, master_inserts_map)
+    ]
+
+
+def is_conflict_with_master_insert(
+    insert: Insert, master_inserts_map: Dict[str, Insert]
+) -> bool:
+    """Check if a given insert conflicts with master-inserts."""
+    if insert.uuid not in master_inserts_map:
+        return False
+    master_insert = master_inserts_map[insert.uuid]
+    if are_inserts_equal(insert, master_insert):
+        logger.info(
+            f"Dropped insert {insert.uuid} from {insert.item_type} as already present"
+            f" in master-inserts"
+        )
+        return False
+    logger.warning(
+        f"Dropped insert {insert.uuid} from {insert.item_type} due to conflict"
+        f" with master-inserts."
+    )
+    return True
+
+
+def are_inserts_equal(insert1: Insert, insert2: Insert) -> bool:
+    """Check if two inserts have same properties."""
+    return insert1.properties == insert2.properties
+
+
+def write_inserts(inserts: Iterable[Insert], inserts_path: Path) -> None:
+    """Write all inserts to given directory."""
+    for item_type, inserts_for_type in group_inserts_by_type(inserts):
+        import pdb
+
+        pdb.set_trace()
+        write_inserts_for_type(item_type, inserts_for_type, inserts_path)
+
+
+def get_insert_item_type(insert: Insert) -> str:
+    """Get item type for a given insert."""
+    return insert.item_type
+
+
+def get_insert_item_type_and_index(insert: Insert) -> Tuple[str, int]:
+    """Get item type and index for a given insert."""
+    return insert.item_type, insert.index
+
+
+def group_inserts_by_type(
+    inserts: Iterable[Insert],
+) -> Iterator[Tuple[str, Iterator[Insert]]]:
+    """Group all inserts by item type."""
+    sorted_inserts = sorted(inserts, key=get_insert_item_type_and_index)
+    return itertools.groupby(sorted_inserts, key=get_insert_item_type)
+
+
+def write_inserts_for_type(
+    item_type: str,
+    inserts_for_type: Iterable[Insert],
+    inserts_path: Path,
+) -> None:
+    """Write all inserts for a given item type to given directory."""
+    insert_file = inserts_path.joinpath(f"{to_camel_case(item_type)}.json")
+    with insert_file.open("w") as file_handle:
+        json.dump(
+            [insert.properties for insert in inserts_for_type],
+            file_handle,
+        )
 
 
 def main():
-    """
-    Use this command to update the inserts from a given fourfront env
+    """Update the inserts from a given portal.
+
+    Use `--item-type` to update existing inserts for specific item types.
+    Use `--from-search` to update inserts from a search result.
     """
     logging.basicConfig()
-    # Loading app will have configured from config file. Reconfigure here:
-    logging.getLogger('encoded').setLevel(logging.DEBUG)
+    logging.getLogger("encoded").setLevel(logging.DEBUG)
 
-    parser = argparse.ArgumentParser(  # noqa - PyCharm wrongly thinks the formatter_class is specified wrong here.
-        description="Update Inserts", epilog=EPILOG,
+    parser = argparse.ArgumentParser(  # noqa
+        description="Update Inserts",
+        epilog=EPILOG,
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    parser.add_argument('--env', default='data',
-                        help='FF environment to update from. Defaults to data')
-    parser.add_argument('--dest', default='temp-local-inserts',
-                        help="destination file in inserts dir to write to")
-    parser.add_argument('--item-type', action='append', default=[],
-                        help="item type, e.g. file_fastq. Defaults to all types")
-    parser.add_argument('--ignore-field', action='append', default=["submitted_by", "date_created", "last_modified", "schema_version"],
-                        help='field name to ignore when running expand_es_metadata')
-    parser.add_argument('--from-search', help='query passed to search_metadata to find uuids')
-
+    parser.add_argument(
+        "--env", default="data", help="Environment to update from. Defaults to data"
+    )
+    parser.add_argument(
+        "--portal",
+        help="Portal to update inserts from. Defaults to SMaHT",
+        choices=creds_utils._KEY_MANAGERS.keys(),
+        default="smaht",
+    )
+    parser.add_argument(
+        "--dest",
+        default="temp-local-inserts",
+        choices=INSERT_DIRECTORIES,
+        help="Destination inserts directory. Defaults to temp-local-inserts.",
+    )
+    parser.add_argument(
+        "--item-type",
+        nargs="+",
+        help=(
+            "Existing item type (e.g. file_fastq) to update inserts for."
+            " Defaults to all types found in destination directory.",
+        ),
+    )
+    parser.add_argument(
+        "--ignore-field",
+        nargs="+",
+        default=DEFAULT_IGNORE_FIELDS,
+        help="Properties to ignore when pulling inserts",
+    )
+    parser.add_argument(
+        "--from-search",
+        help="Query to find new items to add to inserts",
+        type=str,
+    )
     args = parser.parse_args()
-    # this will work since bin/ commands are run from root FF directory
-    inserts_location = 'src/encoded/tests/data'
-    # hardcode these to prevent accidental creation of inserts files
-    inserts_files = ['inserts', 'master-inserts', 'perf-testing', 'workbook-inserts',
-                     'temp-local-inserts', 'deploy-inserts']
-    if args.dest not in inserts_files:
-        raise Exception('Specified inserts destination %s must be one of: %s'
-                        % (args.dest, inserts_files))
-    inserts_path = '/'.join([inserts_location, args.dest])
 
-    local_inserts, item_uuids = read_local_inserts_dir(args.dest, inserts_path, args.item_type)
-
-    # Used to preserve order of existing inserts in folder(s), if any.
-    local_inserts_ordering_map = {}
-    for item_type, local_inserts_for_type in local_inserts.items():
-        for insrt_index, insrt_uuid in enumerate(local_inserts_for_type):
-            # Duplicate insrt_indx between different item types are OK and present.
-            # local_inserts_ordering_map is shallow.
-            local_inserts_ordering_map[insrt_uuid] = insrt_index
-
-    # add uuids from the input search result, if present
-    if args.from_search:
-        use_search = args.from_search
-        # get frame=object search results to keep response small
-        if 'frame=' not in use_search:
-            use_search += '&frame=object'
-        search_res = search_metadata(use_search, ff_env=args.env)
-        search_uuids = [item['uuid'] for item in search_res]
-        logger.info('update_inserts: Will update using %s items from search' % len(search_uuids))
-        item_uuids = list(set(item_uuids + search_uuids))
-
-    # now find uuids and all linked from the given server
-    svr_inserts, svr_uuids = expand_es_metadata(item_uuids, ff_env=args.env,
-                                                store_frame='raw', add_pc_wfr=True,
-                                                ignore_field=args.ignore_field)
-
-    # if we are updating `inserts`, must make sure that items don't conflict
-    # with those in `master-inserts`
-    skip_uuids = set()
-    if args.dest == 'inserts':
-        master_path = '/'.join([inserts_location, 'master-inserts'])
-        master_inserts, master_uuids = read_local_inserts_dir('master-inserts', master_path)
-        item_conflict_report = {}
-        for item_type in svr_inserts:
-            itype_err = []
-            itype_okay = []
-            conflicting_items = [item for item in svr_inserts[item_type] if item['uuid'] in master_uuids]
-            for conflict in conflicting_items:
-                # compare inserts by loading json objects
-                svr_json = json.dumps(conflict, sort_keys=True)
-                mstr_json = json.dumps(master_inserts[item_type][conflict['uuid']], sort_keys=True)
-                if svr_json != mstr_json:
-                    itype_err.append(conflict['uuid'])
-                else:
-                    # the json is the same. Remove from the `inserts` update
-                    skip_uuids.add(conflict['uuid'])
-                    itype_okay.append(conflict['uuid'])
-            item_conflict_report[item_type] = {'error': itype_err, 'okay': itype_okay}
-        if any([it for it in item_conflict_report if item_conflict_report[it]['error']]):
-            error_report = {it: item_conflict_report[it]['error'] for it in item_conflict_report}
-            logger.error('update_inserts: Cannot update the following items in "inserts" directory,'
-                            ' since there are conflicting items with different values'
-                            'in the master-inserts. Update those first. Conflicts:\n%s' % json.dumps(error_report, indent=4))
-            raise Exception('Cannot load inserts as there are conflicting items in `master-inserts`')
-        elif any([it for it in item_conflict_report if item_conflict_report[it]['okay']]):
-            conflict_report = {it: item_conflict_report[it]['okay'] for it in item_conflict_report}
-            logger.warning('update_inserts: The following items are already in "master-inserts".'
-                           ' Will not add to "inserts". Items:\n%s' % json.dumps(conflict_report, indent=4))
-
-    # now we need to update the server inserts with contents from local inserts
-    # so that existing information is not lost
-    for item_type in svr_inserts:
-        if skip_uuids:
-            # remove items specified by skip uuids
-            svr_inserts[item_type] = [
-                insrt for insrt in svr_inserts[item_type]
-                if insrt['uuid'] not in skip_uuids
-            ]
-        svr_inserts[item_type].sort(key=lambda insrt: local_inserts_ordering_map.get(insrt["uuid"], 99999) )
-        for item_uuid in local_inserts.get(item_type, {}):
-            if item_uuid not in svr_uuids and item_uuid not in skip_uuids:
-                svr_inserts[item_type].append(local_inserts[item_type][item_uuid])
-
-    dump_results_to_json(svr_inserts, inserts_path)
-    logger.info('update_inserts: Successfully wrote to %s' % inserts_path)
-    for item_type in svr_inserts:
-        logger.info('update_inserts: Wrote %s items to %s' %
-                    (len(svr_inserts[item_type]), item_type + '.json'))
+    ignore_fields = get_ignore_fields(args.ignore_field)
+    auth_key = get_auth_key(args.portal, args.env)
+    inserts_path = INSERTS_LOCATION.joinpath(args.dest)
+    #    if not inserts_path.exists():
+    #        inserts_path.mkdir()
+    existing_inserts_to_update = get_existing_inserts_to_update(
+        inserts_path, args.item_type
+    )
+    search_uuids = get_uuids_from_search(args.from_search, auth_key)
+    base_uuids_to_get = get_base_uuids_to_get(existing_inserts_to_update, search_uuids)
+    inserts_from_portal = get_inserts_from_portal(
+        base_uuids_to_get, auth_key, ignore_fields
+    )
+    inserts_to_write = get_inserts_to_write(
+        inserts_from_portal, existing_inserts_to_update
+    )
+    write_inserts(inserts_to_write, inserts_path)
 
 
 if __name__ == "__main__":
