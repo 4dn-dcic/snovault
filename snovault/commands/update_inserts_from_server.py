@@ -49,6 +49,26 @@ def get_ignore_fields(ignore_fields: List[str]) -> Set[str]:
     return set(DEFAULT_IGNORE_FIELDS + ignore_fields)
 
 
+def update_inserts_from_server(
+    inserts: Path,
+    auth_key: Dict[str, str],
+    ignore_fields: Iterable[str],
+    item_types: Optional[List[str]] = None,
+    from_search: Optional[str] = None,
+) -> None:
+    """Update inserts for given server."""
+    existing_inserts_to_update = get_existing_inserts_to_update(inserts, item_types)
+    search_uuids = get_uuids_from_search(from_search, auth_key)
+    base_uuids_to_get = get_base_uuids_to_get(existing_inserts_to_update, search_uuids)
+    inserts_from_portal = get_inserts_from_portal(
+        base_uuids_to_get, auth_key, ignore_fields
+    )
+    inserts_to_write = get_inserts_to_write(
+        inserts_from_portal, existing_inserts_to_update
+    )
+    write_inserts(inserts_to_write, inserts)
+
+
 @dataclass(frozen=True)
 class Insert:
     DEFAULT_INDEX = 10000  # Default to high number for sorting
@@ -435,18 +455,13 @@ def main():
     inserts_path = INSERTS_LOCATION.joinpath(args.dest)
     if not inserts_path.exists():
         inserts_path.mkdir()
-    existing_inserts_to_update = get_existing_inserts_to_update(
-        inserts_path, args.item_type
+    update_inserts_from_server(
+        inserts_path,
+        auth_key,
+        ignore_fields,
+        item_types=args.item_type,
+        from_search=args.from_search,
     )
-    search_uuids = get_uuids_from_search(args.from_search, auth_key)
-    base_uuids_to_get = get_base_uuids_to_get(existing_inserts_to_update, search_uuids)
-    inserts_from_portal = get_inserts_from_portal(
-        base_uuids_to_get, auth_key, ignore_fields
-    )
-    inserts_to_write = get_inserts_to_write(
-        inserts_from_portal, existing_inserts_to_update
-    )
-    write_inserts(inserts_to_write, inserts_path)
 
 
 if __name__ == "__main__":
