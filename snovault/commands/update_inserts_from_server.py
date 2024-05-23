@@ -445,7 +445,6 @@ def main():
     parser.add_argument(
         "--dest",
         default="temp-local-inserts",
-        choices=INSERT_DIRECTORIES,
         help="Destination inserts directory. Defaults to temp-local-inserts.",
     )
     parser.add_argument(
@@ -471,6 +470,14 @@ def main():
 
     ignore_fields = get_ignore_fields(args.ignore_field)
     auth_key = get_auth_key(args.portal, args.env)
+    if args.dest not in INSERT_DIRECTORIES:
+        proceed = input(
+            f"Destination {args.dest} not in common choices: {INSERT_DIRECTORIES}."
+            f"Continue? (y/n): "
+        )
+        if proceed.lower().startswith("n"):
+            logger.info("Exiting.")
+            return
     inserts_path = INSERTS_LOCATION.joinpath(args.dest)
     if not inserts_path.exists():
         inserts_path.mkdir()
