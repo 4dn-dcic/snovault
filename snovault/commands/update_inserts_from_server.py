@@ -55,6 +55,7 @@ def update_inserts_from_server(
     ignore_fields: Iterable[str],
     item_types: Optional[List[str]] = None,
     from_search: Optional[str] = None,
+    merge_existing: bool = True,
 ) -> None:
     """Update inserts for given server."""
     existing_inserts_to_update = get_existing_inserts_to_update(inserts, item_types)
@@ -74,7 +75,7 @@ def update_inserts_from_server(
     )
     logger.info(f"Found inserts for {len(inserts_from_portal)} item types from portal")
     inserts_to_write = get_inserts_to_write(
-        inserts_from_portal, existing_inserts_to_update
+        inserts_from_portal, existing_inserts_to_update, merge_existing=merge_existing
     )
     logger.info(f"Writing inserts for {len(inserts_to_write)} item types to {inserts}")
     write_inserts(inserts_to_write, inserts)
@@ -366,16 +367,19 @@ def is_uuid(value: str) -> bool:
 def get_inserts_to_write(
     inserts_from_portal: List[ItemTypeInserts],
     existing_inserts_to_update: List[ItemTypeInserts],
+    merge_existing: bool = True,
 ) -> List[ItemTypeInserts]:
     """Get all inserts to write.
 
     Update portal inserts with existing inserts information, if present,
     and remove conflicts with master-inserts.
     """
-    inserts_updated_with_existing = get_inserts_with_existing_data(
-        inserts_from_portal, existing_inserts_to_update
-    )
-    return get_inserts_without_conflicts(inserts_updated_with_existing)
+    if merge_existing:
+        inserts_updated_with_existing = get_inserts_with_existing_data(
+            inserts_from_portal, existing_inserts_to_update
+        )
+        return get_inserts_without_conflicts(inserts_updated_with_existing)
+    return get_inserts_without_conflicts(inserts_from_portal)
 
 
 def get_inserts_with_existing_data(
@@ -522,6 +526,7 @@ def write_inserts_for_type(
     to_write = [insert.properties for insert in inserts]
     with insert_file.open("w") as file_handle:
         json.dump(to_write, file_handle, indent=4)
+    logger.info(f"Wrote {len(inserts)} inserts for {item_type} to {insert_file}")
 
 
 def main():
@@ -571,6 +576,15 @@ def main():
         help="Query to find new items to add to inserts",
         type=str,
     )
+    parser.add_argument(
+        "--refresh",
+        help=(
+            "Replace existing inserts with new inserts from portal, i.e. don't keep"
+            " properties from existing inserts not present in portal."
+            " Defaults to False.",
+        ),
+        action="store_true",
+    )
     args = parser.parse_args()
 
     ignore_fields = get_ignore_fields(args.ignore_field)
@@ -592,6 +606,7 @@ def main():
         ignore_fields,
         item_types=args.item_type,
         from_search=args.from_search,
+        merge_existing=not args.refresh,
     )
 
 
