@@ -158,9 +158,8 @@ def get_item_type_inserts(insert_file: Path) -> ItemTypeInserts:
     inserts = []
     file_inserts = get_inserts_from_file(insert_file)
     for insert in sort_inserts_by_uuid(file_inserts):
-        uuid = get_uuid(insert)
-        uuids |= {uuid}
-        inserts = itertools.chain(inserts, [create_insert(insert)])
+        uuids |= {insert.uuid}
+        inserts = itertools.chain(inserts, [insert])
     return ItemTypeInserts(
         item_type=item_type,
         uuids=uuids,
@@ -176,9 +175,10 @@ def create_insert(insert: Dict[str, Any]) -> Insert:
     )
 
 
-def get_inserts_from_file(insert_file: Path) -> List[Dict[str, Any]]:
+def get_inserts_from_file(insert_file: Path) -> Iterator[Insert]:
     with insert_file.open("r") as f:
-        return json.load(f)
+        inserts = json.load(f)
+    return (create_insert(insert) for insert in inserts)
 
 
 def sort_inserts_by_uuid(inserts: Iterable[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -517,7 +517,7 @@ def write_inserts_for_type(
 ) -> None:
     """Write all inserts for a given item type to given directory."""
     insert_file = inserts_path.joinpath(f"{item_type}.json")
-    inserts = sort_inserts_by_uuid([insert.properties for insert in inserts_for_type])
+    inserts = sort_inserts_by_uuid(inserts_for_type)
     with insert_file.open("w") as file_handle:
         json.dump(inserts, file_handle, indent=4)
 
