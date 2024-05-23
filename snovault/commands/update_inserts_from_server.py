@@ -176,14 +176,15 @@ def create_insert(insert: Dict[str, Any]) -> Insert:
 
 
 def get_inserts_from_file(insert_file: Path) -> Iterator[Insert]:
+    """Load inserts from file."""
     with insert_file.open("r") as f:
         inserts = json.load(f)
     return (create_insert(insert) for insert in inserts)
 
 
-def sort_inserts_by_uuid(inserts: Iterable[Dict[str, Any]]) -> List[Dict[str, Any]]:
+def sort_inserts_by_uuid(inserts: Iterable[Insert]) -> List[Insert]:
     """Sort all inserts by UUID."""
-    return sorted(inserts, key=get_uuid)
+    return sorted(inserts, key=lambda insert: insert.uuid)
 
 
 def get_uuid(item: Dict[str, Any]) -> str:
@@ -518,8 +519,9 @@ def write_inserts_for_type(
     """Write all inserts for a given item type to given directory."""
     insert_file = inserts_path.joinpath(f"{item_type}.json")
     inserts = sort_inserts_by_uuid(inserts_for_type)
+    to_write = [insert.properties for insert in inserts]
     with insert_file.open("w") as file_handle:
-        json.dump(inserts, file_handle, indent=4)
+        json.dump(to_write, file_handle, indent=4)
 
 
 def main():
