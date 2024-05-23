@@ -68,26 +68,20 @@ def update_inserts_from_server(
     if search_uuids:
         logger.info(f"Found {len(search_uuids)} items from search")
     base_uuids_to_get = get_base_uuids_to_get(existing_inserts_to_update, search_uuids)
-    logger.info(
-        "Collecting inserts from portal. This may take a while..."
-    )
+    logger.info("Collecting inserts from portal. This may take a while...")
     inserts_from_portal = get_inserts_from_portal(
         base_uuids_to_get, auth_key, ignore_fields
     )
-    logger.info(
-        f"Found inserts for {len(inserts_from_portal)} item types from portal"
-    )
+    logger.info(f"Found inserts for {len(inserts_from_portal)} item types from portal")
     inserts_to_write = get_inserts_to_write(
         inserts_from_portal, existing_inserts_to_update
     )
     logger.info(f"Writing inserts for {len(inserts_to_write)} item types to {inserts}")
-    import pdb; pdb.set_trace()
     write_inserts(inserts_to_write, inserts)
 
 
 @dataclass(frozen=True)
 class Insert:
-
     uuid: str
     properties: Dict[str, Any]
 
@@ -117,7 +111,6 @@ class Insert:
 
 @dataclass(frozen=True)
 class ItemTypeInserts:
-
     item_type: str
     uuids: Set[str]
     inserts: Iterator[Insert]
@@ -151,10 +144,7 @@ def get_existing_inserts_to_update(
 def get_existing_inserts(inserts_path: Path) -> List[ItemTypeInserts]:
     """Get all existing inserts from given directory."""
     inserts_files = inserts_path.glob("*.json")
-    return [
-        get_item_type_inserts(insert_file)
-        for insert_file in inserts_files
-    ]
+    return [get_item_type_inserts(insert_file) for insert_file in inserts_files]
 
 
 def get_item_type_inserts(insert_file: Path) -> ItemTypeInserts:
@@ -509,9 +499,7 @@ def is_insert_in_master_inserts(
     return False
 
 
-def write_inserts(
-    item_type_inserts: List[ItemTypeInserts], inserts_path: Path
-) -> None:
+def write_inserts(item_type_inserts: List[ItemTypeInserts], inserts_path: Path) -> None:
     """Write all inserts to given directory."""
     for item_type_insert in item_type_inserts:
         write_inserts_for_type(
