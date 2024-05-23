@@ -280,7 +280,10 @@ def get_insert(uuid: str, auth_key: Dict[str, str], ignore_fields: Set[str]) -> 
 
 
 def get_item_type(uuid: str, auth_key: Dict[str, str]) -> str:
-    """Get item type for a given item."""
+    """Get item type for a given item.
+
+    Ensure snake_cased to match insert file names.
+    """
     item = get_item(uuid, auth_key, frame="object")
     return to_snake_case(item["@type"][0])
 
