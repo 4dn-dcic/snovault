@@ -68,10 +68,10 @@ def update_inserts_from_server(
     search_uuids = get_uuids_from_search(from_search, auth_key)
     if search_uuids:
         logger.info(f"Found {len(search_uuids)} items from search")
-    base_uuids_to_get = get_base_uuids_to_get(existing_inserts_to_update, search_uuids)
+    base_uuids = get_base_uuids(existing_inserts_to_update, search_uuids)
     logger.info("Collecting inserts from portal. This may take a while...")
     inserts_from_portal = get_inserts_from_portal(
-        base_uuids_to_get, auth_key, ignore_fields
+        base_uuids, auth_key, ignore_fields
     )
     logger.info(f"Found inserts for {len(inserts_from_portal)} item types from portal")
     inserts_to_write = get_inserts_to_write(
@@ -233,7 +233,7 @@ def format_search_query(search_query: str) -> str:
     return f"search/{search_query}"
 
 
-def get_base_uuids_to_get(
+def get_base_uuids(
     existing_inserts: List[ItemTypeInserts],
     search_uuids: List[str],
 ) -> Set[str]:
@@ -398,10 +398,33 @@ def get_inserts_with_existing_data(
             portal_item_type_inserts,
             existing_item_types_to_inserts[portal_item_type_inserts.item_type],
         )
-        if portal_item_type_inserts.item_type in existing_item_types_to_inserts
+        if are_item_type_inserts_present_and_overlapping(
+            portal_item_type_inserts, existing_item_types_to_inserts
+        )
         else portal_item_type_inserts
         for portal_item_type_inserts in inserts_from_portal
     ]
+
+
+def are_item_type_inserts_present_and_overlapping(
+    item_type_inserts: ItemTypeInserts,
+    comparison_inserts: Dict[str, ItemTypeInserts],
+) -> bool:
+    """Check if item type inserts are present in and overlap inserts."""
+    return (
+        item_type_inserts.item_type in comparison_inserts
+        and do_inserts_overlap(
+            item_type_inserts, comparison_inserts[item_type_inserts.item_type]
+        )
+    )
+
+
+def do_inserts_overlap(
+    item_type_inserts_1: ItemTypeInserts,
+    item_type_inserts_2: ItemTypeInserts,
+) -> bool:
+    """Check if portal inserts overlap with existing inserts."""
+    return bool(item_type_inserts_1.uuids & item_type_inserts_2.uuids)
 
 
 def get_updated_item_type_inserts(
@@ -410,7 +433,8 @@ def get_updated_item_type_inserts(
 ) -> ItemTypeInserts:
     """Update portal item type inserts with existing inserts data.
 
-    Note: Existing inserts are assumed to be sorted by UUID.
+    Note: Existing inserts are assumed to be sorted by UUID (performed
+    when loaded from file).
     """
     sorted_portal_inserts = sort_inserts_by_uuid(inserts_from_portal.inserts)
     updated_inserts = (
@@ -451,7 +475,9 @@ def get_inserts_without_conflicts(
         get_inserts_without_conflicts_for_item_type(
             item_type_inserts, master_inserts_item_types[item_type_inserts.item_type]
         )
-        if item_type_inserts.item_type in master_inserts_item_types
+        if are_item_type_inserts_present_and_overlapping(
+            item_type_inserts, master_inserts_item_types
+        )
         else item_type_inserts
         for item_type_inserts in item_type_inserts
     ]
@@ -467,7 +493,7 @@ def get_inserts_without_conflicts_for_item_type(
     """
     uuids = set()
     inserts = []
-    for insert in portal_item_type_inserts.inserts:
+    for insert in sort_inserts_by_uuid(portal_item_type_inserts.inserts):
         if is_insert_in_master_inserts(insert, master_item_type_inserts):
             continue
         uuids |= {insert.uuid}
@@ -503,7 +529,7 @@ def is_insert_in_master_inserts(
                         f" {master_item_type_inserts.item_type} as"
                         f" conflicts with master-inserts"
                     )
-        return True
+                return True
     return False
 
 
