@@ -6,6 +6,12 @@ snovault
 Change Log
 ----------
 
+11.14.1
+=======
+
+* Create constants for submission-schemas endpoint to share with downstream portals
+
+
 11.14.0
 =======
 * 2024-03-25
