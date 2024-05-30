@@ -1,17 +1,22 @@
-import pytest
-from unittest import mock
 import contextlib
-from ..project.schema_views import SnovaultProjectSchemaViews
+from typing import Any, Dict, List
+from unittest import mock
 
-from ..interfaces import TYPES
-from ..schema_utils import load_schema
-from .test_views import PARAMETERIZED_NAMES
-from snovault.schema_views import (
+import pytest
+from dcicutils.schema_utils import SchemaConstants
+
+from .schema_views import (
+    SubmissionSchemaConstants,
     _get_conditionally_required_propnames,
     _has_property_attr_with_val,
     _get_item_name_from_schema_id,
     _is_submittable_schema,
+    _update_required_annotation,
 )
+from .test_views import PARAMETERIZED_NAMES
+from ..interfaces import TYPES
+from ..project.schema_views import SnovaultProjectSchemaViews
+from ..schema_utils import load_schema
 
 
 @pytest.mark.parametrize('schema', PARAMETERIZED_NAMES)
@@ -401,3 +406,31 @@ def test_submittables_w_uuid(testapp, loaded_test_schemas):
             res = testapp.get(test_uri, status=200).json
             for sn in res.keys():
                 assert sn in PARAMETERIZED_NAMES
+
+
+@pytest.mark.parametrize(
+    "property_,property_schema,required_properties,expected_annotation",
+    [
+        ("foo", {}, [], False),
+        ("foo", {"type": "string"}, ["bar"], False),
+        ("foo", {"type": "string"}, ["fu", "foo"], True),
+        ("foo", {SchemaConstants.SUBMITTER_REQUIRED: True}, ["bar"], True),
+    ],
+)
+def test_update_required_annotation(
+    property_: str,
+    property_schema: Dict[str, Any],
+    required_properties: List[str],
+    expected_annotation: bool,
+) -> None:
+    result = _update_required_annotation(
+        property_, property_schema, required_properties
+    )
+    if expected_annotation:
+        assert is_required_annotation_present(result)
+    else:
+        assert not is_required_annotation_present(result)
+
+
+def is_required_annotation_present(property_schema: Dict[str, Any]) -> bool:
+    return property_schema.get(SubmissionSchemaConstants.IS_REQUIRED, False)
