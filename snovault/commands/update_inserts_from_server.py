@@ -36,7 +36,7 @@ INSERT_DIRECTORIES = [
 ]
 INSERTS_LOCATION = Path("src/encoded/tests/data/")
 KEYS_TO_IGNORE_FOR_LINKS = set(  # Either UUIDs not needed or can look like UUIDs
-    ["uuid", "title", "blob_id", "md5sum", "content_md5sum"]
+    ["uuid", "title", "blob_id", "md5sum", "content_md5sum", "submitted_md5sum"]
 )
 UUID_IDENTIFIER = re.compile(
     r"^[a-f0-9]{8}-?[a-f0-9]{4}-?4[a-f0-9]{3}-?[a-f0-9]{4}-?[a-f0-9]{12}\Z",
