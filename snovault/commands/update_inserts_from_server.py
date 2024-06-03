@@ -72,18 +72,13 @@ def update_inserts_from_server(
         logger.info(f"Found {len(search_uuids)} items from search")
     base_uuids = get_base_uuids(existing_uuids, search_uuids)
     logger.info("Collecting inserts from portal. This may take a while...")
-    inserts_from_portal = get_inserts_from_portal(
-        base_uuids, auth_key, ignore_fields
-    )
+    inserts_from_portal = get_inserts_from_portal(base_uuids, auth_key, ignore_fields)
     logger.info(
         f"Found inserts for {len(inserts_from_portal)} item types from portal:"
         f" {[item_type_inserts.item_type for item_type_inserts in inserts_from_portal]}"
     )
     inserts_to_write = get_inserts_to_write(
-        inserts,
-        inserts_from_portal,
-        existing_inserts,
-        merge_existing=merge_existing
+        inserts, inserts_from_portal, existing_inserts, merge_existing=merge_existing
     )
     logger.info(f"Writing inserts for {len(inserts_to_write)} item types to {inserts}")
     write_inserts(inserts_to_write, inserts)
@@ -173,7 +168,8 @@ def get_non_empty_item_type_inserts(
 ) -> List[ItemTypeInserts]:
     """Get all non-empty item type inserts."""
     return [
-        item_type_insert for item_type_insert in item_type_inserts
+        item_type_insert
+        for item_type_insert in item_type_inserts
         if item_type_insert.uuids
     ]
 
@@ -504,10 +500,6 @@ def get_updated_item_type_inserts(
 
 def get_next_insert(inserts: Iterator[Insert]) -> Union[Insert, None]:
     """Get next insert from an iterable."""
-    try:
-        return next(inserts, None)
-    except Exception:
-        import pdb; pdb.set_trace()
     return next(inserts, None)
 
 
@@ -606,11 +598,8 @@ def are_item_type_inserts_present_and_overlapping(
     comparison_inserts: Dict[str, ItemTypeInserts],
 ) -> bool:
     """Check if item type inserts are present in and overlap inserts."""
-    return (
-        item_type_inserts.item_type in comparison_inserts
-        and do_inserts_overlap(
-            item_type_inserts, comparison_inserts[item_type_inserts.item_type]
-        )
+    return item_type_inserts.item_type in comparison_inserts and do_inserts_overlap(
+        item_type_inserts, comparison_inserts[item_type_inserts.item_type]
     )
 
 
@@ -671,7 +660,7 @@ def main():
     parser.add_argument(
         "--item",
         nargs="+",
-        help="Existing item type(s) (e.g. file_fastq) to update inserts for."
+        help="Existing item type(s) (e.g. file_fastq) to update inserts for.",
     )
     parser.add_argument(
         "--update",
