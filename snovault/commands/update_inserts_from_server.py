@@ -26,9 +26,10 @@ DEFAULT_IGNORE_FIELDS = [
     "last_modified",
     "schema_version",
 ]
+MASTER_INSERTS = "master-inserts"
 INSERT_DIRECTORIES = [
     "inserts",
-    "master-inserts",
+    MASTER_INSERTS,
     "perf-testing",
     "workbook-inserts",
     "temp-local-inserts",
@@ -54,28 +55,35 @@ def update_inserts_from_server(
     auth_key: Dict[str, str],
     ignore_fields: Iterable[str],
     item_types: Optional[List[str]] = None,
+    update_existing: bool = False,
     from_search: Optional[str] = None,
     merge_existing: bool = True,
 ) -> None:
     """Update inserts for given server."""
-    existing_inserts_to_update = get_existing_inserts_to_update(inserts, item_types)
-    if existing_inserts_to_update:
-        logger.info(
-            f"Found {len(existing_inserts_to_update)} existing inserts to update"
-        )
-    else:
-        logger.info("No existing inserts to update")
+    existing_inserts = get_existing_inserts(inserts)
+    logger.info(f"Found existing inserts for {len(existing_inserts)} item types")
+    existing_uuids = get_existing_uuids_to_update(
+        existing_inserts, item_types=item_types, update_all=update_existing
+    )
+    if existing_uuids:
+        logger.info(f"Found {len(existing_uuids)} existing items to update")
     search_uuids = get_uuids_from_search(from_search, auth_key)
     if search_uuids:
         logger.info(f"Found {len(search_uuids)} items from search")
-    base_uuids = get_base_uuids(existing_inserts_to_update, search_uuids)
+    base_uuids = get_base_uuids(existing_uuids, search_uuids)
     logger.info("Collecting inserts from portal. This may take a while...")
     inserts_from_portal = get_inserts_from_portal(
         base_uuids, auth_key, ignore_fields
     )
-    logger.info(f"Found inserts for {len(inserts_from_portal)} item types from portal")
+    logger.info(
+        f"Found inserts for {len(inserts_from_portal)} item types from portal:"
+        f" {[item_type_inserts.item_type for item_type_inserts in inserts_from_portal]}"
+    )
     inserts_to_write = get_inserts_to_write(
-        inserts_from_portal, existing_inserts_to_update, merge_existing=merge_existing
+        inserts,
+        inserts_from_portal,
+        existing_inserts,
+        merge_existing=merge_existing
     )
     logger.info(f"Writing inserts for {len(inserts_to_write)} item types to {inserts}")
     write_inserts(inserts_to_write, inserts)
@@ -130,22 +138,44 @@ class ItemTypeInserts:
         )
 
 
-def get_existing_inserts_to_update(
-    inserts_path: Path,
-    target_types: Optional[List[str]] = None,
-) -> List[ItemTypeInserts]:
+def get_existing_uuids_to_update(
+    existing_inserts: List[ItemTypeInserts],
+    item_types: Optional[List[str]] = None,
+    update_all: bool = False,
+) -> Set[str]:
     """Get all existing inserts to update from given directory.
 
     Note: Pulling existing inserts into memory
     """
-    existing_inserts = get_existing_inserts(inserts_path)
-    return get_inserts_to_update(existing_inserts, target_types)
+    if update_all:
+        return set(
+            itertools.chain(
+                *[item_type_inserts.uuids for item_type_inserts in existing_inserts]
+            )
+        )
+    return get_uuids_for_item_types(existing_inserts, item_types)
 
 
 def get_existing_inserts(inserts_path: Path) -> List[ItemTypeInserts]:
-    """Get all existing inserts from given directory."""
+    """Get all existing inserts from given directory.
+
+    Ignore any item types with no inserts.
+    """
     inserts_files = inserts_path.glob("*.json")
-    return [get_item_type_inserts(insert_file) for insert_file in inserts_files]
+    item_type_inserts = [
+        get_item_type_inserts(insert_file) for insert_file in inserts_files
+    ]
+    return get_non_empty_item_type_inserts(item_type_inserts)
+
+
+def get_non_empty_item_type_inserts(
+    item_type_inserts: List[ItemTypeInserts],
+) -> List[ItemTypeInserts]:
+    """Get all non-empty item type inserts."""
+    return [
+        item_type_insert for item_type_insert in item_type_inserts
+        if item_type_insert.uuids
+    ]
 
 
 def get_item_type_inserts(insert_file: Path) -> ItemTypeInserts:
@@ -192,19 +222,23 @@ def get_uuid(item: Dict[str, Any]) -> str:
     return item.get("uuid", "")
 
 
-def get_inserts_to_update(
+def get_uuids_for_item_types(
     existing_inserts: List[ItemTypeInserts],
-    target_types: Optional[List[str]] = None,
-) -> Dict[str, Iterator[Insert]]:
+    item_types: Optional[List[str]] = None,
+) -> Set[str]:
     """Get all inserts to update from given directory."""
-    if target_types:
-        item_types_to_keep = set([to_snake_case(target) for target in target_types])
-        return [
-            item_type_inserts
-            for item_type_inserts in existing_inserts
-            if item_type_inserts.item_type in item_types_to_keep
-        ]
-    return existing_inserts
+    if item_types:
+        item_types_to_keep = set([to_snake_case(target) for target in item_types])
+        return set(
+            itertools.chain(
+                *[
+                    item_type_inserts.uuids
+                    for item_type_inserts in existing_inserts
+                    if item_type_inserts.item_type in item_types_to_keep
+                ]
+            )
+        )
+    return set()
 
 
 def get_uuids_from_search(
@@ -234,13 +268,10 @@ def format_search_query(search_query: str) -> str:
 
 
 def get_base_uuids(
-    existing_inserts: List[ItemTypeInserts],
+    existing_uuids: Set[str],
     search_uuids: List[str],
 ) -> Set[str]:
-    """Get all base uuids to get from given existing inserts and search uuids."""
-    existing_uuids = set().union(
-        *[item_type_inserts.uuids for item_type_inserts in existing_inserts]
-    )
+    """Get all base UUIDs to start pulling inserts from portal."""
     return existing_uuids | set(search_uuids)
 
 
@@ -365,28 +396,38 @@ def is_uuid(value: str) -> bool:
 
 
 def get_inserts_to_write(
+    inserts_path: Path,
     inserts_from_portal: List[ItemTypeInserts],
-    existing_inserts_to_update: List[ItemTypeInserts],
+    existing_inserts: List[ItemTypeInserts],
     merge_existing: bool = True,
 ) -> List[ItemTypeInserts]:
     """Get all inserts to write.
 
     Update portal inserts with existing inserts information, if present,
-    and remove conflicts with master-inserts.
+    and remove conflicts with master-inserts (unless updating them).
     """
-    if merge_existing:
-        inserts_updated_with_existing = get_inserts_with_existing_data(
-            inserts_from_portal, existing_inserts_to_update
-        )
-        return get_inserts_without_conflicts(inserts_updated_with_existing)
-    return get_inserts_without_conflicts(inserts_from_portal)
+    inserts_to_write = get_item_type_inserts_to_write(
+        inserts_from_portal, existing_inserts, merge_existing=merge_existing
+    )
+    if is_master_inserts(inserts_path):
+        return inserts_to_write
+    return get_inserts_without_conflicts(inserts_to_write)
 
 
-def get_inserts_with_existing_data(
+def is_master_inserts(inserts_path: Path) -> bool:
+    """Check if inserts are master-inserts."""
+    return inserts_path.stem == MASTER_INSERTS
+
+
+def get_item_type_inserts_to_write(
     inserts_from_portal: List[ItemTypeInserts],
     existing_inserts_to_update: List[ItemTypeInserts],
+    merge_existing: bool = True,
 ) -> List[ItemTypeInserts]:
-    """Update portal inserts with existing inserts data, if present."""
+    """Update portal inserts with existing inserts data, if present.
+
+    Merge existing properties as directed.
+    """
     if not existing_inserts_to_update:
         return inserts_from_portal
     existing_item_types_to_inserts = {
@@ -397,81 +438,107 @@ def get_inserts_with_existing_data(
         get_updated_item_type_inserts(
             portal_item_type_inserts,
             existing_item_types_to_inserts[portal_item_type_inserts.item_type],
+            merge_existing=merge_existing,
         )
-        if are_item_type_inserts_present_and_overlapping(
-            portal_item_type_inserts, existing_item_types_to_inserts
-        )
+        if portal_item_type_inserts.item_type in existing_item_types_to_inserts
         else portal_item_type_inserts
         for portal_item_type_inserts in inserts_from_portal
     ]
 
 
-def are_item_type_inserts_present_and_overlapping(
-    item_type_inserts: ItemTypeInserts,
-    comparison_inserts: Dict[str, ItemTypeInserts],
-) -> bool:
-    """Check if item type inserts are present in and overlap inserts."""
-    return (
-        item_type_inserts.item_type in comparison_inserts
-        and do_inserts_overlap(
-            item_type_inserts, comparison_inserts[item_type_inserts.item_type]
-        )
-    )
-
-
-def do_inserts_overlap(
-    item_type_inserts_1: ItemTypeInserts,
-    item_type_inserts_2: ItemTypeInserts,
-) -> bool:
-    """Check if portal inserts overlap with existing inserts."""
-    return bool(item_type_inserts_1.uuids & item_type_inserts_2.uuids)
-
-
 def get_updated_item_type_inserts(
     inserts_from_portal: ItemTypeInserts,
     existing_inserts: ItemTypeInserts,
+    merge_existing: bool = True,
 ) -> ItemTypeInserts:
-    """Update portal item type inserts with existing inserts data.
+    """Combine portal inserts with existing inserts.
+
+    Walk through portal and existing inserts, collecting all inserts to
+    write for a given item type.
+
+    Keep all inserts found only from portal or only in existing inserts
+    exactly as they are.
+
+    For inserts found in both portal and existing inserts, keep
+    non-overlapping existing properties if directed. Otherwise, only
+    keep portal insert properties.
 
     Note: Existing inserts are assumed to be sorted by UUID (performed
     when loaded from file).
     """
-    sorted_portal_inserts = sort_inserts_by_uuid(inserts_from_portal.inserts)
-    updated_inserts = (
-        get_updated_insert(insert, existing_inserts.inserts)
-        if insert.uuid in existing_inserts.uuids
-        else insert
-        for insert in sorted_portal_inserts
+    sorted_portal_inserts = (
+        insert for insert in sort_inserts_by_uuid(inserts_from_portal.inserts)
     )
+    sorted_existing_inserts = existing_inserts.inserts
+    uuids = set()
+    inserts = []
+    portal_insert = get_next_insert(sorted_portal_inserts)
+    existing_insert = get_next_insert(sorted_existing_inserts)
+    while portal_insert or existing_insert:
+        if not portal_insert:
+            insert_to_add = existing_insert
+            existing_insert = get_next_insert(sorted_existing_inserts)
+        elif not existing_insert:
+            insert_to_add = portal_insert
+            portal_insert = get_next_insert(sorted_portal_inserts)
+        elif portal_insert.uuid < existing_insert.uuid:
+            insert_to_add = portal_insert
+            portal_insert = get_next_insert(sorted_portal_inserts)
+        elif portal_insert.uuid > existing_insert.uuid:
+            insert_to_add = existing_insert
+            existing_insert = get_next_insert(sorted_existing_inserts)
+        else:  # portal_insert.uuid == existing_insert.uuid
+            insert_to_add = get_updated_insert(
+                portal_insert, existing_insert, merge_existing=merge_existing
+            )
+            portal_insert = get_next_insert(sorted_portal_inserts)
+            existing_insert = get_next_insert(sorted_existing_inserts)
+        uuids |= {insert_to_add.uuid}
+        inserts = itertools.chain(inserts, [insert_to_add])
     return ItemTypeInserts(
         item_type=inserts_from_portal.item_type,
-        uuids=inserts_from_portal.uuids,
-        inserts=updated_inserts,
+        uuids=uuids,
+        inserts=inserts,
     )
 
 
-def get_updated_insert(insert: Insert, existing_inserts: Iterator[Insert]) -> Insert:
-    """Update portal insert with data from existing insert.
+def get_next_insert(inserts: Iterator[Insert]) -> Union[Insert, None]:
+    """Get next insert from an iterable."""
+    try:
+        return next(inserts, None)
+    except Exception:
+        import pdb; pdb.set_trace()
+    return next(inserts, None)
 
-    Run through existing inserts (presumed to be sorted by UUID) until
-    match found for given insert (also presumed to be sorted by UUID).
+
+def get_updated_insert(
+    portal_insert: Insert,
+    existing_insert: Insert,
+    merge_existing: bool = True,
+) -> Insert:
+    """Update existing insert with portal insert properties.
+
+    If directed, keep existing properties not present in portal insert.
     """
-    for existing_insert in existing_inserts:
-        if existing_insert.uuid == insert.uuid:
-            return insert.update(existing_insert.properties)
-    return insert
+    if merge_existing:
+        properties = {
+            **existing_insert.properties,
+            **portal_insert.properties,
+        }
+        return portal_insert.update(properties=properties)
+    return portal_insert
 
 
 def get_inserts_without_conflicts(
     item_type_inserts: List[ItemTypeInserts],
 ) -> List[ItemTypeInserts]:
     """Remove all conflicts with master-inserts."""
-    master_inserts = get_existing_inserts(INSERTS_LOCATION.joinpath("master-inserts"))
+    master_inserts = get_existing_inserts(INSERTS_LOCATION.joinpath(MASTER_INSERTS))
     master_inserts_item_types = {
         item_type_inserts.item_type: item_type_inserts
         for item_type_inserts in master_inserts
     }
-    return [
+    item_type_inserts_without_conflicts = [
         get_inserts_without_conflicts_for_item_type(
             item_type_inserts, master_inserts_item_types[item_type_inserts.item_type]
         )
@@ -481,6 +548,7 @@ def get_inserts_without_conflicts(
         else item_type_inserts
         for item_type_inserts in item_type_inserts
     ]
+    return get_non_empty_item_type_inserts(item_type_inserts_without_conflicts)
 
 
 def get_inserts_without_conflicts_for_item_type(
@@ -533,6 +601,27 @@ def is_insert_in_master_inserts(
     return False
 
 
+def are_item_type_inserts_present_and_overlapping(
+    item_type_inserts: ItemTypeInserts,
+    comparison_inserts: Dict[str, ItemTypeInserts],
+) -> bool:
+    """Check if item type inserts are present in and overlap inserts."""
+    return (
+        item_type_inserts.item_type in comparison_inserts
+        and do_inserts_overlap(
+            item_type_inserts, comparison_inserts[item_type_inserts.item_type]
+        )
+    )
+
+
+def do_inserts_overlap(
+    item_type_inserts_1: ItemTypeInserts,
+    item_type_inserts_2: ItemTypeInserts,
+) -> bool:
+    """Check if portal inserts overlap with existing inserts."""
+    return bool(item_type_inserts_1.uuids & item_type_inserts_2.uuids)
+
+
 def write_inserts(item_type_inserts: List[ItemTypeInserts], inserts_path: Path) -> None:
     """Write all inserts to given directory."""
     for item_type_insert in item_type_inserts:
@@ -556,11 +645,7 @@ def write_inserts_for_type(
 
 
 def main():
-    """Update the inserts from a given portal.
-
-    Use `--item-type` to update existing inserts for specific item types.
-    Use `--from-search` to update inserts from a search result.
-    """
+    """Update inserts from a given portal."""
     logging.basicConfig()
     logging.getLogger("encoded").setLevel(logging.DEBUG)
 
@@ -584,21 +669,23 @@ def main():
         help="Destination inserts directory. Defaults to temp-local-inserts.",
     )
     parser.add_argument(
-        "--item-type",
+        "--item",
         nargs="+",
-        help=(
-            "Existing item type (e.g. file_fastq) to update inserts for."
-            " Defaults to all types found in destination directory.",
-        ),
+        help="Existing item type(s) (e.g. file_fastq) to update inserts for."
     )
     parser.add_argument(
-        "--ignore-field",
+        "--update",
+        help="Update existing inserts with data from portal. Defaults to False.",
+        action="store_true",
+    )
+    parser.add_argument(
+        "--ignore",
         nargs="+",
         default=DEFAULT_IGNORE_FIELDS,
         help="Properties to ignore when pulling inserts",
     )
     parser.add_argument(
-        "--from-search",
+        "--search",
         help="Query to find new items to add to inserts",
         type=str,
     )
@@ -613,7 +700,7 @@ def main():
     )
     args = parser.parse_args()
 
-    ignore_fields = get_ignore_fields(args.ignore_field)
+    ignore_fields = get_ignore_fields(args.ignore)
     auth_key = get_auth_key(args.portal, args.env)
     if args.dest not in INSERT_DIRECTORIES:
         proceed = input(
@@ -630,8 +717,9 @@ def main():
         inserts_path,
         auth_key,
         ignore_fields,
-        item_types=args.item_type,
-        from_search=args.from_search,
+        item_types=args.item,
+        update_existing=args.update,
+        from_search=args.search,
         merge_existing=not args.refresh,
     )
 
