@@ -6,6 +6,14 @@ snovault
 Change Log
 ----------
 
+11.14.2
+=======
+
+* Fix `update-inserts-from-server` command to move away from direct ES interaction
+  * Rewrite signicantly
+  * Add new options to allow for more flexible use
+
+
 11.14.1
 =======
 
