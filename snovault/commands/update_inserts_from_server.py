@@ -675,7 +675,10 @@ def main():
     )
     parser.add_argument(
         "--search",
-        help="Query to find new items to add to inserts",
+        help=(
+            "Query to find new items to add to inserts, e.g."
+            " 'type=FileFastq&status=uploaded'."
+        ),
         type=str,
     )
     parser.add_argument(
