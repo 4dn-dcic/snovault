@@ -664,7 +664,10 @@ def main():
     )
     parser.add_argument(
         "--update",
-        help="Update existing inserts with data from portal.",
+        help=(
+            "Update all existing inserts with data from portal."
+            " Overrides --item flag."
+        ),
         action="store_true",
     )
     parser.add_argument(
