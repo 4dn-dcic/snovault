@@ -6,6 +6,12 @@ snovault
 Change Log
 ----------
 
+11.14.3
+=======
+
+* Fix `update-inserts-from-server` command to display `--help` option
+
+
 11.14.2
 =======
 

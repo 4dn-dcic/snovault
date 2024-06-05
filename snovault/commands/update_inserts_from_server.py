@@ -648,7 +648,7 @@ def main():
     )
     parser.add_argument(
         "--portal",
-        help="Portal to update inserts from. Defaults to SMaHT",
+        help="Portal to update inserts from. Defaults to smaht",
         choices=creds_utils._KEY_MANAGERS.keys(),
         default="smaht",
     )
@@ -664,7 +664,10 @@ def main():
     )
     parser.add_argument(
         "--update",
-        help="Update existing inserts with data from portal. Defaults to False.",
+        help=(
+            "Update all existing inserts with data from portal."
+            " Overrides --item flag."
+        ),
         action="store_true",
     )
     parser.add_argument(
@@ -675,7 +678,10 @@ def main():
     )
     parser.add_argument(
         "--search",
-        help="Query to find new items to add to inserts",
+        help=(
+            "Query to find new items to add to inserts, e.g."
+            " 'type=FileFastq&status=uploaded'."
+        ),
         type=str,
     )
     parser.add_argument(
@@ -683,7 +689,6 @@ def main():
         help=(
             "Replace existing inserts with new inserts from portal, i.e. don't keep"
             " properties from existing inserts not present in portal."
-            " Defaults to False.",
         ),
         action="store_true",
     )
