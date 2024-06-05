@@ -683,7 +683,7 @@ def main():
         help=(
             "Replace existing inserts with new inserts from portal, i.e. don't keep"
             " properties from existing inserts not present in portal."
-            " Defaults to False.",
+            " Defaults to False."
         ),
         action="store_true",
     )
