@@ -203,6 +203,12 @@ Change Log
 expiration is enabled
 
 
+10.0.3
+======
+
+* Update ``drs`` primitive to resolve specific access types with preferential defaulting to https, http
+
+
 10.0.2
 ======
 
