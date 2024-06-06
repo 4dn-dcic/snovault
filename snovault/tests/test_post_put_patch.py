@@ -110,7 +110,7 @@ def test_patch(content, testapp):
     assert res.json['simple1'] == 'simple1 default'
     assert res.json['simple2'] == 'simple2 default'
 
-    res = testapp.patch_json(url, {}, status=200)
+    res = testapp.patch_json(url+'?check_diff=true', {}, status=200)
     assert res.json['@graph'][0]['simple1'] == 'simple1 default'
     assert res.json['@graph'][0]['simple2'] == 'simple2 default'
 

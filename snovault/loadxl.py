@@ -684,13 +684,15 @@ def load_all_gen(testapp, inserts, docsdir, overwrite=True, itype=None, from_jso
                 if not identifying_path:
                     raise Exception("Item has no uuid nor any other identifying property; cannot PATCH.")
                 normalized_item, deleted_properties = normalize_deleted_properties(an_item)
+                identifying_path += '?check_diff=true'
                 if deleted_properties:
                     if validate_only and skip_links:
-                        identifying_path += f"?delete_fields={','.join(deleted_properties)}&skip_links=true"
+                        identifying_path += f"&delete_fields={','.join(deleted_properties)}&skip_links=true"
                     else:
-                        identifying_path += f"?delete_fields={','.join(deleted_properties)}"
+                        identifying_path += f"&delete_fields={','.join(deleted_properties)}"
                 elif validate_only and skip_links:
                     identifying_path += f"?skip_links=true"
+
                 res = testapp.patch_json(identifying_path, normalized_item)
                 assert res.status_code == 200
                 patched += 1

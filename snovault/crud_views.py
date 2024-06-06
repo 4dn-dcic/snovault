@@ -70,6 +70,22 @@ def build_diff_from_request(context, request):
     return dm.patch_diffs(body)
 
 
+def build_comparison_from_request(context, request, props):
+    """ Very similar to above method but runs a comparison instead """
+    try:
+        item_type = context.type_info.name
+        body = json.loads(request.body)
+        extract_and_populate_deleted_fields(request, body)
+        dm = DiffManager(label=item_type)
+    except json.decoder.JSONDecodeError:
+        log.info('Request body is not valid JSON!')  # can happen from indirect patch, such as with access key
+        return None
+    except Exception as e:
+        log.error('Unknown error encountered building diff from request: %s' % e)
+        return None
+    return dm._diffs(props, body)
+
+
 def create_item(type_info, request, properties, sheets=None):
     '''
     Validates or generates new UUID, instantiates & saves an Item in
@@ -240,6 +256,10 @@ def item_edit(context, request, render=None):
         render = request.params.get('render', True)
 
     # This *sets* the property sheet and adds the item to the indexing queue
+    check_diff = asbool(request.params.get('check_diff', False))
+    if check_diff:
+        comparison = build_comparison_from_request(context, request, context.properties)
+    import pdb; pdb.set_trace()
     update_item(context, request, request.validated)
 
     rendered = render_item(request, context, render)
