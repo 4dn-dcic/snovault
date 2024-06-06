@@ -361,6 +361,12 @@ def best_mime_type(request, mode=MIME_TYPE_TRIAGE_MODE):
         else:
             mime_type, score = options[0]
             result = mime_type
+
+    # Force JSON for any DRS APIs
+    # This is safe since all portal support JSON/DRS
+    if '/ga4gh/drs/' in request.url or '@@drs' in request.url:
+        result = MIME_TYPE_JSON
+
     if DEBUG_MIME_TYPES:
         PRINT("Using mime type", result, "for", request.method, request.url)
         for k, v in request.headers.items():
