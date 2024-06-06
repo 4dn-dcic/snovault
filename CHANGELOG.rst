@@ -6,10 +6,202 @@ snovault
 Change Log
 ----------
 
-10.0.3
+11.15.0
+=======
+
+* Update ``drs`` primitive to only return JSON
+
+
+11.14.3
+=======
+
+* Fix `update-inserts-from-server` command to display `--help` option
+
+
+11.14.2
+=======
+
+* Fix `update-inserts-from-server` command to move away from direct ES interaction
+  * Rewrite signicantly
+  * Add new options to allow for more flexible use
+
+
+11.14.1
+=======
+
+* Create constants for submission-schemas endpoint to share with downstream portals
+
+
+11.14.0
+=======
+* 2024-03-25
+* Changes to loadxl to support tracking ingestion progess for smaht-submitr (via Redis).
+* Changed dev_servers.py
+
+
+11.13.0
+=======
+
+* Fix in loadxl to PATCH on validate_only for items which already exist;
+  discovered during smaht-submitr testing.
+* Fix in loadxl.normalize_deleted_properties which was creating/returning
+  a new (an_item) item, which was messing up determination of identifying
+  path for patch (as second_round_items comes from store but we had set uuid
+  in an_item which, without this fix, became a different object).
+* Added skip_links feature to loadxl which will cause reference/link integrity
+  checking to be skipped altogether; this is (currently) only set by smaht-portal/
+  ingestion/loadxl_extensions.py for smaht-submitr, since that process already
+  does thorough reference integrity checking anyways (via structured_data).
+
+
+11.12.4
+=======
+
+* Remove restricted permissions for AccessKey status to enable non-admins to delete access keys
+
+
+11.12.3
+=======
+
+* Changed ACCESSION_PREFIX in server_defaults.py to GET_ACCESSION_PREFIX() function;
+  called only within snovault (and only from schema_formats.py); to get around
+  app_project call at file scope (came up as circular import in smaht ingester).
+
+
+11.12.2
+=======
+
+* Gets total results from ES, then try to get exact count if total hits ES_MAX_HIT_TOTAL limitation
+
+
+11.12.1
+=======
+
+* Repairs schema format validation
+
+
+11.12.0
+=======
+
+* Change the exception message for a unresolved object reference (linkTo) in schema_validation.normalize_links.
+* Added instance info to ERROR in loadxl.load_all_gen.
+* Both of above in support of reference integrity validation code within smaht-submitr.
+
+
+11.11.0
+=======
+
+* Removes strip of ``role.`` permissions so smaht-portal roles work
+
+
+11.10.0
+=======
+
+* Version updates to dcicutils.
+  Changes to itemize SMaHT submission ingestion create/update/diff situation.
+
+
+11.9.0
 ======
 
-* Update ``drs`` primitive to resolve specific access types with preferential defaulting to https, http
+* Added support for an optional gitinfo.json file (deployed via portal buildspec.yml).
+
+
+11.8.0
+======
+
+* Add submission-schemas api
+
+
+11.7.0
+======
+* Updated dcicutils to 8.6.0 (with minor fixes related to structured_data and SMaHT ingestion).
+
+
+11.6.0
+======
+* Updated dcicutils to 8.4.1 (with structured_data).
+* Updated loadxl to pass "filename" in yields (for smaht-portal/ingester).
+
+
+11.5.0
+======
+* More work related to SMaHT ingestion.
+
+
+11.4.0
+======
+
+* RAS updates
+
+
+11.3.1
+======
+
+* Broaden schema ``$merge`` regex to allow mixin and other references
+
+
+11.3.0
+======
+
+* Another thug commit to add CHANGELOG for below.
+
+
+11.2.0
+======
+
+* Thug commit to change dcictuils from 8.2.0 to ^8.2.0.
+
+
+11.1.0
+======
+* Merging in Doug's drr_schema_updates branch with new types.
+* Added limited support to loadxl for required properties within anyOf of data type schemas.
+* Merged in load_data_fix branch.
+* Update dcicutils to 8.2.0
+* 2023-11-02
+
+
+11.0.1
+======
+
+* Repair reference to ``load_data_by_type`` to resolve correctly when loadxl
+  is absent entirely from the application repo
+
+
+11.0.0
+======
+
+* Upgrade to Python 3.11.
+* Fixed access of user in types/access_key.py in access_key_add WRT request.validated['user'].
+* Added identifyingProperties with just uuid in schemas/access_key.json.
+* Fix in setup_eb.py to handle jsonschema in pyproject.toml like {extras = ..., version = ...}.
+* Added snovault/commands/generate_local_access_key.py script; originally just for
+  smaht-portal to create access-key for local dev/testing because doing it via UI
+  not yet fully supported; but generally convenient for cgap-portal and fourfront as well.
+  * Minor changes (e.g. create_testapp) to loadxl.py to help load data from a specified directory;
+    called from dev_server.py; for creating access-keys on the fly after startup for local dev/testing.
+    * Enhancement in load_data in loadxl.py to respect a fully qualified data directory path name,
+      i.e. do not make it relative to the current working directory if it is fully qualified.
+    * Updates to load_all_gen to allow object create/update with no uuid.
+* Added snovault/commands/view_local_object.py script for dev/testing to
+  retrieve and output a given object (uuid) from a locally running portal.
+* Added support for consortia and submission_centers in ingestion_listener.py.
+* Added unique_key to types/access_key.py (helps get rid of this in cgap-portal/fourfront).
+
+
+10.0.5
+======
+
+* Bug fix in schema reference resolution when the schema is loaded from a file
+
+
+10.0.4
+======
+
+* Bug fix in access key refresh to predicate on whether
+expiration is enabled
+
 
 10.0.2
 ======
@@ -33,7 +225,7 @@ Change Log
   * Breaking Change: object serialization in schema no longer valid
 
 
-  9.1.1
+9.1.1
 =====
 
 * Small fix for JWT Decode incompatible change

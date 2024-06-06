@@ -9,9 +9,7 @@ from dcicutils.log_utils import set_logging
 from dcicutils.env_utils import is_stg_or_prd_env, is_test_env
 
 # override this order in the downstream portal
-from ..loadxl import (
-    ORDER as ITEM_INDEX_ORDER
-)
+from ..loadxl import loadxl_order
 
 log = structlog.getLogger(__name__)
 EPILOG = __doc__
@@ -68,7 +66,7 @@ def _run_create_mapping(app, args):
             log.info('Overriding deploy_cfg and wiping ES')
             deploy_cfg['WIPE_ES'] = True
         run_create_mapping(app, check_first=(not deploy_cfg['WIPE_ES']), purge_queue=args.clear_queue,
-                           item_order=ITEM_INDEX_ORDER)
+                           item_order=loadxl_order)
     except Exception as e:
         log.error("Exception encountered while gathering deployment information or running create_mapping")
         log.error(str(e))

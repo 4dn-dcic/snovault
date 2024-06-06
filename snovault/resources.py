@@ -1,6 +1,6 @@
 # See http://docs.pylonsproject.org/projects/pyramid/en/latest/narr/resources.html
 import logging
-from collections import Mapping
+from collections.abc import Mapping
 from copy import deepcopy
 from dcicutils.misc_utils import ignored
 from pyramid.decorator import reify
@@ -376,6 +376,7 @@ class Item(Resource):
     AbstractCollection = AbstractCollection
     Collection = Collection
     STATUS_ACL = {}  # note that this should ALWAYS be overridden by downstream application
+    ALLOWED_PATH_CHARACTERS = ["_", "-", ":", ",", ".", " ", "@"]
 
     def __init__(self, registry, model):
         self.registry = registry
@@ -630,11 +631,12 @@ class Item(Resource):
         that interfere with the resource_path. Currently, we allow all
         alphanumeric characters and few others
         """
-        also_allowed = ['_', '-', ':', ',', '.', ' ', '@']
         if not isinstance(value, str):  # formerly basestring
             raise ValueError('Identifying property %s must be a string. Value: %s' % (field, value))
-        forbidden = [char for char in value
-                     if (not char.isalnum() and char not in also_allowed)]
+        forbidden = [
+            char for char in value
+            if (not char.isalnum() and char not in self.ALLOWED_PATH_CHARACTERS)
+        ]
         if any(forbidden):
             msg = ("Forbidden character(s) %s are not allowed in field: %s. Value: %s"
                    % (set(forbidden), field, value))
@@ -734,8 +736,11 @@ class Item(Resource):
             elif Authenticated in principals:
                 principals = [Authenticated]
             # Filter our roles
+            # NOTE: previously, we removed things that began with role. however this
+            # breaks how smaht-portal permissioning is implemented, so we are no longer
+            # suppressing them - Will Jan 31 2024
             allowed[permission] = [
-                p for p in sorted(principals) if not p.startswith('role.')
+                p for p in sorted(principals)  # if not p.startswith('role.')
             ]
         return allowed
 

@@ -21,10 +21,14 @@ exported(
 )
 
 
-
 ACCESSION_FACTORY = __name__ + ':accession_factory'
-ACCESSION_PREFIX = app_project().ACCESSION_PREFIX
 ACCESSION_TEST_PREFIX = 'TST'
+
+# Only within snovault (only called from schema_formats.py) to get around
+# app_project call at file scope (came up as circular import in smaht ingester).
+# ACCESSION_PREFIX = app_project().ACCESSION_PREFIX
+def GET_ACCESSION_PREFIX():
+    return app_project().ACCESSION_PREFIX
 
 
 def includeme(config):
@@ -76,7 +80,7 @@ FDN_ACCESSION_FORMAT = ['ABCDEFGHIJKLMNOPQRSTUVWXYZ123456789']*7
 
 def enc_accession(accession_type):
     random_part = ''.join(random.choice(s) for s in FDN_ACCESSION_FORMAT)
-    return ACCESSION_PREFIX + accession_type + random_part
+    return GET_ACCESSION_PREFIX() + accession_type + random_part
 
 
 TEST_ACCESSION_FORMAT = (digits, ) * 7

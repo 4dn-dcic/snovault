@@ -2,6 +2,7 @@ from copy import deepcopy
 from jsonschema import Draft202012Validator
 from jsonschema import validators
 from jsonschema.exceptions import ValidationError
+from pyramid.settings import asbool
 from pyramid.threadlocal import get_current_request
 from pyramid.traversal import find_resource
 
@@ -21,6 +22,7 @@ def get_resource_base(validator, linkTo):
 
 
 def normalize_links(validator, links, linkTo):
+    skip_links = (request := get_current_request()) and asbool(request.params.get('skip_links', False))
     resource_base = get_resource_base(validator, linkTo)
     normalized_links = []
     errors = []
@@ -40,9 +42,18 @@ def normalize_links(validator, links, linkTo):
                 str(find_resource(resource_base, link.replace(':', '%3A')).uuid)
             )
         except KeyError:
-            errors.append(
-                ValidationError(f'Unable to resolve link: {link}')
-            )
+
+            # 2024-02-13: To help out smaht-submitr refererential integrity checking,
+            # include the schema type name (linkTo) as well as the idenitifying value (link).
+
+            # 2024-02-21/dmichaels:
+            # If skip_links then ignore reference/linkTo errors.
+            # Currently ONLY used by smaht-submitr (via smaht-portal/loadxl_extensions.py).
+
+            if not skip_links:
+                errors.append(
+                    ValidationError(f"Unable to resolve link: /{linkTo}/{link}")
+                )
             normalized_links.append(
                 link
             )

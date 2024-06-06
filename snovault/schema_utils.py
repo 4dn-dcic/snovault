@@ -1,17 +1,21 @@
+import os
 import codecs
 import collections
 import io
 import json
 import uuid
+import re
+import pkg_resources
 
 from datetime import datetime
 from dcicutils.misc_utils import ignored
+from dcicutils.bundle_utils import SchemaManager
 from snovault.schema_validation import SerializingSchemaValidator
-from jsonschema import Draft202012Validator
+from jsonschema import FormatChecker
 from jsonschema import RefResolver
-from jsonschema.exceptions import ValidationError
-import os
+from jsonschema.exceptions import ValidationError, RefResolutionError
 from pyramid.path import AssetResolver, caller_package
+from pyramid.settings import asbool
 from pyramid.threadlocal import get_current_request
 from pyramid.traversal import find_resource
 from uuid import UUID
@@ -115,13 +119,71 @@ def favor_app_specific_schema_ref(schema_ref: str) -> str:
     return schema_ref
 
 
+def fetch_schema_by_package_name(package_name: str, schema_name: str) -> dict:
+    """ Uses the pkg_resources library (good through 3.11) to resolve schemas in other
+        packages """
+    try:
+        schema_data = pkg_resources.resource_string(package_name, schema_name)
+        schema = json.loads(schema_data)
+        return schema
+    except Exception as e:
+        raise RefResolutionError(f"Failed to fetch schema by package name: {str(e)}")
+
+
+def fetch_field_from_schema(schema: dict, ref_identifer: str) -> dict:
+    """ Fetches a field from a schema given the format in our $merge definitions ie:
+        /properties/access_key_id -> schema.get('properties', {}).get('access_key_id', {})
+    """
+    split_path = ref_identifer.split('/')[1:]
+    resolved = None
+    for subpart in split_path:
+        resolved = schema.get(subpart, {})
+        schema = resolved
+    if not resolved:
+        raise RefResolutionError(f'Could not locate $merge ref {ref_identifer} in schema')
+    if not isinstance(resolved, dict):
+        raise ValueError(
+            f'Schema ref {ref_identifer} must resolve dict, not {type(resolved)}'
+        )
+    return resolved
+
+
+MERGE_PATTERN = r'^([^:]+):(.+[.]json)#/(.+)$'
+
+
+def match_merge_syntax(merge):
+    """ Function that matches possible syntax for merge structure """
+    return re.match(MERGE_PATTERN, merge)
+
+
+def extract_schema_from_ref(ref: str) -> dict:
+    """ Implements some special logic for extracting the package_name and path
+        of a given $merge ref value
+    """
+    if not match_merge_syntax(ref):
+        raise RefResolutionError(f'Ref {ref} does match regex {MERGE_PATTERN}')
+    [package_name, path] = ref.split(':')
+    [path, ref] = path.split('#')
+    schema = fetch_schema_by_package_name(package_name, path)
+    return fetch_field_from_schema(schema, ref)
+
+
 def resolve_merge_ref(ref, resolver):
-    with resolver.resolving(ref) as resolved:
-        if not isinstance(resolved, dict):
-            raise ValueError(
-                f'Schema ref {ref} must resolve dict, not {type(resolved)}'
-            )
-        return resolved
+    """ Resolves fields that have a $merge value - must be formatted like the below:
+        snovault:schemas/access_key.json#/properties/access_key_id
+
+        The ':' character denotes package (always required)
+        The '#' character denotes field path ie: how to traverse once schema is resolved
+    """
+    try:
+        with resolver.resolving(ref) as resolved:
+            if not isinstance(resolved, dict):
+                raise ValueError(
+                    f'Schema ref {ref} must resolve dict, not {type(resolved)}'
+                )
+            return resolved
+    except RefResolutionError:  # try again under a different method
+        return extract_schema_from_ref(ref)
 
 
 def _update_resolved_data(resolved_data, value, resolver):
@@ -213,6 +275,11 @@ def mixinSchemas(schema, resolver, key_name='properties'):
 
 
 def linkTo(validator, linkTo, instance, schema):
+    # 2024-02-21/dmichaels:
+    # New skip_links functionality for smaht-submitr since it does link integrity checking.
+    skip_links = (request := get_current_request()) and asbool(request.params.get('skip_links', False))
+    if skip_links:
+        return
     if not validator.is_type(instance, "string"):
         return
 
@@ -229,8 +296,10 @@ def linkTo(validator, linkTo, instance, schema):
     try:
         item = find_resource(base, instance.replace(':', '%3A'))
     except KeyError:
-        error = "%r not found" % instance
-        yield ValidationError(error)
+        check_only = (request := get_current_request()) and asbool(request.params.get('check_only', False))
+        if not check_only:
+            error = "%r not found" % instance
+            yield ValidationError(error)
         return
 
     if not isinstance(item, Item):
@@ -394,6 +463,9 @@ def extract_schema_default(schema, path):
         return None
 
 
+format_checker = FormatChecker()
+
+
 def validate(schema, data, current=None, validate_current=False):
     """
     Validate the given data using a schema. Optionally provide current data
@@ -412,7 +484,7 @@ def validate(schema, data, current=None, validate_current=False):
         dict validated contents, list of errors
     """
     resolver = NoRemoteResolver.from_schema(schema)
-    sv = SchemaValidator(schema, resolver=resolver, format_checker=Draft202012Validator.FORMAT_CHECKER)
+    sv = SchemaValidator(schema, resolver=resolver, format_checker=format_checker)
     validated, errors = sv.serialize(data)
     # validate against current contents if validate_current is set
     if current and validate_current:
@@ -557,3 +629,57 @@ def userid(instance, subschema):  # args required by jsonschema-serialize-fork
 def now(instance, subschema):  # args required by jsonschema-serialize-fork
     ignored(instance, subschema)
     return utc_now_str()
+
+
+def get_identifying_and_required_properties(schema: dict) -> (list, list):
+    """
+    Returns a tuple containing (first) the list of identifying properties
+    and (second) the list of any required properties specified by the given schema.
+
+    This DOES handle a limited version of the "anyOf" construct; namely where it only contains
+    a simple list of objects each specifying a "required" property name or a list of property
+    names; in this call ALL such "required" property names are included; an EXCEPTION is
+    raised if an unsupported usage of this "anyOf" construct is found. 
+
+    This may be slightly confusing in that ALL of the properties specified within an "anyOf"
+    construct are returned from this function as required, which is not technically semantically
+    not correct; only ONE of those would be required; but this function is NOT used for validation,
+    but instead to extract from the actual object the values which must be included on the initial
+    insert into the database, when it is FIRST created, via POST in loadxl.
+    """
+    def get_all_required_properties_from_any_of(schema: dict) -> list:
+        """
+        Returns a list of ALL property names which are specified as "required" within any "anyOf"
+        construct within the given JSON schema. We support ONLY a LIMITED version of "anyOf" construct,
+        in which it must be either ONLY a LIST of OBJECTs each specifying a "required" property which
+        is a property name or a LIST of property names; if the "anyOf" construct looks like it is
+        anything OTHER than this limited usaage, then an EXCEPTION will be raised.
+        """
+        def raise_unsupported_usage_exception():
+            raise Exception("Unsupported use of anyOf in schema.")
+        required_properties = set()
+        any_of_list = schema.get("anyOf")
+        if not any_of_list:
+            return required_properties
+        if not isinstance(any_of_list, list):
+            raise_unsupported_usage_exception()
+        for any_of in any_of_list:
+            if not any_of:
+                continue
+            if not isinstance(any_of, dict):
+                raise_unsupported_usage_exception()
+            if "required" in any_of:
+                if not (any_of_value := any_of["required"]):
+                    continue
+                if isinstance(any_of_value, list):
+                    required_properties.update(any_of_value)
+                elif isinstance(any_of_value, str):
+                    required_properties.add(any_of_value)
+                else:
+                    raise_unsupported_usage_exception()
+        return list(required_properties)
+
+    required_properties = set()
+    required_properties.update(schema.get("required", []))
+    required_properties.update(get_all_required_properties_from_any_of(schema))
+    return SchemaManager.get_identifying_properties(schema), list(required_properties)

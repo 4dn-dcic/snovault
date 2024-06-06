@@ -8,25 +8,27 @@ from pyramid.security import (
     Deny,
     Everyone,
 )
+from ..schema_utils import format_checker
 from ..calculated import calculated_property
 from ..resources import Root
 from ..config import root
 
 
-accession_re = re.compile(r'^SNO(SS|FL)[0-9][0-9][0-9][A-Z][A-Z][A-Z]$')
-test_accession_re = re.compile(r'^TST(SS|FL)[0-9][0-9][0-9]([0-9][0-9][0-9]|[A-Z][A-Z][A-Z])$')
+accession_re = re.compile(r'^SNO[A-Z]{2}[0-9]{3}[A-Z]{3}$')
+test_accession_re = re.compile(r'^TST[A-Z]{2}[0-9]{3}([0-9]{4}|[A-Z]{4})$')
 
 
+def includeme(config):
+    config.scan(__name__)
+
+
+@format_checker.checks("accession")
 def is_accession(instance):
     """ From snowflakes - pattern checker """
     return (
         accession_re.match(instance) is not None or
         test_accession_re.match(instance) is not None
     )
-
-
-def includeme(config):
-    config.scan(__name__)
 
 
 def acl_from_settings(settings):

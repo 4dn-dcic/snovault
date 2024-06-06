@@ -1,7 +1,7 @@
 import pytest
 from snovault.schema_utils import (
     _update_resolved_data, _handle_list_or_string_value,  # noQA - testing protected members
-    resolve_merge_refs, validate
+    resolve_merge_refs, validate, match_merge_syntax
 )
 
 
@@ -420,3 +420,79 @@ def test_schema_utils_validates_date_times(testapp, invalid_date_time):
     })
     date_error = str(errors[0])
     assert f"{invalid_date_time!r} is not a 'date-time'" in date_error
+
+
+@pytest.mark.parametrize('ref', [
+    'snovault:access_key.json#/properties/access_key_id',
+    'snovault:schemas/access_key.json#/properties/access_key_id',
+    'snovault:schemas/access_key2.json#/properties/access_key_id',
+    'snovault:schemas/access_key.json#/properties/access_key_id2',
+    'snovault:schemas/schema_one/access_key.json#/properties/object/access_key_id',
+    'snovault:schemas/mixins.json#/access_key_id',
+    ]
+)
+def test_schema_utils_merge_regex_matches(ref):
+    """ Positive test for testing the merge regex match """
+    assert match_merge_syntax(ref)
+
+
+@pytest.mark.parametrize('ref', [
+    'not a schema',
+    'close:to/aschema',
+    'closer:to.json#aschema',
+    'snovault:schemas/schema_one',
+    'missing-package.json#/properties/schema',
+    'snovault:schemas/access_key.jsn#/properties/access_key_id',
+    ]
+)
+def test_schema_utils_merge_regex_no_match(ref):
+    """ Positive test for testing the merge regex match """
+    assert not match_merge_syntax(ref)
+
+
+def test_get_identifying_and_required_properties():
+
+    from snovault.schema_utils import get_identifying_and_required_properties, load_schema
+
+    schema = load_schema("snovault:schemas/access_key.json")
+    identifying_properties, required_properties = get_identifying_and_required_properties(schema)
+    assert identifying_properties == ["uuid"]
+    assert required_properties == []
+
+    schema = {
+        "identifyingProperties": ["uuid", "another_id"],
+        "required": ["some_required_property_a", "some_required_property_b"],
+        "anyOf": [
+            {"required": ["either_require_this_property_a", "or_this_one"]},
+            {"required": ["or_require_this_property_a"]}
+         ]
+    }
+    identifying_properties, required_properties = get_identifying_and_required_properties(schema)
+    assert set(identifying_properties) == {"another_id", "uuid"}
+    assert set(required_properties) == {"some_required_property_a", "some_required_property_b",
+                                        "either_require_this_property_a", "or_require_this_property_a", "or_this_one"}
+
+    schema = {
+        "identifyingProperties": ["uuid", "another_id"],
+        "anyOf": [
+            {"required": "either_require_this_property_a", "junk_to_ignore": "abc"},
+            {"required": "or_require_this_property_a"},
+            {"junk_to_ignore": 123}
+         ]
+    }
+    identifying_properties, required_properties = get_identifying_and_required_properties(schema)
+    assert set(identifying_properties) == {"another_id", "uuid"}
+    assert set(required_properties) == {"either_require_this_property_a", "or_require_this_property_a"}
+
+    with pytest.raises(Exception):
+        schema = {
+            "required": ["some_required_property_a", "some_required_property_b"],
+            "anyOf": [
+                {"unexpected": "dummy"},
+                {"required": "either_require_this_property_a"},
+                {"required": "or_require_this_property_a"}
+             ]
+        }
+        identifying_properties, required_properties = get_identifying_and_required_properties(schema)
+        assert set(identifying_properties) == {}
+        assert set(required_properties) == {"some_required_property_a", "some_required_property_b", "either_require_this_property_a", "or_require_this_property_a"}

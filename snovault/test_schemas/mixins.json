@@ -51,5 +51,23 @@
         "serverDefault": "userid",
         "permission": "restricted_fields"
     }
-  }
+  },
+  "tags": {
+    "tags": {
+        "title": "Tags",
+        "description": "Key words that can tag an item - useful for filtering.",
+        "type": "array",
+        "lookup": 1000,
+        "uniqueItems": true,
+        "ff_flag": "clear clone",
+        "items": {
+            "title": "Tag",
+            "description": "A tag for the item.",
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 50,
+            "pattern": "^[a-zA-Z0-9_\\-][a-zA-Z0-9_\\-\\s]+[a-zA-Z0-9_\\-]$"
+        }
+    }
+  } 
 }
