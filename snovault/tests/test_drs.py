@@ -72,3 +72,10 @@ class TestDRSAPI:
             testapp.get(f'/ga4gh/drs/v1/objects/access')
         with pytest.raises(Exception):
             testapp.get(f'/ga4gh/drs/v1/objects/{drs_object_uri}/accesss/https')
+
+    def test_drs_get_object_returns_json(self, testapp, htmltestapp, testing_download):
+        """ Tests that even with an htmltestapp, JSON is returned """
+        res = testapp.get(testing_download)
+        drs_object_uri = res.json['uuid']
+        resp = htmltestapp.get(f'/ga4gh/drs/v1/objects/{drs_object_uri}')
+        assert resp.content_type == 'application/json'
