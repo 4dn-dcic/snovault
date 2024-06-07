@@ -101,18 +101,9 @@ def drs_objects(context, request):
     return formatted_drs_object
 
 
-@view_config(
-    route_name='drs_download_no_slash', request_method='GET',
-    effective_principals=Authenticated
-)
-@view_config(
-    route_name='drs_download_slash', request_method='GET',
-    effective_principals=Authenticated
-)
-@view_config(
-    route_name='drs_download', request_method='GET',
-    effective_principals=Authenticated
-)
+@view_config(route_name='drs_download_no_slash', request_method='GET')
+@view_config(route_name='drs_download_slash', request_method='GET')
+@view_config(route_name='drs_download', request_method='GET')
 @debug_log
 def drs_objects_download(context, request):
     """ Implements DRS GET bytes as specified by the API description
