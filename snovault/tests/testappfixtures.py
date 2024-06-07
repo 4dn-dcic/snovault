@@ -115,6 +115,17 @@ def anontestapp(app):
 
 
 @pytest.fixture
+def htmltestapp(app):
+    """TestApp for TEST user, accepting text/html content."""
+    environ = {
+        'HTTP_ACCEPT': 'text/html',
+        'REMOTE_USER': 'TEST',
+    }
+    test_app = webtest.TestApp(app, environ)
+    return test_app
+
+
+@pytest.fixture
 def authenticated_testapp(app):
     """ TestApp with JSON accept header for non-admin user. """
     environ = {

@@ -6,6 +6,12 @@ snovault
 Change Log
 ----------
 
+11.15.0
+=======
+
+* Update ``drs`` primitive to only return JSON
+
+
 11.14.3
 =======
 
