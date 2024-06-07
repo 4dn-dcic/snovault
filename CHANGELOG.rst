@@ -6,6 +6,12 @@ snovault
 Change Log
 ----------
 
+11.15.1
+=======
+
+* Update ``drs_download`` to not guard on Authentication, as this check is superfluous since @@drs as_user is evaluated
+
+
 11.15.0
 =======
 
