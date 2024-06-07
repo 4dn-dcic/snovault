@@ -1,5 +1,4 @@
 from pyramid.view import view_config
-from pyramid.security import Authenticated
 from pyramid.exceptions import HTTPNotFound
 from .util import debug_log
 
