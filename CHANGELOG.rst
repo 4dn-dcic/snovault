@@ -6,6 +6,32 @@ snovault
 Change Log
 ----------
 
+11.15.1
+=======
+
+* Update ``drs_download`` to not guard on Authentication, as this check is superfluous since @@drs as_user is evaluated
+
+
+11.15.0
+=======
+
+* Update ``drs`` primitive to only return JSON
+
+
+11.14.3
+=======
+
+* Fix `update-inserts-from-server` command to display `--help` option
+
+
+11.14.2
+=======
+
+* Fix `update-inserts-from-server` command to move away from direct ES interaction
+  * Rewrite signicantly
+  * Add new options to allow for more flexible use
+
+
 11.14.1
 =======
 
