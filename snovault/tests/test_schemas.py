@@ -5,7 +5,12 @@ from unittest import mock
 import pytest
 from dcicutils.schema_utils import SchemaConstants
 
-from .schema_views import (
+
+from .test_views import PARAMETERIZED_NAMES
+from ..interfaces import TYPES
+from ..project.schema_views import SnovaultProjectSchemaViews
+from ..schema_utils import load_schema
+from ..schema_views import (
     SubmissionSchemaConstants,
     _get_conditionally_required_propnames,
     _has_property_attr_with_val,
@@ -13,10 +18,6 @@ from .schema_views import (
     _is_submittable_schema,
     _update_required_annotation,
 )
-from .test_views import PARAMETERIZED_NAMES
-from ..interfaces import TYPES
-from ..project.schema_views import SnovaultProjectSchemaViews
-from ..schema_utils import load_schema
 
 
 @pytest.mark.parametrize('schema', PARAMETERIZED_NAMES)
