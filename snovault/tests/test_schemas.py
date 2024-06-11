@@ -424,13 +424,13 @@ def test_update_required_annotation(
     required_properties: List[str],
     expected_annotation: bool,
 ) -> None:
-    result = _update_required_annotation(
+    _update_required_annotation(
         property_, property_schema, required_properties
     )
     if expected_annotation:
-        assert is_required_annotation_present(result)
+        assert is_required_annotation_present(property_schema)
     else:
-        assert not is_required_annotation_present(result)
+        assert not is_required_annotation_present(property_schema)
 
 
 def is_required_annotation_present(property_schema: Dict[str, Any]) -> bool:
