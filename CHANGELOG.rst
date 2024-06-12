@@ -6,6 +6,12 @@ snovault
 Change Log
 ----------
 
+11.16.0
+=======
+
+* Update `/submission-schemas/` to capture required prop via new key in property schema
+
+
 11.15.1
 =======
 
