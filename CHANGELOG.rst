@@ -6,6 +6,12 @@ snovault
 Change Log
 ----------
 
+11.15.2
+=======
+
+* Update ``drs`` validation to remove drs_uri
+
+
 11.15.1
 =======
 
