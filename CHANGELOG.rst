@@ -6,10 +6,16 @@ snovault
 Change Log
 ----------
 
-11.15.2
+11.16.1
 =======
 
 * Update ``drs`` validation to remove drs_uri
+
+
+11.16.0
+=======
+
+* Update `/submission-schemas/` to capture required prop via new key in property schema
 
 
 11.15.1
