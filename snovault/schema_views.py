@@ -1,5 +1,6 @@
 from collections import OrderedDict
 from itertools import chain
+from typing import Any, Dict, List
 from urllib.parse import urlparse
 
 from pyramid.httpexceptions import HTTPNotFound
@@ -13,11 +14,13 @@ from .interfaces import (
 from .util import debug_log
 from dcicutils.schema_utils import (
     SchemaConstants as sc,
+    get_dependent_required,
     get_properties,
     get_required,
     get_items,
     is_array_schema,
-    is_object_schema
+    is_object_schema,
+    is_submitter_required,
 )
 from .project_app import app_project
 
@@ -212,11 +215,10 @@ def _annotate_submittable_props(schema, props):
     required_props = get_required(schema)
     oneof_props = _get_conditionally_required_propnames(schema, sc.ONE_OF)
     anyof_props = _get_conditionally_required_propnames(schema, sc.ANY_OF)
-    req_deps = schema.get('dependentRequired', {})
+    req_deps = get_dependent_required(schema)
 
     for propname, propinfo in props.items():
-        if propname in required_props:
-            propinfo[SubmissionSchemaConstants.IS_REQUIRED] = True
+        _update_required_annotation(propname, propinfo, required_props)
         if propname in oneof_props:
             lprops = [p for p in oneof_props if p != propname]
             propinfo.setdefault(
@@ -231,6 +233,16 @@ def _annotate_submittable_props(schema, props):
         if propname in req_deps:
             propinfo[SubmissionSchemaConstants.ALSO_REQUIRES] = req_deps[propname]
     return props
+
+
+def _update_required_annotation(
+    property_: str,
+    property_schema: Dict[str, Any],
+    required_properties: List[str],
+) -> None:
+    """Add required annotation to property schema if appropriate."""
+    if property_ in required_properties or is_submitter_required(property_schema):
+        property_schema[SubmissionSchemaConstants.IS_REQUIRED] = True
 
 
 def _build_embedded_obj(schema, embedded_obj):
