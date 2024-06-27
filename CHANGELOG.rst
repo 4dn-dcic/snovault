@@ -6,6 +6,18 @@ snovault
 Change Log
 ----------
 
+11.17.0
+=======
+
+* Updates related to Python 3.12.
+  - Had to update venusian (from 1.2.0) to 3.1.0.
+  - Had to update pyramid (from 1.10.4) to 2.0.2 (for imp import not found).
+    - Had to add pmdarima (no module pyramid.compat).
+    - Had to define/update numpy (to 1.26.4) for this.
+      - And had to update lower bound of Python (from 3.8.1) to 3.9 for this.
+  - Had to dcicutils (from 8.11.0) to 8.13.0  (for pyramid update for imp import not found).
+
+
 11.16.0
 =======
 
