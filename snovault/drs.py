@@ -12,7 +12,6 @@ DRS_OBJECT_GET_ACCESSS_URL_NO_SLASH = DRS_PREFIX_V1 + '/objects/{object_id}/acce
 REQUIRED_FIELDS = [
     'id',
     'created_time',
-    'drs_id',
     'self_uri',
     'size',
     'checksums'

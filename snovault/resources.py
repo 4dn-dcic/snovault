@@ -528,10 +528,19 @@ class Item(Resource):
                 self.get_filtered_rev_links(request, rev_name)]
 
     def unique_keys(self, properties):
-        return {
+        """ This function used to only resolve keys from schema, it has been
+            updated to handle both accession and alternate_accession
+        """
+        keys = {
             name: [v for prop in props for v in ensurelist(properties.get(prop, ()))]
             for name, props in self.type_info.schema_keys.items()
         }
+        if 'accession' not in self.schema['properties']:
+            return keys
+        keys.setdefault('accession', []).extend(properties.get('alternate_accessions', []))
+        if properties.get('status') != 'replaced' and 'accession' in properties:
+            keys['accession'].append(properties['accession'])
+        return keys
 
     def add_accession_to_title(self, title):
         if self.properties.get('accession') is not None:
