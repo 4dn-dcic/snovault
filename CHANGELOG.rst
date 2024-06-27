@@ -13,7 +13,8 @@ Change Log
   - Had to update venusian (from 1.2.0) to 3.1.0.
   - Had to update pyramid (from 1.10.4) to 1.10.8 (for imp import not found).
     - Had to add pmdarima (no module pyramid.compat).
-    - Had to define/update numpy (to 1.26.4) for this.
+    - Had to define/update numpy (to 1.26.4) for this as it was implicitly,
+      due to something else, using 1.24.4 which failed to build with Python 3.12.
       - And had to update lower bound of Python (from 3.8.1) to 3.9 for this.
   - Had to dcicutils (from 8.11.0) to 8.13.0  (for pyramid update for imp import not found).
 
