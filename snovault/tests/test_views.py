@@ -4,7 +4,7 @@ import pytest
 
 from base64 import b64encode
 from jsonschema import Draft202012Validator
-from pyramid.compat import ascii_native_
+# from pyramid.compat import ascii_native_
 from uuid import uuid4
 
 from ..interfaces import TYPES
@@ -18,6 +18,12 @@ from .testing_views import (
 
 
 TYPE_NAMES = ['TestingPostPutPatchSno', 'TestingDownload']
+
+# pyramid.compat disappeared with pyramid 2.0.02 (during move to Python 3.12).
+def ascii_native_(s):
+    if isinstance(s, str):
+        s = s.encode('ascii')
+    return str(s, 'ascii', 'strict')
 
 
 def get_parameterized_names():
