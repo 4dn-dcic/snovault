@@ -191,11 +191,12 @@ def get_request_methods(item: Union[Endpoint, IIntrospectable]) -> List[str]:
 def format_views(views: List[IIntrospectable]) -> Dict[str, Dict[str, Any]]:
     """Format views for display."""
     views_per_item = get_views_per_item(views)
-    return {
+    result = {
         get_item_name(context): format_item_views(item_views)
         for context, item_views in views_per_item.items()
         if get_item_name(context)
     }
+    return {key: value for key, value in result.items() if value}
 
 
 def get_views_per_item(
