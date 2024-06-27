@@ -973,14 +973,14 @@ files = [
 
 [[package]]
 name = "dcicutils"
-version = "8.12.0.1b4"
+version = "8.12.0.1b6"
 description = "Utility package for interacting with the 4DN Data Portal and other 4DN resources"
 category = "main"
 optional = false
 python-versions = "<3.13,>=3.8.1"
 files = [
-    {file = "dcicutils-8.12.0.1b4-py3-none-any.whl", hash = "sha256:0fea9145e19d62d2d675d2fa0d0f0af700a59abea0858939503f7783eaf631f9"},
-    {file = "dcicutils-8.12.0.1b4.tar.gz", hash = "sha256:31f111f84b4ef4f935ecc911b282c165b17235e290bde1067c5a288371988e07"},
+    {file = "dcicutils-8.12.0.1b6-py3-none-any.whl", hash = "sha256:99411d522326bc0777f7a980c5713bcb4f15a9ef17b4e36c4de3fbdd7405426f"},
+    {file = "dcicutils-8.12.0.1b6.tar.gz", hash = "sha256:4b98e75e05a9776159a90dab36e19bd6aa3543b0baa45013a323c855b83e854c"},
 ]
 
 [package.dependencies]
@@ -999,7 +999,7 @@ opensearch-py = ">=2.0.1,<3.0.0"
 PyJWT = ">=2.6.0,<3.0.0"
 pyOpenSSL = ">=23.1.1,<24.0.0"
 pyperclip = ">=1.8.2,<2.0.0"
-pyramid = ">=2.0.2,<3.0.0"
+pyramid = "1.10.8"
 pytz = ">=2020.4"
 PyYAML = ">=6.0.1,<7.0.0"
 redis = ">=4.5.1,<5.0.0"
@@ -2333,14 +2333,14 @@ files = [
 
 [[package]]
 name = "pyramid"
-version = "2.0.2"
+version = "1.10.8"
 description = "The Pyramid Web Framework, a Pylons project"
 category = "main"
 optional = false
-python-versions = ">=3.6"
+python-versions = ">=2.7,!=3.0.*,!=3.1.*,!=3.2.*,!=3.3.*"
 files = [
-    {file = "pyramid-2.0.2-py3-none-any.whl", hash = "sha256:2e6585ac55c147f0a51bc00dadf72075b3bdd9a871b332ff9e5e04117ccd76fa"},
-    {file = "pyramid-2.0.2.tar.gz", hash = "sha256:372138a738e4216535cc76dcce6eddd5a1aaca95130f2354fb834264c06f18de"},
+    {file = "pyramid-1.10.8-py2.py3-none-any.whl", hash = "sha256:06e99d3174586921490203288e2cc9cd43d12992306f924ca32a2c59233386a9"},
+    {file = "pyramid-1.10.8.tar.gz", hash = "sha256:b7cd66595bef92f81764b976ddde2b2fa8e4f5f325e02f65f6ec7f3708b29cf6"},
 ]
 
 [package.dependencies]
@@ -2355,8 +2355,8 @@ webob = ">=1.8.3"
 "zope.interface" = ">=3.8.0"
 
 [package.extras]
-docs = ["Sphinx (>=3.0.0)", "docutils", "pylons-sphinx-latesturl", "pylons-sphinx-themes (>=1.0.8)", "repoze.sphinx.autointerface", "sphinx-copybutton", "sphinxcontrib-autoprogram"]
-testing = ["coverage", "pytest (>=5.4.2)", "pytest-cov", "webtest (>=1.3.1)", "zope.component (>=4.0)"]
+docs = ["Sphinx (>=3.0.0)", "docutils", "pylons-sphinx-latesturl", "pylons-sphinx-themes (>=1.0.8)", "repoze.sphinx.autointerface", "sphinxcontrib-autoprogram"]
+testing = ["coverage", "nose", "virtualenv", "webtest (>=1.3.1)", "zope.component (>=4.0)"]
 
 [[package]]
 name = "pyramid-multiauth"
@@ -3906,4 +3906,4 @@ test = ["zope.testing"]
 [metadata]
 lock-version = "2.0"
 python-versions = ">=3.9.0,<3.13"
-content-hash = "b17b880fa7272404ba844710713e11e1e661b2fe66bb0549932c62a1f40e6397"
+content-hash = "c6b55a0284b0ae138983134d0e4ed29109868d8335ad3e63718f7f67d936574c"
