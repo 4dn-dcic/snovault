@@ -6,6 +6,12 @@ snovault
 Change Log
 ----------
 
+11.17.0
+=======
+
+* Add `/routes` endpoint to return all routes and select item views in the application
+
+
 11.16.0
 =======
 
