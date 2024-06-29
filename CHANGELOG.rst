@@ -17,6 +17,9 @@ Change Log
       due to something else, using 1.24.4 which failed to build with Python 3.12.
       - And had to update lower bound of Python (from 3.8.1) to 3.9 for this.
   - Had to dcicutils (from 8.11.0) to 8.13.0  (for pyramid update for imp import not found).
+* Minor change to dev_servers.py to facilitate running a local ElasticSearch proxy
+  to observe traffic (resquests/responses) between the portal and ElasticSearch
+  with a tool like mitmproxy or mitmweb; see comments in dev_server.py.
 
 
 11.16.0
