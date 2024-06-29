@@ -6,7 +6,7 @@ snovault
 Change Log
 ----------
 
-11.17.0
+11.18.0
 =======
 
 * Updates related to Python 3.12.
@@ -20,6 +20,12 @@ Change Log
 * Minor change to dev_servers.py to facilitate running a local ElasticSearch proxy
   to observe traffic (resquests/responses) between the portal and ElasticSearch
   with a tool like mitmproxy or mitmweb; see comments in dev_server.py.
+
+
+11.17.0
+=======
+
+* Add `/routes` endpoint to return all routes and select item views in the application
 
 
 11.16.0
