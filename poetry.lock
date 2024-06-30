@@ -973,21 +973,21 @@ files = [
 
 [[package]]
 name = "dcicutils"
-version = "8.12.0.1b6"
+version = "8.12.0.1b7"
 description = "Utility package for interacting with the 4DN Data Portal and other 4DN resources"
 category = "main"
 optional = false
 python-versions = "<3.13,>=3.8.1"
 files = [
-    {file = "dcicutils-8.12.0.1b6-py3-none-any.whl", hash = "sha256:99411d522326bc0777f7a980c5713bcb4f15a9ef17b4e36c4de3fbdd7405426f"},
-    {file = "dcicutils-8.12.0.1b6.tar.gz", hash = "sha256:4b98e75e05a9776159a90dab36e19bd6aa3543b0baa45013a323c855b83e854c"},
+    {file = "dcicutils-8.12.0.1b7-py3-none-any.whl", hash = "sha256:3c6467ea1c885e76d88b38bbaa0aae8de59e09d6c4df930fd772a5c0ca4cf418"},
+    {file = "dcicutils-8.12.0.1b7.tar.gz", hash = "sha256:d8a89209b69907f7485264b604483884a75894dd62dfb14d3d546af54a5f498b"},
 ]
 
 [package.dependencies]
 appdirs = ">=1.4.4,<2.0.0"
 aws-requests-auth = ">=0.4.2,<1"
-boto3 = ">=1.34.93,<2.0.0"
-botocore = ">=1.34.93,<2.0.0"
+boto3 = ">=1.34.136,<2.0.0"
+botocore = ">=1.34.136,<2.0.0"
 chardet = ">=5.2.0,<6.0.0"
 docker = ">=4.4.4,<5.0.0"
 elasticsearch = "7.13.4"
@@ -3912,4 +3912,4 @@ test = ["zope.testing"]
 [metadata]
 lock-version = "2.0"
 python-versions = ">=3.9,<3.13"
-content-hash = "615ce75aa925f20c9277b30082b539e89d757101fbf69dce1803bb8240d7e911"
+content-hash = "8ed572e7037263bf575f809456fed2845392d8c678ac3f6bf33f94df202bb4bb"
