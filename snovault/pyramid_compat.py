@@ -1,4 +1,4 @@
-# Not that pyramid.compat disappeared with pyramid 2.0.2, during move to Python 3.12,
+# Note that pyramid.compat disappeared with pyramid 2.0.2, during move to Python 3.12,
 # though went back to pyramid 1.10.8 subsequently, will run into this eventually.
 
 from urllib.parse import unquote_to_bytes
