@@ -164,7 +164,7 @@ def run(app_name, config_uri, datadir, clear=False, init=False, load=False, inge
         # The elasticsearch.server.actual_port property is useful (only) for running a localhost ElasticSearch
         # proxy in order to observe traffic (requests/responses) between portal and ElasticSearch with a tool like
         # mitmweb; e.g. setting elasticsearch.server.actual_port to 9201 and elasticsearch.server to localhost:9200
-        # will case ElasticSearch to actually run on port 9201 but will cause portal to talk to it via port 9200,
+        # will cause ElasticSearch to actually run on port 9201 but will cause portal to talk to it via port 9200,
         # and then we can run mitmweb --mode reverse:http://localhost:9201 -p 9200 --web-port 8081 which will
         # allow us to browse to http://localhost:8081 locally to observe all of the ElasticSearch traffic.
         if (es_port := config.get('elasticsearch.server.actual_port', None)) and es_port.isdigit():
