@@ -9,6 +9,7 @@ Change Log
 11.18.0
 =======
 
+* Dropped support for Python 3.8.
 * Updates related to Python 3.12.
   - Had to update venusian (from 1.2.0) to 3.1.0.
   - Had to update pyramid (from 1.10.4) to 1.10.8 (for imp import not found).
