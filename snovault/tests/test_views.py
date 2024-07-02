@@ -4,10 +4,10 @@ import pytest
 
 from base64 import b64encode
 from jsonschema import Draft202012Validator
-from pyramid.compat import ascii_native_
 from uuid import uuid4
 
 from ..interfaces import TYPES
+from ..pyramid_compat import ascii_native_
 from ..util import mappings_use_nested
 
 from .testing_views import (

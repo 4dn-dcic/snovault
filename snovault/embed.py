@@ -1,14 +1,14 @@
 import logging
 from copy import deepcopy
 from posixpath import join
-from pyramid.compat import (
-    native_,
-    unquote_bytes_to_wsgi,
-)
 from pyramid.httpexceptions import HTTPNotFound, HTTPServerError
 import pyramid.request
 from .crud_views import collection_add as sno_collection_add
 from .interfaces import COLLECTIONS, CONNECTION
+from .pyramid_compat import (
+    native_,
+    unquote_bytes_to_wsgi,
+)
 from .resources import Collection
 from .schema_utils import validate_request
 from dcicutils.misc_utils import check_true

@@ -160,8 +160,20 @@ def run(app_name, config_uri, datadir, clear=False, init=False, load=False, inge
     es_server_url = config.get('elasticsearch.server', "localhost")
 
     if '127.0.0.1' in es_server_url or 'localhost' in es_server_url:
-        # Bootup local ES server subprocess. Else assume connecting to remote ES cluster.
-        elasticsearch = elasticsearch_fixture.server_process(esdata, echo=True)
+        # Bootup local ES server subprocess; otherwise assume we are connecting to a remote ES cluster.
+        # The elasticsearch.server.actual_port property is useful (only) for running a localhost ElasticSearch
+        # proxy in order to observe traffic (requests/responses) between portal and ElasticSearch with a tool like
+        # mitmweb; e.g. setting elasticsearch.server.actual_port to 9201 and elasticsearch.server to localhost:9200
+        # will cause ElasticSearch to actually run on port 9201 but will cause portal to talk to it via port 9200,
+        # and then we can run mitmweb --mode reverse:http://localhost:9201 -p 9200 --web-port 8081 which will
+        # allow us to browse to http://localhost:8081 locally to observe all of the ElasticSearch traffic.
+        if (es_port := config.get('elasticsearch.server.actual_port', None)) and es_port.isdigit():
+            es_port = int(es_port)
+        elif ((colon := es_server_url.rfind(":")) > 0) and (es_port := es_server_url[colon + 1:]).isdigit():
+            es_port = int(es_port)
+        else:
+            es_port = None
+        elasticsearch = elasticsearch_fixture.server_process(esdata, port=es_port, echo=True)
         processes.append(elasticsearch)
     elif not config.get('indexer.namespace'):
         raise Exception(
