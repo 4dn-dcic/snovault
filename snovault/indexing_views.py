@@ -110,8 +110,8 @@ def item_index_data(context, request):
 
     # 2024-07-09: Make sure that the uuid gets into the frame=raw view.
     # BACK OUT TEMPORARILY TO SEE IF GA IS OKAY ...
-    # if not properties.get('uuid'):
-    #   properties['uuid'] = uuid
+    if not properties.get('uuid'):
+        properties['uuid'] = uuid
 
     # ES versions 2 and up don't allow dots in links. Update these to use ~s
     new_links = {}
