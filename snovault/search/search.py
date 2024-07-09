@@ -1060,6 +1060,9 @@ class SearchBuilder:
                 frame = 'properties'
             for hit in hits:
                 frame_result = hit['_source'][frame]
+                # 2024-07-09: Make sure we get the uuid for frame=raw.
+                if (frame == 'properties') and isinstance(embedded := hit['_source'].get('embedded'), dict):
+                    frame_result['uuid'] = embedded.get('uuid')
                 if 'validation_errors' in hit['_source'] and 'validation_errors' not in frame_result:
                     frame_result['validation_errors'] = hit['_source']['validation_errors']
                 if 'aggregated_items' in hit['_source'] and 'aggregated_items' not in frame_result:
