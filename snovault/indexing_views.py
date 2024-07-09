@@ -109,8 +109,9 @@ def item_index_data(context, request):
         properties = context.upgrade_properties()
 
     # 2024-07-09: Make sure that the uuid gets into the frame=raw view.
-    if not properties.get('uuid'):
-        properties['uuid'] = uuid
+    # BACK OUT TEMPORARILY TO SEE IF GA IS OKAY ...
+    # if not properties.get('uuid'):
+    #   properties['uuid'] = uuid
 
     # ES versions 2 and up don't allow dots in links. Update these to use ~s
     new_links = {}
