@@ -8,7 +8,7 @@ Change Log
 
 11.19.0
 =======
-* POSSIBLE fix in search.py for frame=raw not including the uuid.
+* Fix in indexing_views.py for frame=raw not including the uuid.
 
 
 11.18.0

@@ -108,7 +108,7 @@ def item_index_data(context, request):
     with indexing_timer(indexing_stats, 'upgrade_properties'):
         properties = context.upgrade_properties()
 
-    # 2024-07-09: Probably wrong to do this here but trying it out, to get uuid into frame=raw view.
+    # 2024-07-09: Make sure that the uuid gets into the frame=raw view.
     if not properties.get('uuid'):
         properties['uuid'] = uuid
 
