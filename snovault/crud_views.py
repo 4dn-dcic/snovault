@@ -84,7 +84,6 @@ def create_item(type_info, request, properties, sheets=None):
 
     if 'uuid' in item_properties:
         try:
-            # 2024-07-09: Should we really bve popping this off WRT uuid not being in the frame=raw view?
             nonvalidated_uuid = item_properties.pop('uuid')
             uuid = UUID(nonvalidated_uuid)
         except ValueError as e:
