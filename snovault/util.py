@@ -1124,7 +1124,9 @@ def merge_calculated_into_properties(properties: dict, calculated: dict):
                             raise CalculatedOverrideOfBasePropertiesNotPermitted(calculated_sub_values,
                                                                                  properties_sub_values)
                         props_entry[k] = v
-            else:
+            # 2024-07-09: This check for uuid fallout from the fix in
+            # indexing_views.item_index_data for uuid in frame=raw view.
+            elif key != "uuid":
                 raise ValueError('Got unexpected types for calculated/properties sub-values: '
                                  'calculated: %s \n properties: %s' % (calculated_sub_values, properties_sub_values))
 
