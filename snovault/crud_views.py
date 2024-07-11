@@ -3,7 +3,7 @@ from uuid import (
     UUID,
     uuid4,
 )
-
+from copy import deepcopy
 import transaction
 from pyramid.exceptions import HTTPForbidden
 from pyramid.settings import asbool
@@ -379,7 +379,7 @@ def get_item_revision_history(request, uuid):
         The more edits an item has undergone, the more expensive this
         operation is.
     """
-    revisions = request.registry[STORAGE].revision_history(uuid=uuid)
+    revisions = deepcopy(request.registry[STORAGE].revision_history(uuid=uuid))
     # Resolve last_modified
     # NOTE: last_modified is a server_default present in our applications that
     # use snovault. This code is intended to resolve the user email of the last_modified
@@ -393,7 +393,7 @@ def get_item_revision_history(request, uuid):
             if not user:
                 user = request.embed(modified_by, frame='raw')
                 user_cache[modified_by] = user
-            revision['last_modified']['modified_by'] = user.get('email', 'No email specified!')
+            revision['last_modified']['modified_by'] = user['email']
     return revisions
 
 

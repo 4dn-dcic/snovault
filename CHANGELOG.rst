@@ -6,9 +6,15 @@ snovault
 Change Log
 ----------
 
-11.19.0
+11.20.0
 =======
 * Fix in indexing_views.py for frame=raw not including the uuid.
+
+
+11.19.0
+=======
+
+* Fix for revision history - deepcopy history as to not modify props in place
 
 
 11.18.0
