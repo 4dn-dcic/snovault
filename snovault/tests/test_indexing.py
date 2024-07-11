@@ -1863,6 +1863,9 @@ def test_elasticsearch_item_embedded_agg(app, testapp, indexer_testapp, es_based
     indexer_testapp.post_json('/index', {'record': True})
     time.sleep(3)
     target_es = es.get(index=namespaced_target, id=target_uuid)
+    # 2024-07-09: This adding of uuid is fallout from the fix
+    # in indexing_views.item_index_data for uuid in frame=raw view.
+    target_es_pre['_source']['properties']['uuid'] = target_es_pre['_id']
     # these fields were unchanged by indexing
     assert target_es_pre['_source']['properties'] == target_es['_source']['properties']
     assert target_es_pre['_source']['links'] == target_es['_source']['links']
