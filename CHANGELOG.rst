@@ -6,6 +6,12 @@ snovault
 Change Log
 ----------
 
+11.19.0
+=======
+
+* Fix for revision history - deepcopy history as to not modify props in place
+
+
 11.18.0
 =======
 
