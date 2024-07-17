@@ -6,6 +6,12 @@ snovault
 Change Log
 ----------
 
+11.20.0
+=======
+
+* Bug fix: use loadxl_order() in staggered reindexing
+
+
 11.19.0
 =======
 

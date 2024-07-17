@@ -33,6 +33,7 @@ from dcicutils.misc_utils import as_seconds
 # from ..commands.es_index_data import run as run_index_data
 from ..schema_utils import combine_schemas
 from ..tools import make_indexer_testapp
+from ..project_app import app_project
 from ..util import (
     add_default_embeds, IndexSettings,
     NUM_SHARDS, NUM_REPLICAS, SEARCH_MAX, KW_IGNORE_ABOVE, MIN_NGRAM,
@@ -1383,7 +1384,7 @@ def reindex_by_type_staggered(app):
     registry = app.registry
     es = registry[ELASTIC_SEARCH]
     indexer_queue = registry[INDEXER_QUEUE]
-    all_types = registry[COLLECTIONS].by_item_type
+    all_types = app_project().loadxl_order()
 
     log.warning('Running staggered create_mapping command - wiping and reindexing indices sequentially'
                 ' to minimize downtime.')
