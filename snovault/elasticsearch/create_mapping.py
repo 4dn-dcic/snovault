@@ -875,11 +875,11 @@ def build_index(app, es, index_name, in_type, mapping, uuids_to_index, dry_run,
     start = timer()
     coll_uuids = set(get_uuids_for_types(app.registry, types=[in_type]))
     end = timer()
-    log.info('Time to get collection uuids: %s' % str(end-start), cat='fetch time',
-             duration=str(end-start), collection=in_type)
+    log.warning('Time to get collection uuids: %s' % str(end-start), cat='fetch time',
+                duration=str(end-start), collection=in_type)
     uuids_to_index[in_type] = coll_uuids
-    log.info('MAPPING: will queue all %s items in the new index %s for reindexing' %
-             (len(coll_uuids), in_type), cat='items to queue', count=len(coll_uuids), collection=in_type)
+    log.warning('MAPPING: will queue all %s items in the new index %s for reindexing' %
+                (len(coll_uuids), in_type), cat='items to queue', count=len(coll_uuids), collection=in_type)
 
 
 def check_if_index_exists(es, in_type):
@@ -1397,10 +1397,11 @@ def reindex_by_type_staggered(app):
         uuids = {}
         build_index(app, es, namespaced_index, i_type, mapping, uuids, False)
         mapping_end = timer()
-        to_index_list = flatten_and_sort_uuids(app.registry, uuids, None)
+        to_index_list = flatten_and_sort_uuids(app.registry, uuids, None)  # none here is fine since we pre-ordered
         indexer_queue.add_uuids(app.registry, to_index_list, strict=True,
                                 target_queue='secondary')
-        log.warning(f'Queued type {i_type} in {mapping_end - current_start}')
+        log.warning(f'Queued type {i_type} ({len(to_index_list)} total items) in {mapping_end - current_start}')
+        log.warning(f'First 10 items: {list(uuid for uuid in to_index_list[0:10])}')
         time.sleep(10)  # give queue some time to catch up
         while not indexer_queue.queue_is_empty():
             time.sleep(10)  # check every 10 seconds
