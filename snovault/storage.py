@@ -784,11 +784,12 @@ class PropertySheet(Base):
     )
     # The sid column also serves as the order.
     sid = Column(types.Integer, autoincrement=True, primary_key=True)
+    # B-tree index on rid here greatly optimizes retrieval of revision history
     rid = Column(UUID,
                  ForeignKey('resources.rid',
                             deferrable=True,
                             initially='DEFERRED'),
-                 nullable=False)
+                 nullable=False, index=True)
     name = Column(types.String, nullable=False)
     properties = Column(JSON)
     resource = orm.relationship('Resource')

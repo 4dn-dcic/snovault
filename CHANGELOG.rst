@@ -6,6 +6,13 @@ snovault
 Change Log
 ----------
 
+11.20.0
+=======
+
+* Bug fix: use loadxl_order() in staggered reindexing
+* Add B-tree index to rid column in propsheets to optimize revision history retrieval
+
+
 11.19.0
 =======
 

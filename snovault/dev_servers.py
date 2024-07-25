@@ -213,6 +213,8 @@ def run(app_name, config_uri, datadir, clear=False, init=False, load=False, inge
 
         # now clear the queues and queue items for indexing
         create_mapping.run(app, check_first=True, strict=True, purge_queue=False)
+        # To test prod setup:
+        # create_mapping.reindex_by_type_staggered(app)
 
     PRINT('Started. ^C to exit.')
 
