@@ -6,9 +6,17 @@ snovault
 Change Log
 ----------
 
+11.21.0
+=======
+
+* Fix in indexing_views.py for frame=raw not including the uuid.
+
+
 11.20.0
 =======
-* Fix in indexing_views.py for frame=raw not including the uuid.
+
+* Bug fix: use loadxl_order() in staggered reindexing
+* Add B-tree index to rid column in propsheets to optimize revision history retrieval
 
 
 11.19.0
