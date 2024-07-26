@@ -6,6 +6,12 @@ snovault
 Change Log
 ----------
 
+11.21.0
+=======
+
+* Fix in indexing_views.py for frame=raw not including the uuid.
+
+
 11.20.0
 =======
 
