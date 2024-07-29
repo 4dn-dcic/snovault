@@ -173,7 +173,9 @@ def run(app_name, config_uri, datadir, clear=False, init=False, load=False, inge
             es_port = int(es_port)
         else:
             es_port = None
-        elasticsearch = elasticsearch_fixture.server_process(esdata, port=es_port, echo=True)
+        transport_ports = config.get('elasticsearch.server.transport_ports', None)
+        elasticsearch = elasticsearch_fixture.server_process(esdata, port=es_port, echo=True,
+                                                             transport_ports=transport_ports)
         processes.append(elasticsearch)
     elif not config.get('indexer.namespace'):
         raise Exception(

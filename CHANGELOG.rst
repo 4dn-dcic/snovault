@@ -6,6 +6,14 @@ snovault
 Change Log
 ----------
 
+11.21.1
+=======
+
+* Minor updates to dev_servers.py and tests/elasticsearch_fixture.py to allow
+  defining transport_port for elasticsearch, for localhost/dev purposes only,
+  to allow running (for example) both cgap-portal and smaht-portal simultaneously.
+
+
 11.21.0
 =======
 
