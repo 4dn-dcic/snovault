@@ -25,6 +25,7 @@ from .tests import elasticsearch_fixture, postgresql_fixture
 
 
 EPILOG = __doc__
+DEFAULT_DATA_DIR = "/tmp/snovault"
 
 logger = logging.getLogger(__name__)
 
@@ -127,8 +128,15 @@ def run(app_name, config_uri, datadir, clear=False, init=False, load=False, inge
     config = get_appsettings(config_uri, app_name)
 
     if sqlalchemy_url := config.get("sqlalchemy.url", None):
-        # Handle sqlalchemy.url defined in development.ini that looks something like this:
-        # sqlalchemy.url = postgresql://postgres@localhost:5442/postgres?host=/tmp/snovaultcgap/pgdata
+        # New as of 2024-07-30 (dmichaels).
+        # Handle sqlalchemy.url property defined in development.ini that looks something like this:
+        # sqlalchemy.url = postgresql://postgres@localhost:5442/postgres?host=/tmp/snovault/pgdata
+        # This allows us to get the temporary data directory (from the URL host query-string, for both
+        # Postgres and ElasticSearch, e.g. /tmp/snovault) and the Postgres port (from the URL port),
+        # so that we can easily change where Postgres is running to support (for example) running
+        # both smaht-portal and cgap-portal locally simultaneously. This also obviates the need
+        # in the portal makefiles to parse out the port from this (sqlalchemy.url) property to
+        # set the SNOVAULT_DB_TEST_PORT environment variable as was currently done.
         sqlalchemy_url_parsed = url_parse(sqlalchemy_url)
         sqlalchemy_url_port = sqlalchemy_url_parsed.port
         sqlalchemy_url_query = url_parse_query(sqlalchemy_url_parsed.query)
@@ -139,6 +147,8 @@ def run(app_name, config_uri, datadir, clear=False, init=False, load=False, inge
             datadir = sqlalchemy_url_host
         if (os.environ.get("SNOVAULT_DB_TEST_PORT", None) is None) and sqlalchemy_url_port:
             os.environ["SNOVAULT_DB_TEST_PORT"] =  str(sqlalchemy_url_port)
+    if not datadir:
+        datadir = DEFAULT_DATA_DIR
 
     datadir = os.path.abspath(datadir)
     pgdata = os.path.join(datadir, 'pgdata')
