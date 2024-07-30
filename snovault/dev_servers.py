@@ -14,6 +14,7 @@ import select
 import shutil
 import subprocess
 import sys
+from urllib.parse import urlparse as url_parse, parse_qs as url_parse_query
 
 from dcicutils.misc_utils import PRINT
 from pyramid.paster import get_app, get_appsettings
@@ -103,7 +104,7 @@ def main():
     parser.add_argument('--clear', action="store_true", help="Clear existing data")
     parser.add_argument('--init', action="store_true", help="Init database")
     parser.add_argument('--load', action="store_true", help="Load test set")
-    parser.add_argument('--datadir', default='/tmp/snovault', help="path to datadir")
+    parser.add_argument('--datadir', default=None, help="path to datadir")
     parser.add_argument('--no_ingest', action="store_true", default=False, help="Don't start the ingestion process.")
     args = parser.parse_args()
 
@@ -124,6 +125,20 @@ def run(app_name, config_uri, datadir, clear=False, init=False, load=False, inge
     # get the config and see if we want to connect to non-local servers
     # TODO: This variable seems to not get used? -kmp 25-Jul-2020
     config = get_appsettings(config_uri, app_name)
+
+    if sqlalchemy_url := config.get("sqlalchemy.url", None):
+        # Handle sqlalchemy.url defined in development.ini that looks something like this:
+        # sqlalchemy.url = postgresql://postgres@localhost:5442/postgres?host=/tmp/snovaultcgap/pgdata
+        sqlalchemy_url_parsed = url_parse(sqlalchemy_url)
+        sqlalchemy_url_port = sqlalchemy_url_parsed.port
+        sqlalchemy_url_query = url_parse_query(sqlalchemy_url_parsed.query)
+        if sqlalchemy_url_host := sqlalchemy_url_query.get("host", [None])[0]:
+            if sqlalchemy_url_host.endswith("/pgdata"):
+                sqlalchemy_url_host = sqlalchemy_url_host[:-len("/pgdata")]
+        if (datadir is None) and sqlalchemy_url_host:
+            datadir = sqlalchemy_url_host
+        if (os.environ.get("SNOVAULT_DB_TEST_PORT", None) is None) and sqlalchemy_url_port:
+            os.environ["SNOVAULT_DB_TEST_PORT"] =  str(sqlalchemy_url_port)
 
     datadir = os.path.abspath(datadir)
     pgdata = os.path.join(datadir, 'pgdata')
@@ -154,7 +169,7 @@ def run(app_name, config_uri, datadir, clear=False, init=False, load=False, inge
     processes = []
 
     # For now - required components
-    postgres = postgresql_fixture.server_process(pgdata, echo=True)
+    postgres = postgresql_fixture.server_process(pgdata, echo=True, port=os.environ.get("SNOVAULT_DB_TEST_PORT"))
     processes.append(postgres)
 
     es_server_url = config.get('elasticsearch.server', "localhost")
