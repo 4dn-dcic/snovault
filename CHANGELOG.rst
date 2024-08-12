@@ -6,6 +6,18 @@ snovault
 Change Log
 ----------
 
+11.21.1
+=======
+
+* Minor changes to allow running (for example) both cgap-portal and smaht-portal
+  simultaneously locally, for localhost/dev purposes only:
+  -  Minor updates to dev_servers.py and tests/elasticsearch_fixture.py
+     to allow defining transport_port for elasticsearch.
+  -  Minor updates to dev_servers.py and tests/postgresql_fixture.py to allow
+     parsing sqlalchemy.url in the ini file (e.g. development.ini) for the
+     postgres port and temporary directory path.
+
+
 11.21.0
 =======
 

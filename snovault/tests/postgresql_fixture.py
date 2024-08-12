@@ -56,7 +56,7 @@ def make_snovault_db_test_url(username=SNOVAULT_DB_TEST_USERNAME,
     return "postgresql://%s@%s:%s/%s%s" % (username, hostname, port, dbname, query_string)
 
 
-def server_process(datadir, prefix='', echo=False):
+def server_process(datadir, prefix='', echo=False, port=None):
 
     postgres_command = os.path.join(prefix, 'postgres')
 
@@ -66,7 +66,7 @@ def server_process(datadir, prefix='', echo=False):
         '-F',  # no fsync
         '-h', SNOVAULT_DB_TEST_HOSTNAME,
         '-k', datadir,
-        '-p', str(SNOVAULT_DB_TEST_PORT),
+        '-p', str(SNOVAULT_DB_TEST_PORT) if port is None else port,
     ]
     process = subprocess.Popen(
         command,
