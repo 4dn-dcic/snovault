@@ -1,6 +1,6 @@
 from dcicutils.misc_utils import environ_bool, PRINT
 from pyramid.authorization import ACLAuthorizationPolicy
-from pyramid.compat import is_nonstr_iter
+from pyramid.util import is_nonstr_iter
 from pyramid.interfaces import IAuthorizationPolicy
 from pyramid.location import lineage
 from zope.interface import implementer

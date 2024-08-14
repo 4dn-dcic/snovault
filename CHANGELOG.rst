@@ -6,10 +6,64 @@ snovault
 Change Log
 ----------
 
-11.16.1
+11.22.0
 =======
 
 * Update ``drs`` validation to remove drs_uri
+
+
+11.21.1
+=======
+
+* Minor changes to allow running (for example) both cgap-portal and smaht-portal
+  simultaneously locally, for localhost/dev purposes only:
+  -  Minor updates to dev_servers.py and tests/elasticsearch_fixture.py
+     to allow defining transport_port for elasticsearch.
+  -  Minor updates to dev_servers.py and tests/postgresql_fixture.py to allow
+     parsing sqlalchemy.url in the ini file (e.g. development.ini) for the
+     postgres port and temporary directory path.
+
+
+11.21.0
+=======
+
+* Fix in indexing_views.py for frame=raw not including the uuid.
+
+
+11.20.0
+=======
+
+* Bug fix: use loadxl_order() in staggered reindexing
+* Add B-tree index to rid column in propsheets to optimize revision history retrieval
+
+
+11.19.0
+=======
+
+* Fix for revision history - deepcopy history as to not modify props in place
+
+
+11.18.0
+=======
+
+* Dropped support for Python 3.8.
+* Updates related to Python 3.12.
+  - Had to update venusian (from 1.2.0) to 3.1.0.
+  - Had to update pyramid (from 1.10.4) to 1.10.8 (for imp import not found).
+    - Had to add pmdarima (no module pyramid.compat).
+    - Had to define/update numpy (to 1.26.4) for this as it was implicitly,
+      due to something else, using 1.24.4 which failed to build with Python 3.12.
+      - And had to update lower bound of Python (from 3.8.1) to 3.9 for this.
+  - Had to update dcicutils (from 8.11.0) to 8.13.0  (for pyramid update for imp import not found).
+* Minor change to dev_servers.py to facilitate running a local ElasticSearch proxy
+  to observe traffic (resquests/responses) between the portal and ElasticSearch
+  with a tool like mitmproxy or mitmweb; see comments in dev_server.py.
+
+
+11.17.0
+=======
+
+* Add `/routes` endpoint to return all routes and select item views in the application
 
 
 11.16.0

@@ -14,6 +14,7 @@ import select
 import shutil
 import subprocess
 import sys
+from urllib.parse import urlparse as url_parse, parse_qs as url_parse_query
 
 from dcicutils.misc_utils import PRINT
 from pyramid.paster import get_app, get_appsettings
@@ -24,6 +25,7 @@ from .tests import elasticsearch_fixture, postgresql_fixture
 
 
 EPILOG = __doc__
+DEFAULT_DATA_DIR = "/tmp/snovault"
 
 logger = logging.getLogger(__name__)
 
@@ -103,7 +105,7 @@ def main():
     parser.add_argument('--clear', action="store_true", help="Clear existing data")
     parser.add_argument('--init', action="store_true", help="Init database")
     parser.add_argument('--load', action="store_true", help="Load test set")
-    parser.add_argument('--datadir', default='/tmp/snovault', help="path to datadir")
+    parser.add_argument('--datadir', default=None, help="path to datadir")
     parser.add_argument('--no_ingest', action="store_true", default=False, help="Don't start the ingestion process.")
     args = parser.parse_args()
 
@@ -124,6 +126,29 @@ def run(app_name, config_uri, datadir, clear=False, init=False, load=False, inge
     # get the config and see if we want to connect to non-local servers
     # TODO: This variable seems to not get used? -kmp 25-Jul-2020
     config = get_appsettings(config_uri, app_name)
+
+    if sqlalchemy_url := config.get("sqlalchemy.url", None):
+        # New as of 2024-07-30 (dmichaels).
+        # Handle sqlalchemy.url property defined in development.ini that looks something like this:
+        # sqlalchemy.url = postgresql://postgres@localhost:5442/postgres?host=/tmp/snovault/pgdata
+        # This allows us to get the temporary data directory (from the URL host query-string, for both
+        # Postgres and ElasticSearch, e.g. /tmp/snovault) and the Postgres port (from the URL port),
+        # so that we can easily change where Postgres is running to support (for example) running
+        # both smaht-portal and cgap-portal locally simultaneously. This also obviates the need
+        # in the portal makefiles to parse out the port from this (sqlalchemy.url) property to
+        # set the SNOVAULT_DB_TEST_PORT environment variable as was currently done.
+        sqlalchemy_url_parsed = url_parse(sqlalchemy_url)
+        sqlalchemy_url_port = sqlalchemy_url_parsed.port
+        sqlalchemy_url_query = url_parse_query(sqlalchemy_url_parsed.query)
+        if sqlalchemy_url_host := sqlalchemy_url_query.get("host", [None])[0]:
+            if sqlalchemy_url_host.endswith("/pgdata"):
+                sqlalchemy_url_host = sqlalchemy_url_host[:-len("/pgdata")]
+        if (datadir is None) and sqlalchemy_url_host:
+            datadir = sqlalchemy_url_host
+        if (os.environ.get("SNOVAULT_DB_TEST_PORT", None) is None) and sqlalchemy_url_port:
+            os.environ["SNOVAULT_DB_TEST_PORT"] =  str(sqlalchemy_url_port)
+    if not datadir:
+        datadir = DEFAULT_DATA_DIR
 
     datadir = os.path.abspath(datadir)
     pgdata = os.path.join(datadir, 'pgdata')
@@ -154,14 +179,28 @@ def run(app_name, config_uri, datadir, clear=False, init=False, load=False, inge
     processes = []
 
     # For now - required components
-    postgres = postgresql_fixture.server_process(pgdata, echo=True)
+    postgres = postgresql_fixture.server_process(pgdata, echo=True, port=os.environ.get("SNOVAULT_DB_TEST_PORT"))
     processes.append(postgres)
 
     es_server_url = config.get('elasticsearch.server', "localhost")
 
     if '127.0.0.1' in es_server_url or 'localhost' in es_server_url:
-        # Bootup local ES server subprocess. Else assume connecting to remote ES cluster.
-        elasticsearch = elasticsearch_fixture.server_process(esdata, echo=True)
+        # Bootup local ES server subprocess; otherwise assume we are connecting to a remote ES cluster.
+        # The elasticsearch.server.actual_port property is useful (only) for running a localhost ElasticSearch
+        # proxy in order to observe traffic (requests/responses) between portal and ElasticSearch with a tool like
+        # mitmweb; e.g. setting elasticsearch.server.actual_port to 9201 and elasticsearch.server to localhost:9200
+        # will cause ElasticSearch to actually run on port 9201 but will cause portal to talk to it via port 9200,
+        # and then we can run mitmweb --mode reverse:http://localhost:9201 -p 9200 --web-port 8081 which will
+        # allow us to browse to http://localhost:8081 locally to observe all of the ElasticSearch traffic.
+        if (es_port := config.get('elasticsearch.server.actual_port', None)) and es_port.isdigit():
+            es_port = int(es_port)
+        elif ((colon := es_server_url.rfind(":")) > 0) and (es_port := es_server_url[colon + 1:]).isdigit():
+            es_port = int(es_port)
+        else:
+            es_port = None
+        transport_ports = config.get('elasticsearch.server.transport_ports', None)
+        elasticsearch = elasticsearch_fixture.server_process(esdata, port=es_port, echo=True,
+                                                             transport_ports=transport_ports)
         processes.append(elasticsearch)
     elif not config.get('indexer.namespace'):
         raise Exception(
@@ -201,6 +240,8 @@ def run(app_name, config_uri, datadir, clear=False, init=False, load=False, inge
 
         # now clear the queues and queue items for indexing
         create_mapping.run(app, check_first=True, strict=True, purge_queue=False)
+        # To test prod setup:
+        # create_mapping.reindex_by_type_staggered(app)
 
     PRINT('Started. ^C to exit.')
 

@@ -50,6 +50,7 @@ def includeme(config):
     config.include('snovault.resource_views')
     config.include('snovault.settings')
     config.include('snovault.server_defaults')
+    config.include('snovault.routes')
 
 
 def main(global_config, **local_config):
