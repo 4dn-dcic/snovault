@@ -9,6 +9,11 @@ class TestDRSAPI:
     """
     BASE_URL = 'http://localhost:80/'
 
+    def test_drs_options(self, testapp):
+        """ Tests that the options endpoint returns 204 """
+        res = testapp.options('/ga4gh/drs/v1/options', headers={'Content-Type': 'application/json'})
+        assert res.status_code == 204
+
     def test_drs_get_object(self, testapp, testing_download):  # noQA fixture
         """ Tests basic structure about a drs object """
         res = testapp.get(testing_download)
@@ -20,6 +25,7 @@ class TestDRSAPI:
         assert drs_object_1['self_uri'] == f'drs://localhost:80/ga4gh/drs/v1/objects/{drs_object_uri}'
         assert (drs_object_1['access_methods'][0]['access_url']['url']
                 == f'{self.BASE_URL}{drs_object_uuid}/@@download')
+        assert (drs_object_1['access_methods'][0]['access_id'] == 'http')
 
         # failure cases
         testapp.get(f'/ga4gh/drs/v1/objects/not_a_uri', status=404)

@@ -445,7 +445,8 @@ def drs(context, request):
                 'access_url': {
                     'url': f'http://{request.host}/{context.uuid}/@@download'
                 },
-                'type': 'http'
+                'type': 'http',
+                'access_id': 'http'
             },
         ]
     }

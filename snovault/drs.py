@@ -1,10 +1,13 @@
 from pyramid.view import view_config
 from pyramid.exceptions import HTTPNotFound
+from pyramid.response import Response
+from dcicutils.misc_utils import ignored
 from .util import debug_log
 
 
 DRS_VERSION_1 = 'v1'
 DRS_PREFIX_V1 = f'ga4gh/drs/{DRS_VERSION_1}'
+DRS_OBJECT_OPTIONS = DRS_PREFIX_V1 + '/options'
 DRS_OBJECT_GET = DRS_PREFIX_V1 + '/objects/{object_id}'
 DRS_OBJECT_GET_ACCESS_URL = DRS_PREFIX_V1 + '/objects/{object_id}/access/{access_id}'
 DRS_OBJECT_GET_ACCESSS_URL_SLASH = DRS_PREFIX_V1 + '/objects/{object_id}/access/'
@@ -23,6 +26,7 @@ ACCESS_METHOD_REQUIRED_FIELDS = [
 
 
 def includeme(config):
+    config.add_route('drs_options', '/' + DRS_OBJECT_OPTIONS)
     config.add_route('drs_objects', '/' + DRS_OBJECT_GET)
     config.add_route('drs_download', '/' + DRS_OBJECT_GET_ACCESS_URL)
     config.add_route('drs_download_slash', '/' + DRS_OBJECT_GET_ACCESSS_URL_SLASH)
@@ -79,6 +83,15 @@ def get_drs_url(request, object_uri):
     except Exception as e:
         raise HTTPNotFound(f'You accessed a DRS object that either you do not have access to,'
                            f' did not pass valid access_id or does not exist {str(e)}')
+
+
+@view_config(
+    route_name='drs_options', request_method='OPTIONS'
+)
+@debug_log
+def drs_options(context, request):
+    ignored(context), ignored(request)
+    return Response(status_code=204)
 
 
 @view_config(
