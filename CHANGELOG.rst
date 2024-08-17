@@ -6,6 +6,15 @@ snovault
 Change Log
 ----------
 
+11.22.0
+=======
+
+* Changes to elasticsearch/create_mapping.py related to support nested quality-metrics/qc_values
+  for smaht-portal; appliy fallthru logic for create_mapping.schema_mapping if the type does
+  not match any other itemized type there; e.g. for ['boolean', 'integer', 'number', 'string']
+  for the quality-metrics/qc_values/value type.
+
+
 11.21.1
 =======
 
