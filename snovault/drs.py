@@ -57,7 +57,8 @@ def get_and_format_drs_object(request, object_uri):
     except Exception:
         raise HTTPNotFound('You accessed a DRS object_uri that either does not exist'
                            ' or you do not have access to it.')
-    drs_object['self_uri'] = f'drs://{request.host}{request.path}'
+    uri = drs_object['id']
+    drs_object['self_uri'] = f'drs://{request.host}/{uri}'
     return drs_object
 
 

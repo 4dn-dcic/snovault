@@ -22,7 +22,7 @@ class TestDRSAPI:
         drs_object_1 = testapp.get(f'/ga4gh/drs/v1/objects/{drs_object_uri}').json
         for key in REQUIRED_FIELDS:
             assert key in drs_object_1
-        assert drs_object_1['self_uri'] == f'drs://localhost:80/ga4gh/drs/v1/objects/{drs_object_uri}'
+        assert drs_object_1['self_uri'] == f'drs://localhost:80/{drs_object_uri}'
         assert (drs_object_1['access_methods'][0]['access_url']['url']
                 == f'{self.BASE_URL}{drs_object_uuid}/@@download')
         assert (drs_object_1['access_methods'][0]['access_id'] == 'http')
