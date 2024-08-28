@@ -9,16 +9,13 @@ class TestDRSAPI:
     """
     BASE_URL = 'http://localhost:80/'
 
-    def test_drs_options(self, testapp):
-        """ Tests that the options endpoint returns 204 """
-        res = testapp.options('/ga4gh/drs/v1/options/blah', headers={'Content-Type': 'application/json'})
-        assert res.status_code == 204
-
     def test_drs_get_object(self, testapp, testing_download):  # noQA fixture
         """ Tests basic structure about a drs object """
         res = testapp.get(testing_download)
         drs_object_uri = res.json['accession']
         drs_object_uuid = res.json['uuid']
+        testapp.options(f'/ga4gh/drs/v1/objects/{drs_object_uri}',
+                        headers={'Content-Type': 'application/json'}, status=204)
         drs_object_1 = testapp.get(f'/ga4gh/drs/v1/objects/{drs_object_uri}').json
         for key in REQUIRED_FIELDS:
             assert key in drs_object_1
