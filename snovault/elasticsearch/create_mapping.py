@@ -76,7 +76,7 @@ def determine_if_is_date_field(field, schema):
     return is_date_field
 
 
-def schema_mapping(field, schema, top_level=False, from_array=False):
+def schema_mapping(field, schema, top_level=False, from_array=False, paths_for_logging=[]):
     """
     Create the mapping for a given schema. Can handle using all fields for
     objects (*), but can handle specific fields using the field parameter.
@@ -112,12 +112,13 @@ def schema_mapping(field, schema, top_level=False, from_array=False):
 
     # Elasticsearch handles multiple values for a field
     if type_ == 'array' and schema['items']:
-        return schema_mapping(field, schema['items'], from_array=True)
+        return schema_mapping(field, schema['items'], from_array=True, paths_for_logging=[*paths_for_logging, "[]"])
 
     if type_ == 'object':
         properties = {}
+        paths_for_logging = [*paths_for_logging, schema.get("title", "").replace(" ", "")]
         for k, v in schema.get('properties', {}).items():
-            mapping = schema_mapping(k, v)
+            mapping = schema_mapping(k, v, paths_for_logging=[*paths_for_logging, k])
             if mapping is not None:
                 if field == '*' or k == field:
                     properties[k] = mapping
@@ -150,25 +151,26 @@ def schema_mapping(field, schema, top_level=False, from_array=False):
             }
         }
 
-    if type_ == ["number", "string"]:
-        return {
-            'type': 'text',
-            'fields': {
-                'value': {
-                    'type': 'float',
-                    'ignore_malformed': True,
-                },
-                'raw': {
-                    'type': 'keyword',
-                    'ignore_above': KW_IGNORE_ABOVE
-                },
-                'lower_case_sort': {
-                    'type': 'keyword',
-                    'normalizer': 'case_insensitive',
-                    'ignore_above': KW_IGNORE_ABOVE
-                }
-            }
-        }
+#   Move to bottom as the default ...
+#   if type_ == ["number", "string"]:
+#       return {
+#           'type': 'text',
+#           'fields': {
+#               'value': {
+#                   'type': 'float',
+#                   'ignore_malformed': True,
+#               },
+#               'raw': {
+#                   'type': 'keyword',
+#                   'ignore_above': KW_IGNORE_ABOVE
+#               },
+#               'lower_case_sort': {
+#                   'type': 'keyword',
+#                   'normalizer': 'case_insensitive',
+#                   'ignore_above': KW_IGNORE_ABOVE
+#               }
+#           }
+#       }
 
     if type_ == 'boolean':
         return {
@@ -229,6 +231,39 @@ def schema_mapping(field, schema, top_level=False, from_array=False):
         return {
             'type': 'long',
             'fields': {
+                'raw': {
+                    'type': 'keyword',
+                    'ignore_above': KW_IGNORE_ABOVE
+                },
+                'lower_case_sort': {
+                    'type': 'keyword',
+                    'normalizer': 'case_insensitive',
+                    'ignore_above': KW_IGNORE_ABOVE
+                }
+            }
+        }
+
+    # Fall thru case.
+    default_mapping = False
+
+    # Warnings for unmapped items; guard against duplicate warning by squirreling away
+    # the paths_for_logging in a hidden attribute (__unmapped_warnings) of this function.
+    if len(paths_for_logging) > 1:
+        if not hasattr(schema_mapping, "__unmapped_warnings"):
+            setattr(schema_mapping, "__unmapped_warnings", [])
+        paths_for_logging = ".".join([path for path in paths_for_logging if path])
+        if paths_for_logging not in schema_mapping.__unmapped_warnings:
+            schema_mapping.__unmapped_warnings.append(paths_for_logging)
+            log.warning(f"Using default mapping for field: {paths_for_logging} | type: {type_}")
+
+    if default_mapping:
+        return {
+            'type': 'text',
+            'fields': {
+                'value': {
+                    'type': 'float',
+                    'ignore_malformed': True,
+                },
                 'raw': {
                     'type': 'keyword',
                     'ignore_above': KW_IGNORE_ABOVE
@@ -678,7 +713,8 @@ def type_mapping(types, item_type, embed=True):
     type_info = types[item_type]
     schema = type_info.schema
     # TODO: use top_level parameter here for schema_mapping
-    mapping = schema_mapping('*', schema, from_array=False)
+    paths_for_logging = [schema.get("title", "").replace(" ", "")] if schema else []
+    mapping = schema_mapping('*', schema, from_array=False, paths_for_logging=paths_for_logging)
     if not embed:
         return mapping
 

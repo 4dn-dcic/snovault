@@ -496,3 +496,179 @@ def test_get_identifying_and_required_properties():
         identifying_properties, required_properties = get_identifying_and_required_properties(schema)
         assert set(identifying_properties) == {}
         assert set(required_properties) == {"some_required_property_a", "some_required_property_b", "either_require_this_property_a", "or_require_this_property_a"}
+
+
+def test_get_identifying_and_required_properties_20240828():
+
+    from snovault.schema_utils import get_identifying_and_required_properties
+
+    # Handle (possibly) required properties within an allOf within an anyOf, specifically
+    # for the Analyte properties rna_integrity_number and rna_integrity_number_instrument,
+    # which are required only if molecule is RNA. This example based on Analyte.
+    schema = {
+        "required": [
+            "molecule",
+            "molecule_detail",
+            "samples",
+            "submission_centers",
+            "submitted_id"
+        ],
+        "identifyingProperties": [
+            "accession",
+            "submitted_id",
+            "uuid"
+        ],
+        "properties": {
+            "uuid": {
+                "title": "UUID",
+                "type": "string",
+                "format": "uuid",
+                "exclude_from": [
+                    "FFedit-create"
+                ],
+                "serverDefault": "uuid4",
+                "permission": "restricted_fields",
+                "requestMethod": "POST"
+            }
+        },
+        "anyOf": [
+            {
+                "properties": {
+                    "molecule": {
+                        "not": {
+                            "contains": {
+                                "const": "DNA"
+                            }
+                        }
+                    }
+                },
+                "allOf": [
+                    {
+                        "not": {
+                            "required": [
+                                "genomic_quality_number"
+                            ]
+                        }
+                    },
+                    {
+                        "not": {
+                            "required": [
+                                "genomic_quality_number_instrument"
+                            ]
+                        }
+                    },
+                    {
+                        "not": {
+                            "required": [
+                                "genomic_quality_size_threshold"
+                            ]
+                        }
+                    },
+                    {
+                        "not": {
+                            "required": [
+                                "dna_integrity_number"
+                            ]
+                        }
+                    },
+                    {
+                        "not": {
+                            "required": [
+                                "dna_integrity_number_instrument"
+                            ]
+                        }
+                    },
+                    {
+                        "not": {
+                            "required": [
+                                "dna_quality_number"
+                            ]
+                        }
+                    },
+                    {
+                        "not": {
+                            "required": [
+                                "dna_quality_number_instrument"
+                            ]
+                        }
+                    },
+                    {
+                        "not": {
+                            "required": [
+                                "dna_quality_size_threshold"
+                            ]
+                        }
+                    },
+                    {
+                        "required": [
+                            "rna_integrity_number"
+                        ]
+                    },
+                    {
+                        "required": [
+                            "rna_integrity_number_instrument"
+                        ]
+                    }
+                ]
+            },
+            {
+                "properties": {
+                    "molecule": {
+                        "not": {
+                            "contains": {
+                                "const": "RNA"
+                            }
+                        }
+                    }
+                },
+                "allOf": [
+                    {
+                        "not": {
+                            "required": [
+                                "rna_integrity_number"
+                            ]
+                        }
+                    },
+                    {
+                        "not": {
+                            "required": [
+                                "rna_integrity_number_instrument"
+                            ]
+                        }
+                    },
+                    {
+                        "not": {
+                            "required": [
+                                "ribosomal_rna_ratio"
+                            ]
+                        }
+                    }
+                ]
+            },
+            {
+                "properties": {
+                    "molecule": {
+                        "contains": {
+                            "const": "RNA"
+                        }
+                    }
+                },
+                "allOf": [
+                    {
+                        "required": [
+                            "rna_integrity_number"
+                        ]
+                    },
+                    {
+                        "required": [
+                            "rna_integrity_number_instrument"
+                        ]
+                    }
+                ]
+            }
+        ]
+    }
+    identifying_properties, required_properties = get_identifying_and_required_properties(schema)
+    assert identifying_properties == ["accession", "submitted_id", "uuid"]
+    assert sorted(required_properties) == sorted(["molecule_detail", "molecule", "samples", "rna_integrity_number",
+                                                  "rna_integrity_number_instrument", "submitted_id", "submission_centers"])

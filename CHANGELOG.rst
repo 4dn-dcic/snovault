@@ -6,6 +6,19 @@ snovault
 Change Log
 ----------
 
+11.22.0
+=======
+
+* Changes to elasticsearch/create_mapping.py related to support nested quality-metrics/qc_values
+  for smaht-portal; appliy fallthru logic for create_mapping.schema_mapping if the type does
+  not match any other itemized type there; e.g. for ['boolean', 'integer', 'number', 'string']
+  for the quality-metrics/qc_values/value type.
+* Change to schema_utils.py/get_identifying_and_required_properties to handle (possibly)
+  required properties within an allOf within an anyOf, specifically for the Analyte
+  properties rna_integrity_number and rna_integrity_number_instrument, which are
+  required only if molecule is RNA.
+
+
 11.21.1
 =======
 
