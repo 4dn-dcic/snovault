@@ -11,7 +11,7 @@ class TestDRSAPI:
 
     def test_drs_options(self, testapp):
         """ Tests that the options endpoint returns 204 """
-        res = testapp.options('/ga4gh/drs/v1/options', headers={'Content-Type': 'application/json'})
+        res = testapp.options('/ga4gh/drs/v1/options/blah', headers={'Content-Type': 'application/json'})
         assert res.status_code == 204
 
     def test_drs_get_object(self, testapp, testing_download):  # noQA fixture
