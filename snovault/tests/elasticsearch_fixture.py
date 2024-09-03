@@ -9,7 +9,7 @@ import shutil
 import tempfile
 
 
-def server_process(datadir, host='localhost', port=9200, prefix='', echo=False):
+def server_process(datadir, host='localhost', port=9200, prefix='', echo=False, transport_ports=None):
     # args = [
     #     os.path.join(prefix, 'elasticsearch'),
     #     '-f',  # foreground
