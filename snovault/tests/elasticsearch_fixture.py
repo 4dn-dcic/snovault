@@ -1,13 +1,15 @@
 import os.path
+import requests
 import sys
 import subprocess
+import time
 
 import atexit
 import shutil
 import tempfile
 
 
-def server_process(datadir, host='localhost', port=9200, prefix='', echo=False, transport_ports=None):
+def server_process(datadir, host='localhost', port=9200, prefix='', echo=False):
     # args = [
     #     os.path.join(prefix, 'elasticsearch'),
     #     '-f',  # foreground
@@ -35,42 +37,46 @@ def server_process(datadir, host='localhost', port=9200, prefix='', echo=False, 
     ]
     # elasticsearch for travis
     if os.environ.get('TRAVIS'):
-        echo = True
+        echo = True  # noqa
         args.append('-Epath.conf=%s/deploy' % os.environ['TRAVIS_BUILD_DIR'])
     elif os.path.exists('/etc/elasticsearch'):
         # elasticsearch.deb setup
        args.append('-Epath.conf=/etc/elasticsearch')
-    if isinstance(transport_ports, str) and transport_ports:
-        args.append(f'-Etransport.port={transport_ports}')
     # set JVM heap size for ES
     if not os.environ.get('ES_JAVA_OPTS'):
         os.environ['ES_JAVA_OPTS'] = "-Xms4G -Xmx4G"
 
-    process = subprocess.Popen(
-        args,
-        close_fds=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-    )
-
-    SUCCESS_LINE = b'started\n'
-
-    lines = []
-    for line in iter(process.stdout.readline, b''):
-        if echo:
-            sys.stdout.write(line.decode('utf-8'))
-        lines.append(line)
-        if line.endswith(SUCCESS_LINE):
-            break
+    elasticsearch_command = args
+    elasticsearch_command_string = " ".join(elasticsearch_command)
+    elasticsearch_url = f"http://{host}:{port}"
+    log(f"Starting ElasticSearch ...")
+    log(f"ElasticSearch command: {elasticsearch_command_string}")
+    log(f"ElasticSearch endpoint: {elasticsearch_url}")
+    # Note that (ElasticSearch subprocess) this inherits stdout/stderr from parent.
+    # Previously (pre 2024-09-03) we did not do this and got tripped up for some
+    # not completely understood reason related to logging output from ElasticSearch;
+    # in any case this is the more correct way to do this.
+    process = subprocess.Popen(args, stdin=None, stdout=None, stderr=None)
+    log(f"Waiting for ElasticSearch to be up/running: {elasticsearch_url}")
+    if not wait_for_elasticsearch_be_up_and_running(elasticsearch_url):
+        log(f"WARNING: Did not detect that ElasticSearch is up/running: {elasticsearch_url} (but continuing)")
     else:
-        code = process.wait()
-        msg = ('Process return code: %d\n' % code) + b''.join(lines).decode('utf-8')
-        raise Exception(msg)
-
-    if not echo:
-        process.stdout.close()
+        log(f"ElasticSearch appears to be up/running: {elasticsearch_url}")
 
     return process
+
+
+def wait_for_elasticsearch_be_up_and_running(url: str) -> bool:
+    wait_interval_seconds = 3
+    number_of_times_to_check = 20
+    for n in range(number_of_times_to_check):
+        time.sleep(wait_interval_seconds)
+        try:
+            _ = requests.get(url)
+            return True
+        except Exception:
+            pass
+    return False
 
 
 def main():
@@ -96,14 +102,11 @@ def main():
         finally:
             shutil.rmtree(datadir)
 
-    print('Started. ^C to exit.')
 
-    try:
-        for line in iter(process.stdout.readline, b''):
-            sys.stdout.write(line.decode('utf-8'))
-    except KeyboardInterrupt:
-        raise SystemExit(0)
+def log(message: str) -> None:
+    print(f"PORTAL: {message}", flush=True)
 
 
 if __name__ == '__main__':
     main()
+
