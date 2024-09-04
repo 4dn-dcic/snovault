@@ -199,9 +199,12 @@ def run(app_name, config_uri, datadir, clear=False, init=False, load=False, inge
         else:
             es_port = None
         transport_ports = config.get('elasticsearch.server.transport_ports', None)
-        elasticsearch = elasticsearch_fixture.server_process(esdata, port=es_port, echo=True,
-                                                             transport_ports=transport_ports)
-        processes.append(elasticsearch)
+        _ = elasticsearch_fixture.server_process(esdata, port=es_port, echo=True, transport_ports=transport_ports)
+        # With subprocess.Popen fix in elasticsearch_fixture (2024-09-03) we no longer
+        # need/want to do any stdout/stderr reading (below), which is the only thing
+        # this (adding the process to the processes list) does. TODO: should probably
+        # cleanup the other subprocess.Popen instances here/elsewhere at some point.
+        # processes.append(elasticsearch)
     elif not config.get('indexer.namespace'):
         raise Exception(
             'It looks like are connecting to remote elasticsearch.server but no indexer.namespace is defined.')
