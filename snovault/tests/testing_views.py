@@ -228,15 +228,6 @@ class Item(BaseItem):
             #     roles[viewing_group_members] = 'role.viewing_group_member'
         return roles
 
-    def unique_keys(self, properties):
-        keys = super(Item, self).unique_keys(properties)
-        if 'accession' not in self.schema['properties']:
-            return keys
-        keys.setdefault('accession', []).extend(properties.get('alternate_accessions', []))
-        if properties.get('status') != 'replaced' and 'accession' in properties:
-            keys['accession'].append(properties['accession'])
-        return keys
-
     @calculated_property(schema={
         "title": "Display Title",
         "description": "A calculated title for every object in 4DN",
@@ -418,6 +409,7 @@ class NestedObjectLinkTarget(Item):
 
 @collection(
     'testing-downloads',
+    unique_key='accession',
     properties={
         'title': 'Test download collection',
         'description': 'Testing. Testing. 1, 2, 3.',
@@ -436,11 +428,11 @@ def drs(context, request):
         downstream API (see drs.py).
     """
     rendered_object = request.embed(str(context.uuid), '@@object', as_user=True)
+    accession = rendered_object['accession']
     drs_object = {
-        'id': rendered_object['@id'],
+        'id': accession,
         'created_time': rendered_object['date_created'],
-        'drs_id': rendered_object['uuid'],
-        'self_uri': f'drs://{request.host}{request.path}',
+        'self_uri': f'drs://{request.host}/{accession}',
         'size': 0,
         'checksums': [
             {
@@ -453,7 +445,8 @@ def drs(context, request):
                 'access_url': {
                     'url': f'http://{request.host}/{context.uuid}/@@download'
                 },
-                'type': 'http'
+                'type': 'http',
+                'access_id': 'http'
             },
         ]
     }

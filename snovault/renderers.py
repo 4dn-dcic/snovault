@@ -110,7 +110,7 @@ def validate_request_tween_factory(handler, registry):
         if 'X_REQUEST_METHOD' in environ:
             environ['REQUEST_METHOD'] = environ['X_REQUEST_METHOD']
 
-        if request.method in ('GET', 'HEAD'):
+        if request.method in ('GET', 'HEAD', 'OPTIONS'):
             # If GET request, don't need to check `request.content_type`
             # Includes page text/html requests.
             return handler(request)

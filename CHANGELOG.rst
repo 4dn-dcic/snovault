@@ -6,8 +6,16 @@ snovault
 Change Log
 ----------
 
+
 11.22.0
 =======
+
+* Update ``drs`` validation to remove drs_uri
+
+
+11.22.0
+=======
+
 * 2024-09-03/dmichaels
   - Fix in snovault/tests/elasticsearch_fixture.py (use only for local/dev deploy) for
     strange (new as of 2024-09-02) behavior where it was hanging on startup during
