@@ -1,7 +1,6 @@
 from pyramid.view import view_config
 from pyramid.exceptions import HTTPNotFound
 from pyramid.response import Response
-from dcicutils.misc_utils import ignored
 from .util import debug_log
 
 
