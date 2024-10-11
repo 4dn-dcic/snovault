@@ -6,6 +6,12 @@ snovault
 Change Log
 ----------
 
+11.22.1
+=======
+* 2024-10-11/dmichaels
+* Updated dcicutils version (8.16.1) for vulnerabilities.
+
+
 11.22.0
 =======
 * 2024-09-03/dmichaels
