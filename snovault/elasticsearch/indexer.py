@@ -467,7 +467,8 @@ class Indexer(object):
 
         # xyzzy/dmichaels/20241102
         result_sid = result['sid']
-        del result['sid']
+        # NEVERMIND - BREAKS TEST: FAILED snovault/tests/test_indexing.py::test_indexing_info[False] - KeyError: 'sid'
+        # del result['sid']
         # xyzzy/dmichaels/20241102
 
         last_exc = None  # We intend to set it to something else later, but this is just in case we goof
