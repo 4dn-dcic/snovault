@@ -465,12 +465,6 @@ class Indexer(object):
         if add_to_secondary is not None:
             add_to_secondary.update(result['rev_linked_to_me'])
 
-        # xyzzy/dmichaels/20241102
-        result_sid = result['sid']
-        # NEVERMIND - BREAKS TEST: FAILED snovault/tests/test_indexing.py::test_indexing_info[False] - KeyError: 'sid'
-        # del result['sid']
-        # xyzzy/dmichaels/20241102
-
         last_exc = None  # We intend to set it to something else later, but this is just in case we goof
         ignorable(last_exc)
         for backoff in [0, 1, 2]:
@@ -479,8 +473,7 @@ class Indexer(object):
                 namespaced_index = get_namespaced_index(request, result['item_type'])
                 self.es.index(
                     index=namespaced_index, body=result,
-                    # id=str(uuid), version=result['sid'], version_type='external_gte',
-                    id=str(uuid), version=result_sid, version_type='external_gte', # xyzzy/dmichaels/20241102
+                    id=str(uuid), version=result['sid'], version_type='external_gte',
                     request_timeout=30
                 )
             except ConflictError:
@@ -488,8 +481,7 @@ class Indexer(object):
                 # this may be somewhat common and is not harmful
                 # do not return an error so item is removed from queue
                 duration = timer() - start
-                # log.warning('Conflict indexing', sid=result['sid'], duration=duration, cat=cat)
-                log.warning('Conflict indexing', sid=result_sid, duration=duration, cat=cat)  # xyzzy/dmichaels/20241102
+                log.warning('Conflict indexing', sid=result['sid'], duration=duration, cat=cat)
                 return
             except (ConnectionError, ReadTimeoutError, TransportError) as e:
                 duration = timer() - start
