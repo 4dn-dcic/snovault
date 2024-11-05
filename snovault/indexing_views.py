@@ -108,10 +108,6 @@ def item_index_data(context, request):
     with indexing_timer(indexing_stats, 'upgrade_properties'):
         properties = context.upgrade_properties()
 
-    # 2024-11-03/xyzzy: Possible fix for unexpected 'sid' property ...
-    if "sid" in properties:
-        del properties["sid"]
-
     # 2024-07-09: Make sure that the uuid gets into the frame=raw view.
     if not properties.get('uuid'):
         properties['uuid'] = uuid
