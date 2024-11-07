@@ -9,7 +9,7 @@ Change Log
 11.23.0
 =======
 * 2024-11-02/dmichaels
-  - Possible fix for intermittent 'sid' indexing problem.
+  - Fix for unexpected 'sid' indexing problem.
 
 
 11.22.0
