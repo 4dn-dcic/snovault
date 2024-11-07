@@ -6,6 +6,12 @@ snovault
 Change Log
 ----------
 
+11.23.0
+=======
+* 2024-11-02/dmichaels
+  - Fix for unexpected 'sid' indexing problem.
+
+
 11.22.0
 =======
 * 2024-09-03/dmichaels

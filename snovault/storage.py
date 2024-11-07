@@ -1,4 +1,5 @@
 import boto3
+from copy import deepcopy
 import structlog
 import uuid
 
@@ -566,8 +567,15 @@ class RDBStorage(object):
         session = self.DBSession
         revisions = []
         for revision in session.query(PropertySheet).filter_by(rid=rid).order_by(PropertySheet.sid):
-            revision.properties['sid'] = revision.sid
-            revisions.append(revision.properties)
+            # 2024-11-04/C4-1188/PR-306/dmichaels:
+            # Fix for "sid" appearing in properties in some situations, and ultimately ending up
+            # with validation-errors = Additional properties are not allowed ('sid' was unexpected).
+            # See smaht-portal/.../test_types_file.py for 92e8371b-bcdf-44de-ad49-3a5f108e91eb (from workbook-inserts).
+            # revision.properties['sid'] = revision.sid
+            # revisions.append(revision.properties)
+            revision_properties = deepcopy(revision.properties)
+            revision_properties['sid'] = revision.sid
+            revisions.append(revision_properties)
         return revisions
 
 
