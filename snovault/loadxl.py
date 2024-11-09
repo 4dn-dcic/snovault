@@ -624,6 +624,8 @@ def load_all_gen(testapp, inserts, docsdir, overwrite=True, itype=None, from_jso
                         post_request += '&check_only=true'
                         if skip_links:
                             post_request += "&skip_links=true"
+                    elif skip_links:
+                        post_request += "&skip_links=true"
                     to_post = format_for_attachment(to_post, docsdir)
                     try:
                         # This creates the (as yet non-existent) item to the
@@ -701,11 +703,11 @@ def load_all_gen(testapp, inserts, docsdir, overwrite=True, itype=None, from_jso
                     raise Exception("Item has no uuid nor any other identifying property; cannot PATCH.")
                 normalized_item, deleted_properties = normalize_deleted_properties(an_item)
                 if deleted_properties:
-                    if validate_only and skip_links:
+                    if skip_links:
                         identifying_path += f"?delete_fields={','.join(deleted_properties)}&skip_links=true"
                     else:
                         identifying_path += f"?delete_fields={','.join(deleted_properties)}"
-                elif validate_only and skip_links:
+                elif skip_links:
                     identifying_path += f"?skip_links=true"
                 progress(PROGRESS.PATCH) if progress else None
                 res = testapp.patch_json(identifying_path, normalized_item)

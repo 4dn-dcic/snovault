@@ -6,6 +6,13 @@ snovault
 Change Log
 ----------
 
+11.24.0
+=======
+* 2024-11-09/dmichaels
+  - Expanded effects of skip_links=true in loadxl (currently used only by smaht-submitr)
+    accomodate/workarond occasional issues when loading data locally (from exported production data).
+
+
 11.23.0
 =======
 * 2024-11-02/dmichaels
