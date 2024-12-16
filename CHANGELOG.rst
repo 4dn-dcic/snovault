@@ -6,6 +6,14 @@ snovault
 Change Log
 ----------
 
+11.24.0
+=======
+* 2024-12-16/dmichaels
+  - Fix in  search.SearchBuilder._initialize_additional_facets for array-of-primitive type;
+    e.g. came up in smaht-portal with additional_facet=sample_summary.studies.
+  - Updated dcicutils to 8.16.4.
+
+
 11.23.0
 =======
 * 2024-11-02/dmichaels

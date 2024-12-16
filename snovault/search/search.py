@@ -571,6 +571,10 @@ class SearchBuilder:
                 ))
             else:
                 t = field_definition.get('type', None)
+                # dmichaels/2024-12-16: Fix for arary-of-primitive;
+                # e.g. came up in smaht-portal with additional_facet=sample_summary.studies.
+                if t == "array":
+                    t = field_definition.get("items", {}).get("type")
                 if not t:
                     log.error('Encountered an additional facet that has no type! %s' % field_definition)
                     continue  # drop this facet
