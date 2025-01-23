@@ -905,6 +905,9 @@ class SearchBuilder:
                                 }
 
                     result_facet['terms'] = list(term_to_bucket.values())
+                    if 'group_by_field' in result_facet and (full_agg_name + ':group_by') in aggregations:
+                        self.group_facet_terms(result_facet, aggregations[full_agg_name + ':group_by'],
+                                               es_results['filters'])
 
                 # XXX: not clear this functions as intended - Will 2/17/2020
                 if len(aggregations[full_agg_name].keys()) > 2:
@@ -952,6 +955,58 @@ class SearchBuilder:
             return {}
         return {k: v for k, v in es_results['aggregations'].items()
                 if k != 'all_items'}
+
+    @staticmethod
+    def group_facet_terms(result_facet, agg, filters):
+        """ Helper function ported (as is) from FF that retrieves counts from a sub
+            aggregation and populates them into a main aggregation
+        """
+        if result_facet is None or agg is None:
+            return
+
+        def transpose_dict(original_dict):
+            transposed_dict = {}
+            for key, values in original_dict.items():
+                for value in values:
+                    if value not in transposed_dict:
+                        transposed_dict[value] = [key]
+                    else:
+                        transposed_dict[value].append(key)
+            return transposed_dict
+
+        ret_result = {}
+        for bucket in agg["primary_agg"]["buckets"]:
+            ret_result[bucket['key']] = [str(item['key']) for item in bucket['sub_terms']['buckets']]
+        # transpose {group 1: [term 1_1, term 1_2, ... term 1_n]} to
+        # {term 1_1: [group1], term 1_2: [group1], .. term 1_n: [group1]} for faster traversing (see below)
+        transposed = transpose_dict(ret_result)
+
+        group_terms_dict = dict()
+        added_keys_dict = dict()
+
+        for term in result_facet['terms']:
+            group_key = transposed[term['key']][0] if term['key'] in transposed else '(Missing group)'
+            if group_key not in group_terms_dict:
+                group_terms_dict[group_key] = {'key': group_key, 'doc_count': 0, 'terms': []}
+            group_term = group_terms_dict[group_key]
+            # calculate total doc_count
+            group_term['doc_count'] += term['doc_count']
+            group_term['terms'].append(term)
+            added_keys_dict[term['key']] = True
+        # add terms not in results but exists in filters
+        # (ui handles it for regular facets, where as it is not possible to build parent-child relation for grouping facet terms)
+        for filter in filters:
+            if (filter['field'] != result_facet['field'] or filter['term'] in added_keys_dict):
+                continue
+            group_key = transposed[filter['term']][0] if filter['term'] in transposed else '(Missing group)'
+            if group_key not in group_terms_dict:
+                group_terms_dict[group_key] = {'key': group_key, 'doc_count': 0, 'terms': []}
+            group_term = group_terms_dict[group_key]
+            group_term['terms'].append({'key': filter['term'], 'doc_count': 0})
+
+        result_facet['terms'] = sorted(list(group_terms_dict.values()), key=lambda t: t['doc_count'], reverse=True)
+        del result_facet['group_by_field']
+        result_facet['has_group_by'] = True
 
     def get_collection_actions(self):
         """
