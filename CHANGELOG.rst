@@ -6,6 +6,13 @@ snovault
 Change Log
 ----------
 
+11.23.0.1b0
+===========
+
+* Ports ``group_by_field`` faceting feature from Fourfront
+
+
+
 11.23.0
 =======
 * 2024-11-02/dmichaels
@@ -18,7 +25,7 @@ Change Log
   - Fix in snovault/tests/elasticsearch_fixture.py (use only for local/dev deploy) for
     strange (new as of 2024-09-02) behavior where it was hanging on startup during
     ElasticSearch index mapping creation, related to ElasticSearch logging output,
-    and the way we were using subprocess.Popen and reading the subprocess output; 
+    and the way we were using subprocess.Popen and reading the subprocess output;
     more correct way is to inherit stdout/stderr of the partent.
 
 

@@ -103,6 +103,27 @@ class LuceneBuilder:
         should_query = {BOOL: {SHOULD: {TERMS: {field_name: options}}}}
         return should_query
 
+    @staticmethod
+    def create_field_filters(field_filters):
+        """ Taken as is (essentially) from Fourfront to implement the group by facet
+            terms aggregation
+        """
+        must_terms, must_not_terms = [], []
+        must_filters, must_not_filters = [], []
+        for query_field, filters in field_filters.items():
+            must_terms = {'terms': {query_field: filters['must_terms']}} if filters['must_terms'] else {}
+            must_not_terms = {'terms': {query_field: filters['must_not_terms']}} if filters['must_not_terms'] else {}
+
+        final_filters = {'bool': {'must': must_filters, 'must_not': must_not_filters}}
+
+        if must_terms:
+            must_filters.append(must_terms)
+        if must_not_terms:
+            must_not_filters.append(must_not_terms)
+
+        return final_filters
+
+
     @classmethod
     def build_sub_queries(cls, field_filters, es_mapping):
         """
@@ -381,8 +402,8 @@ class LuceneBuilder:
 
         return range_filters
 
-    @staticmethod
-    def initialize_field_filters(request, principals, doc_types):
+    @classmethod
+    def initialize_field_filters(cls, request, principals, doc_types):
         """ Helper function for build_filters
             Initializes field filters with filters that exist on all searches, does some basic updates
         """
@@ -416,7 +437,10 @@ class LuceneBuilder:
         if 'OntologyTerm' not in doc_types:
             field_filters['embedded.@type.raw']['must_not_terms'].append('OntologyTerm')
 
-        return field_filters
+        # base filters only includes principals, doc_type and excludes some status and item types
+        # it is essentially useful for the group by facet terms aggregation
+        base_field_filters = cls.create_field_filters(deepcopy(field_filters))
+        return field_filters, base_field_filters
 
     @staticmethod
     def build_nested_query(nested_path, query):
@@ -569,7 +593,7 @@ class LuceneBuilder:
 
         # these next two dictionaries should each have keys equal to query_field
         # and values: must_terms: [<list of terms>], must_not_terms: [<list of terms>], add_no_value: True/False/None
-        field_filters = cls.initialize_field_filters(request, principals, doc_types)
+        field_filters, base_field_filters = cls.initialize_field_filters(request, principals, doc_types,)
         range_filters = cls.handle_range_filters(request, result, field_filters, doc_types)
 
         # construct queries
@@ -588,7 +612,7 @@ class LuceneBuilder:
 
         # at this point, final_filters is valid lucene and can be dropped into the query directly
         query[QUERY][BOOL][FILTER] = final_filters
-        return query, final_filters
+        return query, final_filters, base_field_filters
 
     @staticmethod
     def _check_and_remove(compare_field, facet_filters, active_filter, query_field, filter_type):
@@ -969,7 +993,7 @@ class LuceneBuilder:
 
     @classmethod
     def _add_terms_aggregation(cls, facet, query_field, search_filters, string_query, nested_path, aggs, agg_name,
-                               requested_values):
+                               requested_values, base_field_filters):
         """ Builds a standard terms aggregation, setting a nested identifier to be repaired later
             by elasticsearch_dsl, adding it to the given aggs.
 
@@ -981,6 +1005,7 @@ class LuceneBuilder:
             :param aggs: the aggregation object we are building
             :param agg_name: name of the aggregation we are building
             :param requested_values: values for this terms agg we requested (to be explicitly included)
+            :param base_field_filters: Dict of filters on base fields for use with group by terms facet
         """
         is_nested = nested_path is not None
         if is_nested:
@@ -1032,9 +1057,38 @@ class LuceneBuilder:
                     FILTER: facet_filters,
                 }
 
+        # This comment is taken from Fourfront and represents the last remnant of divergent in behavior
+        # in search across the portals. Note that such terms query will *not* work on nested fields,
+        # but this is not likely to be a big issue as it's an uncommon scenario -Will 23 Jan 2024
+        # add extra ES sub-query to fetch facet terms and their grouping terms to build
+        # parent - child hierarchy (we always build full map, since the implementation in
+        # https://github.com/4dn-dcic/fourfront/blob/dc47659487aec88fb0c19145e48ebbd20588eba3/src/encoded/search.py
+        # fails when there are selected terms in filters but not listed in facets)
+        # Note: This aggregation is used in group_facet_terms func.
+        if 'group_by_field' in facet and base_field_filters:
+            aggs[facet['aggregation_type'] + ":" + agg_name + ":group_by"] = {
+                'aggs': {
+                    "primary_agg": {
+                        "terms": {
+                            'size': 100,
+                            'field': "embedded." + facet['group_by_field'] + ".raw",
+                            'missing': facet.get("missing_value_replacement", "No value"),
+                            'aggs': {
+                                "sub_terms": {
+                                    "terms": {
+                                        "field": query_field,
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                'filter': {'bool': deepcopy(base_field_filters['bool'])},
+            }
+
     @classmethod
     def build_facets(cls, query, facets, search_filters, string_query, request, doc_types,
-                     custom_aggregations=None, size=25, from_=0, es_mapping=None):
+                     custom_aggregations=None, size=25, from_=0, es_mapping=None, base_field_filters=None):
         """
         Sets facets in the query as ElasticSearch aggregations, with each aggregation to be
         filtered by search_filters minus filter affecting facet field in order to get counts
@@ -1044,6 +1098,7 @@ class LuceneBuilder:
             :type  facets:         List of tuples.
             :param search_filters: Dict of filters which are set for the ES query in build_filters
             :param string_query:   Dict holding the query_string used in the search
+            :param base_field_filters: Dict of filters for use with the group by term facet
         """
         if from_ != 0:
             return query
@@ -1066,7 +1121,7 @@ class LuceneBuilder:
                                            aggs, agg_name)
             else:  # assume terms
                 cls._add_terms_aggregation(facet, query_field, search_filters, string_query, nested_path,
-                                           aggs, agg_name, requested_values)
+                                           aggs, agg_name, requested_values, base_field_filters)
 
             # Update facet with title, description from field_schema, if missing.
             if facet.get('title') is None and field_schema and 'title' in field_schema:

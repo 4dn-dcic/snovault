@@ -612,7 +612,7 @@ class SearchBuilder:
         else:
             facets = [
                 # adds default 'type' facet with hide_from_view=True
-                # Note that the 'hide_from_view=True' facet is included in context.facets whereas the 'default_hidden=True' is ignored 
+                # Note that the 'hide_from_view=True' facet is included in context.facets whereas the 'default_hidden=True' is ignored
                 ('type', {'title': 'Data Type', 'hide_from_view': True})
             ]
 
@@ -748,16 +748,16 @@ class SearchBuilder:
         self.set_sort_order()
 
         # Transform into filtered search
-        self.query, query_filters = LuceneBuilder.build_filters(self.request, self.query, self.response,
-                                                                 self.principals, self.doc_types,
-                                                                 self.item_type_es_mapping)
+        self.query, query_filters, base_field_filters = LuceneBuilder.build_filters(self.request, self.query, self.response,
+                                                                                    self.principals, self.doc_types,
+                                                                                    self.item_type_es_mapping)
         # Prepare facets in intermediary structure
         self.facets = self.initialize_facets()
 
         # Transform filter search into filter + faceted search
         self.query = LuceneBuilder.build_facets(self.query, self.facets, query_filters, self.string_query,
                                                 self.request, self.doc_types, self.custom_aggregations, self.size,
-                                                self.from_, self.item_type_es_mapping)
+                                                self.from_, self.item_type_es_mapping, base_field_filters)
 
         # Add preference from session, if available
         # This just sets the value on the class - it is passed to execute_search later
@@ -1208,7 +1208,7 @@ class SearchBuilder:
         '''
         # default value returned by ES
         total = es_results['hits']['total']['value']
-        
+
         # After ES7 upgrade, 'total' does not return the exact count if it is >10000. To get a more precise result, it
         # loops through the facet terms. (currently, type=Item's doc_count is calculated correctly)
         if total == ES_MAX_HIT_TOTAL and 'facets' in self.response:
