@@ -46,7 +46,7 @@ elasticsearch = "7.13.4"  # versions >= 7.14.0 lock out AWS ES
 elasticsearch_dsl = "^7.4.0"
 #python-3.12 elasticsearch = "^7.17.9"
 #python-3.12 elasticsearch_dsl = "^7.4.1"
-dcicutils = "^8.14.3"
+dcicutils = "^8.16.6"
 future = "^0.18.3"
 html5lib = ">=1.1"  # experimental, should be OK now that we're not using moto server
 humanfriendly = "^1.44.9"
