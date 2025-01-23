@@ -907,7 +907,7 @@ class SearchBuilder:
                     result_facet['terms'] = list(term_to_bucket.values())
                     if 'group_by_field' in result_facet and (full_agg_name + ':group_by') in aggregations:
                         self.group_facet_terms(result_facet, aggregations[full_agg_name + ':group_by'],
-                                               es_results['filters'])
+                                               self.response['filters'])
 
                 # XXX: not clear this functions as intended - Will 2/17/2020
                 if len(aggregations[full_agg_name].keys()) > 2:
