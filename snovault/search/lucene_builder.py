@@ -1073,11 +1073,11 @@ class LuceneBuilder:
                             'size': 100,
                             'field': "embedded." + facet['group_by_field'] + ".raw",
                             'missing': facet.get("missing_value_replacement", "No value"),
-                            'aggs': {
-                                "sub_terms": {
-                                    "terms": {
-                                        "field": query_field,
-                                    }
+                        },
+                        'aggs': {
+                            "sub_terms": {
+                                "terms": {
+                                    "field": query_field,
                                 }
                             }
                         }
