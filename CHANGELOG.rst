@@ -6,11 +6,10 @@ snovault
 Change Log
 ----------
 
-11.23.0.33b5
+11.23.0.33b6
 ============
 
-* Ports ``group_by_field`` faceting feature from Fourfront
-
+* Ports ``group_by_field`` faceting feature from Fourfront with small changes
 
 
 11.23.0

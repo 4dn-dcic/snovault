@@ -904,7 +904,9 @@ class SearchBuilder:
                                     'doc_count': 0
                                 }
 
-                    result_facet['terms'] = list(term_to_bucket.values())
+                    # This "original terms" list is persisted in order for use with
+                    # other features that do *not* want to utilize the grouping
+                    result_facet['terms'] = result_facet['original_terms'] = list(term_to_bucket.values())
                     if 'group_by_field' in result_facet and (full_agg_name + ':group_by') in aggregations:
                         self.group_facet_terms(result_facet, aggregations[full_agg_name + ':group_by'],
                                                self.response['filters'])
@@ -1007,6 +1009,7 @@ class SearchBuilder:
         result_facet['terms'] = sorted(list(group_terms_dict.values()), key=lambda t: t['doc_count'], reverse=True)
         del result_facet['group_by_field']
         result_facet['has_group_by'] = True
+        print(result_facet)
 
     def get_collection_actions(self):
         """
