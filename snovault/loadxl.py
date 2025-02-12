@@ -407,7 +407,7 @@ def normalize_deleted_properties(data: dict) -> Tuple[dict, List[str]]:
 def load_all_gen(testapp, inserts, docsdir, overwrite=True, itype=None, from_json=False,
                  patch_only=False, post_only=False, skip_types=None, validate_only=False,
                  skip_links=False, continue_on_exception: bool = False, verbose=False,
-                 progress=None):
+                 noset_last_modified=False, progress=None):
     """
     Generator function that yields bytes information about each item POSTed/PATCHed.
     Is the base functionality of load_all function.
@@ -695,7 +695,8 @@ def load_all_gen(testapp, inserts, docsdir, overwrite=True, itype=None, from_jso
             progress(PROGRESS.ITEM_SECOND_ROUND) if progress else None
             an_item = format_for_attachment(an_item, docsdir)
             try:
-                add_last_modified(an_item, userid=LOADXL_USER_UUID)
+                if not noset_last_modified:
+                    add_last_modified(an_item, userid=LOADXL_USER_UUID)
                 identifying_path = get_identifying_path(an_item, a_type, identifying_properties)
                 if not identifying_path:
                     raise Exception("Item has no uuid nor any other identifying property; cannot PATCH.")
