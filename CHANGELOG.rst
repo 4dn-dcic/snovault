@@ -13,6 +13,7 @@ Change Log
     - Derived from branch: master (commit: b51a8e11451446c657a196e2284ddc50f30b4e19)
   - In loadxl.load_all_gen added noset_last_modified hook to skip add_last_modified call.
     This was for smaht-submitr when discovered that this can fail when running as non-admin user.
+  - Updated dcicutils to 8.18.0.
 
 
 11.23.0
