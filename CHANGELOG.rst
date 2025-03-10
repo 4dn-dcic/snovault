@@ -6,11 +6,26 @@ snovault
 Change Log
 ----------
 
-
-11.22.0
+11.25.0
 =======
 
 * Update ``drs`` validation to remove drs_uri
+
+
+11.24.0
+=======
+* 2025-02-12 / dmichaels
+  - Branch: dmichaels-20250212-loadx-no-set-last-modified-for-smaht-submitr | PR-310
+    - Derived from branch: master (commit: b51a8e11451446c657a196e2284ddc50f30b4e19)
+  - In loadxl.load_all_gen added noset_last_modified hook to skip add_last_modified call.
+    This was for smaht-submitr when discovered that this can fail when running as non-admin user.
+  - Updated dcicutils to 8.18.0.
+
+
+11.23.0
+=======
+* 2024-11-02/dmichaels
+  - Fix for unexpected 'sid' indexing problem.
 
 
 11.22.0
