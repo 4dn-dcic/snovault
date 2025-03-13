@@ -69,5 +69,33 @@
             "pattern": "^[a-zA-Z0-9_\\-][a-zA-Z0-9_\\-\\s]+[a-zA-Z0-9_\\-]$"
         }
     }
-  } 
+  },
+   "accession": {
+        "accession": {
+            "title": "Accession",
+            "description": "A unique identifier to be used to reference the object.",
+            "internal_comment": "Only admins are allowed to set or update this value.",
+            "exclude_from": [
+                "FFedit-create"
+            ],
+            "type": "string",
+            "format": "accession",
+            "permission": "restricted_fields",
+            "serverDefault": "accession"
+        },
+        "alternate_accessions": {
+            "title": "Alternate Accessions",
+            "description": "Accessions previously assigned to objects that have been merged with this object.",
+            "type": "array",
+            "lookup": 1000,
+            "internal_comment": "Only admins are allowed to set or update this value.",
+            "items": {
+                "title": "Alternate Accession",
+                "description": "An accession previously assigned to an object that has been merged with this object.",
+                "type": "string",
+                "permission": "restricted_fields",
+                "format": "accession"
+            }
+        }
+    }
 }

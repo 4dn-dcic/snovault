@@ -1,5 +1,6 @@
 from pyramid.view import view_config
 from pyramid.exceptions import HTTPNotFound
+from pyramid.response import Response
 from .util import debug_log
 
 
@@ -12,7 +13,6 @@ DRS_OBJECT_GET_ACCESSS_URL_NO_SLASH = DRS_PREFIX_V1 + '/objects/{object_id}/acce
 REQUIRED_FIELDS = [
     'id',
     'created_time',
-    'drs_id',
     'self_uri',
     'size',
     'checksums'
@@ -54,7 +54,8 @@ def get_and_format_drs_object(request, object_uri):
     except Exception:
         raise HTTPNotFound('You accessed a DRS object_uri that either does not exist'
                            ' or you do not have access to it.')
-    drs_object['self_uri'] = f'drs://{request.host}{request.path}'
+    uri = drs_object['id']
+    drs_object['self_uri'] = f'drs://{request.host}/{uri}'
     return drs_object
 
 
@@ -83,13 +84,15 @@ def get_drs_url(request, object_uri):
 
 
 @view_config(
-    route_name='drs_objects', request_method='GET'
+    route_name='drs_objects', request_method=['GET', 'OPTIONS']
 )
 @debug_log
 def drs_objects(context, request):
     """ Implements DRS GET as specified by the API description
     https://ga4gh.github.io/data-repository-service-schemas/preview/release/drs-1.0.0/docs/#_getobject
     """
+    if request.method == 'OPTIONS':
+        return Response(status_code=204)
     drs_object_uri = '/' + request.matchdict['object_id']
     formatted_drs_object = get_and_format_drs_object(request, drs_object_uri)
     try:
