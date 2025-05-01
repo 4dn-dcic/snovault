@@ -612,7 +612,7 @@ class SearchBuilder:
         else:
             facets = [
                 # adds default 'type' facet with hide_from_view=True
-                # Note that the 'hide_from_view=True' facet is included in context.facets whereas the 'default_hidden=True' is ignored 
+                # Note that the 'hide_from_view=True' facet is included in context.facets whereas the 'default_hidden=True' is ignored
                 ('type', {'title': 'Data Type', 'hide_from_view': True})
             ]
 
@@ -748,16 +748,16 @@ class SearchBuilder:
         self.set_sort_order()
 
         # Transform into filtered search
-        self.query, query_filters = LuceneBuilder.build_filters(self.request, self.query, self.response,
-                                                                 self.principals, self.doc_types,
-                                                                 self.item_type_es_mapping)
+        self.query, query_filters, base_field_filters = LuceneBuilder.build_filters(self.request, self.query, self.response,
+                                                                                    self.principals, self.doc_types,
+                                                                                    self.item_type_es_mapping)
         # Prepare facets in intermediary structure
         self.facets = self.initialize_facets()
 
         # Transform filter search into filter + faceted search
         self.query = LuceneBuilder.build_facets(self.query, self.facets, query_filters, self.string_query,
                                                 self.request, self.doc_types, self.custom_aggregations, self.size,
-                                                self.from_, self.item_type_es_mapping)
+                                                self.from_, self.item_type_es_mapping, base_field_filters)
 
         # Add preference from session, if available
         # This just sets the value on the class - it is passed to execute_search later
@@ -904,7 +904,12 @@ class SearchBuilder:
                                     'doc_count': 0
                                 }
 
-                    result_facet['terms'] = list(term_to_bucket.values())
+                    # This "original terms" list is persisted in order for use with
+                    # other features that do *not* want to utilize the grouping
+                    result_facet['terms'] = result_facet['original_terms'] = list(term_to_bucket.values())
+                    if 'group_by_field' in result_facet and (full_agg_name + ':group_by') in aggregations:
+                        self.group_facet_terms(result_facet, aggregations[full_agg_name + ':group_by'],
+                                               self.response['filters'])
 
                 # XXX: not clear this functions as intended - Will 2/17/2020
                 if len(aggregations[full_agg_name].keys()) > 2:
@@ -952,6 +957,59 @@ class SearchBuilder:
             return {}
         return {k: v for k, v in es_results['aggregations'].items()
                 if k != 'all_items'}
+
+    @staticmethod
+    def group_facet_terms(result_facet, agg, filters):
+        """ Helper function ported (as is) from FF that retrieves counts from a sub
+            aggregation and populates them into a main aggregation
+        """
+        if result_facet is None or agg is None:
+            return
+
+        def transpose_dict(original_dict):
+            transposed_dict = {}
+            for key, values in original_dict.items():
+                for value in values:
+                    if value not in transposed_dict:
+                        transposed_dict[value] = [key]
+                    else:
+                        transposed_dict[value].append(key)
+            return transposed_dict
+
+        ret_result = {}
+        for bucket in agg["primary_agg"]["buckets"]:
+            ret_result[bucket['key']] = [str(item['key']) for item in bucket['sub_terms']['buckets']]
+        # transpose {group 1: [term 1_1, term 1_2, ... term 1_n]} to
+        # {term 1_1: [group1], term 1_2: [group1], .. term 1_n: [group1]} for faster traversing (see below)
+        transposed = transpose_dict(ret_result)
+
+        group_terms_dict = dict()
+        added_keys_dict = dict()
+
+        for term in result_facet['terms']:
+            group_key = transposed[term['key']][0] if term['key'] in transposed else '(Missing group)'
+            if group_key not in group_terms_dict:
+                group_terms_dict[group_key] = {'key': group_key, 'doc_count': 0, 'terms': []}
+            group_term = group_terms_dict[group_key]
+            # calculate total doc_count
+            group_term['doc_count'] += term['doc_count']
+            group_term['terms'].append(term)
+            added_keys_dict[term['key']] = True
+        # add terms not in results but exists in filters
+        # (ui handles it for regular facets, where as it is not possible to build parent-child relation for grouping facet terms)
+        for filter in filters:
+            if (filter['field'] != result_facet['field'] or filter['term'] in added_keys_dict):
+                continue
+            group_key = transposed[filter['term']][0] if filter['term'] in transposed else '(Missing group)'
+            if group_key not in group_terms_dict:
+                group_terms_dict[group_key] = {'key': group_key, 'doc_count': 0, 'terms': []}
+            group_term = group_terms_dict[group_key]
+            group_term['terms'].append({'key': filter['term'], 'doc_count': 0})
+
+        result_facet['terms'] = sorted(list(group_terms_dict.values()), key=lambda t: t['doc_count'], reverse=True)
+        del result_facet['group_by_field']
+        result_facet['has_group_by'] = True
+        print(result_facet)
 
     def get_collection_actions(self):
         """
@@ -1208,7 +1266,7 @@ class SearchBuilder:
         '''
         # default value returned by ES
         total = es_results['hits']['total']['value']
-        
+
         # After ES7 upgrade, 'total' does not return the exact count if it is >10000. To get a more precise result, it
         # loops through the facet terms. (currently, type=Item's doc_count is calculated correctly)
         if total == ES_MAX_HIT_TOTAL and 'facets' in self.response:
