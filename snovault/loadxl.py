@@ -511,6 +511,7 @@ def load_all_gen(testapp, inserts, docsdir, overwrite=True, itype=None, from_jso
     # run step1 - if item does not exist, post with minimal metadata (and skip indexing since we will patch
     # in round 2)
     second_round_items = {}
+    import pdb; pdb.set_trace()
     if not patch_only:
         for a_type in all_types:
             first_fields = []
