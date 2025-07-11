@@ -22,7 +22,7 @@ from ..storage import (
     Resource,
     S3BlobStorage,
 )
-from moto import mock_s3
+from moto import mock_aws
 
 pytestmark = pytest.mark.storage
 
@@ -241,7 +241,7 @@ def test_get_sids_by_uuids(session, storage):
 )
 def test_S3BlobStorage(s3_encrypt_key_id, kms_args_expected):
     # NOTE: I have separated the call to _test_S3BlobStorage into a separate function so I can wrap it with
-    #       @mock_s3 after establishing this context manager to suppress a warning. (It could have been an
+    #       @mock_aws after establishing this context manager to suppress a warning. (It could have been an
     #       internal function, but it shows up better in the patch diffs if I do it this way, and will be
     #       easier to simplify later. The warning is due to a call made by moto 1.3.x that uses deprecated
     #       support complained about in responses 0.17.0. Hopefully if we ever get higher than that version
@@ -256,7 +256,7 @@ def test_S3BlobStorage(s3_encrypt_key_id, kms_args_expected):
         _test_S3BlobStorage(s3_encrypt_key_id, kms_args_expected)
 
 
-@mock_s3
+@mock_aws
 def _test_S3BlobStorage(s3_encrypt_key_id, kms_args_expected):
 
     blob_bucket = 'encoded-4dn-blobs'  # note that this bucket exists but is mocked out here
@@ -303,7 +303,7 @@ def test_S3BlobStorage_get_blob_url_for_non_s3_file():
         _test_S3BlobStorage_get_blob_url_for_non_s3_file()
 
 
-@mock_s3
+@mock_aws
 def _test_S3BlobStorage_get_blob_url_for_non_s3_file():
 
     blob_bucket = 'encoded-4dn-blobs'

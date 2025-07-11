@@ -4,7 +4,7 @@ import boto3
 
 from base64 import b64decode
 from dcicutils.ff_utils import parse_s3_bucket_and_key_url
-from moto import mock_s3
+from moto import mock_aws
 from unittest import mock
 from .. import attachment as attachment_module
 from ..attachment import file_type, guess_mime_type, system_mime_type, fallback_mime_type, DEFAULT_FALLBACK_MIME_TYPE
@@ -290,7 +290,7 @@ class TestAttachmentEncrypted:
         content = self._get_attachment_from_s3(client, url)
         assert content == b64decode(BLUE_DOT.split(',', 1)[1])
 
-    @mock_s3
+    @mock_aws
     def test_download_create_encrypted(self, encrypted_testapp):
         loc = self.create_bucket_and_post_download(encrypted_testapp)
         res = encrypted_testapp.get(loc)
@@ -318,7 +318,7 @@ class TestAttachmentEncrypted:
         assert res.content_type == 'application/json'
         self.attachment_is_blue_dot(boto3.client('s3'), res.location)
 
-    @mock_s3
+    @mock_aws
     def test_download_update_encrypted(self, encrypted_testapp):
         item = {
             'attachment': {
@@ -347,7 +347,7 @@ class TestAttachmentEncrypted:
         assert res.content_type == 'application/json'
         self.attachment_is_red_dot(boto3.client('s3'), res.location)
 
-    @mock_s3
+    @mock_aws
     def test_download_update_no_change_encrypted(self, encrypted_testapp):
         item = {
             'attachment': {
@@ -368,7 +368,7 @@ class TestAttachmentEncrypted:
         assert attachment['href'] == '@@download/attachment/red-dot.png'
         assert attachment2['href'] == '@@download/attachment2/blue-dot.png'
 
-    @mock_s3
+    @mock_aws
     def test_download_update_one_encrypted(self, encrypted_testapp):
         item = {
             'attachment': {
@@ -398,7 +398,7 @@ class TestAttachmentEncrypted:
         assert res.content_type == 'application/json'
         self.attachment_is_red_dot(boto3.client('s3'), res.location)
 
-    @mock_s3
+    @mock_aws
     def test_download_update_with_premade_href_encrypted(self, encrypted_testapp):
         """
         Test the functionality of PATCHing the attachment information directly
@@ -423,7 +423,7 @@ class TestAttachmentEncrypted:
         attachment = res2.json['@graph'][0]['attachment']
         assert attachment['href'] == '@@download/attachment/blue-dot.png'
 
-    @mock_s3
+    @mock_aws
     def test_download_remove_one_encrypted(self, encrypted_testapp):
         item = {
             'attachment': {
@@ -441,7 +441,7 @@ class TestAttachmentEncrypted:
         url = loc + '/@@download/attachment2/red-dot.png'
         encrypted_testapp.get(url, status=404)
 
-    @mock_s3
+    @mock_aws
     @pytest.mark.parametrize(
         'href',
         [
@@ -456,7 +456,7 @@ class TestAttachmentEncrypted:
         loc = self.create_bucket_and_post_download(encrypted_testapp)
         encrypted_testapp.put_json(loc, item, status=422)
 
-    @mock_s3
+    @mock_aws
     @pytest.mark.parametrize(
         'href',
         [
@@ -472,7 +472,7 @@ class TestAttachmentEncrypted:
         }}
         encrypted_testapp.post_json(self.url, item, status=422)
 
-    @mock_s3
+    @mock_aws
     def test_download_create_wrong_extension_encrypted(self, encrypted_testapp):
         item = {'attachment': {
             'download': 'red-dot.jpg',
@@ -480,7 +480,7 @@ class TestAttachmentEncrypted:
         }}
         encrypted_testapp.post_json(self.url, item, status=422)
 
-    @mock_s3
+    @mock_aws
     def test_download_create_w_wrong_md5sum_encrypted(self, encrypted_testapp):
         item = {'attachment': {
             'download': 'red-dot.jpg',

@@ -15,8 +15,29 @@ _TILDE_MATCH = re.compile(r"[~]([0-9]+[.])([0-9]+)([.].*)?$")
 
 
 def fix_requirement(requirement):
-    if isinstance(requirement, dict) and "version" in requirement:
-        requirement = requirement["version"]
+    if isinstance(requirement, str):
+        return _fix_requirement_string(requirement)
+    elif isinstance(requirement, list):
+        return fix_requirement(_select_requirement(requirement))
+    elif isinstance(requirement, dict):
+        return _fix_requirement_dict(requirement)
+    else:
+        raise ValueError(f"Unrecognized requirement: {requirement!r}")
+
+
+def _select_requirement(requirement):
+    if not isinstance(requirement, list):
+        raise ValueError(f"{requirement!r} is not a list.")
+    python_version = Version(f"{python_version_info.major}.{python_version_info.minor}.{python_version_info.micro}")
+    for clause in requirement:
+        if "python" not in clause:
+            raise ValueError(f"Missing 'python' in clause: {clause!r}")
+        if SimpleSpec(clause['python']).match(python_version):
+            return clause
+        raise ValueError(f"No clauses matched: {requirement!r}")
+
+
+def _fix_requirement_string(requirement):
     m = _CARET_MATCH.match(requirement)
     if m:
         return ">=%s%s,<%s" % (m.group(1), m.group(2), int(m.group(1)) + 1)
@@ -27,6 +48,20 @@ def fix_requirement(requirement):
         return "==" + requirement
     else:
         return requirement
+
+
+def _fix_requirement_dict(requirement):
+    if "version" not in requirement:
+        raise ValueError(f"Missing 'version' in requirement: {requirement!r}")
+
+    version = _fix_requirement_string(requirement["version"])
+    extras = requirement.get("extras", [])
+
+    if not extras:
+        return version
+    else:
+        extras_str = "[" + ",".join(extras) + "]"
+        return extras_str + version
 
 
 _EMAIL_MATCH = re.compile(r"^([^<]*)[<]([^>]*)[>]$")
