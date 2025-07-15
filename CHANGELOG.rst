@@ -6,6 +6,16 @@ snovault
 Change Log
 ----------
 
+11.27.0
+============
+
+* Update package dependencies:
+  - Update `aws_requests_auth` to `0.4.3`
+  - Update `pillow` to `^11.1.0`
+  - Update `moto` to `^5.1.0`
+* Update setup_eb.py to handle git dependencies correctly and 'extras' in poetry dependencies.
+
+
 11.26.0
 ============
 
