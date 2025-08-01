@@ -1,6 +1,8 @@
 import logging
 import pytest
-
+from unittest.mock import patch
+from botocore.credentials import Credentials
+from moto import mock_aws
 from ..project_defs import C4ProjectRegistry  # noQA
 from ..elasticsearch.indexer_queue import QueueManager
 
@@ -9,6 +11,26 @@ from ..elasticsearch.indexer_queue import QueueManager
 @pytest.fixture(autouse=True)
 def autouse_external_tx(external_tx):
     pass
+
+
+@pytest.fixture(autouse=True, scope='session')
+def moto_with_fake_credentials():
+    """
+    Auto-applied fixture that mocks AWS and injects static credentials,
+    avoiding SSO, credential_process, and expired token issues.
+    Works with Moto.
+    """
+    # Real credentials object to prevent MagicMock issues
+    creds = Credentials(
+        access_key='test-access-key',
+        secret_key='test-secret-key',
+        token='test-session-token'
+    )
+
+    with mock_aws():
+        with patch('boto3.Session.get_credentials', return_value=creds), \
+             patch('botocore.credentials.CredentialResolver.load_credentials', return_value=creds):
+            yield
 
 
 # def _check_server_is_up(output):
