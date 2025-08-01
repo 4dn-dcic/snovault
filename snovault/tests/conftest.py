@@ -1,29 +1,76 @@
 import logging
 import pytest
-from unittest.mock import patch
+import os
+# from unittest.mock import patch
 from moto import mock_aws
-from botocore.credentials import Credentials
+# from botocore.credentials import Credentials
 from ..project_defs import C4ProjectRegistry  # noQA
 from ..elasticsearch.indexer_queue import QueueManager
 
 
 @pytest.fixture(scope='session')
-def aws_mocks():
+def mock_aws_env():
     """
-    Ensures all AWS calls use mocked credentials and Moto,
-    preventing real network access and expired tokens.
+    Mocks AWS services and sets static fake credentials to avoid SSO/token errors.
     """
-    fake_creds = Credentials(
-        access_key='fake-access-key',
-        secret_key='fake-secret-key',
-        token='fake-session-token'
-    )
+    # Set static credentials to avoid boto trying credential_process, SSO, etc.
+    os.environ['AWS_ACCESS_KEY_ID'] = 'testing'
+    os.environ['AWS_SECRET_ACCESS_KEY'] = 'testing'
+    os.environ['AWS_SECURITY_TOKEN'] = 'testing'
+    os.environ['AWS_SESSION_TOKEN'] = 'testing'
+    os.environ['AWS_DEFAULT_REGION'] = 'us-east-1'
 
-    # Patch AWS credential loading globally
-    with patch('boto3.Session.get_credentials', return_value=fake_creds), \
-         patch('botocore.credentials.CredentialResolver.load_credentials', return_value=fake_creds), \
-         mock_aws():
+    # Start moto mock
+    with mock_aws():  # Add others like "dynamodb", "sqs" as needed
         yield
+
+    # Optional: Clean up (in case you set these globally)
+    for var in [
+        'AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY', 
+        'AWS_SECURITY_TOKEN', 'AWS_SESSION_TOKEN', 
+        'AWS_DEFAULT_REGION'
+    ]:
+        os.environ.pop(var, None)
+
+
+# @pytest.fixture(autouse=True, scope='session')
+# def mock_aws_env():
+#     """
+#     Autouse fixture that sets up fake AWS credentials and Moto mocking
+#     for all tests, avoiding expired token/SSO issues and ensuring
+#     boto3 clients are mocked globally.
+#     """
+#     with patch.dict('os.environ', {
+#         'AWS_ACCESS_KEY_ID': 'testing',
+#         'AWS_SECRET_ACCESS_KEY': 'testing',
+#         'AWS_SESSION_TOKEN': 'testing',
+#         'AWS_DEFAULT_REGION': 'us-east-1',
+#     }), \
+#          mock_s3(), \
+#          mock_sts(), \
+#          patch('boto3.Session.get_credentials') as mock_creds:
+
+#         mock_creds.return_value = boto3.Session().get_credentials()
+#         yield
+
+
+# @pytest.fixture(scope='session')
+# def aws_mocks():
+#     """
+#     Ensures all AWS calls use mocked credentials and Moto,
+#     preventing real network access and expired tokens.
+#     """
+#     fake_creds = Credentials(
+#         access_key='fake-access-key',
+#         secret_key='fake-secret-key',
+#         token='fake-session-token'
+#     )
+
+#     # Patch AWS credential loading globally
+#     with patch('boto3.Session.get_credentials', return_value=fake_creds), \
+#          patch('botocore.credentials.CredentialResolver.load_credentials', return_value=fake_creds), \
+#          mock_aws():
+#         yield
 
 
 # required so that db transactions are properly rolled back in tests

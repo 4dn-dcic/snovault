@@ -66,14 +66,14 @@ def app_settings(request, wsgi_server_host_port, conn, DBSession, basic_app_sett
 
 
 @pytest.fixture(scope='session')
-def app(app_settings, aws_mocks):  # <-- ensure aws is mocked before app creation
+def app(app_settings): #, aws_mocks):  # <-- ensure aws is mocked before app creation
     """ WSGI application level functional testing.
         will have to make snovault dummy main app """
     return main({}, **app_settings)
 
 
 @pytest.fixture(scope='session')
-def encrypted_app(app_settings, aws_mocks):
+def encrypted_app(app_settings): #, aws_mocks):
     """ WSGI application level functional testing with encrypted buckets.
         Note that this also forced use of s3 blob storage.
         Setting blob_bucket in registry.settings == enabling S3blobstorage (and disable DB blobs)
