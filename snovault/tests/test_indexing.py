@@ -97,7 +97,7 @@ else:
 
 
 @pytest.fixture(scope='session', params=INDEXER_APP_PARAMS)  # must happen AFTER scope='session' moto setup
-def app(app_settings, request):
+def app(app_settings, aws_mocks, request):
     old_mpindexer = app_settings['mpindexer']
     with override_dict(app_settings, mpindexer=old_mpindexer):  # we plan to set it inside here
         if request.param:  # run tests both with and without mpindexer
