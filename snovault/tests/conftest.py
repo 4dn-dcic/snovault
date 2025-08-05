@@ -1,8 +1,34 @@
 import logging
 import pytest
-
+import os
+from moto import mock_aws
 from ..project_defs import C4ProjectRegistry  # noQA
 from ..elasticsearch.indexer_queue import QueueManager
+
+
+@pytest.fixture(scope='session')
+def mock_aws_env():
+    """
+    Mocks AWS services and sets static fake credentials to avoid SSO/token errors.
+    """
+    # Set static credentials to avoid boto trying credential_process, SSO, etc.
+    os.environ['AWS_ACCESS_KEY_ID'] = 'testing'
+    os.environ['AWS_SECRET_ACCESS_KEY'] = 'testing'
+    os.environ['AWS_SECURITY_TOKEN'] = 'testing'
+    os.environ['AWS_SESSION_TOKEN'] = 'testing'
+    os.environ['AWS_DEFAULT_REGION'] = 'us-east-1'
+
+    # Start moto mock
+    with mock_aws():  # Add others like "dynamodb", "sqs" as needed
+        yield
+
+    # Optional: Clean up (in case you set these globally)
+    for var in [
+        'AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY', 
+        'AWS_SECURITY_TOKEN', 'AWS_SESSION_TOKEN', 
+        'AWS_DEFAULT_REGION'
+    ]:
+        os.environ.pop(var, None)
 
 
 # required so that db transactions are properly rolled back in tests

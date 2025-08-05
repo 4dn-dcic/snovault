@@ -84,7 +84,7 @@ def register_storage(registry, write_override=None, read_override=None):
 
 # These 3 versions are known to be compatible, older versions should not be
 # used, odds are 14 can be used as well - Will Sept 13 2022
-POSTGRES_COMPATIBLE_MAJOR_VERSIONS = ['11', '12', '13', '14']
+POSTGRES_COMPATIBLE_MAJOR_VERSIONS = ['11', '12', '13', '14', '15']
 
 Base = declarative_base()
 
