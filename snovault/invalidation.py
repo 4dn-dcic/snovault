@@ -19,6 +19,7 @@ def add_to_indexing_queue(success, request, item, edit_or_add):
     Queue item with strict=False so that secondary items and new rev links
     are also indexed
     """
+    log.error(f'Entering indexing queue hook for: {item["uuid"]}')
     error_msg = None
     # only queue if the transaction is successful and we do no explicitly skip indexing (loadxl phase 1)
     if success and not request.params.get('skip_indexing'):
