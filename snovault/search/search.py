@@ -859,12 +859,53 @@ class SearchBuilder:
                     if 'buckets' not in bucket_location:  # account for nested structure
                         bucket_location = bucket_location['primary_agg']
 
+                    def bounds_match(range_bound, bucket_bound):
+                        """Match bounds with tolerance for inclusive upper bumps (nextafter / +1)."""
+
+                        # handle missings
+                        if range_bound is self.MISSING or bucket_bound is self.MISSING:
+                            return range_bound is bucket_bound
+
+                        # bool is special (bool is a subclass of int)
+                        if isinstance(range_bound, bool) or isinstance(bucket_bound, bool):
+                            return range_bound == bucket_bound
+
+                        # try numeric comparison
+                        try:
+                            r = float(range_bound)
+                            b = float(bucket_bound)
+                        except (TypeError, ValueError):
+                            return range_bound == bucket_bound
+
+                        if not (math.isfinite(r) and math.isfinite(b)):
+                            return False
+
+                        # test exact equality first (covers +0.0/-0.0 too)
+                        if r == b:
+                            return True
+
+                        # allow nextafter bump (inclusive upper bound)
+                        if b == math.nextafter(r, math.inf):
+                            return True
+
+                        # allow "+1" bump only when both are integer-like
+                        def int_like(v, num):
+                            return (
+                                (isinstance(v, int) and not isinstance(v, bool)) or
+                                (isinstance(v, float) and num.is_integer())
+                            )
+                        
+                        if int_like(range_bound, r) and int_like(bucket_bound, b):
+                            return int(b) == int(r) + 1
+
+                        return False
+
                     # TODO - refactor ?
                     # merge bucket labels from ranges into buckets
                     for r in result_facet['ranges']:
                         for b in bucket_location['buckets']:
-                            if (r.get('from', self.MISSING) == b.get('from', self.MISSING) and
-                                    r.get('to', self.MISSING) == b.get('to', self.MISSING)):
+                            if bounds_match(r.get('from', self.MISSING), b.get('from', self.MISSING)) and \
+                                    bounds_match(r.get('to', self.MISSING), b.get('to', self.MISSING)):
                                 r['doc_count'] = b['doc_count']
                                 break
 
