@@ -61,9 +61,6 @@ jobs:
           role-session-name: fourfront-unit-testing-session
           aws-region: us-east-1
 
-      - name: Verify AWS identity
-        run: aws sts get-caller-identity
-
       - name: QA (INDEXING)
         if: ${{ matrix.test_type == 'INDEXING' }}
         env:
