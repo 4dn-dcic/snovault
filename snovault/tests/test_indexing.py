@@ -2231,15 +2231,18 @@ class TestSearchBucketRangeFacets:
     """ Class that encapsulates tests for BucketRanges """
 
     @staticmethod
-    def verify_facet_counts(facets, expected_fields, expected_cardinality, expected_count):
+    def verify_facet_counts(facets, expected_fields, expected_cardinality, expected_counts):
         """ Checks for given expected facets, checking bucket cardinality and document count
             Note that the actual range properties are trivial (we are not testing elasticsearch)
         """
         for facet in facets:
             if facet['field'] in expected_fields:
                 assert len(facet['ranges']) == expected_cardinality
-                for bucket in facet['ranges']:
-                    assert bucket['doc_count'] == expected_count
+                if isinstance(expected_counts, (list, tuple)):
+                    assert len(expected_counts) == expected_cardinality
+                for idx, bucket in enumerate(facet['ranges']):
+                    expected = expected_counts[idx] if isinstance(expected_counts, (list, tuple)) else expected_counts
+                    assert bucket['doc_count'] == expected
 
     @staticmethod
     def verify_counts(response, expected_count):
@@ -2255,8 +2258,8 @@ class TestSearchBucketRangeFacets:
         return result
 
     @pytest.mark.parametrize('expected_fields, expected_counts', [
-        (['special_integer'], 5),
-        (['special_object_that_holds_integer.embedded_integer'], 5),
+        (['special_integer'], [6, 5]),
+        (['special_object_that_holds_integer.embedded_integer'], [6, 5]),
         (['array_of_objects_that_holds_integer.embedded_integer'], 10)
     ])
     def test_search_bucket_range_simple(self, testapp, bucket_range_data, expected_fields, expected_counts):

@@ -1,5 +1,6 @@
 import re
 import structlog
+import math
 from copy import deepcopy
 from collections import OrderedDict
 from pyramid.httpexceptions import HTTPBadRequest
@@ -933,7 +934,21 @@ class LuceneBuilder:
                 if r['from'] == 0 and r['to'] == 0:
                     r['to'] = cls.SMALLEST_NONZERO_IEEE_32
             if 'to' in r and r['to'] != cls.SMALLEST_NONZERO_IEEE_32:
-                r['to'] += cls.SMALLEST_NONZERO_IEEE_32
+                try:
+                    to_val = r['to']
+                    if isinstance(to_val, bool):  # skip
+                        continue
+                    if isinstance(to_val, int):
+                        r['to'] = to_val + 1 # Move to next integer so bucket includes it.
+                    else:
+                        to_float = float(to_val)
+                        if math.isfinite(to_float):
+                            # Move to the next representable float so the bucket includes it.
+                            # Adding cls.SMALLEST_NONZERO_IEEE_32 may not work due to float precision issues.
+                            r['to'] = math.nextafter(to_float, math.inf)
+                except (TypeError, ValueError):
+                    # If non-numeric, leave unchanged; aggregation will behave as before.
+                    pass
         return {
             RANGE: {
                 FIELD: query_field,
