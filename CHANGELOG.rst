@@ -6,6 +6,15 @@ snovault
 Change Log
 ----------
 
+11.28.0
+=====
+
+`PR 312: Range Aggregation Updates  <https://github.com/4dn-dcic/snovault/pull/312>`_
+
+* Range facet calculations excluded values equal to the upper bound. The intended margin
+  using SMALLEST_NONZERO_IEEE_32 was ineffective due to precision limits. This has now been corrected.
+
+
 11.27.0
 ============
 
