@@ -6,8 +6,16 @@ snovault
 Change Log
 ----------
 
+11.29.0
+=======
+
+* Updates revision history API to make email resolution configurable,
+default is to not resolve to allow use of revision history
+in calc props without blowing up the invalidation scope
+
+
 11.28.0
-=====
+=======
 
 `PR 312: Range Aggregation Updates  <https://github.com/4dn-dcic/snovault/pull/312>`_
 
@@ -30,7 +38,7 @@ Change Log
 
 * Ports ``group_by_field`` faceting feature from Fourfront with small changes
 
-  
+
 =======
 11.25.0
 =======

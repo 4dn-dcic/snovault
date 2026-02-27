@@ -374,7 +374,7 @@ def validation_errors_property(context, request):
     return request.embed(path, '@@validation-errors')['validation_errors']
 
 
-def get_item_revision_history(request, uuid):
+def get_item_revision_history(request, uuid, resolve_emails=False):
     """ Computes the revision history of the given item from the DB.
         The more edits an item has undergone, the more expensive this
         operation is.
@@ -384,16 +384,22 @@ def get_item_revision_history(request, uuid):
     # NOTE: last_modified is a server_default present in our applications that
     # use snovault. This code is intended to resolve the user email of the last_modified
     # resource path (if it exists).
-    user_cache = {}
-    for revision in revisions:
-        last_modified = revision.get('last_modified', {})
-        modified_by = last_modified.get('modified_by', None)
-        if modified_by:
-            user = user_cache.get(modified_by)
-            if not user:
-                user = request.embed(modified_by, frame='raw')
-                user_cache[modified_by] = user
-            revision['last_modified']['modified_by'] = user['email']
+    # NOTE 2: This request.embed method causes an explosion of links on users
+    # if you ever want to use revision history inside of a calc prop for example.
+    # Generally, you can do this with the above fix but the embedded value cannot
+    # rely on the user email. It will now only pull this when requested via API
+    # and an extra parameter is passed.
+    if resolve_emails:
+        user_cache = {}
+        for revision in revisions:
+            last_modified = revision.get('last_modified', {})
+            modified_by = last_modified.get('modified_by', None)
+            if modified_by:
+                user = user_cache.get(modified_by)
+                if not user:
+                    user = request.embed(modified_by, frame='raw')
+                    user_cache[modified_by] = user
+                revision['last_modified']['modified_by'] = user['email']
     return revisions
 
 
@@ -405,7 +411,8 @@ def item_view_revision_history(context, request):
         For now, to view revision history the caller must have EDIT permissions.
     """
     uuid = str(context.uuid)
-    revisions = get_item_revision_history(request, uuid)
+    resolve_emails = asbool(request.GET.get('resolve_emails', False))
+    revisions = get_item_revision_history(request, uuid, resolve_emails=resolve_emails)
     return {
         'uuid': uuid,
         'revisions': revisions
