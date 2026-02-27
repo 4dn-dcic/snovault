@@ -12,6 +12,7 @@ Change Log
 * Updates revision history API to make email resolution configurable,
 default is to not resolve to allow use of revision history
 in calc props without blowing up the invalidation scope
+* Configure OIDC role for builds
 
 
 11.28.0
