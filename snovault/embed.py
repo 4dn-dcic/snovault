@@ -125,7 +125,10 @@ def embed(request, *elements, **kw):
 
     # NOTE: if result was retrieved from ES, the following cached attrs will be
     # empty: _aggregated_items, _linked_uuids, _rev_linked_by_item
-    result = deepcopy(cached['result'])
+    # deepcopy is not necessary in an indexing view - this causes explosion
+    # of memory usage when indexing very large objects, slows indexing speed
+    # - Will 22 May 26
+    result = cached['result'] if request._indexing_view else deepcopy(cached['result'])
 
     # aggregated_items may be cached; if so, add them to the request
     # these conditions only fulfilled when using @@embedded and aggregated
