@@ -1,5 +1,4 @@
 import argparse
-import gc
 import logging
 import webtest
 
@@ -8,7 +7,7 @@ from dcicutils.log_utils import set_logging
 
 
 EPILOG = __doc__
-INDEXING_RUN_ITERATIONS = 50
+INDEXING_RUN_ITERATIONS = 100
 
 
 def run(app, uuids=None):
@@ -51,11 +50,6 @@ def main():
         'indexer': 'true',
     }
     app = get_app(args.config_uri, args.app_name, options)
-
-    # Freeze all framework/app objects so GC never scans them during indexing.
-    # Objects allocated after this point are the only ones GC will track,
-    # reducing automatic collection overhead during the indexing loop.
-    gc.freeze()
 
     # Loading app will have configured from config file. Reconfigure here:
     # Use `es_server=app.registry.settings.get('elasticsearch.server')` when ES logging is working
