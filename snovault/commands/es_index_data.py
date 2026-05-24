@@ -1,5 +1,4 @@
 import argparse
-import ctypes
 import gc
 import logging
 import webtest
@@ -10,24 +9,6 @@ from dcicutils.log_utils import set_logging
 
 EPILOG = __doc__
 INDEXING_RUN_ITERATIONS = 50
-
-
-def _tune_allocator():
-    """Tune glibc so large allocations use mmap and are returned to the OS on free.
-
-    Objects above M_MMAP_THRESHOLD bypass the heap and use mmap directly; freed
-    mmap regions are immediately released to the OS without needing malloc_trim.
-    Set to 1 MB so that large embedded documents (multi-MB MetaWorkflowRun
-    objects) are mmap-backed while smaller repeated allocations still reuse the
-    heap free-list for speed.
-    """
-    try:
-        ctypes.CDLL('libc.so.6').mallopt(
-            ctypes.c_int(-3),       # M_MMAP_THRESHOLD
-            ctypes.c_int(1048576),  # 1 MB
-        )
-    except Exception:
-        pass  # non-Linux environments
 
 
 def run(app, uuids=None):
@@ -45,7 +26,6 @@ def run(app, uuids=None):
     else:
         for _ in range(INDEXING_RUN_ITERATIONS):
             testapp.post_json('/index', post_body)
-            gc.collect()
 
 
 def main():
@@ -73,13 +53,9 @@ def main():
     app = get_app(args.config_uri, args.app_name, options)
 
     # Freeze all framework/app objects so GC never scans them during indexing.
-    # Only objects allocated after this point will be tracked by the collector,
-    # making each gc.collect() call between iterations much cheaper.
+    # Objects allocated after this point are the only ones GC will track,
+    # reducing automatic collection overhead during the indexing loop.
     gc.freeze()
-
-    # Tune glibc mmap threshold so large embedded documents are returned to the
-    # OS automatically on free, without needing explicit malloc_trim calls.
-    _tune_allocator()
 
     # Loading app will have configured from config file. Reconfigure here:
     # Use `es_server=app.registry.settings.get('elasticsearch.server')` when ES logging is working
