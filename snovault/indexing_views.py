@@ -144,6 +144,11 @@ def item_index_data(context, request):
     # setting _indexing_view enables the embed_cache and cause population of
     # request._linked_uuids and request._rev_linked_uuids_by_item
     request._indexing_view = True
+    # Set aggregate_for before @@object (not just @@embedded) so that calculated
+    # properties during @@object can identify the primary indexed item and its type.
+    # item_type is snake_case (e.g. 'file_set', 'meta_workflow_run').
+    request._aggregate_for['uuid'] = uuid
+    request._aggregate_for['item_type'] = context.type_info.item_type
 
     # run the object view first
     request._linked_uuids = set()
@@ -155,7 +160,7 @@ def item_index_data(context, request):
     # reset these properties, then run embedded view
     request._linked_uuids = set()
     request._rev_linked_uuids_by_item = {}
-    request._aggregate_for['uuid'] = uuid
+    # _aggregate_for uuid/item_type already set above
     request._aggregated_items = {
         agg: {'_fields': context.aggregated_items[agg], 'items': []} for agg in context.aggregated_items
     }

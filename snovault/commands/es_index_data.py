@@ -42,8 +42,11 @@ def main():
     args = parser.parse_args()
 
     logging.basicConfig()
+    # NOTE: the embed cache capacity can in fact be too large in the case
+    # of indexing many objects that are not used frequently or enough to
+    # justify keeping around - Will 22 May 2026
     options = {
-        'embed_cache.capacity': '5000',
+        'embed_cache.capacity': '2000',
         'indexer': 'true',
     }
     app = get_app(args.config_uri, args.app_name, options)

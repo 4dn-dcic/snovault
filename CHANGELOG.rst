@@ -6,6 +6,13 @@ snovault
 Change Log
 ----------
 
+11.30.0
+=======
+
+* Remove unnecessary deepcopy from indexer
+* Reduce embed cache size as it becomes polluted with unused objects over time
+
+
 11.29.0
 =======
 
