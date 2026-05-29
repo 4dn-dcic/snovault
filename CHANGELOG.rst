@@ -6,6 +6,12 @@ snovault
 Change Log
 ----------
 
+11.30.1
+=======
+
+* Expand copy to eliminate cache mutation
+
+
 11.30.0
 =======
 

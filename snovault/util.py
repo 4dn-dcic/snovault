@@ -578,7 +578,11 @@ def expand_embedded_model(request, obj, model, parent_path='', embedded_path=Non
     fields_to_use = model.get('fields_to_use')
     if fields_to_use:
         if '*' in fields_to_use:
-            embedded_res = obj
+            # Shallow-copy to avoid aliasing the input `obj` — this function
+            # later mutates `embedded_res[to_embed] = obj_embedded`, which
+            # would corrupt the embed_cache entry under the deepcopy-skip
+            # indexing optimization (where `obj` is the shared cache result).
+            embedded_res = dict(obj)
         else:
             for field in fields_to_use:
                 found = obj.get(field)
