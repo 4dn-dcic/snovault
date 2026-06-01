@@ -3,6 +3,7 @@ import math
 import itertools
 import uuid
 import structlog
+from pyramid.settings import asbool
 from pyramid.view import view_config
 from webob.multidict import MultiDict
 from functools import reduce
@@ -590,6 +591,14 @@ class SearchBuilder:
                         }
                     ))
 
+    # URL query param: when truthy, suppress every default facet computation
+    # and only run aggregations for fields explicitly listed in `additional_facet`.
+    # Use it for endpoints that want snovault's correct filter construction
+    # (nested fields, schema-aware paths, type subtypes, principal filtering)
+    # but don't want to pay for the dozens of schema-default facet aggregations
+    # — the dominant cost of /search on item types with many faceted fields.
+    SKIP_DEFAULT_FACETS = 'skip_default_facets'
+
     def initialize_facets(self):
         """
         Initialize the facets used for the search. If searching across multiple
@@ -604,6 +613,19 @@ class SearchBuilder:
         :returns: list: tuples containing (0) ElasticSearch-formatted field name (e.g. `embedded.status`)
                         and (1) list of terms for it.
         """
+        # Fast path: caller has asked for additional_facet aggregations only.
+        # Returning early skips the schema-default facet loading entirely —
+        # used by callers like peek-metadata that need a single tiny stats
+        # aggregation and were timing out paying for all default facets.
+        if asbool(self.request.normalized_params.get(self.SKIP_DEFAULT_FACETS)):
+            facets = []
+            current_type_schema = (
+                self.request.registry[TYPES][self.doc_types[0]].schema
+                if len(self.doc_types) == 1 else {}
+            )
+            self._initialize_additional_facets(facets, current_type_schema)
+            return facets
+
         if len(self.doc_types) > 1:  # only provide this if we are searching on more than one type
             facets = [
                 # More facets will be appended to this list from item schema plus from any currently-active filters (as requested in URI params).
