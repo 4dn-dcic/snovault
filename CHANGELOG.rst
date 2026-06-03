@@ -6,6 +6,12 @@ snovault
 Change Log
 ----------
 
+11.30.2
+=======
+
+* Add direct streaming primitive to ES
+
+
 11.30.1
 =======
 

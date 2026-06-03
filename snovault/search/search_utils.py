@@ -361,6 +361,90 @@ def execute_search(*, es, query, index, from_, size, session_id=None):
     return es_results
 
 
+def build_permission_filter(request):
+    """Build the standard snovault view-permission filter for direct ES queries.
+
+    Returns a single ES `terms` filter that restricts results to documents
+    whose `principals_allowed.view` intersects the request's effective
+    principals. Use this when constructing ES queries OUTSIDE the snovault
+    SearchBuilder pipeline (e.g. for streaming endpoints that bypass the
+    full search() machinery to avoid default-facet computation).
+
+    Without this clause, a direct ES query would leak documents the caller
+    is not authorized to view.
+    """
+    return {'terms': {'principals_allowed.view': list(request.effective_principals)}}
+
+
+def execute_streaming_search(es, *, index, query, source_includes=None,
+                             sort_fields=None, batch_size=1000, timeout='60s'):
+    """Stream `_source` dicts for every hit matching `query`, in sorted order.
+
+    Yields one document per hit. Uses Elasticsearch's `search_after` cursor
+    so total work is O(N) regardless of result size — unlike from/size
+    pagination which is O(N^2) for large result sets. Intended for endpoints
+    that need to iterate the full match set without buffering it server-side
+    (e.g. metadata.tsv generation for thousands of files).
+
+    This helper deliberately does NOT request facets/aggregations: the caller
+    is paying only for the documents it actually yields. snovault's
+    `search()` computes ~15-20 default facets per item type per call, each
+    scanning every matched document — that's what blows the 30s search
+    timeout on large /metadata requests.
+
+    The caller is responsible for:
+    - Including a permission filter in `query` (see `build_permission_filter`).
+      This function does not inject one — it doesn't know the request context.
+    - Choosing a sort key that's stable & unique (uuid is the safe default).
+      search_after requires a stable sort or you'll skip/duplicate documents.
+
+    :param es: handle to the registered ES client
+        (typically `request.registry[ELASTIC_SEARCH]`).
+    :param index: ES index string (use `get_es_index(request, [type])` to
+        resolve type aliases including subtypes).
+    :param query: ES query body (the `query` clause; `sort`, `size`,
+        `_source`, `search_after` are added by this function).
+    :param source_includes: optional list of `_source` paths to include in
+        each returned hit (matches ES `_source.includes` semantics). Use
+        this to drop heavyweight embedded sub-objects you won't read.
+    :param sort_fields: optional list of ES sort clauses. Defaults to
+        `[{'embedded.uuid.raw': {'order': 'asc'}}]`.
+    :param batch_size: ES page size (default 1000). Larger reduces round
+        trips; ES caps at index.max_result_window (default 10000) but with
+        search_after the cap does not apply per page.
+    :param timeout: per-batch ES timeout string (default '60s'). Search_after
+        executes one query per batch, so each batch must complete within
+        this timeout — the total streaming duration can exceed it.
+    """
+    if sort_fields is None:
+        sort_fields = [{'embedded.uuid.raw': {'order': 'asc'}}]
+    body = {
+        'query': query,
+        'sort': sort_fields,
+        'size': batch_size,
+        # Skip the cost of computing an exact total count — we're streaming
+        # results, not reporting a paginated UI total.
+        'track_total_hits': False,
+    }
+    if source_includes is not None:
+        body['_source'] = {'includes': list(source_includes)}
+
+    search_after = None
+    while True:
+        if search_after is not None:
+            body['search_after'] = search_after
+        result = es.search(index=index, body=body, timeout=timeout)
+        hits = result['hits']['hits']
+        if not hits:
+            return
+        for hit in hits:
+            yield hit['_source']
+        if len(hits) < batch_size:
+            # Last partial page — no need to ask for another.
+            return
+        search_after = hits[-1]['sort']
+
+
 def make_search_subreq(request, path, **kwargs):
     subreq = make_subrequest(request, path, **kwargs)
     if hasattr(request, "_stats"):
