@@ -9,7 +9,7 @@ from timeit import default_timer as timer
 
 from .elasticsearch.indexer_utils import find_uuids_for_indexing
 from .embed import make_subrequest
-from .interfaces import STORAGE
+from .interfaces import CONNECTION, STORAGE
 from .resources import Item
 from .util import debug_log
 from .validation import ValidationFailure
@@ -156,6 +156,30 @@ def item_index_data(context, request):
         object_view = request.invoke_view(path, '@@object')
     linked_uuids_object = request._linked_uuids.copy()
     rev_link_names = request._rev_linked_uuids_by_item.get(uuid, {}).copy()
+
+    # Overwrite any embed_cache entries for this item's @@object across all
+    # known path variants (canonical, accession, alias, uuid) with the freshly
+    # computed object_view. Calc properties may short-circuit when an item is
+    # sub-embedded under a different primary (see e.g.
+    # types/file.py::file_status_tracking) and an entry cached from such a
+    # sub-embed earlier in the same /index transaction would otherwise be
+    # served back to the @@embedded view below (which reads @@object via
+    # request.embed → embed_cache) — producing an `embedded` document that's
+    # missing calc props the `object` document has. Populating (rather than
+    # invalidating) avoids a second @@object computation in the @@embedded
+    # pass, which for File items is expensive (file_status_tracking fetches
+    # @@revision-history).
+    embed_cache = request.registry[CONNECTION].embed_cache
+    fresh_object_cache_entry = {
+        'result': object_view,
+        '_linked_uuids': linked_uuids_object,
+        '_rev_linked_by_item': dict(request._rev_linked_uuids_by_item),
+        '_aggregated_items': {},
+        '_sid_cache': dict(getattr(request, '_sid_cache', {}) or {}),
+    }
+    for known_path in paths:
+        for cache_key in (known_path + '/@@object', known_path + '@@object'):
+            embed_cache[cache_key] = fresh_object_cache_entry
 
     # reset these properties, then run embedded view
     request._linked_uuids = set()
