@@ -150,36 +150,33 @@ def item_index_data(context, request):
     request._aggregate_for['uuid'] = uuid
     request._aggregate_for['item_type'] = context.type_info.item_type
 
+    # Invalidate any embed_cache entries for this item's @@object across all
+    # known path variants (canonical, accession, alias, uuid) BEFORE invoking
+    # the views below. Both request.invoke_view and request.embed are bound
+    # to the same `embed` function (see embed.py:22-23), so they both read
+    # from embed_cache. If a sub-embed under a different primary earlier in
+    # this same /index transaction populated the cache for this item, and
+    # the calc-prop guard in e.g. types/file.py::file_status_tracking
+    # short-circuited during that sub-embed, the cached entry would be
+    # missing calc props — and would be served back to both the @@object
+    # invoke below (corrupting `document['object']`) and the @@embedded
+    # pass's request.embed call (corrupting `document['embedded']`). After
+    # invalidation, the invoke below cache-misses, calls _embed which
+    # propagates _aggregate_for to the subreq (so primary_uuid == self.uuid
+    # in the calc prop → guard does not fire → calc prop computes), and
+    # populates the cache with the fresh result for the @@embedded pass.
+    embed_cache = request.registry[CONNECTION].embed_cache
+    for known_path in paths:
+        for cache_key in (known_path + '/@@object', known_path + '@@object'):
+            if cache_key in embed_cache:
+                del embed_cache[cache_key]
+
     # run the object view first
     request._linked_uuids = set()
     with indexing_timer(indexing_stats, 'object_view'):
         object_view = request.invoke_view(path, '@@object')
     linked_uuids_object = request._linked_uuids.copy()
     rev_link_names = request._rev_linked_uuids_by_item.get(uuid, {}).copy()
-
-    # Overwrite any embed_cache entries for this item's @@object across all
-    # known path variants (canonical, accession, alias, uuid) with the freshly
-    # computed object_view. Calc properties may short-circuit when an item is
-    # sub-embedded under a different primary (see e.g.
-    # types/file.py::file_status_tracking) and an entry cached from such a
-    # sub-embed earlier in the same /index transaction would otherwise be
-    # served back to the @@embedded view below (which reads @@object via
-    # request.embed → embed_cache) — producing an `embedded` document that's
-    # missing calc props the `object` document has. Populating (rather than
-    # invalidating) avoids a second @@object computation in the @@embedded
-    # pass, which for File items is expensive (file_status_tracking fetches
-    # @@revision-history).
-    embed_cache = request.registry[CONNECTION].embed_cache
-    fresh_object_cache_entry = {
-        'result': object_view,
-        '_linked_uuids': linked_uuids_object,
-        '_rev_linked_by_item': dict(request._rev_linked_uuids_by_item),
-        '_aggregated_items': {},
-        '_sid_cache': dict(getattr(request, '_sid_cache', {}) or {}),
-    }
-    for known_path in paths:
-        for cache_key in (known_path + '/@@object', known_path + '@@object'):
-            embed_cache[cache_key] = fresh_object_cache_entry
 
     # reset these properties, then run embedded view
     request._linked_uuids = set()
