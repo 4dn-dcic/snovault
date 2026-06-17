@@ -6,6 +6,12 @@ snovault
 Change Log
 ----------
 
+11.30.3
+=======
+
+* Fix additional cache poisoning code path
+
+
 11.30.2
 =======
 
