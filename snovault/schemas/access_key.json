@@ -37,8 +37,10 @@
         },
         "user": {
             "title": "User",
+            "comment": "Only admins are allowed to set this value; otherwise it defaults to the requesting user.",
             "type": "string",
-            "linkTo": "User"
+            "linkTo": "User",
+            "permission": "restricted_fields"
         },
         "description": {
             "title": "Description",
