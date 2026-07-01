@@ -6,6 +6,12 @@ snovault
 Change Log
 ----------
 
+11.30.4
+=======
+
+* Restrict AccessKey.user to admins, fixing privilege escalation
+
+
 11.30.3
 =======
 
