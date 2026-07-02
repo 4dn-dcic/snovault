@@ -261,6 +261,10 @@ class CompoundSearchBuilder:
             sort, result_sort = build_sort_dicts(requested_sorts, request, [ doc_type ])
 
             search_builder_instance = SearchBuilder.from_search(context, compound_subreq, compound_query, return_generator=return_generator)
+            # from_search skips _bootstrap_query, so _source is never restricted - set it explicitly
+            # since both consumers of this result (format_result_for_endpoint_response, es_results_generator)
+            # only ever read hit['_source']['embedded']
+            search_builder_instance.query['_source'] = ['embedded.*']
             search_builder_instance.assure_session_id()
             search_builder_instance.query['sort'] = sort
             es_results = None

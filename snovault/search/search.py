@@ -482,8 +482,9 @@ class SearchBuilder:
                 frame = 'properties'
             else:
                 frame = self.search_frame
-            # let embedded be searched as well (for faceting)
-            fields = ['embedded.*', frame + '.*']
+            # note: aggregations operate on indexed doc-values, not _source, so
+            # restricting _source to just the requested frame does not affect faceting
+            fields = [frame + '.*']
         else:
             fields = ['embedded.*']
         return fields
@@ -613,11 +614,14 @@ class SearchBuilder:
         :returns: list: tuples containing (0) ElasticSearch-formatted field name (e.g. `embedded.status`)
                         and (1) list of terms for it.
         """
-        # Fast path: caller has asked for additional_facet aggregations only.
-        # Returning early skips the schema-default facet loading entirely —
-        # used by callers like peek-metadata that need a single tiny stats
-        # aggregation and were timing out paying for all default facets.
-        if asbool(self.request.normalized_params.get(self.SKIP_DEFAULT_FACETS)):
+        # Fast path: caller has asked for additional_facet aggregations only,
+        # or the response frame can't use default facets anyway (format_facets
+        # returns [] for any frame != 'embedded', so computing them is wasted
+        # ES aggregation work). Returning early skips the schema-default facet
+        # loading entirely — used by callers like peek-metadata that need a
+        # single tiny stats aggregation and were timing out paying for all
+        # default facets.
+        if asbool(self.request.normalized_params.get(self.SKIP_DEFAULT_FACETS)) or self.search_frame != 'embedded':
             facets = []
             current_type_schema = (
                 self.request.registry[TYPES][self.doc_types[0]].schema
