@@ -15,8 +15,6 @@ downstream), so its fix is validated the same way: asserting on the
 constructed query dict, without invoking `execute_filter_set` end-to-end.
 """
 
-import pytest
-
 from snovault.search.search import SearchBuilder
 
 
