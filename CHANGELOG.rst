@@ -6,6 +6,15 @@ snovault
 Change Log
 ----------
 
+11.31.0
+=======
+
+* Add a per-type ``track_revisions`` flag (default ``True``) letting an item type opt out
+  of Postgres revision-history tracking. When ``False``, updates overwrite the existing
+  ``propsheets`` row (at most one row per resource + sheet name survives) and the
+  ``@@revision-history`` view returns a 404 instead of an implied-complete partial history.
+
+
 11.30.3
 =======
 
