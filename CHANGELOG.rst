@@ -6,6 +6,19 @@ snovault
 Change Log
 ----------
 
+11.30.4
+=======
+
+* Reduce wasted Elasticsearch query/fetch work in search and compound_search:
+  - ``compound_search``'s multi-block path now restricts ``_source`` to
+    ``embedded.*`` instead of fetching the entire document per hit
+  - Default per-field facet aggregations are now skipped whenever the
+    response frame is not ``embedded`` (facets were already discarded
+    for these frames, so computing them was wasted ES work)
+  - ``frame=object``/``frame=raw`` searches no longer also fetch unused
+    ``embedded.*`` in ``_source``
+
+
 11.30.3
 =======
 
