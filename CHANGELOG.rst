@@ -6,6 +6,14 @@ snovault
 Change Log
 ----------
 
+11.30.4
+=======
+
+* Add unit tests closing coverage gaps in pure-logic modules (typedsheets,
+  authorization, etag, schema_formats, server_defaults_misc, predicates,
+  typeinfo, and util helpers); no production code changes
+
+
 11.30.3
 =======
 
