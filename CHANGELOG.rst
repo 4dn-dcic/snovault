@@ -6,6 +6,18 @@ snovault
 Change Log
 ----------
 
+11.30.5
+=======
+
+* Fix a self-registration privilege-escalation vulnerability in
+  ``create_unauthorized_user`` (``POST /create-unauthorized-user``): the endpoint now
+  whitelists which submitted fields are applied to the newly created User (email,
+  first_name, last_name, preferred_email, job_title, institution, pending_lab), instead
+  of passing the caller-submitted body through almost as-is while running with an
+  elevated (``restricted_fields``) write permission. Previously a caller could self-assign
+  privileged fields (e.g. ``"groups": ["admin"]``) on their own new account.
+
+
 11.30.3
 =======
 

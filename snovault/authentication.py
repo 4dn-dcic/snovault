@@ -741,6 +741,30 @@ def generate_password():
     return password
 
 
+# Fields the self-registration endpoint (create_unauthorized_user) is allowed to accept from
+# the caller-submitted request body. This is a whitelist rather than a blocklist: the endpoint
+# sets request.remote_user = 'EMBED' (which carries the 'restricted_fields' write permission)
+# before validating/creating the User, so any field NOT filtered out here would be written
+# through as submitted, letting a caller self-assign privileged fields such as "groups" or
+# "submits_for". A blocklist only protects against field names its author thought to
+# enumerate, and snovault is consumed by apps with different User schemas (e.g. fourfront's
+# lab/submits_for/groups/viewing_groups vs. other consumers' equivalents), so a whitelist of
+# known-safe fields fails safe across all current and future consumers where a blocklist would
+# not. `pending_lab` is included as a documented exception: although its schema permission is
+# restricted like the truly privileged fields, it is only a self-declared request that an admin
+# must separately review and promote to `lab` before it grants any real access - unlike
+# lab/groups/submits_for/viewing_groups, which grant real access immediately if set.
+SELF_REGISTRATION_ALLOWED_FIELDS = frozenset({
+    'email',
+    'first_name',
+    'last_name',
+    'preferred_email',
+    'job_title',
+    'institution',
+    'pending_lab',
+})
+
+
 @view_config(route_name='create-unauthorized-user', request_method='POST',
              permission=NO_PERMISSION_REQUIRED)
 @debug_log
@@ -825,6 +849,12 @@ def create_unauthorized_user(context, request):
 
     # set user insert props
     del user_props['g-recaptcha-response']
+    # Strip any field not explicitly whitelisted for self-registration before validation, so a
+    # caller cannot self-assign privileged fields (e.g. "groups": ["admin"]) via the elevated
+    # write permission granted below. See SELF_REGISTRATION_ALLOWED_FIELDS for rationale.
+    for key in list(user_props):
+        if key not in SELF_REGISTRATION_ALLOWED_FIELDS:
+            del user_props[key]
     user_props['was_unauthorized'] = True
     user_props['email'] = user_props_email  # lower-cased
     user_coll = request.registry[COLLECTIONS]['User']
