@@ -6,7 +6,7 @@ snovault
 Change Log
 ----------
 
-11.30.4
+11.30.6
 =======
 
 * Reduce wasted Elasticsearch query/fetch work in search and compound_search:
