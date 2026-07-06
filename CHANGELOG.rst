@@ -6,7 +6,7 @@ snovault
 Change Log
 ----------
 
-11.30.5
+11.30.8
 =======
 
 * Fix a self-registration privilege-escalation vulnerability in
