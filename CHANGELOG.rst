@@ -6,7 +6,7 @@ snovault
 Change Log
 ----------
 
-11.30.6
+11.30.5
 =======
 
 * Reduce wasted Elasticsearch query/fetch work in search and compound_search:
@@ -17,6 +17,12 @@ Change Log
     for these frames, so computing them was wasted ES work)
   - ``frame=object``/``frame=raw`` searches no longer also fetch unused
     ``embedded.*`` in ``_source``
+
+
+11.30.4
+=======
+
+* Restrict AccessKey.user to admins, fixing privilege escalation
 
 
 11.30.3
