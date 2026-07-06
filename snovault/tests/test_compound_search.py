@@ -43,17 +43,15 @@ class TestAddTypeToFlagIfNeeded:
         result = CompoundSearchBuilder._add_type_to_flag_if_needed('', 'type=Item')
         assert result == 'type=Item'
 
-    def test_appends_type_again_even_when_already_present(self):
-        # NOTE: the presence check is `if type_flag not in flags or type_flag.lower()
-        # not in flags:` (an OR) - since type_flag.lower() is checked against the
-        # *original-case* flags string, that second clause is true almost
-        # whenever flags isn't already all-lowercase, so this "not already
-        # present" guard does not actually prevent duplication in the common
-        # case. Documenting current (likely unintended) behavior here rather
-        # than the presumably-intended dedup behavior, since this file only
-        # closes test gaps and does not change behavior.
+    def test_does_not_duplicate_type_when_already_present(self):
         result = CompoundSearchBuilder._add_type_to_flag_if_needed('type=Item&status=released', 'type=Item')
-        assert result == 'type=Item&status=released&type=Item'
+        assert result == 'type=Item&status=released'
+
+    def test_does_not_duplicate_type_when_present_in_lowercase_form(self):
+        # type_flag is 'type=Item' but flags already has the lowercase form -
+        # the `type_flag.lower() not in flags` clause should still catch this.
+        result = CompoundSearchBuilder._add_type_to_flag_if_needed('type=item&status=released', 'type=Item')
+        assert result == 'type=item&status=released'
 
 
 class TestEsResultsGenerator:

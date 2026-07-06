@@ -73,9 +73,13 @@ class TestCanonicalizeBoundsAndRangeIncludesZero:
 
     def test_epsilon_nudge_is_only_observable_exactly_at_zero(self):
         # The epsilon is only large enough to perturb the boundary when the
-        # pivot itself is at (or extremely near) zero.
+        # pivot itself is at (or extremely near) zero. Exclusive bounds are
+        # nudged *away* from the pivot (gt up, lt down) so an inclusive (<=)
+        # comparison against the nudged value correctly excludes the pivot.
         lower, _ = LuceneBuilder.canonicalize_bounds({'gt': 0})
-        assert lower < 0
+        assert lower > 0
+        _, upper = LuceneBuilder.canonicalize_bounds({'lt': 0})
+        assert upper < 0
         _, upper = LuceneBuilder.canonicalize_bounds({'lte': 0})
         assert upper > 0
 
@@ -91,25 +95,13 @@ class TestCanonicalizeBoundsAndRangeIncludesZero:
     def test_range_with_gte_zero_includes_zero(self):
         assert LuceneBuilder.range_includes_zero({'gte': 0, 'lte': 10}) is True
 
-    def test_range_with_exclusive_gt_zero_boundary_currently_reports_includes_zero(self):
-        # NOTE: mathematically, `gt: 0` (strictly greater than zero) should
-        # exclude zero. But canonicalize_bounds computes lower = pivot - epsilon
-        # for 'gt', which at pivot=0 produces a small *negative* number
-        # (-1.1754e-38), making `lower <= 0` true. So this currently reports
-        # True (includes zero) for an exact `gt: 0` boundary, which looks like
-        # an off-by-epsilon edge case in the exclusive/zero-boundary interaction
-        # (only reachable when a numeric field's schema also sets add_no_value
-        # and a caller filters with an exact `gt: 0`/`lt: 0` boundary) -
-        # documenting current behavior here rather than asserting the
-        # mathematically "correct" answer, since this file only closes test
-        # gaps and does not change behavior.
-        assert LuceneBuilder.range_includes_zero({'gt': 0, 'lte': 10}) is True
+    def test_range_with_exclusive_gt_zero_boundary_excludes_zero(self):
+        # `gt: 0` (strictly greater than zero) must exclude zero.
+        assert LuceneBuilder.range_includes_zero({'gt': 0, 'lte': 10}) is False
 
-    def test_range_with_exclusive_lt_zero_boundary_currently_reports_includes_zero(self):
-        # Same edge case, mirrored: `lt: 0` (strictly less than zero) should
-        # exclude zero, but upper = pivot + epsilon at pivot=0 produces a tiny
-        # *positive* number, making `upper >= 0` true.
-        assert LuceneBuilder.range_includes_zero({'gte': -10, 'lt': 0}) is True
+    def test_range_with_exclusive_lt_zero_boundary_excludes_zero(self):
+        # `lt: 0` (strictly less than zero) must exclude zero.
+        assert LuceneBuilder.range_includes_zero({'gte': -10, 'lt': 0}) is False
 
 
 class TestConstructNestedSubQueries:

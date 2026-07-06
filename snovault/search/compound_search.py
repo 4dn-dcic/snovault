@@ -158,7 +158,7 @@ class CompoundSearchBuilder:
         :param type_flag: query substring containing type requirement
         :return: query string that combines the two, if type requirement isn't already there
         """
-        if type_flag not in flags or type_flag.lower() not in flags:
+        if type_flag not in flags and type_flag.lower() not in flags:
             if len(flags) > 0:
                 flags += '&' + type_flag
             else:
