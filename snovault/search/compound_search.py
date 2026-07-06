@@ -57,6 +57,13 @@ class CompoundSearchBuilder:
         if len(query) > 0 and query[0] != "?":
             query = '?' + query
 
+        # /build_query only ever reads query['query'] back (see execute_filter_set) -
+        # facet/aggregation construction only ever writes query['aggs'], so skipping the
+        # default per-field facet computation here is free and leaves the extracted query
+        # identical, while avoiding a deepcopy-per-facet + schema crawl on every filter block.
+        if route == CompoundSearchBuilder.BUILD_QUERY_URL:
+            query = '?' + CompoundSearchBuilder.combine_query_strings(query, 'skip_default_facets=true')
+
         # If any '?', '&', or '=' in search term, should have been pre-encoded.
         # Meant to handle "+" especially.
         query = urllib.parse.quote(query, safe="?&=")
