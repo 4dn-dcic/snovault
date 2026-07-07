@@ -216,7 +216,16 @@ class QueueManager(object):
             self.collision_manager = LockoutManager(lockout_seconds=self.PURGE_QUEUE_LOCKOUT_SECONDS,
                                                      safety_seconds=self.PURGE_QUEUE_SAFETY_SECONDS,
                                                      action="purge_queue", log=log)
-        self.env_name = mirror_env if mirror_env else registry.settings.get('env.name')
+        # NOTE: intentionally does NOT fall back to registry.settings.get('indexer.namespace')
+        # here for real deployments - only when env.name itself is unset (e.g. in tests) do we
+        # consult it. Do not repurpose 'env.name' itself for this: snovault.elasticsearch's
+        # includeme() separately reads settings['env.name'] to decide whether to look up a
+        # blue/green mirror env (dcicutils.env_utils.blue_green_mirror_env), which in an
+        # orchestrated-but-unconfigured environment (e.g. CI, no IDENTITY available) raises
+        # rather than returning None - so making env.name truthy in test settings to namespace
+        # SQS queues would crash app construction before any test runs.
+        self.env_name = (mirror_env if mirror_env
+                          else (registry.settings.get('env.name') or registry.settings.get('indexer.namespace')))
         self.override_url = override_url
         # local development
         if not self.env_name:
@@ -225,7 +234,7 @@ class QueueManager(object):
             # last case scenario
             self.env_name = backup if backup else 'fourfront-backup'
         else:
-            # env.name may come from a test-run identifier (e.g. INDEXER_NAMESPACE_FOR_TESTING,
+            # env_name may come from a test-run identifier (e.g. INDEXER_NAMESPACE_FOR_TESTING,
             # which can contain a python version like "3.11") rather than a real deployment env
             # name, so sanitize it the same way as the hostname-derived fallback above.
             self.env_name = self.clean_env_namespace(self.env_name)

@@ -76,11 +76,13 @@ def app_settings(basic_app_settings, wsgi_server_host_port, elasticsearch_server
     settings['collection_datastore'] = 'elasticsearch'
     settings['item_datastore'] = 'elasticsearch'
     settings['indexer'] = True
+    # QueueManager (snovault/elasticsearch/indexer_queue.py) namespaces its SQS queues from
+    # this same setting (falling back to it only when env.name is unset), so this also
+    # namespaces SQS queues per CI run/repo instead of colliding on the runner's hostname.
+    # Deliberately NOT setting settings['env.name'] here: snovault.elasticsearch's includeme()
+    # reads env.name to decide whether to look up a blue/green mirror env, which crashes in
+    # CI (no IDENTITY configured) as soon as env.name is truthy - see QueueManager.__init__.
     settings['indexer.namespace'] = INDEXER_NAMESPACE_FOR_TESTING
-    # Namespace SQS queues the same way ES indices already are, so queue names are unique
-    # per CI run/repo instead of colliding on the runner's hostname (QueueManager falls back
-    # to socket.gethostname() when env.name is unset, which it otherwise always is in tests).
-    settings['env.name'] = INDEXER_NAMESPACE_FOR_TESTING
 
     # use aws auth to access elasticsearch
     if aws_auth:

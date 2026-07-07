@@ -21,27 +21,27 @@ def main():
     # not the raw TEST_JOB_ID (which is otherwise usable as-is for ES index names).
     prefix = QueueManager.clean_env_namespace(jid)
     logger.info('Wiping SQS queues on us-east-1 with prefix %s\n' % prefix)
+    client = boto3.client('sqs', region_name='us-east-1')
     try:
-        client = boto3.client('sqs', region_name='us-east-1')
         queue_urls = client.list_queues(QueueNamePrefix=prefix).get('QueueUrls', [])
     except Exception as exc:
-        logger.error('Failed to list queues with exception: %s\n' % str(exc))
-        exit(1)
+        # A missing sqs:ListQueues permission on the CI role is a known gap (as of this
+        # writing the role isn't authorized for sqs:ListQueues/sqs:DeleteQueue) - treat any
+        # failure here as non-fatal so a cleanup-permission gap doesn't fail the whole CI
+        # job. Leftover queues just accumulate until the permission is granted.
+        logger.warning('Could not list SQS queues to clean up (leaving them in place): %s\n' % str(exc))
+        return
 
     if not queue_urls:
         logger.info('No SQS queues found with prefix %s' % prefix)
         return
 
-    failures = False
     for queue_url in queue_urls:
         try:
             client.delete_queue(QueueUrl=queue_url)
             logger.info('Deleted queue %s' % queue_url)
         except Exception as exc:
-            failures = True
-            logger.error('Failed to delete queue %s with exception: %s\n' % (queue_url, str(exc)))
-    if failures:
-        exit(1)
+            logger.warning('Failed to delete queue %s with exception: %s\n' % (queue_url, str(exc)))
 
 
 if __name__ == '__main__':

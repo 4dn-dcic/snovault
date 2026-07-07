@@ -45,14 +45,27 @@ before a subsequent `testapp` request corrupts the shared transaction and makes 
 ## SQS test-queue namespacing and INDEXING CI flakiness
 
 `QueueManager` (`snovault/elasticsearch/indexer_queue.py`) names its 3 SQS queues from
-`registry.settings['env.name']`, falling back to a sanitized `socket.gethostname()` when
-`env.name` is unset. `snovault/tests/test_indexing.py`'s `app_settings` fixture now sets
-`env.name = INDEXER_NAMESPACE_FOR_TESTING` (the same per-CI-run/per-python-version
-identifier already used for the ES index namespace), so SQS queues are namespaced per run
+`registry.settings['env.name']`, falling back (only when `env.name` is falsy) to
+`registry.settings['indexer.namespace']`, and only after that to a sanitized
+`socket.gethostname()`. `snovault/tests/test_indexing.py`'s `app_settings` fixture already
+sets `indexer.namespace = INDEXER_NAMESPACE_FOR_TESTING` (the same per-CI-run/per-python-version
+identifier used for the ES index namespace), so SQS queues get namespaced per run for free
 instead of colliding on the CI runner's hostname across runs/repos. Because that identifier
 can contain a python version like `3.11` (periods aren't valid in SQS queue names),
-`QueueManager.clean_env_namespace` sanitizes *any* explicitly-provided `env.name`, not just
-the hostname fallback — don't bypass it when constructing queue names.
+`QueueManager.clean_env_namespace` sanitizes whichever of the two settings actually gets
+used, not just the hostname fallback — don't bypass it when constructing queue names.
+
+**Do not set `settings['env.name']` directly to a test-run identifier** to achieve this -
+`snovault.elasticsearch`'s `includeme()` separately reads `settings['env.name']` to decide
+whether to look up a blue/green mirror env
+(`mirror_env = blue_green_mirror_env(env_name) if env_name else None`). In an
+orchestrated-but-unconfigured environment (e.g. CI, no `IDENTITY` available),
+`blue_green_mirror_env(...)` raises `ValueError: There is no default identity name available
+for IDENTITY` rather than returning `None` — it's only skipped because a falsy `env_name`
+short-circuits the call. Making `env.name` truthy in test settings (an earlier version of
+this fix did exactly that) crashes app construction before any test runs, taking down the
+whole INDEXING CI job immediately. `indexer.namespace` doesn't have this problem: nothing
+else reads it to gate blue/green lookups, so it's safe to always set in test settings.
 
 Only `test_indexing.py` sets `elasticsearch.server` in its settings, and that whole file is
 tagged `pytest.mark.indexing` + `pytest.mark.es`, which only runs in the CI "INDEXING" job
@@ -62,7 +75,13 @@ to touch that job, not "UNIT".
 CI cleanup: `poetry run wipe-test-indexer-queues $TEST_JOB_ID` (mirrors `wipe-test-indices`,
 in `.github/workflows/main.yml`'s "Cleanup (INDEXING)" step) lists/deletes SQS queues by the
 same sanitized-namespace prefix, so namespaced queues don't accumulate under the 14-day
-message-retention period.
+message-retention period. As of this writing the CI IAM role
+(`arn:aws:iam::643366669028:role/4dn-dcic-github-actions-deployment-role`) is **not**
+authorized for `sqs:ListQueues`/`sqs:DeleteQueue`, so this step currently no-ops in practice
+(queues still accumulate until that policy gap is closed). The command deliberately treats
+any AWS error here (including `AccessDenied`) as a soft failure — logs a warning and returns
+normally — specifically so a missing IAM permission doesn't fail the whole CI job the way it
+did the first time this was wired up.
 
 `QueueManager.purge_queue()` now sleeps `PURGE_QUEUE_LOCKOUT_SECONDS +
 PURGE_QUEUE_SAFETY_SECONDS` (~61s) after issuing the purge, in addition to the pre-purge

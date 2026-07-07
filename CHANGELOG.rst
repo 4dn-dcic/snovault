@@ -6,16 +6,24 @@ snovault
 Change Log
 ----------
 
-11.31.2
+11.31.3
 =======
 
 * Reduce INDEXING CI flakiness caused by SQS queue handling:
 
-  * Namespace test SQS queues the same way ES test indices already are (via ``env.name``
-    derived from ``INDEXER_NAMESPACE_FOR_TESTING``/``TEST_JOB_ID``) instead of falling back
-    to the runner's hostname, so queues no longer collide across CI runs/repos.
+  * Namespace test SQS queues the same way ES test indices already are, via
+    ``indexer.namespace`` (``INDEXER_NAMESPACE_FOR_TESTING``/``TEST_JOB_ID``) as a
+    ``QueueManager`` fallback when ``env.name`` is unset, instead of falling back to the
+    runner's hostname, so queues no longer collide across CI runs/repos. Deliberately does
+    *not* set ``env.name`` itself for this, since ``snovault.elasticsearch``'s
+    ``includeme()`` separately uses a truthy ``env.name`` to trigger a blue/green mirror-env
+    lookup that crashes app construction in an unconfigured (e.g. CI) environment.
   * Add a ``wipe-test-indexer-queues`` command and matching CI cleanup step, mirroring
     ``wipe-test-indices``, so namespaced test queues are deleted instead of accumulating.
+    Treats AWS errors (e.g. a missing ``sqs:ListQueues``/``sqs:DeleteQueue`` IAM permission)
+    as a soft failure - logs a warning rather than failing the job - since the CI role isn't
+    yet authorized for this and closing that gap requires an IAM policy change outside this
+    repo.
   * Make ``QueueManager.purge_queue`` actually wait out SQS's ~60s purge-propagation
     window before returning, instead of letting the next test proceed immediately and
     risk seeing pre-purge messages.
