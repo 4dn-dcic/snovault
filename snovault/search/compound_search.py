@@ -57,6 +57,13 @@ class CompoundSearchBuilder:
         if len(query) > 0 and query[0] != "?":
             query = '?' + query
 
+        # /build_query only ever reads query['query'] back (see execute_filter_set) -
+        # facet/aggregation construction only ever writes query['aggs'], so skipping the
+        # default per-field facet computation here is free and leaves the extracted query
+        # identical, while avoiding a deepcopy-per-facet + schema crawl on every filter block.
+        if route == CompoundSearchBuilder.BUILD_QUERY_URL:
+            query = '?' + CompoundSearchBuilder.combine_query_strings(query, 'skip_default_facets=true')
+
         # If any '?', '&', or '=' in search term, should have been pre-encoded.
         # Meant to handle "+" especially.
         query = urllib.parse.quote(query, safe="?&=")
@@ -151,7 +158,7 @@ class CompoundSearchBuilder:
         :param type_flag: query substring containing type requirement
         :return: query string that combines the two, if type requirement isn't already there
         """
-        if type_flag not in flags or type_flag.lower() not in flags:
+        if type_flag not in flags and type_flag.lower() not in flags:
             if len(flags) > 0:
                 flags += '&' + type_flag
             else:
@@ -261,6 +268,10 @@ class CompoundSearchBuilder:
             sort, result_sort = build_sort_dicts(requested_sorts, request, [ doc_type ])
 
             search_builder_instance = SearchBuilder.from_search(context, compound_subreq, compound_query, return_generator=return_generator)
+            # from_search skips _bootstrap_query, so _source is never restricted - set it explicitly
+            # since both consumers of this result (format_result_for_endpoint_response, es_results_generator)
+            # only ever read hit['_source']['embedded']
+            search_builder_instance.query['_source'] = ['embedded.*']
             search_builder_instance.assure_session_id()
             search_builder_instance.query['sort'] = sort
             es_results = None

@@ -367,6 +367,14 @@ class Item(Resource):
     item_type = None
     base_types = ['Item']
     name_key = None
+    # Whether Postgres revision history is tracked for this type. When True (the
+    # default), each update inserts a new `propsheets` row keyed by (rid, name,
+    # sid), preserving prior versions so the revision-history view can walk them.
+    # A type may opt out by setting `track_revisions = False`, in which case an
+    # update overwrites the existing propsheet row (at most one row per rid+name
+    # survives) and the revision-history view returns a 404. See snovault.storage
+    # (RDBStorage._prune_revisions) and crud_views.item_view_revision_history.
+    track_revisions = True
     rev = {}
     aggregated_items = {}
     embedded_list = []

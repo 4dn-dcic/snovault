@@ -6,6 +6,7 @@ from uuid import (
 from copy import deepcopy
 import transaction
 from pyramid.exceptions import HTTPForbidden
+from pyramid.httpexceptions import HTTPNotFound
 from pyramid.settings import asbool
 from pyramid.view import view_config
 from structlog import get_logger
@@ -409,7 +410,17 @@ def get_item_revision_history(request, uuid, resolve_emails=False):
 def item_view_revision_history(context, request):
     """ View config for viewing an item's revision history.
         For now, to view revision history the caller must have EDIT permissions.
+
+        Types that opt out of revision-history tracking (track_revisions = False)
+        do not retain prior propsheet rows, so there is no honest history to
+        return. Rather than silently returning only the current version (which
+        would imply a full history), fail explicitly with a 404.
     """
+    if not getattr(context, 'track_revisions', True):
+        raise HTTPNotFound(
+            f'Revision history is not tracked for item type '
+            f'{context.type_info.name!r} (track_revisions = False).'
+        )
     uuid = str(context.uuid)
     resolve_emails = asbool(request.GET.get('resolve_emails', False))
     revisions = get_item_revision_history(request, uuid, resolve_emails=resolve_emails)

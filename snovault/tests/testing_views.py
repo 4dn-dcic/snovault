@@ -898,6 +898,52 @@ class TestingEmbeddedLinkedSchemaField(Item):
 
 
 
+@collection(
+    'testing-revision-history-enabled',
+    properties={
+        'title': 'Testing Revision History Enabled',
+        'description': 'Item type that tracks revision history (the default).',
+    },
+)
+class TestingRevisionHistoryEnabled(Item):
+    """ Item type that tracks Postgres revision history (the default behavior).
+        Sibling of TestingRevisionHistoryDisabled, used to verify that the opt-out
+        flag does not regress the default (history-tracking) behavior.
+    """
+    item_type = 'testing_revision_history_enabled'
+    schema = {
+        'type': 'object',
+        'properties': {
+            'title': {'type': 'string'},
+            'description': {'type': 'string'},
+        }
+    }
+
+
+@collection(
+    'testing-revision-history-disabled',
+    properties={
+        'title': 'Testing Revision History Disabled',
+        'description': 'Item type that opts out of revision-history tracking.',
+    },
+)
+class TestingRevisionHistoryDisabled(Item):
+    """ Item type that opts out of Postgres revision-history tracking by setting
+        `track_revisions = False`. Updates overwrite the existing propsheet row
+        instead of inserting a new one, so at most one propsheet row per
+        (rid, name) survives, and the revision-history view returns a 404.
+    """
+    item_type = 'testing_revision_history_disabled'
+    track_revisions = False
+    schema = {
+        'type': 'object',
+        'properties': {
+            'title': {'type': 'string'},
+            'description': {'type': 'string'},
+        }
+    }
+
+
 @collection('testing-hidden-facets')
 class TestingHiddenFacets(Item):
     """ Collection designed to test searching with hidden facets. Yes this is large, but this is a complex feature

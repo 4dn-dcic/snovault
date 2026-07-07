@@ -58,3 +58,61 @@ To unit-test a view function that hits the DB by calling it directly against
   relies on for isolation, and leaves real committed rows that leak into and break later
   tests (e.g. `test_storage.py`'s row-count assertions) even though `external_tx` is
   autoused.
+## Revision-history tracking (`track_revisions` per-type flag)
+
+By default, every item type tracks full Postgres revision history: each update inserts a
+new row into the `propsheets` table keyed by `(rid, name, sid)`, so prior versions are
+preserved and the `@@revision-history` view can walk them.
+
+A type can opt out of history tracking by setting a class attribute on its `Item` subclass:
+
+```python
+class MyType(Item):
+    item_type = 'my_type'
+    track_revisions = False   # default is True
+```
+
+Behavior when `track_revisions = False`:
+- **Write path** (`snovault/storage.py`): `PickStorage.update` resolves the flag from the
+  type registry via `model.item_type` (`_track_revisions_for`) and passes it to
+  `RDBStorage.update`. After the normal write, `RDBStorage._prune_revisions` deletes the
+  prior `propsheets` rows for each written `(rid, name)`, leaving **at most one row** per
+  resource + sheet name. A fresh propsheet row is still created per write (so the `sid`
+  advances and sid-based indexing/invalidation still detects the change) — only older rows
+  are pruned. The first write (create) has no prior rows and is unaffected.
+- **Revision-history view** (`snovault/crud_views.py::item_view_revision_history`): returns
+  **HTTP 404** with a message like "Revision history is not tracked for item type ..."
+  rather than silently returning only the current version (which would falsely imply a full
+  history).
+
+The flag is declared/documented on the base `Item` class in `snovault/resources.py`.
+Tests: `snovault/tests/test_storage.py` (`test_track_revisions_*`) exercise both the
+disabled and enabled paths, asserting the propsheet row count **directly against the DB**.
+Test types `TestingRevisionHistoryDisabled` / `TestingRevisionHistoryEnabled` live in
+`snovault/tests/testing_views.py`.
+
+Test gotcha: `testapp` and the `session` fixture share one `DBSession`. Do all `testapp`
+requests first, then raw `session` queries at the end — a `session.query(...)` interleaved
+before a subsequent `testapp` request corrupts the shared transaction and makes traversal
+404 (this also leaks into later tests).
+
+## SQS/ES-polling tests in `test_indexing.py` need the flaky rerun decorator
+
+Tests in `snovault/tests/test_indexing.py` that poll SQS and/or ES for eventual
+consistency intermittently fail on CI purely from timing (this also hits `master`; the
+INDEXING CI job is known-flaky). The established mitigation is
+`@pytest.mark.flaky(max_runs=N, rerun_filter=delay_rerun)` (`delay_rerun` from
+`snovault/tools.py` sleeps 10s between reruns). When adding a test to this file that
+follows the queue-then-poll pattern, include that decorator — several timing failures
+traced back to tests that used the pattern but were missing it
+(`test_aggregated_items`, `test_indexer_namespacing`, `test_indexer_queue_adds_telemetry_id`).
+
+## `ItemNamespace.__getattr__` sharp edge (calculated.py)
+
+`ItemNamespace.__getattr__` resolves unknown names via `self.registry` / `self._properties`
+(both pyramid `reify` properties). If the namespace was built with `request=None` (or a
+request lacking `.registry`), the reify body raises `AttributeError`, which re-enters
+`__getattr__` and recurses to `RecursionError` instead of a clean `AttributeError`. Not
+reachable in production (`calculate_properties` always passes a real request), but when
+unit-testing the namespace directly, inject `registry`/`_properties` via the `ns` dict —
+see `snovault/tests/test_calculated_registry.py`.

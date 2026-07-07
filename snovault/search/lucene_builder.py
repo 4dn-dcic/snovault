@@ -264,11 +264,15 @@ class LuceneBuilder:
             if direction == 'lte':
                 upper = pivot + cls.SMALLEST_NONZERO_IEEE_32
             elif direction == 'lt':
-                upper = pivot
+                # exclusive upper bound - nudge down so an inclusive (<=) comparison
+                # against this value correctly excludes the pivot itself
+                upper = pivot - cls.SMALLEST_NONZERO_IEEE_32
             elif direction == 'gte':
                 lower = pivot
             elif direction == 'gt':
-                lower = pivot - cls.SMALLEST_NONZERO_IEEE_32
+                # exclusive lower bound - nudge up so an inclusive (<=) comparison
+                # against this value correctly excludes the pivot itself
+                lower = pivot + cls.SMALLEST_NONZERO_IEEE_32
         return lower, upper
 
     @classmethod

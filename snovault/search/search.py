@@ -482,8 +482,9 @@ class SearchBuilder:
                 frame = 'properties'
             else:
                 frame = self.search_frame
-            # let embedded be searched as well (for faceting)
-            fields = ['embedded.*', frame + '.*']
+            # note: aggregations operate on indexed doc-values, not _source, so
+            # restricting _source to just the requested frame does not affect faceting
+            fields = [frame + '.*']
         else:
             fields = ['embedded.*']
         return fields
@@ -613,11 +614,14 @@ class SearchBuilder:
         :returns: list: tuples containing (0) ElasticSearch-formatted field name (e.g. `embedded.status`)
                         and (1) list of terms for it.
         """
-        # Fast path: caller has asked for additional_facet aggregations only.
-        # Returning early skips the schema-default facet loading entirely —
-        # used by callers like peek-metadata that need a single tiny stats
-        # aggregation and were timing out paying for all default facets.
-        if asbool(self.request.normalized_params.get(self.SKIP_DEFAULT_FACETS)):
+        # Fast path: caller has asked for additional_facet aggregations only,
+        # or the response frame can't use default facets anyway (format_facets
+        # returns [] for any frame != 'embedded', so computing them is wasted
+        # ES aggregation work). Returning early skips the schema-default facet
+        # loading entirely — used by callers like peek-metadata that need a
+        # single tiny stats aggregation and were timing out paying for all
+        # default facets.
+        if asbool(self.request.normalized_params.get(self.SKIP_DEFAULT_FACETS)) or self.search_frame != 'embedded':
             facets = []
             current_type_schema = (
                 self.request.registry[TYPES][self.doc_types[0]].schema
@@ -1072,7 +1076,6 @@ class SearchBuilder:
         result_facet['terms'] = sorted(list(group_terms_dict.values()), key=lambda t: t['doc_count'], reverse=True)
         del result_facet['group_by_field']
         result_facet['has_group_by'] = True
-        print(result_facet)
 
     def get_collection_actions(self):
         """
@@ -1193,10 +1196,16 @@ class SearchBuilder:
         Calls `execute_search` in paginated manner iteratively until all results have been yielded.
         """
         from_ = 0
+        # Facet aggregations run in a `global` (whole-index) context, so they cost the same on
+        # every page regardless of `from_`/`size` - but format_facets only ever reads them from
+        # the first page's response. Drop `aggs` (and total-hit tracking, also only needed on the
+        # first page) from subsequent-page queries so we don't re-pay that cost on every page.
+        subsequent_query = {k: v for k, v in self.query.items() if k != 'aggs'}
+        subsequent_query['track_total_hits'] = False
         while extra_requests_needed_count > 0:
             # print(str(extra_requests_needed_count) + " requests left to get all results.")
             from_ = from_ + size_increment
-            subsequent_search_result = execute_search(es=self.es, query=self.query, index=self.es_index,
+            subsequent_search_result = execute_search(es=self.es, query=subsequent_query, index=self.es_index,
                                                       from_=from_, size=size_increment,
                                                       session_id=self.search_session_id)
             extra_requests_needed_count -= 1

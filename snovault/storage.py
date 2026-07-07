@@ -15,7 +15,7 @@ from sqlalchemy.ext import baked
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import backref, collections
 from sqlalchemy.orm.exc import FlushError, MultipleResultsFound, NoResultFound
-from .interfaces import BLOBS, DBSESSION, STORAGE
+from .interfaces import BLOBS, DBSESSION, STORAGE, TYPES
 
 
 log = structlog.getLogger(__name__)
@@ -264,13 +264,34 @@ class PickStorage(object):
         then this will both update DB tables and the item properties in ES
         """
         storage = self.storage(datastore)
+        # Per-type opt-out: types with `track_revisions = False` overwrite their
+        # existing propsheet row on update instead of accumulating history rows.
+        track_revisions = self._track_revisions_for(model)
         if storage is self.read:
             # must update links and such in write RDS. However, don't update
             # properties and sheets, as those are exclusively stored in ES.
             # Still call `storage.update` below to update contents of ES doc
-            self.write.update(model, {}, None, unique_keys, links)
+            self.write.update(model, {}, None, unique_keys, links,
+                              track_revisions=track_revisions)
+            return storage.update(model, properties, sheets, unique_keys, links)
 
-        return storage.update(model, properties, sheets, unique_keys, links)
+        return storage.update(model, properties, sheets, unique_keys, links,
+                              track_revisions=track_revisions)
+
+    def _track_revisions_for(self, model):
+        """
+        Resolve the per-type `track_revisions` flag for the given resource model
+        using the type registry. Defaults to True (track history) so existing
+        types are unaffected. A type opts out of revision-history tracking by
+        setting the class attribute `track_revisions = False` on its factory.
+        """
+        try:
+            type_info = self.registry[TYPES].by_item_type.get(model.item_type)
+        except (KeyError, AttributeError, TypeError):
+            return True
+        if type_info is None:
+            return True
+        return getattr(type_info.factory, 'track_revisions', True)
 
     def get_sids_by_uuids(self, uuids):
         """
@@ -455,7 +476,8 @@ class RDBStorage(object):
     def create(self, item_type, rid):
         return Resource(item_type, rid=rid)
 
-    def update(self, model, properties=None, sheets=None, unique_keys=None, links=None):
+    def update(self, model, properties=None, sheets=None, unique_keys=None, links=None,
+               track_revisions=True):
         session = self.DBSession()
         sp = session.begin_nested()
         try:
@@ -465,6 +487,8 @@ class RDBStorage(object):
                 self._update_rels(model, links)
             if unique_keys is not None:
                 keys_add, keys_remove = self._update_keys(model, unique_keys)
+            if not track_revisions:
+                self._prune_revisions(model, properties, sheets)
             sp.commit()
             return
         except (IntegrityError, FlushError):
@@ -514,6 +538,43 @@ class RDBStorage(object):
         if sheets is not None:
             for key, value in sheets.items():
                 model.propsheets[key] = value
+
+    def _prune_revisions(self, model, properties, sheets=None):
+        """
+        For types that opt out of revision-history tracking (track_revisions =
+        False), delete stale propsheet rows so that at most one row remains per
+        (rid, name) after this write.
+
+        A brand-new propsheet row is still created for each write (by
+        `_update_properties`), which advances the sid so that downstream sid-based
+        indexing/invalidation still detects the change. This method then removes
+        any *prior* propsheet rows for the same resource + sheet name, leaving
+        only the current one. The first write of a resource has no prior rows and
+        is therefore unaffected.
+        """
+        names = []
+        if properties is not None:
+            names.append('')
+        if sheets is not None:
+            names.extend(sheets.keys())
+        if not names:
+            return
+        session = self.DBSession()
+        # Flush so the freshly-created propsheet rows are assigned their sids and
+        # the current_propsheet rows point at them before we prune older rows.
+        session.flush()
+        for name in names:
+            current = model.data.get(name)
+            if current is None:
+                continue
+            current_sid = current.sid
+            stale = session.query(PropertySheet).filter(
+                PropertySheet.rid == model.rid,
+                PropertySheet.name == name,
+                PropertySheet.sid != current_sid,
+            ).all()
+            for propsheet in stale:
+                session.delete(propsheet)
 
     def _update_keys(self, model, unique_keys):
         keys_set = {(k, v) for k, values in unique_keys.items() for v in values}
