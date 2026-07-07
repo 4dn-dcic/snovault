@@ -6,13 +6,51 @@ snovault
 Change Log
 ----------
 
-11.30.7
+11.31.1
 =======
 
 * Add unit tests closing coverage gaps in pure-logic modules (typedsheets,
   authorization, etag, schema_formats, server_defaults_misc, predicates,
   typeinfo, and util helpers); no production code changes
+  
 
+11.31.0
+=======
+
+* Add a per-type ``track_revisions`` flag (default ``True``) letting an item type opt out
+  of Postgres revision-history tracking. When ``False``, updates overwrite the existing
+  ``propsheets`` row (at most one row per resource + sheet name survives) and the
+  ``@@revision-history`` view returns a 404 instead of an implied-complete partial history.
+
+11.30.5
+=======
+
+* Reduce wasted Elasticsearch query/fetch work in search and compound_search:
+  - ``compound_search``'s multi-block path now restricts ``_source`` to
+    ``embedded.*`` instead of fetching the entire document per hit
+  - Default per-field facet aggregations are now skipped whenever the
+    response frame is not ``embedded`` (facets were already discarded
+    for these frames, so computing them was wasted ES work)
+  - ``frame=object``/``frame=raw`` searches no longer also fetch unused
+    ``embedded.*`` in ``_source``
+  - ``limit=all`` pagination no longer re-sends the default-facet
+    aggregation block (or tracks total hits) on every subsequent page -
+    only the first page's aggregations are ever read
+  - Fixed ``skip_default_facets`` URL param being silently parsed as a
+    field filter on a nonexistent field (previously matched zero results
+    whenever used as documented)
+  - ``compound_search``'s per-block ``/build_query`` subrequests now pass
+    ``skip_default_facets=true``, skipping wasted default-facet
+    construction (deepcopy-per-facet + schema crawl) per filter block
+  - Fixed ``schema_for_field``'s per-request memoization, which never
+    actually persisted its cache onto the request
+  - Removed a stray ``print()`` debug statement in ``group_facet_terms``
+
+
+11.30.4
+=======
+
+* Restrict AccessKey.user to admins, fixing privilege escalation
 
 11.30.3
 =======
