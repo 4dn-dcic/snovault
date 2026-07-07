@@ -47,7 +47,7 @@ COMMON_EXCLUDED_URI_PARAMS = [
     # Difference of this and URL params should result in all fields/filters.
     'frame', 'format', 'limit', 'sort', 'from', 'field',
     'mode', 'redirected_from', 'datastore', 'referrer',
-    'currentAction', 'additional_facet', 'debug'
+    'currentAction', 'additional_facet', 'debug', 'skip_default_facets'
 ]
 MAX_FACET_COUNTS = 100
 RAW_FIELD_AGGREGATIONS = [
@@ -186,7 +186,7 @@ def schema_for_field(field, request, doc_types, should_log=False):
     doc_type_string = ','.join(sorted(doc_types))  # use default sort
 
     # Check cache, initializing if necessary
-    cache = getattr(request, '_field_schema_cache', {})
+    cache = getattr(request, '_field_schema_cache', None)
     cache_key = (field, doc_type_string)
     if cache is None:
         request._field_schema_cache = cache = {}
