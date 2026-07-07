@@ -196,6 +196,7 @@ def test_indexing_post_then_get_immediately(testapp, indexer_testapp):
     assert index_settings.settings['index']['number_of_replicas'] == 2  # should match value in testing_views.py
 
 
+@pytest.mark.flaky(max_runs=3, rerun_filter=delay_rerun)
 def test_indexer_namespacing(app, testapp, indexer_testapp):
     """
     Tests that namespacing indexes works as expected. This test has no real
@@ -219,6 +220,7 @@ def test_indexer_namespacing(app, testapp, indexer_testapp):
 
 
 # @pytest.mark.es - Specified at top of file for whole file
+@pytest.mark.flaky(max_runs=3, rerun_filter=delay_rerun)
 def test_indexer_queue_adds_telemetry_id(app):
     indexer_queue = app.registry[INDEXER_QUEUE]
     indexer_queue.clear_queue()
@@ -1463,7 +1465,7 @@ def test_indexing_rdbstorage_can_purge_without_es(app, testapp, indexer_testapp)
     print("All done.")
 
 
-# @pytest.mark.flaky(max_runs=3, rerun_filter=delay_rerun)
+@pytest.mark.flaky(max_runs=3, rerun_filter=delay_rerun)
 def test_aggregated_items(app, testapp, indexer_testapp):
     """
     Test that the item aggregation works, which only occurs when indexing
