@@ -41,3 +41,59 @@ Test gotcha: `testapp` and the `session` fixture share one `DBSession`. Do all `
 requests first, then raw `session` queries at the end — a `session.query(...)` interleaved
 before a subsequent `testapp` request corrupts the shared transaction and makes traversal
 404 (this also leaks into later tests).
+
+## SQS test-queue namespacing and INDEXING CI flakiness
+
+`QueueManager` (`snovault/elasticsearch/indexer_queue.py`) names its 3 SQS queues from
+`registry.settings['env.name']`, falling back to a sanitized `socket.gethostname()` when
+`env.name` is unset. `snovault/tests/test_indexing.py`'s `app_settings` fixture now sets
+`env.name = INDEXER_NAMESPACE_FOR_TESTING` (the same per-CI-run/per-python-version
+identifier already used for the ES index namespace), so SQS queues are namespaced per run
+instead of colliding on the CI runner's hostname across runs/repos. Because that identifier
+can contain a python version like `3.11` (periods aren't valid in SQS queue names),
+`QueueManager.clean_env_namespace` sanitizes *any* explicitly-provided `env.name`, not just
+the hostname fallback — don't bypass it when constructing queue names.
+
+Only `test_indexing.py` sets `elasticsearch.server` in its settings, and that whole file is
+tagged `pytest.mark.indexing` + `pytest.mark.es`, which only runs in the CI "INDEXING" job
+(`make remote-test-indexing`) — so this queue-naming fix and its CI cleanup step only need
+to touch that job, not "UNIT".
+
+CI cleanup: `poetry run wipe-test-indexer-queues $TEST_JOB_ID` (mirrors `wipe-test-indices`,
+in `.github/workflows/main.yml`'s "Cleanup (INDEXING)" step) lists/deletes SQS queues by the
+same sanitized-namespace prefix, so namespaced queues don't accumulate under the 14-day
+message-retention period.
+
+`QueueManager.purge_queue()` now sleeps `PURGE_QUEUE_LOCKOUT_SECONDS +
+PURGE_QUEUE_SAFETY_SECONDS` (~61s) after issuing the purge, in addition to the pre-purge
+rate-limit wait, because AWS's `PurgeQueue` doesn't guarantee full propagation for up to 60s
+— without this, `snovault/tests/test_indexing.py`'s autouse `setup_and_teardown` fixture
+(which purges the shared queue when non-empty, e.g. after a prior test failed to clean up)
+could let a still-purging queue leak stale messages into several subsequent tests. This
+purge path is *not* made redundant by the per-run queue namespacing above: `QueueManager` is
+created once per (session-scoped, parametrized-on-mpindexer) `app` fixture, so the same
+queue is shared across all ~100+ tests in one INDEXING run — namespacing only prevents
+*cross-run*/*cross-repo* collisions, not intra-run leakage between sequential tests. The
+post-purge wait is a raw `time.sleep(...)`, not another `collision_manager.wait_if_needed()`
+call — the latter resets the lockout timestamp to "now" (post-sleep), which would double the
+wait on the very next `purge_queue()` call instead of just enforcing one ~61s window per
+call (verified by direct measurement, not by running `test_queue_manager_purge_queue_wait`
+locally — see below).
+
+`receive_messages()` now passes an explicit `WaitTimeSeconds=10` (was implicitly using the
+queue's 2-second `ReceiveMessageWaitTimeSeconds` default) so receive calls long-poll for
+messages that are genuinely in flight but not yet visible.
+
+Local-verification gotcha: every test in `test_indexing.py`, including "pure logic" ones
+like `test_queue_manager_creation`/`test_queue_manager_purge_queue_wait` that mock out boto3
+entirely, still depends on the file's autouse `setup_and_teardown(app)` fixture and so
+requires a live ES/Postgres/AWS-SSO session to even collect-and-run locally (pytest autouse
+fixtures apply per-file, and this one requests `app`, which pulls in `aws_auth`). New
+boto3-mocked unit coverage for `QueueManager`/`receive_n_messages` logic therefore lives in
+standalone files without that autouse dependency: `snovault/tests/test_indexer_queue.py`
+(imports `receive_n_messages` from `test_indexing` — safe, since importing a function
+doesn't trigger the other file's autouse fixture) and
+`snovault/tests/test_wipe_test_indexer_queues.py`. Anything that actually needs live SQS
+timing (e.g. confirming `test_queue_manager_purge_queue_wait`'s exact wait math) has to be
+verified either via a standalone throwaway script using `ControlledTime` mocks (no live AWS
+needed, just no pytest/autouse fixture involved) or via real CI.

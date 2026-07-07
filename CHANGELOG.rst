@@ -6,6 +6,25 @@ snovault
 Change Log
 ----------
 
+11.31.1
+=======
+
+* Reduce INDEXING CI flakiness caused by SQS queue handling:
+
+  * Namespace test SQS queues the same way ES test indices already are (via ``env.name``
+    derived from ``INDEXER_NAMESPACE_FOR_TESTING``/``TEST_JOB_ID``) instead of falling back
+    to the runner's hostname, so queues no longer collide across CI runs/repos.
+  * Add a ``wipe-test-indexer-queues`` command and matching CI cleanup step, mirroring
+    ``wipe-test-indices``, so namespaced test queues are deleted instead of accumulating.
+  * Make ``QueueManager.purge_queue`` actually wait out SQS's ~60s purge-propagation
+    window before returning, instead of letting the next test proceed immediately and
+    risk seeing pre-purge messages.
+  * Pass an explicit, longer ``WaitTimeSeconds`` to ``receive_messages`` (was relying on
+    the queue's conservative 2-second default).
+  * Fix ``receive_n_messages`` test helper to treat a message count greater than
+    expected as a clear "discarding surplus" diagnostic rather than a misleading
+    "only received N" failure.
+
 11.31.0
 =======
 

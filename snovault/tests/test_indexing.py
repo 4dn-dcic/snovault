@@ -77,6 +77,10 @@ def app_settings(basic_app_settings, wsgi_server_host_port, elasticsearch_server
     settings['item_datastore'] = 'elasticsearch'
     settings['indexer'] = True
     settings['indexer.namespace'] = INDEXER_NAMESPACE_FOR_TESTING
+    # Namespace SQS queues the same way ES indices already are, so queue names are unique
+    # per CI run/repo instead of colliding on the runner's hostname (QueueManager falls back
+    # to socket.gethostname() when env.name is unset, which it otherwise always is in tests).
+    settings['env.name'] = INDEXER_NAMESPACE_FOR_TESTING
 
     # use aws auth to access elasticsearch
     if aws_auth:
@@ -333,7 +337,18 @@ def receive_n_messages(*, queue, target='primary', n, tries=10, wait_seconds=1):
         received_this_time = queue.receive_messages(target_queue=target)
         assert isinstance(received_this_time, list)
         received += received_this_time
-        if len(received) == n:
+        if len(received) >= n:
+            if len(received) > n:
+                # A queue polluted with stale/leftover messages (e.g. from a prior test)
+                # would otherwise burn the whole retry budget and raise a misleading
+                # "only received N, but wanted n" error even though N > n. Discard the
+                # surplus (and delete it from the queue so it doesn't resurface later)
+                # and log it clearly instead.
+                surplus = received[n:]
+                print(f"Received {n_of(received, 'message')}, wanted {n};"
+                      f" discarding {n_of(surplus, 'surplus message')}.")
+                queue.delete_messages(surplus, target_queue=target)
+                received = received[:n]
             return received
         print(f" try #{try_n}, received {len(received_this_time)}")
         time.sleep(wait_seconds)
@@ -2501,22 +2516,24 @@ def test_queue_manager_purge_queue_wait():
                             assert manager.client.purge_queue.call_count == 0  # Just to be sure
                             manager.purge_queue()
                             assert manager.client.purge_queue.call_count == 3  # Called once for each queue
-                            # The first time it shouldn't wait, but does check the time twice
+                            # Even the very first purge now waits out AWS's documented
+                            # purge-propagation window (~60s + safety=1) before returning, so a
+                            # caller can't proceed while pre-purge messages might still be visible.
                             now = dt.just_now()
-                            assert now > start_time
-                            assert now < start_time + timedelta(seconds=5 * tick)
+                            assert now > start_time + timedelta(seconds=60)
+                            assert now < start_time + timedelta(seconds=61 + 10 * tick)
 
-                            # Try again now...
+                            # Try again immediately...
                             start_time = dt.just_now()
                             assert manager.client.purge_queue.call_count == 3  # Just to be sure
                             manager.purge_queue()
                             assert manager.client.purge_queue.call_count == 6  # Called once for each queue
-                            # The second time the wait should be about 61 seconds, 60 + safety=1 + plus a few
-                            # clock ticks. We could say more precisely but not without overpromising an abstraction
-                            # maintained elsewhere, so this test is now fuzzy.
+                            # The rate-limiting pre-wait is a no-op this time (the post-purge wait
+                            # from the prior call already satisfied it), so the total wait is still
+                            # just one ~61 second propagation window, not two stacked back to back.
                             now = dt.just_now()
                             assert now > start_time + timedelta(seconds=60)
-                            assert now < start_time + timedelta(seconds=61 + 5 * tick)
+                            assert now < start_time + timedelta(seconds=61 + 10 * tick)
 
 
 def test_queue_manager_chunk_messages():

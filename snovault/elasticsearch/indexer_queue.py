@@ -193,6 +193,11 @@ class QueueManager(object):
 
     USE_RATE_MANAGER = False
 
+    # Amazon says we shouldn't do anything for 60 seconds after a purge request.
+    # Since we can't be sure they're counting from the same place as we are, we add 1 second margin for error.
+    PURGE_QUEUE_LOCKOUT_SECONDS = 60
+    PURGE_QUEUE_SAFETY_SECONDS = 1
+
     def __init__(self, registry, mirror_env=None, override_url=None):
         """
         __init__ will build all three queues needed with the desired settings.
@@ -203,13 +208,14 @@ class QueueManager(object):
         self.receive_batch_size = 10
         self.delete_batch_size = 10
         self.replace_batch_size = 10
-        # Amazon says we shouldn't do anything for 60 seconds after a purge request.
-        # Since we can't be sure they're counting from the same place as we are, we add 1 second margin for error.
         if self.USE_RATE_MANAGER:
-            self.collision_manager = RateManager(action="purge_queue", interval_seconds=60, safety_seconds=1,
+            self.collision_manager = RateManager(action="purge_queue", interval_seconds=self.PURGE_QUEUE_LOCKOUT_SECONDS,
+                                                 safety_seconds=self.PURGE_QUEUE_SAFETY_SECONDS,
                                                  allowed_attempts=1, log=log)
         else:
-            self.collision_manager = LockoutManager(lockout_seconds=60, safety_seconds=1, action="purge_queue", log=log)
+            self.collision_manager = LockoutManager(lockout_seconds=self.PURGE_QUEUE_LOCKOUT_SECONDS,
+                                                     safety_seconds=self.PURGE_QUEUE_SAFETY_SECONDS,
+                                                     action="purge_queue", log=log)
         self.env_name = mirror_env if mirror_env else registry.settings.get('env.name')
         self.override_url = override_url
         # local development
@@ -218,6 +224,11 @@ class QueueManager(object):
             backup = self.generate_clean_env_namespace()
             # last case scenario
             self.env_name = backup if backup else 'fourfront-backup'
+        else:
+            # env.name may come from a test-run identifier (e.g. INDEXER_NAMESPACE_FOR_TESTING,
+            # which can contain a python version like "3.11") rather than a real deployment env
+            # name, so sanitize it the same way as the hostname-derived fallback above.
+            self.env_name = self.clean_env_namespace(self.env_name)
 
         kwargs = {
             'region_name': 'us-east-1'
@@ -271,7 +282,14 @@ class QueueManager(object):
     def generate_clean_env_namespace():
         """ Helper that ensures the env namespace for queues is short, does not contain
             spaces or punctuation typically seen in the host """
-        return socket.gethostname()[:80].replace('.', '-').replace(' ', '').replace("’", '')
+        return QueueManager.clean_env_namespace(socket.gethostname())
+
+    @staticmethod
+    def clean_env_namespace(namespace):
+        """ Helper that ensures a given env namespace is short and does not contain
+            spaces or punctuation that AWS SQS queue names disallow (e.g. periods,
+            which can show up in test-run identifiers that embed a python version) """
+        return namespace[:80].replace('.', '-').replace(' ', '').replace("’", '')
 
     def add_uuids(self, registry, uuids, strict=False, target_queue='primary',
                   sid=None, telemetry_id=None):
@@ -447,17 +465,16 @@ class QueueManager(object):
                 self.client.purge_queue(
                     QueueUrl=queue_url
                 )
-                # NOTE: It's possible that we should be again calling ._wait_Until_purge_queue_allowed() here, too.
-                #       The reason for the two calls would be this:
-                #       - A wait before would be because we could get an error if we needed to wait and didn't.
-                #         If we waited after, the only case where the wait before would matter is if there was an
-                #         aborted wait that didn't wait the relevant time after. That's a possible scenario in testing.
-                #       - A wait after would be to protect other operations that might be unreliable if done too soon.
-                #       For now I'm going to try the simpler strategy, but I wanted to identify this as a potential
-                #       source of lingering trouble. -kmp 6-May-2020
             except self.client.exceptions.PurgeQueueInProgress:
                 log.warning('\n___QUEUE IS ALREADY BEING PURGED: %s___\n' % queue_url,
                             queue_url=queue_url)
+        # Wait out AWS's documented purge-propagation window before returning, so a caller
+        # that immediately turns around and uses the queue doesn't observe pre-purge messages
+        # that haven't finished disappearing yet. This is a raw sleep rather than another
+        # collision_manager.wait_if_needed() call: that would reset collision_manager's
+        # timestamp to "now" (post-sleep) instead of leaving it anchored near purge-issuance
+        # time, which would needlessly double the wait on the next purge_queue() call.
+        time.sleep(self.PURGE_QUEUE_LOCKOUT_SECONDS + self.PURGE_QUEUE_SAFETY_SECONDS)
 
     def clear_queue(self):
         """
@@ -552,20 +569,25 @@ class QueueManager(object):
             failed.extend(failed_messages)
         return failed
 
-    def receive_messages(self, target_queue='primary'):
+    def receive_messages(self, target_queue='primary', wait_time_seconds=10):
         """
         Recieves up to self.receive_batch_size number of messages from the queue.
         Fewer (even 0) messages may be returned on any given run.
 
+        Uses long polling (wait_time_seconds, up to the SQS max of 20) rather than the
+        queue's own conservative 2-second default, so a call is less likely to return
+        empty for a message that is genuinely in flight but hasn't finished propagating
+        across SQS's backend nodes yet.
+        Ref: https://stackoverflow.com/questions/50558084/how-to-long-poll-amazon-sqs-service-using-boto
+        Ref: https://aws.amazon.com/sqs/faqs/
+
         Returns a list of messages with message metadata
         """
-        # TODO: Consider whether "long polling" would be useful here to avoid some useless re-polling when queue empty.
-        #  Ref: https://stackoverflow.com/questions/50558084/how-to-long-poll-amazon-sqs-service-using-boto
-        #  Ref: https://aws.amazon.com/sqs/faqs/
         queue_url = self.choose_queue_url(target_queue)
         response = self.client.receive_message(
             QueueUrl=queue_url,
-            MaxNumberOfMessages=self.receive_batch_size
+            MaxNumberOfMessages=self.receive_batch_size,
+            WaitTimeSeconds=wait_time_seconds
         )
         # messages in response include ReceiptHandle and Body, most importantly
         return response.get('Messages', [])
