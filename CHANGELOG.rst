@@ -6,7 +6,7 @@ snovault
 Change Log
 ----------
 
-11.31.8
+11.31.1
 =======
 
 * Add unit tests closing further coverage gaps flagged as follow-ups in the
