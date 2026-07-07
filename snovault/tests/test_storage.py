@@ -8,7 +8,7 @@ from dcicutils.misc_utils import filtered_warnings
 from pyramid.threadlocal import manager
 from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
-from ..interfaces import DBSESSION, STORAGE
+from ..interfaces import DBSESSION, STORAGE, TYPES
 from ..storage import (
     POSTGRES_COMPATIBLE_MAJOR_VERSIONS,
     Blob,
@@ -312,6 +312,143 @@ def _test_S3BlobStorage_get_blob_url_for_non_s3_file():
     download_meta = {'blob_id': 'blob_id'}
     url = storage.get_blob_url(download_meta)
     assert url
+
+
+def _count_propsheet_rows(session, rid, name=''):
+    """ Direct-DB count of propsheet rows for a given resource + sheet name. """
+    return (
+        session.query(PropertySheet)
+        .filter(PropertySheet.rid == rid, PropertySheet.name == name)
+        .count()
+    )
+
+
+def test_track_revisions_flag_resolution(registry, storage):
+    """ The per-type track_revisions flag defaults to True and can be opted out. """
+    types = registry[TYPES]
+    enabled_ti = types.by_item_type['testing_revision_history_enabled']
+    disabled_ti = types.by_item_type['testing_revision_history_disabled']
+    assert enabled_ti.factory.track_revisions is True
+    assert disabled_ti.factory.track_revisions is False
+
+    # PickStorage resolves the flag from the resource model's item_type
+    enabled_model = Resource('testing_revision_history_enabled', {'': {}})
+    disabled_model = Resource('testing_revision_history_disabled', {'': {}})
+    unknown_model = Resource('some_unregistered_type', {'': {}})
+    assert storage._track_revisions_for(enabled_model) is True
+    assert storage._track_revisions_for(disabled_model) is False
+    # unknown/unregistered types default to tracking history (True)
+    assert storage._track_revisions_for(unknown_model) is True
+
+
+def test_track_revisions_disabled_first_write(testapp, session):
+    """ The initial create of a history-disabled type produces exactly one row. """
+    res = testapp.post_json('/testing-revision-history-disabled',
+                            {'title': 'v1', 'description': 'first'}, status=201)
+    item_uuid = res.json['@graph'][0]['uuid']
+    # NOTE: all direct `session` queries happen AFTER every testapp request; the
+    # testapp and the `session` fixture share a DBSession, so a raw session query
+    # interleaved before a subsequent testapp request corrupts the shared txn.
+    assert _count_propsheet_rows(session, item_uuid) == 1
+
+
+def test_track_revisions_disabled_overwrites_single_row(testapp, session):
+    """ For a history-disabled type, N updates leave AT MOST ONE propsheet row
+        for the resource + default sheet name. Verified directly against the DB.
+    """
+    res = testapp.post_json('/testing-revision-history-disabled',
+                            {'title': 'v1', 'description': 'first'}, status=201)
+    item = res.json['@graph'][0]
+    item_uuid = item['uuid']
+    item_id = item['@id']
+
+    # Perform several updates (5 of them)
+    for i in range(2, 7):
+        testapp.patch_json(item_id,
+                           {'title': f'v{i}', 'description': f'update {i}'},
+                           status=200)
+
+    # The API reflects the latest version (do all testapp requests first)
+    latest = testapp.get(item_id + '?frame=object').json
+    assert latest['title'] == 'v6'
+
+    # Direct-DB assertion: exactly one propsheet row for this resource+sheet name,
+    # holding the latest properties, after create + 5 updates.
+    assert _count_propsheet_rows(session, item_uuid) == 1
+    surviving = (session.query(PropertySheet)
+                 .filter(PropertySheet.rid == item_uuid, PropertySheet.name == '')
+                 .one())
+    assert surviving.properties['title'] == 'v6'
+
+
+def test_track_revisions_disabled_history_view_404(testapp):
+    """ The revision-history view fails honestly (404) for a history-disabled
+        type rather than returning an empty or partial history.
+    """
+    res = testapp.post_json('/testing-revision-history-disabled',
+                            {'title': 'v1', 'description': 'first'}, status=201)
+    item_id = res.json['@graph'][0]['@id']
+    testapp.patch_json(item_id, {'title': 'v2'}, status=200)
+
+    # revision-history should 404 with an honest message (history not tracked)
+    err = testapp.get(item_id + '@@revision-history', status=404)
+    assert 'not tracked' in err.json['detail'].lower()
+
+
+def test_track_revisions_enabled_accumulates_rows(testapp, session):
+    """ Inverse case: a history-enabled type still accumulates one propsheet row
+        per update, and its revision-history view returns them all. No regression.
+    """
+    res = testapp.post_json('/testing-revision-history-enabled',
+                            {'title': 'v1', 'description': 'first'}, status=201)
+    item = res.json['@graph'][0]
+    item_uuid = item['uuid']
+    item_id = item['@id']
+
+    for i in range(2, 7):  # 5 updates -> 6 total writes
+        testapp.patch_json(item_id,
+                           {'title': f'v{i}', 'description': f'update {i}'},
+                           status=200)
+
+    # revision-history view returns the full ordered history (all testapp first)
+    revisions = testapp.get(item_id + '@@revision-history').json['revisions']
+    assert len(revisions) == 6
+    assert [r['title'] for r in revisions] == ['v1', 'v2', 'v3', 'v4', 'v5', 'v6']
+
+    # Direct-DB assertion: one row per write (create + 5 updates == 6)
+    assert _count_propsheet_rows(session, item_uuid) == 6
+
+
+def test_track_revisions_disabled_mixed_sheets(testapp, session, storage, connection):
+    """ Edge case: a history-disabled type with more than one sheet name keeps at
+        most one row PER (rid, name). Exercises the storage `sheets` write path
+        directly (the API only writes the default '' sheet).
+    """
+    res = testapp.post_json('/testing-revision-history-disabled',
+                            {'title': 'v1', 'description': 'first'}, status=201)
+    item_uuid = res.json['@graph'][0]['uuid']
+    model = storage.write.get_by_uuid(item_uuid)
+
+    extra_sheet = 'downloads'
+    # Multiple updates writing BOTH the default sheet and an extra named sheet
+    for i in range(2, 6):  # 4 updates
+        connection.update(
+            model,
+            {'title': f'v{i}', 'description': f'update {i}'},
+            sheets={extra_sheet: {'blob_id': f'blob-{i}'}},
+        )
+
+    # Each (rid, name) retains at most one row, holding the latest content
+    assert _count_propsheet_rows(session, item_uuid, name='') == 1
+    assert _count_propsheet_rows(session, item_uuid, name=extra_sheet) == 1
+    default_row = (session.query(PropertySheet)
+                   .filter(PropertySheet.rid == item_uuid, PropertySheet.name == '')
+                   .one())
+    extra_row = (session.query(PropertySheet)
+                 .filter(PropertySheet.rid == item_uuid, PropertySheet.name == extra_sheet)
+                 .one())
+    assert default_row.properties['title'] == 'v5'
+    assert extra_row.properties['blob_id'] == 'blob-5'
 
 
 def test_pick_storage(registry, dummy_request):
