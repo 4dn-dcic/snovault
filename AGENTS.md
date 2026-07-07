@@ -41,3 +41,24 @@ Test gotcha: `testapp` and the `session` fixture share one `DBSession`. Do all `
 requests first, then raw `session` queries at the end — a `session.query(...)` interleaved
 before a subsequent `testapp` request corrupts the shared transaction and makes traversal
 404 (this also leaks into later tests).
+
+## SQS/ES-polling tests in `test_indexing.py` need the flaky rerun decorator
+
+Tests in `snovault/tests/test_indexing.py` that poll SQS and/or ES for eventual
+consistency intermittently fail on CI purely from timing (this also hits `master`; the
+INDEXING CI job is known-flaky). The established mitigation is
+`@pytest.mark.flaky(max_runs=N, rerun_filter=delay_rerun)` (`delay_rerun` from
+`snovault/tools.py` sleeps 10s between reruns). When adding a test to this file that
+follows the queue-then-poll pattern, include that decorator — several timing failures
+traced back to tests that used the pattern but were missing it
+(`test_aggregated_items`, `test_indexer_namespacing`, `test_indexer_queue_adds_telemetry_id`).
+
+## `ItemNamespace.__getattr__` sharp edge (calculated.py)
+
+`ItemNamespace.__getattr__` resolves unknown names via `self.registry` / `self._properties`
+(both pyramid `reify` properties). If the namespace was built with `request=None` (or a
+request lacking `.registry`), the reify body raises `AttributeError`, which re-enters
+`__getattr__` and recurses to `RecursionError` instead of a clean `AttributeError`. Not
+reachable in production (`calculate_properties` always passes a real request), but when
+unit-testing the namespace directly, inject `registry`/`_properties` via the `ns` dict —
+see `snovault/tests/test_calculated_registry.py`.
