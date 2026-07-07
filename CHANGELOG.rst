@@ -6,13 +6,26 @@ snovault
 Change Log
 ----------
 
-11.31.1
+11.31.8
+=======
+
+* Add unit tests closing further coverage gaps flagged as follow-ups in the
+  initial audit: local_roles (local principal expansion / authorization policy),
+  the calculated-property registry classes, json_renderer adapters,
+  ManagerLRUCache, and the untested EDWHash branches (verify round-trip,
+  password-too-long guard); no production code changes
+* Re-enable the ``flaky`` rerun decorator on ``test_aggregated_items`` and add it
+  to ``test_indexer_namespacing`` / ``test_indexer_queue_adds_telemetry_id``,
+  which use the same SQS/ES polling pattern as their already-protected neighbors
+  (known CI flakiness mitigation)
+
+11.31.7
 =======
 
 * Add unit tests closing coverage gaps in pure-logic modules (typedsheets,
   authorization, etag, schema_formats, server_defaults_misc, predicates,
   typeinfo, and util helpers); no production code changes
-  
+
 
 11.31.0
 =======
