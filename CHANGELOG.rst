@@ -24,14 +24,18 @@ Change Log
     as a soft failure - logs a warning rather than failing the job - since the CI role isn't
     yet authorized for this and closing that gap requires an IAM policy change outside this
     repo.
-  * Make ``QueueManager.purge_queue`` actually wait out SQS's ~60s purge-propagation
-    window before returning, instead of letting the next test proceed immediately and
-    risk seeing pre-purge messages.
   * Pass an explicit, longer ``WaitTimeSeconds`` to ``receive_messages`` (was relying on
     the queue's conservative 2-second default).
   * Fix ``receive_n_messages`` test helper to treat a message count greater than
     expected as a clear "discarding surplus" diagnostic rather than a misleading
     "only received N" failure.
+  * (Tried, then reverted after live-CI evidence: making ``QueueManager.purge_queue`` wait
+    out SQS's ~60s purge-propagation window before returning. ``queue_is_empty()``'s
+    AWS-side approximate/eventually-consistent message counters produce enough false
+    "not empty" signals across this suite's ~79 rapid-fire sequential indexing tests that
+    an unconditional post-purge wait turned a ~12.5 minute INDEXING run into a ~57.5 minute
+    one. The ``WaitTimeSeconds`` and ``receive_n_messages`` fixes above already address the
+    cascading-failure risk this was meant to fix, at much lower cost.)
 
 11.31.1
 =======

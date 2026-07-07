@@ -83,21 +83,25 @@ any AWS error here (including `AccessDenied`) as a soft failure — logs a warni
 normally — specifically so a missing IAM permission doesn't fail the whole CI job the way it
 did the first time this was wired up.
 
-`QueueManager.purge_queue()` now sleeps `PURGE_QUEUE_LOCKOUT_SECONDS +
-PURGE_QUEUE_SAFETY_SECONDS` (~61s) after issuing the purge, in addition to the pre-purge
-rate-limit wait, because AWS's `PurgeQueue` doesn't guarantee full propagation for up to 60s
-— without this, `snovault/tests/test_indexing.py`'s autouse `setup_and_teardown` fixture
-(which purges the shared queue when non-empty, e.g. after a prior test failed to clean up)
-could let a still-purging queue leak stale messages into several subsequent tests. This
-purge path is *not* made redundant by the per-run queue namespacing above: `QueueManager` is
-created once per (session-scoped, parametrized-on-mpindexer) `app` fixture, so the same
-queue is shared across all ~100+ tests in one INDEXING run — namespacing only prevents
-*cross-run*/*cross-repo* collisions, not intra-run leakage between sequential tests. The
-post-purge wait is a raw `time.sleep(...)`, not another `collision_manager.wait_if_needed()`
-call — the latter resets the lockout timestamp to "now" (post-sleep), which would double the
-wait on the very next `purge_queue()` call instead of just enforcing one ~61s window per
-call (verified by direct measurement, not by running `test_queue_manager_purge_queue_wait`
-locally — see below).
+**`QueueManager.purge_queue()` deliberately does NOT wait out the post-purge propagation
+window** (a version of this PR briefly did, via an unconditional `time.sleep(...)` after
+issuing the purge — see git history). That was reverted after live CI evidence: it turned a
+~12.5 minute INDEXING run into a ~57.5 minute one (same 79 tests, measured via
+`gh-axi run view --job ... --log`'s pytest duration summary). Root cause: `queue_is_empty()`
+(the caller's gate for whether to purge at all, in `create_mapping.py`) reads AWS's own
+documented *approximate*/eventually-consistent `ApproximateNumberOfMessages(NotVisible)`
+queue attributes, which produced enough false "not empty" positives across ~79 rapid-fire
+sequential indexing tests sharing one queue that `purge_queue()` was actually getting called
+on a large fraction of tests — not just the rare post-failure-recovery case the propagation
+wait was meant to protect. Making every one of those calls pay a ~61s tax was a severe net
+regression relative to the flakiness it was meant to fix. `receive_messages()`'s explicit
+`WaitTimeSeconds` long-polling and `receive_n_messages`'s tolerance for surplus/stale
+messages (both below) already directly address the specific cascading-failure risk a
+slow-to-propagate purge creates, at far lower cost, so that's the layer this fix leans on
+instead. If a future change wants to retry the propagation-wait idea, first fix
+`queue_is_empty()`'s reliability (e.g. corroborate the approximate count with an actual
+`receive_messages()` probe before deciding to purge) so the wait doesn't fire on false
+positives.
 
 `receive_messages()` now passes an explicit `WaitTimeSeconds=10` (was implicitly using the
 queue's 2-second `ReceiveMessageWaitTimeSeconds` default) so receive calls long-poll for

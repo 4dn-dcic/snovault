@@ -474,16 +474,24 @@ class QueueManager(object):
                 self.client.purge_queue(
                     QueueUrl=queue_url
                 )
+                # NOTE: It's possible that we should be again calling ._wait_until_purge_queue_allowed()
+                #       here, too, to force every purge_queue() call to wait out the propagation window
+                #       before returning (see git history for a version of this method that did exactly
+                #       that). Measured live in CI: queue_is_empty() (the caller's gate for whether to
+                #       purge at all) reads AWS's own documented *approximate*/eventually-consistent
+                #       ApproximateNumberOfMessages(NotVisible) attributes, which produce enough false
+                #       "not empty" positives across ~79 rapid-fire sequential indexing tests sharing one
+                #       queue that an unconditional post-purge wait turned a ~12.5 minute INDEXING run into
+                #       a ~57.5 minute one - i.e. purge_queue() was actually being called on a large
+                #       fraction of tests, not just the rare post-failure-recovery case this was meant for.
+                #       receive_messages()'s explicit WaitTimeSeconds long-polling and receive_n_messages's
+                #       tolerance for surplus/stale messages (both added alongside this) already directly
+                #       address the specific cascading-failure risk a slow-to-propagate purge creates, at
+                #       much lower cost, so this method intentionally does not also pay a blocking tax on
+                #       every call. -wr 6-Jul-2026
             except self.client.exceptions.PurgeQueueInProgress:
                 log.warning('\n___QUEUE IS ALREADY BEING PURGED: %s___\n' % queue_url,
                             queue_url=queue_url)
-        # Wait out AWS's documented purge-propagation window before returning, so a caller
-        # that immediately turns around and uses the queue doesn't observe pre-purge messages
-        # that haven't finished disappearing yet. This is a raw sleep rather than another
-        # collision_manager.wait_if_needed() call: that would reset collision_manager's
-        # timestamp to "now" (post-sleep) instead of leaving it anchored near purge-issuance
-        # time, which would needlessly double the wait on the next purge_queue() call.
-        time.sleep(self.PURGE_QUEUE_LOCKOUT_SECONDS + self.PURGE_QUEUE_SAFETY_SECONDS)
 
     def clear_queue(self):
         """
