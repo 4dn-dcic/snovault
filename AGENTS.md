@@ -157,9 +157,23 @@ instead. If a future change wants to retry the propagation-wait idea, first fix
 `receive_messages()` probe before deciding to purge) so the wait doesn't fire on false
 positives.
 
-`receive_messages()` now passes an explicit `WaitTimeSeconds=10` (was implicitly using the
-queue's 2-second `ReceiveMessageWaitTimeSeconds` default) so receive calls long-poll for
-messages that are genuinely in flight but not yet visible.
+**`receive_messages()` passes `WaitTimeSeconds` explicitly (resolving a longstanding TODO)
+but deliberately keeps it at 2 seconds, matching the queue's own configured
+`ReceiveMessageWaitTimeSeconds`**, rather than raising it toward SQS's 20s max as originally
+attempted. That attempt (`WaitTimeSeconds=10`) was also reverted after live CI evidence, for
+the same class of reason as the purge-wait above: `Indexer.get_messages_from_queue()`
+(`snovault/elasticsearch/indexer.py`) checks all 3 `queue_targets` sequentially on every
+call, and `Indexer.update_objects_queue` loops calling it until every target comes back
+empty - the normal steady-state end of every `/index` request once a batch is drained.
+Raising the long-poll duration multiplies that "confirm nothing's left to do" cost across 3
+targets on every such request, and that cost compounds across every polling helper
+(`index_n_items_for_testing`, `receive_n_messages`, etc.) used throughout the test suite.
+Measured: reverting the purge-wait alone (keeping `WaitTimeSeconds=10`) still left the same
+79-test INDEXING run at ~44 minutes (vs. the ~12.5 minute baseline) - reverting
+`WaitTimeSeconds` back to 2 as well closed the rest of that gap. If a future change wants to
+retry raising this, first make it apply only where it's actually likely to help (e.g. a
+caller that already found messages this cycle and is checking for stragglers) rather than to
+every steady-state "is there anything left" check.
 
 Local-verification gotcha: every test in `test_indexing.py`, including "pure logic" ones
 like `test_queue_manager_creation`/`test_queue_manager_purge_queue_wait` that mock out boto3

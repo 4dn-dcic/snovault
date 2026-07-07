@@ -586,15 +586,21 @@ class QueueManager(object):
             failed.extend(failed_messages)
         return failed
 
-    def receive_messages(self, target_queue='primary', wait_time_seconds=10):
+    def receive_messages(self, target_queue='primary', wait_time_seconds=2):
         """
         Recieves up to self.receive_batch_size number of messages from the queue.
         Fewer (even 0) messages may be returned on any given run.
 
-        Uses long polling (wait_time_seconds, up to the SQS max of 20) rather than the
-        queue's own conservative 2-second default, so a call is less likely to return
-        empty for a message that is genuinely in flight but hasn't finished propagating
-        across SQS's backend nodes yet.
+        Passes WaitTimeSeconds explicitly (there was a longstanding TODO to consider long
+        polling here) but keeps it at 2 seconds, matching the queue's own configured
+        ReceiveMessageWaitTimeSeconds, rather than raising it toward SQS's 20s max. Measured
+        live in CI: Indexer.get_messages_from_queue() (snovault/elasticsearch/indexer.py)
+        checks all 3 queue_targets sequentially on every call, and Indexer.update_objects_queue
+        loops calling it until every target comes back empty - so on every /index request that
+        finds nothing left to do (the common steady-state case once a batch is drained),
+        raising this to 10s multiplied that "confirm nothing's left" cost 5x across 3 targets,
+        compounding across every polling helper in the test suite into a measured ~3.5x
+        INDEXING CI runtime regression (see git history / AGENTS.md) for negligible upside.
         Ref: https://stackoverflow.com/questions/50558084/how-to-long-poll-amazon-sqs-service-using-boto
         Ref: https://aws.amazon.com/sqs/faqs/
 

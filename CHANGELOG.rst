@@ -24,8 +24,9 @@ Change Log
     as a soft failure - logs a warning rather than failing the job - since the CI role isn't
     yet authorized for this and closing that gap requires an IAM policy change outside this
     repo.
-  * Pass an explicit, longer ``WaitTimeSeconds`` to ``receive_messages`` (was relying on
-    the queue's conservative 2-second default).
+  * Pass ``WaitTimeSeconds`` explicitly to ``receive_messages`` (resolving a longstanding
+    ``TODO``), but keep it at 2 seconds matching the queue's own configured default rather
+    than raising it - see below.
   * Fix ``receive_n_messages`` test helper to treat a message count greater than
     expected as a clear "discarding surplus" diagnostic rather than a misleading
     "only received N" failure.
@@ -34,8 +35,15 @@ Change Log
     AWS-side approximate/eventually-consistent message counters produce enough false
     "not empty" signals across this suite's ~79 rapid-fire sequential indexing tests that
     an unconditional post-purge wait turned a ~12.5 minute INDEXING run into a ~57.5 minute
-    one. The ``WaitTimeSeconds`` and ``receive_n_messages`` fixes above already address the
-    cascading-failure risk this was meant to fix, at much lower cost.)
+    one. ``receive_n_messages``'s surplus tolerance already addresses the cascading-failure
+    risk this was meant to fix, at much lower cost.)
+  * (Also tried, then reverted after live-CI evidence: raising ``WaitTimeSeconds`` to 10.
+    ``Indexer.get_messages_from_queue`` checks all 3 queue targets on every call, and
+    ``Indexer.update_objects_queue`` loops calling it until every target is empty - the
+    normal end state of every ``/index`` request once a batch is drained - so a higher
+    long-poll duration multiplies that "confirm nothing's left" cost across every polling
+    helper in the suite. With the purge-wait above reverted but this still at 10, the same
+    79-test run was still ~44 minutes; reverting this too closed the rest of the gap.)
 
 11.32.0
 =======

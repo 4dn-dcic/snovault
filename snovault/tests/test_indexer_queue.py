@@ -92,8 +92,10 @@ def test_env_name_must_stay_unset_for_blue_green_safety():
 
 
 def test_receive_messages_passes_wait_time_seconds():
-    """ receive_messages should long-poll with an explicit WaitTimeSeconds rather than
-    relying on the queue's conservative 2-second ReceiveMessageWaitTimeSeconds default. """
+    """ receive_messages should pass WaitTimeSeconds explicitly (resolving a longstanding
+    TODO), matching the queue's own configured 2-second ReceiveMessageWaitTimeSeconds by
+    default - see the docstring/comment on receive_messages for why this intentionally
+    isn't raised higher (measured live-CI regression from a version of this fix that did). """
     manager, mock_boto3_client = make_queue_manager(env_name="some-env")
     mock_client = mock_boto3_client.return_value
     mock_client.receive_message.return_value = {'Messages': []}
@@ -102,7 +104,7 @@ def test_receive_messages_passes_wait_time_seconds():
     mock_client.receive_message.assert_called_once_with(
         QueueUrl=manager.queue_url,
         MaxNumberOfMessages=manager.receive_batch_size,
-        WaitTimeSeconds=10,
+        WaitTimeSeconds=2,
     )
 
     mock_client.receive_message.reset_mock()
