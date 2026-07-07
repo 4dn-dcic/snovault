@@ -6,7 +6,7 @@ snovault
 Change Log
 ----------
 
-11.31.3
+11.32.1
 =======
 
 * Reduce INDEXING CI flakiness caused by SQS queue handling:
@@ -36,6 +36,17 @@ Change Log
     an unconditional post-purge wait turned a ~12.5 minute INDEXING run into a ~57.5 minute
     one. The ``WaitTimeSeconds`` and ``receive_n_messages`` fixes above already address the
     cascading-failure risk this was meant to fix, at much lower cost.)
+
+11.32.0
+=======
+
+* Fix a self-registration privilege-escalation vulnerability in
+  ``create_unauthorized_user`` (``POST /create-unauthorized-user``): the endpoint now
+  whitelists which submitted fields are applied to the newly created User (email,
+  first_name, last_name, preferred_email, job_title, institution, pending_lab), instead
+  of passing the caller-submitted body through almost as-is while running with an
+  elevated (``restricted_fields``) write permission. Previously a caller could self-assign
+  privileged fields (e.g. ``"groups": ["admin"]``) on their own new account.
 
 11.31.1
 =======
@@ -95,6 +106,7 @@ Change Log
 =======
 
 * Restrict AccessKey.user to admins, fixing privilege escalation
+
 
 11.30.3
 =======
