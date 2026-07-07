@@ -93,6 +93,7 @@ jobs:
           TEST_JOB_ID: sno-test-indexing-${{ github.run_number }}-${{ matrix.python_version }}-
         run: |
           poetry run wipe-test-indices $TEST_JOB_ID search-fourfront-testing-opensearch-kqm7pliix4wgiu4druk2indorq.us-east-1.es.amazonaws.com:443
+          poetry run wipe-test-indexer-queues $TEST_JOB_ID
 
       - name: Cleanup (UNIT)
         if: ${{ always() && matrix.test_type == 'UNIT' }}

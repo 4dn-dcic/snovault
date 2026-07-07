@@ -96,6 +96,99 @@ requests first, then raw `session` queries at the end — a `session.query(...)`
 before a subsequent `testapp` request corrupts the shared transaction and makes traversal
 404 (this also leaks into later tests).
 
+## SQS test-queue namespacing and INDEXING CI flakiness
+
+`QueueManager` (`snovault/elasticsearch/indexer_queue.py`) names its 3 SQS queues from
+`registry.settings['env.name']`, falling back (only when `env.name` is falsy) to
+`registry.settings['indexer.namespace']`, and only after that to a sanitized
+`socket.gethostname()`. `snovault/tests/test_indexing.py`'s `app_settings` fixture already
+sets `indexer.namespace = INDEXER_NAMESPACE_FOR_TESTING` (the same per-CI-run/per-python-version
+identifier used for the ES index namespace), so SQS queues get namespaced per run for free
+instead of colliding on the CI runner's hostname across runs/repos. Because that identifier
+can contain a python version like `3.11` (periods aren't valid in SQS queue names),
+`QueueManager.clean_env_namespace` sanitizes whichever of the two settings actually gets
+used, not just the hostname fallback — don't bypass it when constructing queue names.
+
+**Do not set `settings['env.name']` directly to a test-run identifier** to achieve this -
+`snovault.elasticsearch`'s `includeme()` separately reads `settings['env.name']` to decide
+whether to look up a blue/green mirror env
+(`mirror_env = blue_green_mirror_env(env_name) if env_name else None`). In an
+orchestrated-but-unconfigured environment (e.g. CI, no `IDENTITY` available),
+`blue_green_mirror_env(...)` raises `ValueError: There is no default identity name available
+for IDENTITY` rather than returning `None` — it's only skipped because a falsy `env_name`
+short-circuits the call. Making `env.name` truthy in test settings (an earlier version of
+this fix did exactly that) crashes app construction before any test runs, taking down the
+whole INDEXING CI job immediately. `indexer.namespace` doesn't have this problem: nothing
+else reads it to gate blue/green lookups, so it's safe to always set in test settings.
+
+Only `test_indexing.py` sets `elasticsearch.server` in its settings, and that whole file is
+tagged `pytest.mark.indexing` + `pytest.mark.es`, which only runs in the CI "INDEXING" job
+(`make remote-test-indexing`) — so this queue-naming fix and its CI cleanup step only need
+to touch that job, not "UNIT".
+
+CI cleanup: `poetry run wipe-test-indexer-queues $TEST_JOB_ID` (mirrors `wipe-test-indices`,
+in `.github/workflows/main.yml`'s "Cleanup (INDEXING)" step) lists/deletes SQS queues by the
+same sanitized-namespace prefix, so namespaced queues don't accumulate under the 14-day
+message-retention period. As of this writing the CI IAM role
+(`arn:aws:iam::643366669028:role/4dn-dcic-github-actions-deployment-role`) is **not**
+authorized for `sqs:ListQueues`/`sqs:DeleteQueue`, so this step currently no-ops in practice
+(queues still accumulate until that policy gap is closed). The command deliberately treats
+any AWS error here (including `AccessDenied`) as a soft failure — logs a warning and returns
+normally — specifically so a missing IAM permission doesn't fail the whole CI job the way it
+did the first time this was wired up.
+
+**`QueueManager.purge_queue()` deliberately does NOT wait out the post-purge propagation
+window** (a version of this PR briefly did, via an unconditional `time.sleep(...)` after
+issuing the purge — see git history). That was reverted after live CI evidence: it turned a
+~12.5 minute INDEXING run into a ~57.5 minute one (same 79 tests, measured via
+`gh-axi run view --job ... --log`'s pytest duration summary). Root cause: `queue_is_empty()`
+(the caller's gate for whether to purge at all, in `create_mapping.py`) reads AWS's own
+documented *approximate*/eventually-consistent `ApproximateNumberOfMessages(NotVisible)`
+queue attributes, which produced enough false "not empty" positives across ~79 rapid-fire
+sequential indexing tests sharing one queue that `purge_queue()` was actually getting called
+on a large fraction of tests — not just the rare post-failure-recovery case the propagation
+wait was meant to protect. Making every one of those calls pay a ~61s tax was a severe net
+regression relative to the flakiness it was meant to fix. `receive_messages()`'s explicit
+`WaitTimeSeconds` long-polling and `receive_n_messages`'s tolerance for surplus/stale
+messages (both below) already directly address the specific cascading-failure risk a
+slow-to-propagate purge creates, at far lower cost, so that's the layer this fix leans on
+instead. If a future change wants to retry the propagation-wait idea, first fix
+`queue_is_empty()`'s reliability (e.g. corroborate the approximate count with an actual
+`receive_messages()` probe before deciding to purge) so the wait doesn't fire on false
+positives.
+
+**`receive_messages()` passes `WaitTimeSeconds` explicitly (resolving a longstanding TODO)
+but deliberately keeps it at 2 seconds, matching the queue's own configured
+`ReceiveMessageWaitTimeSeconds`**, rather than raising it toward SQS's 20s max as originally
+attempted. That attempt (`WaitTimeSeconds=10`) was also reverted after live CI evidence, for
+the same class of reason as the purge-wait above: `Indexer.get_messages_from_queue()`
+(`snovault/elasticsearch/indexer.py`) checks all 3 `queue_targets` sequentially on every
+call, and `Indexer.update_objects_queue` loops calling it until every target comes back
+empty - the normal steady-state end of every `/index` request once a batch is drained.
+Raising the long-poll duration multiplies that "confirm nothing's left to do" cost across 3
+targets on every such request, and that cost compounds across every polling helper
+(`index_n_items_for_testing`, `receive_n_messages`, etc.) used throughout the test suite.
+Measured: reverting the purge-wait alone (keeping `WaitTimeSeconds=10`) still left the same
+79-test INDEXING run at ~44 minutes (vs. the ~12.5 minute baseline) - reverting
+`WaitTimeSeconds` back to 2 as well closed the rest of that gap. If a future change wants to
+retry raising this, first make it apply only where it's actually likely to help (e.g. a
+caller that already found messages this cycle and is checking for stragglers) rather than to
+every steady-state "is there anything left" check.
+
+Local-verification gotcha: every test in `test_indexing.py`, including "pure logic" ones
+like `test_queue_manager_creation`/`test_queue_manager_purge_queue_wait` that mock out boto3
+entirely, still depends on the file's autouse `setup_and_teardown(app)` fixture and so
+requires a live ES/Postgres/AWS-SSO session to even collect-and-run locally (pytest autouse
+fixtures apply per-file, and this one requests `app`, which pulls in `aws_auth`). New
+boto3-mocked unit coverage for `QueueManager`/`receive_n_messages` logic therefore lives in
+standalone files without that autouse dependency: `snovault/tests/test_indexer_queue.py`
+(imports `receive_n_messages` from `test_indexing` — safe, since importing a function
+doesn't trigger the other file's autouse fixture) and
+`snovault/tests/test_wipe_test_indexer_queues.py`. Anything that actually needs live SQS
+timing (e.g. confirming `test_queue_manager_purge_queue_wait`'s exact wait math) has to be
+verified either via a standalone throwaway script using `ControlledTime` mocks (no live AWS
+needed, just no pytest/autouse fixture involved) or via real CI.
+
 ## SQS/ES-polling tests in `test_indexing.py` need the flaky rerun decorator
 
 Tests in `snovault/tests/test_indexing.py` that poll SQS and/or ES for eventual

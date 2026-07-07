@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "dcicsnovault"
-version = "11.32.0"
+version = "11.32.1"
 description = "Storage support for 4DN Data Portals."
 authors = ["4DN-DCIC Team <support@4dnucleome.org>"]
 license = "MIT"
@@ -141,6 +141,7 @@ list-db-tables = "snovault.commands.list_db_tables:main"
 prepare-local-dev = "snovault.commands.prepare_template:prepare_local_dev_main"
 publish-to-pypi = "dcicutils.scripts.publish_to_pypi:main"
 wipe-test-indices = "snovault.commands.wipe_test_indices:main"
+wipe-test-indexer-queues = "snovault.commands.wipe_test_indexer_queues:main"
 
 [paste.app_factory]
 main = "snovault:main"

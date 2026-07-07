@@ -76,6 +76,12 @@ def app_settings(basic_app_settings, wsgi_server_host_port, elasticsearch_server
     settings['collection_datastore'] = 'elasticsearch'
     settings['item_datastore'] = 'elasticsearch'
     settings['indexer'] = True
+    # QueueManager (snovault/elasticsearch/indexer_queue.py) namespaces its SQS queues from
+    # this same setting (falling back to it only when env.name is unset), so this also
+    # namespaces SQS queues per CI run/repo instead of colliding on the runner's hostname.
+    # Deliberately NOT setting settings['env.name'] here: snovault.elasticsearch's includeme()
+    # reads env.name to decide whether to look up a blue/green mirror env, which crashes in
+    # CI (no IDENTITY configured) as soon as env.name is truthy - see QueueManager.__init__.
     settings['indexer.namespace'] = INDEXER_NAMESPACE_FOR_TESTING
 
     # use aws auth to access elasticsearch
@@ -335,7 +341,18 @@ def receive_n_messages(*, queue, target='primary', n, tries=10, wait_seconds=1):
         received_this_time = queue.receive_messages(target_queue=target)
         assert isinstance(received_this_time, list)
         received += received_this_time
-        if len(received) == n:
+        if len(received) >= n:
+            if len(received) > n:
+                # A queue polluted with stale/leftover messages (e.g. from a prior test)
+                # would otherwise burn the whole retry budget and raise a misleading
+                # "only received N, but wanted n" error even though N > n. Discard the
+                # surplus (and delete it from the queue so it doesn't resurface later)
+                # and log it clearly instead.
+                surplus = received[n:]
+                print(f"Received {n_of(received, 'message')}, wanted {n};"
+                      f" discarding {n_of(surplus, 'surplus message')}.")
+                queue.delete_messages(surplus, target_queue=target)
+                received = received[:n]
             return received
         print(f" try #{try_n}, received {len(received_this_time)}")
         time.sleep(wait_seconds)
