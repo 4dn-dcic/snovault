@@ -4,7 +4,12 @@ from pyramid.interfaces import IAuthenticationPolicy
 from pyramid.security import Authenticated, Everyone
 from pyramid.testing import DummyRequest
 from zope.interface.verify import verifyObject, verifyClass
-from ..authentication import NamespacedAuthenticationPolicy
+from ..authentication import JWT_ALL_ALGORITHMS, JWT_DECODING_ALGORITHMS, NamespacedAuthenticationPolicy
+
+
+def test_jwt_algorithms_exclude_none():
+    assert 'none' not in JWT_ALL_ALGORITHMS
+    assert 'none' not in JWT_DECODING_ALGORITHMS
 
 
 class TestNamespacedAuthenticationPolicy(unittest.TestCase):

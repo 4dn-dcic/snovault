@@ -5,8 +5,16 @@ import boto3
 from base64 import b64decode
 from dcicutils.ff_utils import parse_s3_bucket_and_key_url
 from unittest import mock
+from urllib.parse import parse_qs, urlparse
 from .. import attachment as attachment_module
-from ..attachment import file_type, guess_mime_type, system_mime_type, fallback_mime_type, DEFAULT_FALLBACK_MIME_TYPE
+from ..attachment import (
+    DEFAULT_FALLBACK_MIME_TYPE,
+    fallback_mime_type,
+    file_type,
+    guess_mime_type,
+    safe_content_disposition_filename,
+    system_mime_type,
+)
 
 
 # Test for blob storage
@@ -57,6 +65,7 @@ class TestAttachment:
         url = testing_download + '/' + attachment['href']
         res = testapp.get(url)
         assert res.content_type == 'image/png'
+        assert res.headers['Content-Disposition'] == 'attachment; filename="red-dot.png"'
         assert res.body == b64decode(RED_DOT.split(',', 1)[1])
 
         assert attachment2['href'] == '@@download/attachment2/blue-dot.png'
@@ -304,6 +313,8 @@ class TestAttachmentEncrypted:
 
         res = encrypted_testapp.get(url)  # follow redirect to s3
         assert res.content_type == 'application/json'
+        query = parse_qs(urlparse(res.location).query)
+        assert query['response-content-disposition'] == ['attachment; filename="red-dot.png"']
         self.attachment_is_red_dot(boto3.client('s3'), res.location)
 
         assert attachment2['href'] == '@@download/attachment2/blue-dot.png'
@@ -487,6 +498,11 @@ def test_file_type():
 
     assert file_type("xyz/foo.abc") == ".abc"
     assert file_type("foo.abc") == ".abc"
+
+
+def test_safe_content_disposition_filename():
+    assert safe_content_disposition_filename('safe-name.png') == 'safe-name.png'
+    assert safe_content_disposition_filename('bad\r\n"x.png') == 'badx.png'
 
 
 def test_system_mime_type():

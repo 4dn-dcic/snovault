@@ -1,5 +1,6 @@
 import boto3
 from copy import deepcopy
+import re
 import structlog
 import uuid
 
@@ -21,6 +22,20 @@ from .interfaces import BLOBS, DBSESSION, STORAGE, TYPES
 log = structlog.getLogger(__name__)
 
 _DBSESSION = None
+
+# Matches any ASCII control character (including CR/LF) so it can be stripped from
+# values that get embedded in HTTP header fields, preventing header injection /
+# response splitting via a crafted attachment filename.
+_CONTROL_CHARS_RE = re.compile(r'[\x00-\x1f\x7f]')
+
+
+def _safe_content_disposition_filename(filename):
+    """ Sanitize a filename for safe use inside a Content-Disposition header value:
+        strips control characters (notably \\r and \\n, which could otherwise inject
+        extra header lines) and double quotes (which would break out of the quoted
+        filename value).
+    """
+    return _CONTROL_CHARS_RE.sub('', filename).replace('"', '')
 
 
 def includeme(config):
@@ -778,10 +793,18 @@ class S3BlobStorage(object):
             url to the data
         """
         bucket_name, key = self._get_bucket_key(download_meta)
+        params = {'Bucket': bucket_name, 'Key': key}
+        # Force a download rather than inline rendering so that uploaded HTML/SVG/etc.
+        # content cannot execute as script when opened from the presigned URL.
+        filename = download_meta.get('download')
+        if filename:
+            params['ResponseContentDisposition'] = (
+                'attachment; filename="%s"' % _safe_content_disposition_filename(filename)
+            )
         location = self.s3.generate_presigned_url(
             ClientMethod='get_object',
             ExpiresIn=36*60*60,
-            Params={'Bucket': bucket_name, 'Key': key})
+            Params=params)
         return location
 
     def get_blob(self, download_meta):

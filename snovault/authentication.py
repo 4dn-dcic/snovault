@@ -47,7 +47,10 @@ JWT_ENCODING_ALGORITHM = 'HS256'
 # default_algorithms() method used to be what we've got in JWT_ALL_ALGORITHMS here.
 #  -kmp 15-May-2020
 
-JWT_ALL_ALGORITHMS = ['ES512', 'RS384', 'HS512', 'ES256', 'none',
+# 'none' is intentionally excluded: allowing it in the decode algorithm list means an
+# attacker-supplied, unsigned token (alg=none) would be accepted as authentic, which is a
+# well-known JWT authentication bypass. See CWE-347 / "JWT alg:none" attack.
+JWT_ALL_ALGORITHMS = ['ES512', 'RS384', 'HS512', 'ES256',
                       'RS256', 'PS512', 'ES384', 'HS384', 'ES521',
                       'PS384', 'HS256', 'PS256', 'RS512']
 
