@@ -5,6 +5,7 @@ These deliberately avoid the live-ES/SQS ``app`` fixture (and its autouse
 environment - see the INDEXING CI flakiness investigation that motivated the
 queue-namespacing/long-polling fixes these tests cover.
 """
+import json
 import pytest
 from unittest import mock
 
@@ -114,6 +115,46 @@ def test_receive_messages_passes_wait_time_seconds():
         MaxNumberOfMessages=manager.receive_batch_size,
         WaitTimeSeconds=20,
     )
+
+
+def test_send_messages_uses_batch_index_ids_without_sleeping():
+    """ send_messages should build SQS batch-entry Ids from the enumerate index (unique
+    within a single <=10-entry request, which is all SQS requires) instead of a
+    microsecond wall-clock value, and must not sleep to avoid Id collisions. """
+    manager, mock_boto3_client = make_queue_manager(env_name="some-env")
+    mock_client = mock_boto3_client.return_value
+    mock_client.send_message_batch.return_value = {}
+
+    items = [{'uuid': 'a'}, {'uuid': 'b'}, {'uuid': 'c'}]
+    with mock.patch('snovault.elasticsearch.indexer_queue.time.sleep') as mock_sleep:
+        failed = manager.send_messages(items, target_queue='primary')
+
+    mock_sleep.assert_not_called()
+    assert failed == []
+    _, kwargs = mock_client.send_message_batch.call_args
+    entries = kwargs['Entries']
+    assert [entry['Id'] for entry in entries] == ['0', '1', '2']
+
+
+def test_send_messages_retries_failed_entries_by_id():
+    """ The Id-based failure-retry matching (send_messages re-sends any MessageBody whose
+    Id shows up in the batch response's Failed list) must keep working with index-based
+    Ids, since entries are rebuilt fresh on each retry call. """
+    manager, mock_boto3_client = make_queue_manager(env_name="some-env")
+    mock_client = mock_boto3_client.return_value
+    mock_client.send_message_batch.side_effect = [
+        {'Failed': [{'Id': '1'}]},
+        {},
+    ]
+
+    items = [{'uuid': 'a'}, {'uuid': 'b'}]
+    failed = manager.send_messages(items, target_queue='primary')
+
+    assert failed == []
+    assert mock_client.send_message_batch.call_count == 2
+    retry_kwargs = mock_client.send_message_batch.call_args_list[1].kwargs
+    retried_bodies = [json.loads(e['MessageBody']) for e in retry_kwargs['Entries']]
+    assert retried_bodies == [{'uuid': 'b'}]
 
 
 class FakeQueue:

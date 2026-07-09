@@ -220,6 +220,7 @@ class ElasticSearchStorage(object):
         """
         search = Search(using=self.es, index=self.index)
         search = search.extra(size=SEARCH_MAX)
+        search = search.source(False)
         # rel links use '~' instead of '.' due to ES field restraints
         proc_rel = rel.replace('.', '~')
         # had to use ** kw notation because of variable in field name
@@ -227,7 +228,7 @@ class ElasticSearchStorage(object):
         if item_types:
             search = search.filter('terms', item_type=item_types)
         hits = search.execute()
-        return [hit.to_dict().get('uuid', hit.to_dict().get('_id')) for hit in hits]
+        return [hit.meta.id for hit in hits]
 
     def get_sids_by_uuids(self, rids):
         """
@@ -369,13 +370,16 @@ class ElasticSearchStorage(object):
         Return a generator that yields string uuids of all documents matching
         given item types (through kwargs). Use all item types if none provided
         """
-        query = {'query': {
-            'bool': {
-                'filter': {'terms': {'item_type': item_types}} if item_types else {'match_all': {}}
+        query = {
+            '_source': False,
+            'query': {
+                'bool': {
+                    'filter': {'terms': {'item_type': item_types}} if item_types else {'match_all': {}}
+                }
             }
-        }}
+        }
         for hit in scan(self.es, index=self.index, query=query):
-            yield hit.get('uuid', hit.get('_id'))
+            yield hit['_id']
 
     def __len__(self, *item_types):
         """

@@ -4,6 +4,23 @@ This file is the project's committed home for project-intrinsic agent knowledge:
 
 - Add durable project-specific notes here as they are discovered through real work.
 
+## Automatic tag-and-publish-on-master release workflow
+
+`.github/workflows/main.yml`'s `publish` job (`needs: build`, runs only on
+`push` to `master`) reads the version from `pyproject.toml` (`poetry version -s`) and, if
+no git tag for that version exists yet, tags and publishes to PyPI **in the same job run**.
+It deliberately does not rely on `.github/workflows/main-publish.yml`'s tag-triggered
+`on: push: tags` event, because GitHub Actions does not start a new workflow run from a tag
+pushed using the default `GITHUB_TOKEN` (anti-recursion rule) — `main-publish.yml` remains
+only for manual/`workflow_dispatch` publishing. The tag-existence check is the idempotency
+guard: an unchanged version on a master merge is a no-op; only a version bump in
+`pyproject.toml` triggers a real tag+publish. `publish-for-ga` itself (dcicutils
+`publish-to-pypi`) is also idempotent as a second safety net. The workflow-level
+`permissions:` block in `main.yml` stays `id-token: write` / `contents: read` (needed by the
+`build` job's AWS OIDC auth); `contents: write` (needed to push the tag) is scoped to the
+`publish` job only, since a job-level `permissions:` block replaces rather than merges with
+the workflow-level one.
+
 ## Self-registration field whitelist (`create_unauthorized_user`)
 
 `snovault/authentication.py::create_unauthorized_user` (`POST /create-unauthorized-user`)
@@ -200,6 +217,26 @@ follows the queue-then-poll pattern, include that decorator — several timing f
 traced back to tests that used the pattern but were missing it
 (`test_aggregated_items`, `test_indexer_namespacing`, `test_indexer_queue_adds_telemetry_id`).
 
+## Testing `filter_invalidation_scope`'s shared-list-mutation fix: build a diffs dict with a real parent extension
+
+`filter_invalidation_scope` (`snovault/elasticsearch/indexer_utils.py`) builds its internal
+`diffs` dict fresh per call from `build_diff_metadata`, then does
+`all_possible_diffs = list(diffs.get(base_field_item_type, []))` before `.extend`-ing in
+parent/child-type diffs — the `list(...)` copy exists so those `.extend` calls don't mutate
+the dict's own stored list permanently.
+
+A regression test that only feeds a single-type diff (e.g. `['SomeType.field']`) does
+**not** exercise this: with only one key in `diffs`, every `diffs.get(parent_or_child, [])`
+lookup returns `[]`, so `.extend([])` is a no-op whether or not the list was copied — the
+test passes on both the buggy and fixed code. To actually discriminate, mock
+`build_diff_metadata` to return a `diffs` dict with a **populated parent-type entry** (e.g.
+`{'TestingBiosampleSno': ['identifier'], 'SomeParentType': ['other_field']}` plus
+`child_to_parent_type = {'TestingBiosampleSno': ['SomeParentType']}`), while still using the
+real `testapp.app.registry` so `crawl_schema` can resolve the real embed path — see
+`test_invalidation_scope_does_not_mutate_diffs_dict` in
+`snovault/tests/test_invalidation_scope.py`. Before trusting a regression test for a
+mutation/aliasing bug, temporarily revert the fix and confirm the test actually fails.
+
 ## `ItemNamespace.__getattr__` sharp edge (calculated.py)
 
 `ItemNamespace.__getattr__` resolves unknown names via `self.registry` / `self._properties`
@@ -209,3 +246,10 @@ request lacking `.registry`), the reify body raises `AttributeError`, which re-e
 reachable in production (`calculate_properties` always passes a real request), but when
 unit-testing the namespace directly, inject `registry`/`_properties` via the `ns` dict —
 see `snovault/tests/test_calculated_registry.py`.
+
+## Maintaining this file
+
+Keep this file for knowledge useful to almost every future agent session in this project.
+Do not repeat what the codebase already shows; point to the authoritative file or command instead.
+Prefer rewriting or pruning existing entries over appending new ones.
+When updating this file, preserve this bar for all agents and keep entries concise.
