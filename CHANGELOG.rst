@@ -23,9 +23,9 @@ Change Log
     reads from (a latent aliasing bug), and no longer calls ``determine_child_types``
     twice per matched embed.
   * ``es-index-data`` (``snovault/commands/es_index_data.py``) now stops posting to
-    ``/index`` once the indexer queue has been empty and indexed nothing for two
-    consecutive iterations, instead of unconditionally running the full 100-iteration
-    cap.
+    ``/index`` once the indexer queue (including in-flight/invisible retryable
+    messages) has been empty and indexed nothing for two consecutive iterations,
+    instead of unconditionally running the full 100-iteration cap.
   * ``ElasticSearchStorage.__iter__`` no longer fetches each document's full ``_source``
     just to discard it and yield the ``_id``.
 

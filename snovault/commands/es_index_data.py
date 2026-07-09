@@ -34,7 +34,8 @@ def run(app, uuids=None):
         for _ in range(INDEXING_RUN_ITERATIONS):
             response = testapp.post_json('/index', post_body)
             indexing_count = response.json.get('indexing_count', 0)
-            if indexing_count == 0 and indexer_queue.queue_is_empty(secondary_only=False):
+            if indexing_count == 0 and indexer_queue.queue_is_empty(secondary_only=False,
+                                                                     include_inflight=True):
                 consecutive_empty += 1
                 if consecutive_empty >= CONSECUTIVE_EMPTY_ITERATIONS_TO_STOP:
                     break
