@@ -5,9 +5,15 @@ import webtest
 from pyramid.paster import get_app
 from dcicutils.log_utils import set_logging
 
+from snovault.elasticsearch.interfaces import INDEXER_QUEUE
+
 
 EPILOG = __doc__
 INDEXING_RUN_ITERATIONS = 100
+# require this many consecutive empty-queue/zero-indexed iterations before breaking
+# early, since queue_is_empty relies on SQS's approximate (eventually-consistent)
+# message counts
+CONSECUTIVE_EMPTY_ITERATIONS_TO_STOP = 2
 
 
 def run(app, uuids=None):
@@ -23,8 +29,17 @@ def run(app, uuids=None):
         post_body['uuids'] = list(uuids)
         testapp.post_json('/index', post_body)
     else:
+        indexer_queue = app.registry[INDEXER_QUEUE]
+        consecutive_empty = 0
         for _ in range(INDEXING_RUN_ITERATIONS):
-            testapp.post_json('/index', post_body)
+            response = testapp.post_json('/index', post_body)
+            indexing_count = response.json.get('indexing_count', 0)
+            if indexing_count == 0 and indexer_queue.queue_is_empty(secondary_only=False):
+                consecutive_empty += 1
+                if consecutive_empty >= CONSECUTIVE_EMPTY_ITERATIONS_TO_STOP:
+                    break
+            else:
+                consecutive_empty = 0
 
 
 def main():

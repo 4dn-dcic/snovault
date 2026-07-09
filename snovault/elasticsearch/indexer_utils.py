@@ -283,19 +283,20 @@ def filter_invalidation_scope(registry, diff, invalidated_with_type, secondary_u
             # grab terminal field based on the actual linkTo depth
             terminal_field = '.'.join(split_embed[link_depth:])
 
-            # Collect diffs from all possible item_types
-            all_possible_diffs = diffs.get(base_field_item_type, [])
+            # Collect diffs from all possible item_types (copy so we never mutate the shared
+            # list stored in diffs)
+            all_possible_diffs = list(diffs.get(base_field_item_type, []))
 
             # A linkTo target could be a child type (in that we need to look at parent type diffs as well)
             parent_types = child_to_parent_type.get(base_field_item_type, None)
             if parent_types is not None:
-                for parent_type in child_to_parent_type.get(base_field_item_type, []):
+                for parent_type in parent_types:
                     all_possible_diffs.extend(diffs.get(parent_type, []))
 
             # It could also be parent type (in that we must look at all potential child types)
             child_types = determine_child_types(registry, base_field_item_type)
             if child_types is not None:
-                for child_type in determine_child_types(registry, base_field_item_type) or []:
+                for child_type in child_types:
                     all_possible_diffs.extend(diffs.get(child_type, []))
 
             if not all_possible_diffs:  # no diffs match this embed

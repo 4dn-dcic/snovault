@@ -553,19 +553,19 @@ class QueueManager(object):
         failed = []
         for msg_batch in self.chunk_messages(items, self.send_batch_size):
             entries = []
-            for msg in msg_batch:
+            for i, msg in enumerate(msg_batch):
                 # quick workaround to communicate with old style messages
+                # Id only needs to be unique within this single batch request
                 if isinstance(msg, dict):
                     entries.append({
-                        'Id': str(int(time.time() * 1000000)),
+                        'Id': str(i),
                         'MessageBody': json.dumps(msg)
                     })
                 else:
                     entries.append({
-                        'Id': str(int(time.time() * 1000000)),
+                        'Id': str(i),
                         'MessageBody': msg
                     })
-                time.sleep(0.001)  # ensure time-based Ids are not repeated
             response = self.client.send_message_batch(
                 QueueUrl=queue_url,
                 Entries=entries

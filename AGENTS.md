@@ -200,6 +200,26 @@ follows the queue-then-poll pattern, include that decorator — several timing f
 traced back to tests that used the pattern but were missing it
 (`test_aggregated_items`, `test_indexer_namespacing`, `test_indexer_queue_adds_telemetry_id`).
 
+## Testing `filter_invalidation_scope`'s shared-list-mutation fix: build a diffs dict with a real parent extension
+
+`filter_invalidation_scope` (`snovault/elasticsearch/indexer_utils.py`) builds its internal
+`diffs` dict fresh per call from `build_diff_metadata`, then does
+`all_possible_diffs = list(diffs.get(base_field_item_type, []))` before `.extend`-ing in
+parent/child-type diffs — the `list(...)` copy exists so those `.extend` calls don't mutate
+the dict's own stored list permanently.
+
+A regression test that only feeds a single-type diff (e.g. `['SomeType.field']`) does
+**not** exercise this: with only one key in `diffs`, every `diffs.get(parent_or_child, [])`
+lookup returns `[]`, so `.extend([])` is a no-op whether or not the list was copied — the
+test passes on both the buggy and fixed code. To actually discriminate, mock
+`build_diff_metadata` to return a `diffs` dict with a **populated parent-type entry** (e.g.
+`{'TestingBiosampleSno': ['identifier'], 'SomeParentType': ['other_field']}` plus
+`child_to_parent_type = {'TestingBiosampleSno': ['SomeParentType']}`), while still using the
+real `testapp.app.registry` so `crawl_schema` can resolve the real embed path — see
+`test_invalidation_scope_does_not_mutate_diffs_dict` in
+`snovault/tests/test_invalidation_scope.py`. Before trusting a regression test for a
+mutation/aliasing bug, temporarily revert the fix and confirm the test actually fails.
+
 ## `ItemNamespace.__getattr__` sharp edge (calculated.py)
 
 `ItemNamespace.__getattr__` resolves unknown names via `self.registry` / `self._properties`

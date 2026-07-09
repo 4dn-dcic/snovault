@@ -6,6 +6,29 @@ snovault
 Change Log
 ----------
 
+11.32.3
+=======
+
+* Five low-risk Elasticsearch performance/efficiency fixes identified by a performance
+  review (no behavior changes intended):
+
+  * ``ElasticSearchStorage.get_rev_links`` no longer fetches full documents just to read
+    their uuid - it restricts ``_source`` and reads the uuid off the ES hit's own ``_id``
+    (which is always the item's uuid).
+  * ``QueueManager.send_messages`` no longer sleeps 1ms per queued SQS message to
+    guarantee unique wall-clock-based batch entry ``Id``s; entry ``Id``s are now derived
+    from each entry's position within its batch, which is all SQS requires for
+    uniqueness.
+  * ``filter_invalidation_scope`` no longer mutates the shared per-type diff list it
+    reads from (a latent aliasing bug), and no longer calls ``determine_child_types``
+    twice per matched embed.
+  * ``es-index-data`` (``snovault/commands/es_index_data.py``) now stops posting to
+    ``/index`` once the indexer queue has been empty and indexed nothing for two
+    consecutive iterations, instead of unconditionally running the full 100-iteration
+    cap.
+  * ``ElasticSearchStorage.__iter__`` no longer fetches each document's full ``_source``
+    just to discard it and yield the ``_id``.
+
 11.32.2
 =======
 

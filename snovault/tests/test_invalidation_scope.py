@@ -624,3 +624,43 @@ class TestingInvalidationScopeIntegrated:
         invalidated = [(obj['@id'], obj['@type'][0]) for obj in groups + sources + samples]
         secondary = {obj['@id'] for obj in groups + sources + samples}
         self.runtest(testapp, [], invalidated, secondary, 0)
+
+    def test_invalidation_scope_does_not_mutate_diffs_dict(self, testapp, invalidation_scope_workbook):
+        """ Regression test: diffs.get(base_field_item_type) used to hand back the dict's own
+        stored list, and the subsequent .extend(...) calls permanently appended parent-type
+        diff fields into it. This only becomes observable when a parent type of
+        base_field_item_type also has diff entries (otherwise .extend([]) is a no-op on old
+        and new code alike) - so build_diff_metadata is mocked to return a diffs dict with a
+        real parent-type entry to extend from, while still using the real testapp registry
+        so crawl_schema resolves the TestingBiosourceSno.samples -> TestingBiosampleSno embed. """
+        groups, sources, samples, _ = invalidation_scope_workbook
+        diff = ['ignored']
+        invalidated = [(sources[0]['@id'], sources[0]['@type'][0])]
+        secondary = {sources[0]['@id']}
+
+        diffs = {'TestingBiosampleSno': ['identifier'], 'SomeParentType': ['other_field']}
+        child_to_parent_type = {'TestingBiosampleSno': ['SomeParentType']}
+        diffs_before = copy.deepcopy(diffs)
+
+        with mock.patch('snovault.elasticsearch.indexer_utils.build_diff_metadata',
+                        return_value=(False, diffs, 'TestingBiosampleSno', child_to_parent_type)):
+            filter_invalidation_scope(testapp.app.registry, diff, invalidated, secondary)
+
+        assert diffs == diffs_before
+
+    def test_invalidation_scope_does_not_call_determine_child_types_redundantly(self, testapp,
+                                                                                 invalidation_scope_workbook):
+        """ Regression test: determine_child_types (an O(#types) registry scan) used to be called
+        twice back-to-back with identical arguments for the same matched embed - once to check
+        `is not None` and again in the for-loop. For a single invalidated item with one matching
+        embed, it should now be called exactly once. """
+        groups, sources, samples, _ = invalidation_scope_workbook
+        diff = ['TestingBiosampleSno.identifier']
+        invalidated = [(sources[0]['@id'], sources[0]['@type'][0])]
+        secondary = {sources[0]['@id']}
+
+        with mock.patch('snovault.elasticsearch.indexer_utils.determine_child_types',
+                        return_value=[]) as mock_child_types:
+            filter_invalidation_scope(testapp.app.registry, diff, invalidated, secondary)
+
+        assert mock_child_types.call_count == 1
