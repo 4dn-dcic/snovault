@@ -8,18 +8,29 @@ This file is the project's committed home for project-intrinsic agent knowledge:
 
 `.github/workflows/main.yml`'s `publish` job (`needs: build`, runs only on
 `push` to `master`) reads the version from `pyproject.toml` (`poetry version -s`) and, if
-no git tag for that version exists yet, tags and publishes to PyPI **in the same job run**.
-It deliberately does not rely on `.github/workflows/main-publish.yml`'s tag-triggered
-`on: push: tags` event, because GitHub Actions does not start a new workflow run from a tag
-pushed using the default `GITHUB_TOKEN` (anti-recursion rule) — `main-publish.yml` remains
-only for manual/`workflow_dispatch` publishing. The tag-existence check is the idempotency
-guard: an unchanged version on a master merge is a no-op; only a version bump in
-`pyproject.toml` triggers a real tag+publish. `publish-for-ga` itself (dcicutils
-`publish-to-pypi`) is also idempotent as a second safety net. The workflow-level
-`permissions:` block in `main.yml` stays `id-token: write` / `contents: read` (needed by the
-`build` job's AWS OIDC auth); `contents: write` (needed to push the tag) is scoped to the
-`publish` job only, since a job-level `permissions:` block replaces rather than merges with
-the workflow-level one.
+no git tag for that version exists yet, tags it, then always attempts to publish to PyPI
+**in the same job run**. It deliberately does not rely on
+`.github/workflows/main-publish.yml`'s tag-triggered `on: push: tags` event, because GitHub
+Actions does not start a new workflow run from a tag pushed using the default
+`GITHUB_TOKEN` (anti-recursion rule) — `main-publish.yml` remains only for manual/
+`workflow_dispatch` publishing.
+
+The "Create and push tag" step is gated on the tag-existence check (`exists == 'false'`) —
+tag once per version. The "Publish to PyPI" step is deliberately **not** gated on that same
+check; it always runs, relying solely on `publish-to-pypi --noconfirm`'s own idempotent
+per-version PyPI check as the guard against redundant publishes. This split exists because
+the first real run (CI run 29052379561, from PR #324 landing) tagged `11.32.3` successfully
+but then the publish step crashed (`ModuleNotFoundError: no module named 'dcicutils'` — the
+job's "Install Deps" step ran `make configure`, which only installs pip/wheel/poetry, not
+project deps; it now runs `make build-for-ga`, which also runs `poetry install`). With both
+steps sharing one guard, the tag existing after that crash meant publish would have been
+skipped forever on every subsequent master push — no self-healing possible. Decoupling them
+means a tag-exists-but-never-published state (however it arises) always gets a retry.
+
+The workflow-level `permissions:` block in `main.yml` stays `id-token: write` / `contents:
+read` (needed by the `build` job's AWS OIDC auth); `contents: write` (needed to push the
+tag) is scoped to the `publish` job only, since a job-level `permissions:` block replaces
+rather than merges with the workflow-level one.
 
 ## Self-registration field whitelist (`create_unauthorized_user`)
 
