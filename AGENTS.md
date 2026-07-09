@@ -4,6 +4,23 @@ This file is the project's committed home for project-intrinsic agent knowledge:
 
 - Add durable project-specific notes here as they are discovered through real work.
 
+## Automatic tag-and-publish-on-master release workflow
+
+`.github/workflows/main.yml`'s `publish` job (`needs: build`, runs only on
+`push` to `master`) reads the version from `pyproject.toml` (`poetry version -s`) and, if
+no git tag for that version exists yet, tags and publishes to PyPI **in the same job run**.
+It deliberately does not rely on `.github/workflows/main-publish.yml`'s tag-triggered
+`on: push: tags` event, because GitHub Actions does not start a new workflow run from a tag
+pushed using the default `GITHUB_TOKEN` (anti-recursion rule) — `main-publish.yml` remains
+only for manual/`workflow_dispatch` publishing. The tag-existence check is the idempotency
+guard: an unchanged version on a master merge is a no-op; only a version bump in
+`pyproject.toml` triggers a real tag+publish. `publish-for-ga` itself (dcicutils
+`publish-to-pypi`) is also idempotent as a second safety net. The workflow-level
+`permissions:` block in `main.yml` stays `id-token: write` / `contents: read` (needed by the
+`build` job's AWS OIDC auth); `contents: write` (needed to push the tag) is scoped to the
+`publish` job only, since a job-level `permissions:` block replaces rather than merges with
+the workflow-level one.
+
 ## Self-registration field whitelist (`create_unauthorized_user`)
 
 `snovault/authentication.py::create_unauthorized_user` (`POST /create-unauthorized-user`)
@@ -229,3 +246,10 @@ request lacking `.registry`), the reify body raises `AttributeError`, which re-e
 reachable in production (`calculate_properties` always passes a real request), but when
 unit-testing the namespace directly, inject `registry`/`_properties` via the `ns` dict —
 see `snovault/tests/test_calculated_registry.py`.
+
+## Maintaining this file
+
+Keep this file for knowledge useful to almost every future agent session in this project.
+Do not repeat what the codebase already shows; point to the authoritative file or command instead.
+Prefer rewriting or pruning existing entries over appending new ones.
+When updating this file, preserve this bar for all agents and keep entries concise.
