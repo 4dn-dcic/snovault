@@ -105,3 +105,54 @@ jobs:
           TEST_JOB_ID: sno-test-unit-${{ github.run_number }}-${{ matrix.python_version }}-
         run: |
           poetry run wipe-test-indices $TEST_JOB_ID search-fourfront-testing-opensearch-kqm7pliix4wgiu4druk2indorq.us-east-1.es.amazonaws.com:443
+
+  # Tags and publishes the version declared in pyproject.toml after a successful test run on
+  # master. Runs in the same job as the tag push (rather than relying on main-publish.yml's
+  # tag-triggered `on: push: tags` event) because GitHub Actions does not start a new workflow
+  # run from a push made with the default GITHUB_TOKEN. Idempotent: skips entirely if the tag
+  # for the current version already exists, so unrelated master merges are no-ops and only a
+  # version bump triggers a release.
+  publish:
+    name: Tag and Publish to PyPI
+    needs: build
+    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/master' }}
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-python@v4
+        with:
+          python-version: 3.11
+
+      - name: Install Deps
+        run: |
+          make configure
+
+      - name: Determine version and check for existing tag
+        id: version
+        run: |
+          VERSION=$(poetry version -s)
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          if git ls-remote --tags origin "refs/tags/$VERSION" | grep -q "refs/tags/$VERSION$"; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create and push tag
+        if: ${{ steps.version.outputs.exists == 'false' }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag "${{ steps.version.outputs.version }}"
+          git push origin "${{ steps.version.outputs.version }}"
+
+      - name: Publish to PyPI
+        if: ${{ steps.version.outputs.exists == 'false' }}
+        env:
+          PYPI_USER: ${{ secrets.PYPI_USER }}
+          PYPI_PASSWORD: ${{ secrets.PYPI_PASSWORD }}
+        run: |
+          make configure
+          make publish-for-ga

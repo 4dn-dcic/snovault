@@ -29,6 +29,14 @@ Change Log
   * ``ElasticSearchStorage.__iter__`` no longer fetches each document's full ``_source``
     just to discard it and yield the ``_id``.
 
+* Add automatic tag-and-publish-on-master release workflow: on a successful push to
+  ``master``, a new ``publish`` job in ``.github/workflows/main.yml`` (gated behind the
+  existing test matrix via ``needs: build``) reads the version from ``pyproject.toml`` and,
+  if no git tag for that version exists yet, tags and publishes it to PyPI in the same job
+  run (tagging and publishing separately would not work, since GitHub Actions does not
+  trigger a new workflow run from a tag pushed with the default ``GITHUB_TOKEN``). Merges
+  that don't change the version are no-ops.
+
 11.32.2
 =======
 
