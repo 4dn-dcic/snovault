@@ -37,6 +37,14 @@ Change Log
   trigger a new workflow run from a tag pushed with the default ``GITHUB_TOKEN``). Merges
   that don't change the version are no-ops.
 
+* Fix the ``publish`` job added just above: its "Install Deps" step now runs
+  ``make build-for-ga`` (not just ``make configure``), since ``poetry run publish-to-pypi``
+  needs project dependencies (``dcicutils``) installed, which ``configure`` alone doesn't
+  provide. Also decouples the "Publish to PyPI" step from the tag-existence guard - it now
+  always runs (relying on ``publish-to-pypi --noconfirm``'s own idempotent per-version PyPI
+  check) instead of being skipped whenever a tag already exists, so a run that tags
+  successfully but crashes before publishing can self-heal on the next master push.
+
 11.32.2
 =======
 
