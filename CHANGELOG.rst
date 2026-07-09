@@ -6,6 +6,16 @@ snovault
 Change Log
 ----------
 
+11.32.2
+=======
+
+* Fix a stored-XSS risk in attachment downloads: RDB-backed downloads and S3 presigned
+  URLs now force ``Content-Disposition: attachment`` so uploaded HTML/SVG/etc. content is
+  downloaded instead of rendered inline. Attachment filenames used in the header are
+  sanitized to remove control characters and quotes.
+* Remove the JWT ``none`` algorithm from the decode allow-list, avoiding a well-known
+  unsigned-token authentication-bypass footgun.
+
 11.32.1
 =======
 

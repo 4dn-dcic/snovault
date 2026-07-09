@@ -1,6 +1,7 @@
 import magic
 import mimetypes
 import os
+import re
 import uuid
 
 from base64 import b64decode
@@ -33,6 +34,21 @@ log = getLogger(__name__)
 
 def file_type(filename):
     return os.path.splitext(filename)[1]
+
+
+# Matches any ASCII control character (including CR/LF) so it can be stripped from
+# values that get embedded in HTTP header fields, preventing header injection /
+# response splitting via a crafted attachment filename.
+_CONTROL_CHARS_RE = re.compile(r'[\x00-\x1f\x7f]')
+
+
+def safe_content_disposition_filename(filename):
+    """ Sanitize a filename for safe use inside a Content-Disposition header value:
+        strips control characters (notably \\r and \\n, which could otherwise inject
+        extra header lines) and double quotes (which would break out of the quoted
+        filename value).
+    """
+    return _CONTROL_CHARS_RE.sub('', filename).replace('"', '')
 
 
 FALLBACK_MIMETYPES = {
@@ -313,5 +329,8 @@ def download(context, request):
     blob = blob_storage.get_blob(download_meta)
     headers = {
         'Content-Type': mimetype,
+        # Force a download rather than inline rendering so that uploaded HTML/SVG/etc.
+        # content cannot execute as script in the portal's origin (stored XSS).
+        'Content-Disposition': 'attachment; filename="%s"' % safe_content_disposition_filename(filename),
     }
     return Response(body=blob, headers=headers)
