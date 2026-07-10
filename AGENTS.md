@@ -7,25 +7,27 @@ This file is the project's committed home for project-intrinsic agent knowledge:
 ## Automatic tag-and-publish-on-master release workflow
 
 `.github/workflows/main.yml`'s `publish` job (`needs: build`, runs only on
-`push` to `master`) reads the version from `pyproject.toml` (`poetry version -s`) and, if
-no git tag for that version exists yet, tags it, then always attempts to publish to PyPI
-**in the same job run**. It deliberately does not rely on
+`push` to `master`) reads the version from `pyproject.toml` (`poetry version -s`) and checks
+both for its git tag and for an existing PyPI release. It creates the tag if missing and
+publishes only if PyPI does not already have the version, all **in the same job run**. It deliberately does not rely on
 `.github/workflows/main-publish.yml`'s tag-triggered `on: push: tags` event, because GitHub
 Actions does not start a new workflow run from a tag pushed using the default
 `GITHUB_TOKEN` (anti-recursion rule) — `main-publish.yml` remains only for manual/
 `workflow_dispatch` publishing.
 
 The "Create and push tag" step is gated on the tag-existence check (`exists == 'false'`) —
-tag once per version. The "Publish to PyPI" step is deliberately **not** gated on that same
-check; it always runs, relying solely on `publish-to-pypi --noconfirm`'s own idempotent
-per-version PyPI check as the guard against redundant publishes. This split exists because
-the first real run (CI run 29052379561, from PR #324 landing) tagged `11.32.3` successfully
-but then the publish step crashed (`ModuleNotFoundError: no module named 'dcicutils'` — the
-job's "Install Deps" step ran `make configure`, which only installs pip/wheel/poetry, not
-project deps; it now runs `make build-for-ga`, which also runs `poetry install`). With both
-steps sharing one guard, the tag existing after that crash meant publish would have been
-skipped forever on every subsequent master push — no self-healing possible. Decoupling them
-means a tag-exists-but-never-published state (however it arises) always gets a retry.
+tag once per version. The "Publish to PyPI" step instead uses the independently checked
+`pypi_exists == 'false'` condition. Its curl request treats only HTTP 200 (present) and 404
+(absent) as valid; any other status fails the job closed. This split preserves recovery from
+a tag-exists-but-never-published state, while avoiding a failing duplicate-upload attempt on
+later merges. `publish-to-pypi` itself treats an existing release as an error, rather than
+an idempotent success.
+
+`make build-for-ga` must use `POETRY_VIRTUALENVS_CREATE=true poetry install`, never
+`poetry config --local virtualenvs.create true`: the latter changes tracked `poetry.toml` and
+makes the release checkout dirty, causing `publish-to-pypi` to abort. The workflow also sets
+the variable job-wide and asserts `git diff --exit-code` directly after dependency install so
+any future mutation names the affected file at the source of the failure.
 
 The workflow-level `permissions:` block in `main.yml` stays `id-token: write` / `contents:
 read` (needed by the `build` job's AWS OIDC auth); `contents: write` (needed to push the
