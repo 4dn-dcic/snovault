@@ -52,8 +52,7 @@ fix-dist-info:
 
 build-for-ga:
 	make configure
-	poetry config --local virtualenvs.create true
-	poetry install
+	POETRY_VIRTUALENVS_CREATE=true poetry install
 
 deploy1:  # starts postgres/ES locally and loads inserts, and also starts ingestion engine
 	@DEBUGLOG=`pwd` SNOVAULT_DB_TEST_PORT=`grep 'sqlalchemy[.]url =' development.ini | sed -E 's|.*:([0-9]+)/.*|\1|'` dev-servers-snovault development.ini --app-name app --clear --init --load

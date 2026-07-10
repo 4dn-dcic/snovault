@@ -110,10 +110,9 @@ jobs:
   # master. Runs in the same job as the tag push (rather than relying on main-publish.yml's
   # tag-triggered `on: push: tags` event) because GitHub Actions does not start a new workflow
   # run from a push made with the default GITHUB_TOKEN. The tag-push step is gated on the
-  # tag-existence check (only tag once per version); the publish step deliberately is NOT
-  # gated on it, and always runs, relying on `publish-to-pypi --noconfirm`'s own idempotent
-  # per-version PyPI check as the sole guard against redundant publishes. This lets publish
-  # self-heal if a prior run tagged successfully but crashed before publishing.
+  # tag-existence check (only tag once per version). The publish step is independently gated
+  # on whether the version exists on PyPI, so it can self-heal if a prior run tagged
+  # successfully but crashed before publishing without failing for an already-published version.
   publish:
     name: Tag and Publish to PyPI
     needs: build
@@ -121,6 +120,8 @@ jobs:
     runs-on: ubuntu-22.04
     permissions:
       contents: write
+    env:
+      POETRY_VIRTUALENVS_CREATE: "true"
     steps:
       - uses: actions/checkout@v3
       - uses: actions/setup-python@v4
@@ -131,7 +132,10 @@ jobs:
         run: |
           make build-for-ga
 
-      - name: Determine version and check for existing tag
+      - name: Assert clean release checkout
+        run: git diff --exit-code
+
+      - name: Determine version and check for existing tag and PyPI release
         id: version
         run: |
           VERSION=$(poetry version -s)
@@ -141,6 +145,13 @@ jobs:
           else
             echo "exists=false" >> "$GITHUB_OUTPUT"
           fi
+          PYPI_STATUS=$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
+            "https://pypi.org/pypi/dcicsnovault/${VERSION}/json")
+          case "$PYPI_STATUS" in
+            200) echo "pypi_exists=true" >> "$GITHUB_OUTPUT" ;;
+            404) echo "pypi_exists=false" >> "$GITHUB_OUTPUT" ;;
+            *) echo "Unexpected PyPI status ${PYPI_STATUS} for ${VERSION}" >&2; exit 1 ;;
+          esac
 
       - name: Create and push tag
         if: ${{ steps.version.outputs.exists == 'false' }}
@@ -151,6 +162,7 @@ jobs:
           git push origin "${{ steps.version.outputs.version }}"
 
       - name: Publish to PyPI
+        if: ${{ steps.version.outputs.pypi_exists == 'false' }}
         env:
           PYPI_USER: ${{ secrets.PYPI_USER }}
           PYPI_PASSWORD: ${{ secrets.PYPI_PASSWORD }}
