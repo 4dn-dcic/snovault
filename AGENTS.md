@@ -4,6 +4,105 @@ This file is the project's committed home for project-intrinsic agent knowledge:
 
 - Add durable project-specific notes here as they are discovered through real work.
 
+## Start here
+
+Snovault is the reusable Pyramid/JSON-LD storage and search framework published as the
+`dcicsnovault` Python package; portal applications supply their own item types, schemas,
+permissions, and settings. Use these sources of truth before relying on older prose docs:
+
+- `snovault/__init__.py::main` and `includeme` assemble the WSGI app and show which
+  subsystems are conditional on Elasticsearch, Redis, and test settings.
+- `snovault/resources.py`, `snovault/config.py`, and `snovault/typeinfo.py` define the
+  resource/collection model and the registry populated by `@collection` declarations.
+- `docs/source/object-lifecycle.rst`, `storage_overview.rst`,
+  `embedding-and-indexing.rst`, and `invalidation.rst` explain the concepts and diagrams;
+  confirm details against code because some narrative documentation is historical.
+- `Makefile`, `pyproject.toml`, `pytest.ini`, and `.github/workflows/*.yml` are authoritative
+  for supported tooling, dependencies, test partitions, and CI/release behavior.
+
+## Repository map
+
+- `snovault/`: framework package. Route declarations are in `routes.py`; traversal roots,
+  resources, CRUD/rendering, validation, authentication/authorization, calculated
+  properties, embedding, invalidation, upgrading, and SQL storage each live in the
+  correspondingly named modules.
+- `snovault/types/` and `snovault/schemas/`: framework-owned base item types and JSON
+  Schemas. Consumer applications normally add their domain types and schemas themselves.
+- `snovault/elasticsearch/`: mappings, ES-backed storage/caching, invalidation utilities,
+  SQS queue management, and single-/multi-process indexers.
+- `snovault/search/`: search views and Lucene query construction. Read its nested
+  `AGENTS.md` before editing this subtree.
+- `snovault/ingestion/`: SQS-driven ingestion listeners, messages, decorators, and
+  processors; this is distinct from the Elasticsearch indexing queue.
+- `snovault/commands/`: operational and developer CLI entry points. Published command
+  names are declared in `[tool.poetry.scripts]` in `pyproject.toml`.
+- `snovault/tests/`: pytest suite, shared fixtures, test-only item declarations in
+  `testing_views.py`, schemas in `snovault/test_schemas/`, and fixture data in
+  `snovault/tests/data/`.
+- `docs/source/`: Sphinx documentation; `deploy/` holds Elasticsearch runtime config;
+  `scripts/` and `bin/` hold build/test helpers. Top-level INI files are PasteDeploy
+  configuration and templates, not independent applications.
+
+## Pyramid, storage, and Elasticsearch flow
+
+The app is registry-driven. Venusian decorators register collections, item types,
+calculated properties, upgrade steps, and views during Pyramid configuration. Requests
+resolve resources through traversal from `root.py`/`resources.py`; `crud_views.py` and
+`resource_views.py` validate JSON Schemas, enforce ACL/schema permissions, and render the
+requested frame. Links are stored canonically as UUIDs and expanded during rendering.
+
+PostgreSQL is the system of record. `connection.py` and `storage.py` implement SQLAlchemy
+resource, property-sheet/revision, unique-key, and link storage. A successful write records
+invalidation/indexing work; `elasticsearch/indexer_queue.py` manages the SQS queues and
+`elasticsearch/indexer.py` consumes them, computes affected linked items, renders object
+and embedded frames, and writes ES documents. Search views in `snovault/search/` query ES
+when `elasticsearch.server` is configured. Treat ES as a derived index: repair mappings or
+reindex from PostgreSQL rather than making ES-only state authoritative. Embedding choices
+also determine invalidation breadth, so changes to `embedded_list`, calculated properties,
+or link fields require focused indexing/invalidation tests.
+
+## Configuration and local development
+
+- `base.ini` contains common PasteDeploy application defaults;
+  `development.ini.template` and `test.ini.template` are inputs. `prepare-local-dev`
+  generates local files. Do not commit generated credentials or machine-specific INI
+  changes.
+- `pyproject.toml` plus `poetry.lock` define the environment. `make build` is the normal
+  bootstrap and `make build-for-ga` mirrors the lean CI install. Check `make help` before
+  copying commands from older `docs/source/local_installation.rst`.
+- `make deploy1` starts the local PostgreSQL/Elasticsearch/ingestion stack after build;
+  `make psql-dev` connects to its database. `make kill` uses broad process-name matching,
+  so inspect the recipe and use it cautiously on a shared workstation.
+- Optional subsystems are settings-gated: Elasticsearch enables search/indexing, Redis
+  enables Redis integration, and `testing = true` installs test types/root and enables
+  invalidation scope. Preserve those distinctions in fixtures and app construction.
+
+## Tests and CI
+
+Prefer the narrowest useful command:
+
+- `poetry run pytest path/to/test_file.py -k test_name` for a focused test;
+  `make test-one TEST_NAME=...` for name filtering with repository defaults.
+- `make test-unit` for `not indexing`; `make test-indexing` for both indexing partitions;
+  `make test-static` for static checks plus lint; `make test` for the local aggregate.
+- `pytest.ini` registers fixture plugins and markers. Many integration fixtures provision
+  PostgreSQL, Redis, Elasticsearch, or AWS-authenticated resources, so a test's markers and
+  fixture graph determine whether it is genuinely local.
+
+GitHub Actions is the final integration environment. `.github/workflows/main.yml` splits
+UNIT and INDEXING work, obtains AWS credentials through OIDC, and cleans test indices and
+queues; `.github/workflows/static-checks.yml` runs static tests. Keep local tests focused
+when external services are unavailable and state any unrun CI-only coverage explicitly.
+
+## Versioning and release conventions
+
+The package/version and console scripts live in `pyproject.toml`; dependency resolution
+lives in `poetry.lock`; user-facing history lives in `CHANGELOG.rst`. Do not hand-edit
+generated distribution metadata. Releases are automated from `master` by
+`.github/workflows/main.yml`; `.github/workflows/main-publish.yml` is the manual fallback.
+The detailed idempotency and clean-worktree constraints below are intentional release
+invariants.
+
 ## Automatic tag-and-publish-on-master release workflow
 
 `.github/workflows/main.yml`'s `publish` job (`needs: build`, runs only on
