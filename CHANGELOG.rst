@@ -6,6 +6,14 @@ snovault
 Change Log
 ----------
 
+11.33.1
+=======
+
+* Fix ingestion SQS message deletion retries by correlating batch failure ``Id`` values
+  back to the original received messages and reusing their current ``ReceiptHandle``.
+  Bound deletion to three retries after the initial attempt, avoiding listener crashes,
+  unbounded retry loops, and unnecessary duplicate processing after transient failures.
+
 11.33.0
 =======
 
