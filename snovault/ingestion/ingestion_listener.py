@@ -377,6 +377,7 @@ def get_queue_manager(request, *, override_name):
 class IngestionListener(IngestionListenerBase):
     """ Organizes helper functions for the ingestion listener """
     POLL_INTERVAL = 10  # seconds between each poll
+    DELETE_RETRIES = 3
     INGEST_AS_USER = environ_bool('INGEST_AS_USER', default=True)  # The new way, but possible to disable for now
 
     def __init__(self, vapp, _queue_manager=None, _update_status=None):
@@ -423,20 +424,17 @@ class IngestionListener(IngestionListenerBase):
         :param messages: messages to be deleted
         """
         failed = self.queue_manager.delete_messages(messages)
-        while True:
+        retries_remaining = self.DELETE_RETRIES
+        while failed and retries_remaining > 0:
             debuglog("Trying to delete messages")
-            tries = 3
-            if failed:
-                debuglog("Failed to delete messages")
-                if tries > 0:
-                    failed = self.queue_manager.delete_messages(failed)  # try again
-                    tries -= 1
-                else:
-                    log.error('Failed to delete messages from SQS: %s' % failed)
-                    break
-            else:
-                debuglog("Deleted messages")
-                break
+            debuglog("Failed to delete messages")
+            failed = self.queue_manager.delete_messages(failed)
+            retries_remaining -= 1
+        if failed:
+            log.error('Failed to delete messages from SQS after %s retries: %s' %
+                      (self.DELETE_RETRIES, failed))
+        else:
+            debuglog("Deleted messages")
 
     def _patch_value(self, uuid, field, value):
         """ Patches field with value on item uuid """

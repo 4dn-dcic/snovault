@@ -118,29 +118,42 @@ class IngestionQueueManager:
         Called after a message has been successfully received and processed.
         Removes message from the queue.
         Input should be the messages directly from receive messages. At the
-        very least, needs a list of messages with 'Id' and 'ReceiptHandle' as this
-        metadata is necessary to identify the message in SQS internals.
+        very least, each message needs 'MessageId' and 'ReceiptHandle'. The
+        receipt handle identifies the received message to SQS; the message ID is
+        used only as the batch request's correlation ID.
 
         NOTE: deletion does NOT have a retry mechanism
 
         :param messages: messages to be deleted
-        :returns: a list with any failed messages
+        :returns: the original received-message dictionaries for any failed
+            entries, preserving their receipt handles so callers can retry
         """
         failed = []
         for batch in self._chunk_messages(messages):
-            # need to change message format, since deleting takes slightly
-            # different fields what's return from receiving
-            for i in range(len(batch)):
-                to_delete = {
-                    'Id': batch[i]['MessageId'],
-                    'ReceiptHandle': batch[i]['ReceiptHandle']
+            entries = [
+                {
+                    'Id': message['MessageId'],
+                    'ReceiptHandle': message['ReceiptHandle']
                 }
-                batch[i] = to_delete
+                for message in batch
+            ]
+            messages_by_id = {
+                entry['Id']: message
+                for entry, message in zip(entries, batch)
+            }
             response = self.client.delete_message_batch(
                 QueueUrl=self.queue_url,
-                Entries=batch
+                Entries=entries
             )
-            failed.extend(response.get('Failed', []))
+            for failure in response.get('Failed', []):
+                log.warning(
+                    'SQS delete_message_batch entry failed',
+                    batch_id=failure['Id'],
+                    sender_fault=failure.get('SenderFault'),
+                    code=failure.get('Code'),
+                    message=failure.get('Message'),
+                )
+                failed.append(messages_by_id[failure['Id']])
         return failed
 
     def add_uuids(self, uuids, ingestion_type='vcf'):
