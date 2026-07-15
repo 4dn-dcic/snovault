@@ -8,6 +8,7 @@ To load the initial data:
 """
 
 import argparse
+import copy
 import datetime
 import json
 import logging
@@ -44,6 +45,10 @@ from .indexer_utils import (
     find_uuids_for_indexing,
     get_uuids_for_types,
     SCAN_PAGE_SIZE,
+)
+from .calculated_property_signature import (
+    CALCULATED_PROPERTIES_SIGNATURE_META_KEY,
+    calculated_properties_signature,
 )
 from ..schema_utils import load_schema
 from .interfaces import ELASTIC_SEARCH, INDEXER_QUEUE
@@ -377,8 +382,8 @@ def validation_error_mapping():
 
 
 # generate an index record, which contains a mapping and settings
-def build_index_record(mapping, in_type,
-                       type_specific_settings=None):
+def build_index_record(mapping, in_type, type_specific_settings=None,
+                       calculated_properties_state=None):
     """
     Generate an index record, which is the entire mapping + settings for the
     given index (in_type)
@@ -386,6 +391,11 @@ def build_index_record(mapping, in_type,
     NOTE: you could disable dynamic mappings globally here, but doing so will break ES
     Item because it relies on the dynamic mappings used for unique keys.
     """
+    mapping = mapping.copy()
+    if calculated_properties_state is not None:
+        mapping_meta = mapping.get('_meta', {}).copy()
+        mapping_meta[CALCULATED_PROPERTIES_SIGNATURE_META_KEY] = calculated_properties_state
+        mapping['_meta'] = mapping_meta
     return {
         'mappings': mapping,  # in ES7, only 1 mapping per index
         'settings': index_settings(type_specific_settings=type_specific_settings)
@@ -791,7 +801,8 @@ def create_mapping_by_type(in_type, registry):
 
 
 def build_index(app, es, index_name, in_type, mapping, uuids_to_index, dry_run,
-                check_first=False, index_diff=False, print_count_only=False):
+                check_first=False, index_diff=False, print_count_only=False,
+                selective_reindex=False):
     """
     Creates an es index for the given `in_type` with the given mapping and
     settings defined by item_settings(). Delete existing index first.
@@ -810,8 +821,19 @@ def build_index(app, es, index_name, in_type, mapping, uuids_to_index, dry_run,
 
     # combines mapping and settings
     collection_settings = app.registry[COLLECTIONS][in_type].index_settings()
-    this_index_record = build_index_record(mapping, in_type,
-                                           type_specific_settings=collection_settings)
+    calculated_properties_state = calculated_properties_signature(app.registry, in_type)
+    this_index_record = build_index_record(
+        mapping,
+        in_type,
+        type_specific_settings=collection_settings,
+        calculated_properties_state=calculated_properties_state,
+    )
+    if selective_reindex and not calculated_properties_state['complete']:
+        log.warning(
+            'MAPPING: calculated-property signature is incomplete; collection %s '
+            'will be fully reindexed' % in_type,
+            collection=in_type,
+        )
 
     if dry_run:
         log.info('___DRY RUN___')
@@ -826,7 +848,14 @@ def build_index(app, es, index_name, in_type, mapping, uuids_to_index, dry_run,
     # otherwise, run if we are using the check-first or index_diff args
     if ((check_first or index_diff)
             and this_index_exists
-            and compare_against_existing_mapping(es, index_name, in_type, this_index_record, True)):
+            and compare_against_existing_mapping(
+                es,
+                index_name,
+                in_type,
+                this_index_record,
+                True,
+                selective_reindex=selective_reindex,
+            )):
         check_and_reindex_existing(app, es, in_type, uuids_to_index, index_diff)
         log.info(f'MAPPING: using existing index for collection {in_type}', collection=in_type)
         return
@@ -1040,7 +1069,18 @@ def find_and_replace_dynamic_mappings(new_mapping, found_mapping):
             find_and_replace_dynamic_mappings(new_val['properties'], found_val.get('properties', {}))
 
 
-def compare_against_existing_mapping(es, index_name, in_type, this_index_record, live_mapping=False):
+def _remove_calculated_properties_state(mapping):
+    """Remove only Snovault's selective-reindex metadata from a mapping copy."""
+    mapping_meta = mapping.get('_meta')
+    if not isinstance(mapping_meta, dict):
+        return
+    mapping_meta.pop(CALCULATED_PROPERTIES_SIGNATURE_META_KEY, None)
+    if not mapping_meta:
+        mapping.pop('_meta', None)
+
+
+def compare_against_existing_mapping(es, index_name, in_type, this_index_record,
+                                     live_mapping=False, selective_reindex=False):
     """
     Compare the given index mapping and compare it to the existing mapping
     in an index. Return True if they are the same, False otherwise.
@@ -1057,15 +1097,31 @@ def compare_against_existing_mapping(es, index_name, in_type, this_index_record,
         this_index_record (dict): record of current index, with mapping and settings
         live_mapping (bool): if True, compare new mapping to live one and remove
             dynamically-created mappings
+        selective_reindex (bool): require a complete, matching calculated-
+            property signature in addition to the legacy mapping comparison
 
     Returns:
         bool: True if new mapping is the same as the live mapping
     """
-    found_mapping = es.indices.get_mapping(index=index_name).get(index_name).get('mappings', {})
-    new_mapping = this_index_record['mappings']
+    found_mapping = copy.deepcopy(
+        es.indices.get_mapping(index=index_name).get(index_name).get('mappings', {})
+    )
+    new_mapping = copy.deepcopy(this_index_record['mappings'])
     if live_mapping:  # in ES7, there are no more type specific mappings, only 1 mapping per index
         find_and_replace_dynamic_mappings(new_mapping['properties'],
                                           found_mapping['properties'])
+    if selective_reindex:
+        signature = new_mapping.get('_meta', {}).get(
+            CALCULATED_PROPERTIES_SIGNATURE_META_KEY
+        )
+        # An absent or incomplete current signature is always unsafe to skip,
+        # even when an identical incomplete marker was persisted previously.
+        if not isinstance(signature, dict) or not signature.get('complete'):
+            return False
+    else:
+        # Preserve the historical mapping-only semantics of --check-first.
+        _remove_calculated_properties_state(found_mapping)
+        _remove_calculated_properties_state(new_mapping)
     # dump to JSON to compare the mappings
     found_map_json = json.dumps(found_mapping, sort_keys=True)
     new_map_json = json.dumps(new_mapping, sort_keys=True)
@@ -1189,7 +1245,7 @@ def flatten_and_sort_uuids(registry, uuids_to_index, item_order):
 
 def run(app, collections=None, dry_run=False, check_first=False, skip_indexing=False,
         index_diff=False, strict=False, sync_index=False, print_count_only=False,
-        purge_queue=False, item_order=None):
+        purge_queue=False, item_order=None, selective_reindex=False):
     """
     Run create_mapping. Has the following options:
     collections: run create mapping for the given list of item types only.
@@ -1198,6 +1254,9 @@ def run(app, collections=None, dry_run=False, check_first=False, skip_indexing=F
     check_first: if True, attempt to keep indices that have not changed mapping.
         If the document counts in the index and db do not match, delete index
         and queue all items in the index for reindexing.
+    selective_reindex: if True, enable check_first and additionally require a
+        complete, matching calculated-property implementation signature. A
+        changed or unresolved signature rebuilds and fully queues that type.
     index_diff: if True, do NOT create/delete indices but identify any items
         that exist in db but not in es or that need upgrading and reindex those.
         Takes precedence over check_first
@@ -1221,12 +1280,21 @@ def run(app, collections=None, dry_run=False, check_first=False, skip_indexing=F
     indexer_queue = registry[INDEXER_QUEUE]
     cat = 'start create mapping'
 
+    if selective_reindex and index_diff:
+        raise ValueError(
+            'selective_reindex and index_diff are mutually exclusive: '
+            'selective reindexing rebuilds every changed type in full'
+        )
+    if selective_reindex:
+        check_first = True
+
     # always overwrite telemetry id
     global log
     telemetry_id = 'cm_run_' + datetime.datetime.now().isoformat()
     log = log.bind(telemetry_id=telemetry_id)
     log.info(f'\n___CREATE-MAPPING___:\ncollections: {collections}'
-             f'\ncheck_first {check_first}\n index_diff {index_diff}\n', cat=cat)
+             f'\ncheck_first {check_first}\nindex_diff {index_diff}'
+             f'\nselective_reindex {selective_reindex}\n', cat=cat)
     # These log statements are not frequently viewed anyway and significantly slow down tests - Will Jan 6 2022
     # log.info('\n___ES___:\n %s\n' % (str(es.cat.client)), cat=cat)
     # log.info('\n___ES NODES___:\n %s\n' % (str(es.cat.nodes())), cat=cat)
@@ -1282,7 +1350,8 @@ def run(app, collections=None, dry_run=False, check_first=False, skip_indexing=F
         start = timer()
         namespaced_index = get_namespaced_index(app, collection_name)
         build_index(app, es, namespaced_index, collection_name, mapping, uuids_to_index,
-                    dry_run, check_first, index_diff, print_count_only)
+                    dry_run, check_first, index_diff, print_count_only,
+                    selective_reindex)
         index_time = timer() - start
         log.info(f'___FINISHED {collection_name}___\n')
         log.info('___Mapping Time: %s  Index time %s ___\n' % (mapping_time, index_time),
@@ -1320,7 +1389,7 @@ def run(app, collections=None, dry_run=False, check_first=False, skip_indexing=F
             # using sync_index and NOT strict could cause issues with picking
             # up newly rev linked items. Print out an error and deal with it
             # for now
-            if not strict:
+            if not (strict or selective_reindex):
                 # XXX: this used to check if len(uuids) > 50000 and if so trigger a full reindex
                 #      no idea why such a thing was needed/desired -will 4-16-2020
                 if total_reindex:
@@ -1356,7 +1425,9 @@ def run(app, collections=None, dry_run=False, check_first=False, skip_indexing=F
         else:
             # if non-strict and attempting to reindex a ton, it is faster
             # just to strictly reindex all items
-            use_strict = strict or total_reindex
+            # Selective mode must never broaden a large changed collection
+            # into a full all-type reindex through the 50,000-item shortcut.
+            use_strict = strict or total_reindex or selective_reindex
             if len_all_uuids > 50000 and not use_strict:
                 log.warning('___MAPPING ALL ITEMS WITH STRICT=TRUE TO SAVE TIME___')
                 # get all the uuids from EVERY item type
@@ -1422,6 +1493,12 @@ def main():
                         help="Don't post to ES, just print")
     parser.add_argument('--check-first', action='store_true',
                         help="check if index exists first before attempting creation")
+    parser.add_argument(
+        '--selective-reindex',
+        action='store_true',
+        help=("keep unchanged indices only when both their mappings and "
+              "calculated-property implementation signatures match"),
+    )
     parser.add_argument('--skip-indexing', action='store_true',
                         help="skip all indexing if set")
     parser.add_argument('--index-diff', action='store_true',
@@ -1449,7 +1526,8 @@ def main():
     if not args.staggered:
         run(app, collections=args.item_type, dry_run=args.dry_run, check_first=args.check_first,
             skip_indexing=args.skip_indexing, index_diff=args.index_diff, strict=args.strict,
-            sync_index=args.sync_index, print_count_only=args.print_count_only, purge_queue=args.purge_queue)
+            sync_index=args.sync_index, print_count_only=args.print_count_only,
+            purge_queue=args.purge_queue, selective_reindex=args.selective_reindex)
     else:
         reindex_by_type_staggered(app)
 

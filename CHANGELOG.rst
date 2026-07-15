@@ -6,6 +6,19 @@ snovault
 Change Log
 ----------
 
+11.33.0
+=======
+
+* Add explicit calculated-property-aware selective type reindexing to
+  ``create-mapping`` and ``create-mapping-on-deploy`` via ``--selective-reindex``.
+  Unchanged types retain their existing index, while a mapping change, implementation or
+  decorator/configuration signature change, or unresolved signature rebuilds and fully
+  queues the affected type. The signature transitively covers factory helper methods and
+  class-attribute configuration read by implementations (for example rev-link definitions,
+  ``filtered_rev_statuses``, ``name_key``, and the ``__acl__``/``STATUS_ACL`` inputs to the
+  indexed ``principals_allowed``). Existing mapping-only ``--check-first`` and full-wipe
+  behavior remain unchanged.
+
 11.32.3
 =======
 

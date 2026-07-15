@@ -65,8 +65,15 @@ def _run_create_mapping(app, args):
         if args.wipe_es:  # override deploy_cfg WIPE_ES option
             log.info('Overriding deploy_cfg and wiping ES')
             deploy_cfg['WIPE_ES'] = True
+        selective_reindex = getattr(args, 'selective_reindex', False)
+        if selective_reindex and deploy_cfg['WIPE_ES']:
+            raise ValueError(
+                '--selective-reindex cannot be used when this deployment is '
+                'configured to wipe Elasticsearch; retain the full wipe or '
+                'change the deployment configuration explicitly'
+            )
         run_create_mapping(app, check_first=(not deploy_cfg['WIPE_ES']), purge_queue=args.clear_queue,
-                           item_order=loadxl_order())
+                           item_order=loadxl_order(), selective_reindex=selective_reindex)
     except Exception as e:
         log.error("Exception encountered while gathering deployment information or running create_mapping")
         log.error(str(e))
@@ -82,6 +89,13 @@ def main():
     parser.add_argument('--app-name', help="Pyramid app name in configfile")
     parser.add_argument('--wipe-es', help="Specify to wipe ES", action='store_true', default=False)
     parser.add_argument('--clear-queue', help="Specify to clear the SQS queue", action='store_true', default=False)
+    parser.add_argument(
+        '--selective-reindex',
+        help=("Skip unchanged item types only when both their mappings and "
+              "calculated-property implementation signatures match"),
+        action='store_true',
+        default=False,
+    )
     parser.add_argument('--staggered', default=False, action='store_true',
                         help='Pass to trigger staggered reindexing, a new mode that will go type-by-type')
 
