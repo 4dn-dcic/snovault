@@ -5,6 +5,7 @@ import enum
 import hashlib
 import inspect
 import json
+import logging
 import math
 import textwrap
 
@@ -25,6 +26,23 @@ def _identity(value):
     name = getattr(value, '__qualname__', None) or getattr(value, '__name__', None)
     if module and name:
         return f'{module}.{name}'
+    return None
+
+
+def _logger_record(value):
+    """Return a stable record for logger singletons, or None if not a logger.
+
+    Module-global loggers appear throughout implementation code but never
+    affect calculated output; identifying them by name keeps signatures
+    complete instead of conservatively rebuilding every type that logs.
+    """
+    if isinstance(value, logging.Logger):
+        return {'logger': value.name}
+    cls = type(value)
+    if cls.__module__.split('.')[0] == 'structlog' and 'Logger' in cls.__name__:
+        factory_args = getattr(value, '_logger_factory_args', None) or ()
+        name = '.'.join(str(arg) for arg in factory_args)
+        return {'logger': name or None}
     return None
 
 
@@ -68,6 +86,9 @@ class _SignatureBuilder:
                 for key, item in value.items()
             ]
             return {'dict': sorted(items, key=lambda item: _canonical_json(item[0]))}
+        logger_record = _logger_record(value)
+        if logger_record is not None:
+            return logger_record
         if inspect.ismodule(value):
             return {'module': value.__name__}
         if inspect.isclass(value):
@@ -125,7 +146,10 @@ class _SignatureBuilder:
                 if name not in fn.__globals__:
                     continue
                 global_value = fn.__globals__[name]
-                if (inspect.isfunction(global_value)
+                logger_record = _logger_record(global_value)
+                if logger_record is not None:
+                    referenced_globals[name] = logger_record
+                elif (inspect.isfunction(global_value)
                         and global_value.__module__ == fn.__module__):
                     referenced_globals[name] = self.callable(global_value)
                 elif callable(global_value) and not inspect.isclass(global_value):
@@ -249,28 +273,63 @@ def _relevant_type_infos(registry, item_type, builder):
     return sorted(relevant.values(), key=lambda type_info: type_info.item_type)
 
 
+def _referenced_names(fn):
+    """Names an implementation function may resolve against its factory."""
+    if inspect.ismethod(fn):
+        fn = fn.__func__
+    if not inspect.isfunction(fn):
+        return ()
+    return fn.__code__.co_names
+
+
 def _implementation_dependencies(factory, implementation, builder):
-    """Fingerprint factory helpers directly referenced by an implementation."""
-    if inspect.ismethod(implementation):
-        implementation = implementation.__func__
-    if not inspect.isfunction(implementation):
-        return {}
+    """Fingerprint factory members transitively reachable from an implementation.
+
+    Walks the implementation's referenced names against the factory MRO and
+    keeps following names referenced by any factory function found, so a
+    change to a helper-of-a-helper, or to plain class-attribute data such as
+    ``rev`` (read by ``Item.get_rev_links``) or ``filtered_rev_statuses``,
+    always changes the signature.
+    """
     dependencies = {}
-    for name in sorted(set(implementation.__code__.co_names)):
+    pending = list(_referenced_names(implementation))
+    seen = set()
+    while pending:
+        name = pending.pop()
+        if name in seen:
+            continue
+        seen.add(name)
         raw_value = None
         for cls in factory.mro():
+            # Builtin members (e.g. object.__class__) are interpreter-defined
+            # and cannot change between deployments of the application.
+            if cls.__module__ == 'builtins':
+                continue
             if name in cls.__dict__:
                 raw_value = cls.__dict__[name]
                 break
+        if raw_value is None:
+            continue
         if isinstance(raw_value, (classmethod, staticmethod)):
             raw_value = raw_value.__func__
+        wrapped = getattr(raw_value, 'wrapped', None)
         if isinstance(raw_value, property):
             dependencies[name] = {
                 'get': builder.callable(raw_value.fget) if raw_value.fget else None,
                 'set': builder.callable(raw_value.fset) if raw_value.fset else None,
             }
+            pending.extend(_referenced_names(raw_value.fget))
+            pending.extend(_referenced_names(raw_value.fset))
         elif inspect.isfunction(raw_value):
             dependencies[name] = builder.callable(raw_value)
+            pending.extend(_referenced_names(raw_value))
+        elif inspect.isfunction(wrapped):
+            # Non-data descriptors wrapping a function, e.g. pyramid ``reify``.
+            dependencies[name] = builder.callable(wrapped)
+            pending.extend(_referenced_names(wrapped))
+        else:
+            # Plain class-attribute data an implementation reads via ``self``.
+            dependencies[name] = builder.value(raw_value)
     return dependencies
 
 
@@ -290,8 +349,12 @@ def _property_record(type_info, name, prop, builder):
 
     if prop.condition is None or isinstance(prop.condition, str):
         condition_signature = prop.condition
+        condition_dependencies = {}
     else:
         condition_signature = builder.callable(prop.condition)
+        condition_dependencies = _implementation_dependencies(
+            type_info.factory, prop.condition, builder
+        )
 
     return {
         'name': name,
@@ -303,7 +366,44 @@ def _property_record(type_info, name, prop, builder):
             type_info.factory, implementation, builder
         ),
         'condition': condition_signature,
+        'condition_dependencies': condition_dependencies,
     }
+
+
+def _factory_configuration(factory, builder):
+    """Class-attribute configuration that changes indexed content directly.
+
+    ``rev`` and ``filtered_rev_statuses`` determine rev-link calculated
+    property values; ``name_key`` determines ``@id`` and resource paths for
+    this type wherever it is rendered, including inside other types'
+    embedded documents.
+    """
+    return {
+        'rev': builder.value(getattr(factory, 'rev', None)),
+        'filtered_rev_statuses': builder.value(
+            getattr(factory, 'filtered_rev_statuses', None)
+        ),
+        'name_key': builder.value(getattr(factory, 'name_key', None)),
+    }
+
+
+def _acl_record(factory, builder):
+    """Fingerprint the ACL inputs to the root document's principals_allowed.
+
+    Walks ``__acl__`` and everything it references on the factory (such as
+    ``STATUS_ACL``), so a permission change with an unchanged mapping still
+    rebuilds and reindexes the type.
+    """
+    acl = getattr(factory, '__acl__', None)
+    if acl is None:
+        return None
+    if inspect.isfunction(acl) or inspect.ismethod(acl):
+        return {
+            'implementation': builder.callable(acl),
+            'dependencies': _implementation_dependencies(factory, acl, builder),
+        }
+    # Pyramid also permits a plain ACL list attribute.
+    return {'value': builder.value(acl)}
 
 
 def calculated_properties_signature(registry, item_type):
@@ -338,14 +438,17 @@ def calculated_properties_signature(registry, item_type):
             factory_identity = _identity(type_info.factory)
             if not factory_identity:
                 builder.complete = False
+            factory_configuration = _factory_configuration(type_info.factory, builder)
         except Exception:
             builder.complete = False
             property_records = []
             factory_identity = None
+            factory_configuration = None
         type_records.append({
             'item_type': type_info.item_type,
             'factory': factory_identity,
             'base_types': builder.value(list(type_info.base_types)),
+            'configuration': factory_configuration,
             'properties': property_records,
         })
 
@@ -357,10 +460,17 @@ def calculated_properties_signature(registry, item_type):
         builder.complete = False
         index_configuration = None
     else:
+        try:
+            acl_record = _acl_record(root_type_info.factory, builder)
+        except Exception:
+            builder.complete = False
+            acl_record = None
         index_configuration = {
             # add_default_embeds treats ordering and duplicates as incidental.
             'embedded_list': sorted(set(root_type_info.embedded_list)),
             'aggregated_items': builder.value(root_type_info.aggregated_items),
+            # principals_allowed is indexed on every root document.
+            'acl': acl_record,
         }
 
     payload = {

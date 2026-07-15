@@ -1,13 +1,18 @@
 """Service-free coverage for calculated-property-aware selective reindexing."""
 
 import copy
+import logging
 
 from types import SimpleNamespace
 
 import pytest
+import structlog
+
+from pyramid.decorator import reify
 
 from ..calculated import CalculatedProperties
 from ..interfaces import CALCULATED_PROPERTIES, COLLECTIONS, TYPES
+from ..resources import Item
 from ..elasticsearch import calculated_property_signature as signature_module
 from ..elasticsearch import create_mapping
 from ..elasticsearch.calculated_property_signature import (
@@ -238,6 +243,229 @@ def test_inherited_implementation_and_subclass_override_are_detected():
     assert inherited['digest'] != overridden['digest']
 
 
+stdlib_logger = logging.getLogger(__name__)
+struct_logger = structlog.getLogger(__name__)
+
+
+def implementation_calling_helper_chain(self):
+    return self.helper_outer()
+
+
+def helper_outer(self):
+    return self.helper_inner()
+
+
+def helper_inner_one(self):
+    return 'inner-one'
+
+
+def helper_inner_two(self):
+    return 'inner-two'
+
+
+def implementation_reading_class_data(self):
+    return self.CLASS_LABEL
+
+
+def implementation_with_loggers(self):
+    stdlib_logger.warning('calculating')
+    struct_logger.info('calculating')
+    return 'logged'
+
+
+def implementation_using_reify_helper(self):
+    return self.reified_helper
+
+
+def implementation_using_rev(self, request):
+    return self.rev_link_atids(request, 'children')
+
+
+def single_type_registry(item_type, item_factory, registrations,
+                         schema_properties=None):
+    schema = {
+        'type': 'object',
+        'properties': schema_properties or {'calc': copy.deepcopy(CALCULATED_SCHEMA)},
+    }
+    return registry_for(
+        [FakeTypeInfo(item_factory, item_type, schema)], registrations
+    )
+
+
+def calc_registration(item_factory, implementation, **overrides):
+    registration = {
+        'fn': implementation,
+        'name': 'calc',
+        'context': item_factory,
+        'attr': 'calc',
+        'schema': {'type': 'string'},
+    }
+    registration.update(overrides)
+    return registration
+
+
+def real_item_registry(**attributes):
+    attributes.setdefault('__module__', __name__)
+    attributes.setdefault('item_type', 'real_root')
+    item_factory = type('RealRoot', (Item,), attributes)
+    registrations = []
+    if 'calc' in attributes:
+        registrations.append(calc_registration(item_factory, attributes['calc']))
+    return single_type_registry('real_root', item_factory, registrations)
+
+
+def test_transitive_factory_helper_change_is_detected():
+    def helper_registry(helper_inner):
+        root = factory(
+            'ChainRoot',
+            calc=implementation_calling_helper_chain,
+            helper_outer=helper_outer,
+            helper_inner=helper_inner,
+        )
+        return single_type_registry('chain_root', root, [
+            calc_registration(root, implementation_calling_helper_chain),
+        ])
+
+    before = calculated_properties_signature(
+        helper_registry(helper_inner_one), 'chain_root'
+    )
+    after = calculated_properties_signature(
+        helper_registry(helper_inner_two), 'chain_root'
+    )
+
+    assert before['complete'] is after['complete'] is True
+    assert before['digest'] != after['digest']
+
+
+def test_class_data_attribute_change_is_detected():
+    def label_registry(label):
+        root = factory(
+            'LabelRoot',
+            CLASS_LABEL=label,
+            calc=implementation_reading_class_data,
+        )
+        return single_type_registry('label_root', root, [
+            calc_registration(root, implementation_reading_class_data),
+        ])
+
+    before = calculated_properties_signature(label_registry('one'), 'label_root')
+    after = calculated_properties_signature(label_registry('two'), 'label_root')
+
+    assert before['complete'] is after['complete'] is True
+    assert before['digest'] != after['digest']
+
+
+def test_rev_link_definition_change_is_detected_on_real_item():
+    before = calculated_properties_signature(
+        real_item_registry(
+            calc=implementation_using_rev,
+            rev={'children': ('Child', 'parent')},
+        ),
+        'real_root',
+    )
+    after = calculated_properties_signature(
+        real_item_registry(
+            calc=implementation_using_rev,
+            rev={'children': ('OtherChild', 'owner')},
+        ),
+        'real_root',
+    )
+
+    assert before['complete'] is after['complete'] is True
+    assert before['digest'] != after['digest']
+
+
+def test_filtered_rev_statuses_change_is_detected():
+    before = calculated_properties_signature(
+        real_item_registry(filtered_rev_statuses=()), 'real_root'
+    )
+    after = calculated_properties_signature(
+        real_item_registry(filtered_rev_statuses=('deleted',)), 'real_root'
+    )
+
+    assert before['complete'] is after['complete'] is True
+    assert before['digest'] != after['digest']
+
+
+def test_name_key_change_is_detected():
+    before = calculated_properties_signature(
+        real_item_registry(name_key=None), 'real_root'
+    )
+    after = calculated_properties_signature(
+        real_item_registry(name_key='accession'), 'real_root'
+    )
+
+    assert before['digest'] != after['digest']
+
+
+def test_status_acl_change_is_detected_on_real_item():
+    before = calculated_properties_signature(
+        real_item_registry(
+            STATUS_ACL={'released': [('Allow', 'group.submitter', 'view')]}
+        ),
+        'real_root',
+    )
+    after = calculated_properties_signature(
+        real_item_registry(
+            STATUS_ACL={'released': [('Allow', 'system.Everyone', 'view')]}
+        ),
+        'real_root',
+    )
+
+    assert before['complete'] is after['complete'] is True
+    assert before['digest'] != after['digest']
+
+
+def implementation_using_builtin_members(self):
+    return self.__class__.__name__
+
+
+def test_builtin_member_references_keep_signature_complete():
+    root = factory('DunderRoot', calc=implementation_using_builtin_members)
+    registry = single_type_registry('dunder_root', root, [
+        calc_registration(root, implementation_using_builtin_members),
+    ])
+
+    state = calculated_properties_signature(registry, 'dunder_root')
+
+    assert state['complete'] is True
+
+
+def test_module_logger_references_keep_signature_complete():
+    root = factory('LoggingRoot', calc=implementation_with_loggers)
+    registry = single_type_registry('logging_root', root, [
+        calc_registration(root, implementation_with_loggers),
+    ])
+
+    first = calculated_properties_signature(registry, 'logging_root')
+    second = calculated_properties_signature(registry, 'logging_root')
+
+    assert first['complete'] is True
+    assert first == second
+
+
+def test_reify_wrapped_helper_change_is_detected_and_complete():
+    def reify_registry(helper):
+        root = factory(
+            'ReifyRoot',
+            calc=implementation_using_reify_helper,
+            reified_helper=reify(helper),
+        )
+        return single_type_registry('reify_root', root, [
+            calc_registration(root, implementation_using_reify_helper),
+        ])
+
+    before = calculated_properties_signature(
+        reify_registry(helper_inner_one), 'reify_root'
+    )
+    after = calculated_properties_signature(
+        reify_registry(helper_inner_two), 'reify_root'
+    )
+
+    assert before['complete'] is after['complete'] is True
+    assert before['digest'] != after['digest']
+
+
 def embedded_registry(target_implementation):
     root = factory('EmbeddedRoot')
     target = factory('EmbeddedTarget', nested_calc=target_implementation)
@@ -283,6 +511,47 @@ def test_nested_embedded_calculated_property_changes_root_signature():
     )
     after = calculated_properties_signature(
         embedded_registry(implementation_two), 'embedded_root'
+    )
+
+    assert before['complete'] is after['complete'] is True
+    assert before['digest'] != after['digest']
+
+
+def test_embedded_type_rev_definition_change_changes_root_signature():
+    def embedded_rev_registry(target_rev):
+        root = factory('EmbeddedRevRoot')
+        target = factory('EmbeddedRevTarget', rev=target_rev)
+        root_schema = {
+            'type': 'object',
+            'properties': {
+                'linked': {'type': 'string', 'linkTo': 'EmbeddedRevTarget'},
+            },
+        }
+        target_schema = {
+            'type': 'object',
+            'properties': {
+                '@id': {'type': 'string'},
+                '@type': {'type': 'array', 'items': {'type': 'string'}},
+                'display_title': {'type': 'string'},
+                'principals_allowed': {'type': 'object', 'properties': {}},
+                'status': {'type': 'string'},
+                'uuid': {'type': 'string'},
+            },
+        }
+        infos = [
+            FakeTypeInfo(root, 'embedded_rev_root', root_schema,
+                         embedded_list=['linked.display_title']),
+            FakeTypeInfo(target, 'embedded_rev_target', target_schema),
+        ]
+        return registry_for(infos, [])
+
+    before = calculated_properties_signature(
+        embedded_rev_registry({'children': ('Child', 'parent')}),
+        'embedded_rev_root',
+    )
+    after = calculated_properties_signature(
+        embedded_rev_registry({'children': ('OtherChild', 'owner')}),
+        'embedded_rev_root',
     )
 
     assert before['complete'] is after['complete'] is True
@@ -419,6 +688,19 @@ def test_legacy_mapping_comparison_ignores_new_signature_metadata():
     es = MappingES('root-index', mapping_with_state(before))
     record = {'mappings': mapping_with_state(after), 'settings': {}}
 
+    assert compare_against_existing_mapping(es, 'root-index', 'root', record) is True
+    assert compare_against_existing_mapping(
+        es, 'root-index', 'root', record, selective_reindex=True
+    ) is False
+
+
+def test_index_without_stored_signature_is_rebuilt_only_in_selective_mode():
+    state = calculated_properties_signature(own_type_registry(), 'root')
+    legacy_mapping = {'properties': {'field': {'type': 'keyword'}}}
+    es = MappingES('root-index', legacy_mapping)
+    record = {'mappings': mapping_with_state(state), 'settings': {}}
+
+    assert state['complete'] is True
     assert compare_against_existing_mapping(es, 'root-index', 'root', record) is True
     assert compare_against_existing_mapping(
         es, 'root-index', 'root', record, selective_reindex=True
