@@ -9,6 +9,13 @@ Change Log
 11.32.3
 =======
 
+* Add explicit calculated-property-aware selective type reindexing to
+  ``create-mapping`` and ``create-mapping-on-deploy`` via ``--selective-reindex``.
+  Unchanged types retain their existing index, while a mapping change, implementation or
+  decorator/configuration signature change, or unresolved signature rebuilds and fully
+  queues the affected type. Existing mapping-only ``--check-first`` and full-wipe behavior
+  remain unchanged.
+
 * Five low-risk Elasticsearch performance/efficiency fixes identified by a performance
   review (no behavior changes intended):
 

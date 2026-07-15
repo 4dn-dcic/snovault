@@ -28,6 +28,9 @@ from .. import util  # The filename util.py, not something in __init__.py
 from .. import main  # Function main actually defined in __init__.py (should maybe be defined elsewhere)
 
 from ..elasticsearch import create_mapping, indexer_utils
+from ..elasticsearch.calculated_property_signature import (
+    CALCULATED_PROPERTIES_SIGNATURE_META_KEY,
+)
 from ..elasticsearch.create_mapping import (
     build_index_record,
     check_and_reindex_existing,
@@ -1314,6 +1317,46 @@ def test_create_mapping_check_first(app, testapp, indexer_testapp):
     assert third_count == 0
     # ensure the re-created dynamic mapping still matches the original one
     assert compare_against_existing_mapping(es, namespaced_index, TEST_TYPE, index_record, True) is True
+
+
+@pytest.mark.flaky(max_runs=2, rerun_filter=delay_rerun)
+def test_create_mapping_selective_reindex_signature(app, testapp, indexer_testapp,
+                                                    monkeypatch):
+    """Selective mode keeps a matching index and rebuilds a changed type."""
+    es = app.registry[ELASTIC_SEARCH]
+    namespaced_index = indexer_utils.get_namespaced_index(app, TEST_TYPE)
+    testapp.post_json(TEST_COLL, {'required': ''})
+    index_n_items_for_testing(indexer_testapp, 1)
+    assert es.count(index=namespaced_index).get('count') == 1
+
+    run(
+        app,
+        collections=[TEST_TYPE],
+        selective_reindex=True,
+        skip_indexing=True,
+    )
+    assert es.count(index=namespaced_index).get('count') == 1
+
+    live_mapping = es.indices.get_mapping(index=namespaced_index)
+    signature = live_mapping[namespaced_index]['mappings']['_meta'][
+        CALCULATED_PROPERTIES_SIGNATURE_META_KEY
+    ]
+    assert signature['complete'] is True
+
+    changed_signature = signature.copy()
+    changed_signature['digest'] = 'implementation-changed-with-identical-mapping'
+    monkeypatch.setattr(
+        create_mapping,
+        'calculated_properties_signature',
+        lambda registry, item_type: changed_signature,
+    )
+    run(
+        app,
+        collections=[TEST_TYPE],
+        selective_reindex=True,
+        skip_indexing=True,
+    )
+    assert es.count(index=namespaced_index).get('count') == 0
 
 
 @pytest.mark.flaky(max_runs=2, rerun_filter=delay_rerun)
