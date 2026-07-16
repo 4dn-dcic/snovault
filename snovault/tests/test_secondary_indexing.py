@@ -180,6 +180,11 @@ class FailingPrepareStore(MemoryStore):
         raise RuntimeError('injected PostgreSQL state failure')
 
 
+class FailingReleaseStore(MemoryStore):
+    def release_all(self, namespace):
+        raise AssertionError('off-mode cleanup must not access PostgreSQL state')
+
+
 class FakeQueue:
     def __init__(self, namespace='env-a'):
         self.env_name = namespace
@@ -289,6 +294,12 @@ def test_release_all_clears_pending_state_for_queue_purges():
 
     assert coalescer.release_all() == 1
     assert store.rows[(rid, 'env-a')]['pending'] is False
+
+
+def test_off_mode_release_all_does_not_access_optional_state():
+    coalescer, _, _, _ = make_coalescer(mode='off', store=FailingReleaseStore())
+
+    assert coalescer.release_all() == 0
 
 
 def test_purge_queue_releases_matching_coalescing_namespace():

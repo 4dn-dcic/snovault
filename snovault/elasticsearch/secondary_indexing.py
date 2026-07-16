@@ -453,6 +453,8 @@ class SecondaryIndexingCoalescer:
         return result
 
     def release_all(self):
+        if not self.enabled:
+            return 0
         return self.store.release_all(self.namespace)
 
     @staticmethod
