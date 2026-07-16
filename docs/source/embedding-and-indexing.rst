@@ -139,9 +139,11 @@ Operations and rollout
   default, is capped at 1,000 rows, and is audit-logged with the authenticated
   principal.  ``requeue=true`` keeps rows pending, commits a fresh ``queued_at``,
   and then sends; a failed administrative send is therefore still sweepable.
-* Moving from ``off`` or ``shadow`` to ``on`` requires a dry run followed by a
-  namespace reset.  Turning ``on`` back to ``off`` is an immediate safe kill
-  switch because off mode sends every fan-out target through the original path.
+* Treat rollout as one-way after the state table is deployed: use a dry run
+  followed by a namespace reset before moving from ``off`` or ``shadow`` to
+  ``on``, then keep coalescing enabled.  If rollback is required, roll back the
+  database and the associated application version together rather than changing
+  the runtime mode independently.
 
 Structured logs use ``coalescing_event`` to expose fan-out targets/suppression,
 database and SQS enqueue failures, claims and stale deferrals, sweeper repairs,

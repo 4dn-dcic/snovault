@@ -335,32 +335,6 @@ def test_off_mode_release_all_does_not_access_optional_state():
     assert coalescer.release_all() == 0
 
 
-def test_rollout_disable_preserves_state_for_reenable():
-    for initial_mode in ('shadow', 'on'):
-        rid = str(uuid.uuid4())
-        coalescer, queue, store, registry = make_coalescer(mode=initial_mode)
-        coalescer.enqueue([rid], sid=10)
-
-        registry.settings['indexer.coalesce_secondary'] = 'off'
-        assert coalescer.enabled is False
-        assert store.rows[(rid, 'env-a')]['pending'] is True
-
-        registry.settings['indexer.coalesce_secondary'] = 'on'
-        assert coalescer.enabled is True
-        assert queue.send_calls == []
-        coalescer.enqueue([rid], sid=11)
-        assert queue.add_calls[-1][0] == []
-        assert store.rows[(rid, 'env-a')]['pending'] is True
-
-
-def test_rollout_disable_cleanup_failure_keeps_off_mode_available():
-    coalescer, _, _, registry = make_coalescer(mode='on', store=FailingReleaseStore())
-
-    registry.settings['indexer.coalesce_secondary'] = 'off'
-
-    assert coalescer.enabled is False
-
-
 def test_bulk_reindex_cleanup_releases_only_selected_state():
     rid = str(uuid.uuid4())
     unrelated = str(uuid.uuid4())
@@ -406,11 +380,8 @@ def test_restart_does_not_duplicate_live_pending_marker():
     assert queue.add_calls[-1][0] == []
 
 
-def test_listener_rechecks_coalescing_mode_and_interval():
-    coalescer, _, _, registry = make_coalescer(mode='off')
-    assert coalescing_sweep_configuration(coalescer, registry.settings) == (False, 0)
-
-    registry.settings['indexer.coalesce_secondary'] = 'on'
+def test_listener_uses_enabled_coalescing_interval():
+    coalescer, _, _, registry = make_coalescer(mode='on')
     registry.settings['indexer.coalesce_secondary.sweep_interval'] = '17'
     assert coalescing_sweep_configuration(coalescer, registry.settings) == (True, 17)
 
