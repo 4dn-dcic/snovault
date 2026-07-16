@@ -1239,6 +1239,12 @@ def _release_secondary_coalescing(registry):
         coalescer.release_all()
 
 
+def _release_secondary_coalescing_targets(registry, target_uuids):
+    coalescer = registry.get(SECONDARY_INDEXING_COALESCER)
+    if coalescer is not None and target_uuids:
+        coalescer.release_targets(target_uuids)
+
+
 # Will thinks this is no longer needed. -kmp 11-Mar-2023
 #
 # def run_indexing(app, indexing_uuids):
@@ -1389,9 +1395,6 @@ def run(app, collections=None, dry_run=False, check_first=False, skip_indexing=F
     if skip_indexing or print_count_only:
         return timings
 
-    if uuids_to_index and not dry_run:
-        _release_secondary_coalescing(registry)
-
     # now, queue items for indexing in the secondary queue
     # get a total list of all uuids to index among types for invalidation checking
     len_all_uuids = sum([len(uuids_to_index[i_type]) for i_type in uuids_to_index])
@@ -1432,6 +1435,7 @@ def run(app, collections=None, dry_run=False, check_first=False, skip_indexing=F
             # Will suggested this substitute way to implement this indexing action. -kmp 11-Mar-2023
             vapp = make_indexer_testapp(app)
             vapp.post_json('/index', {'record': True, 'uuids': to_index_list})
+            _release_secondary_coalescing_targets(registry, to_index_list)
             # run_indexing(app, to_index_list)
 
         else:
@@ -1450,8 +1454,18 @@ def run(app, collections=None, dry_run=False, check_first=False, skip_indexing=F
             to_index_list = flatten_and_sort_uuids(app.registry, uuids_to_index, item_order)
             log.info('\n___UUIDS TO INDEX (QUEUED)___: %s\n' % len(to_index_list),
                      cat='uuids to index', count=len(to_index_list))
-            indexer_queue.add_uuids(app.registry, to_index_list, strict=use_strict,
-                                    target_queue='secondary', telemetry_id=telemetry_id)
+            queued, failed = indexer_queue.add_uuids(
+                app.registry, to_index_list, strict=use_strict,
+                target_queue='secondary', telemetry_id=telemetry_id)
+            failed_uuids = {
+                failure.get('uuid')
+                for failure in failed or []
+                if isinstance(failure, dict) and failure.get('uuid')
+            }
+            _release_secondary_coalescing_targets(
+                registry,
+                [target for target in queued if target not in failed_uuids],
+            )
     return timings
 
 
@@ -1481,9 +1495,17 @@ def reindex_by_type_staggered(app):
         build_index(app, es, namespaced_index, i_type, mapping, uuids, False)
         mapping_end = timer()
         to_index_list = flatten_and_sort_uuids(app.registry, uuids, None)  # none here is fine since we pre-ordered
-        _release_secondary_coalescing(registry)
-        indexer_queue.add_uuids(app.registry, to_index_list, strict=True,
-                                target_queue='secondary')
+        queued, failed = indexer_queue.add_uuids(
+            app.registry, to_index_list, strict=True, target_queue='secondary')
+        failed_uuids = {
+            failure.get('uuid')
+            for failure in failed or []
+            if isinstance(failure, dict) and failure.get('uuid')
+        }
+        _release_secondary_coalescing_targets(
+            registry,
+            [target for target in queued if target not in failed_uuids],
+        )
         log.warning(f'Queued type {i_type} ({len(to_index_list)} total items) in {mapping_end - current_start}')
         log.warning(f'First 10 items: {list(uuid for uuid in to_index_list[0:10])}')
         time.sleep(10)  # give queue some time to catch up

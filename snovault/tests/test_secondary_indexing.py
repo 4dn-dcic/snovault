@@ -16,8 +16,11 @@ from sqlalchemy import create_mock_engine
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.schema import CreateIndex
 
-from ..elasticsearch.es_index_listener import coalescing_sweep_interval
-from ..elasticsearch.create_mapping import _release_secondary_coalescing
+from ..elasticsearch.es_index_listener import (
+    coalescing_sweep_configuration,
+    coalescing_sweep_interval,
+)
+from ..elasticsearch.create_mapping import _release_secondary_coalescing_targets
 from ..elasticsearch.indexer import Indexer
 from ..elasticsearch.indexer_queue import QueueManager, dlq_to_primary, queue_indexing
 from ..elasticsearch.interfaces import (
@@ -128,6 +131,22 @@ class MemoryStore:
         self.events.append(('sweep_commit', namespace, len(candidates)))
         return candidates
 
+    def rearm_pending(self, namespace, before, row_limit=1000):
+        candidates = []
+        for (rid, row_namespace), row in sorted(self.rows.items()):
+            if (row_namespace != namespace or not row['pending']
+                    or row['queued_at'] >= before):
+                continue
+            row['queued_at'] = datetime.datetime.now(datetime.timezone.utc)
+            candidates.append({
+                'rid': rid,
+                'queued_sid': row['queued_sid'],
+                'queued_at': row['queued_at'],
+            })
+            if len(candidates) == row_limit:
+                break
+        return candidates
+
     def status(self, namespace):
         matching = [row for (rid, ns), row in self.rows.items() if ns == namespace]
         pending = [row for row in matching if row['pending']]
@@ -184,6 +203,9 @@ class MemoryStore:
             self.events.append(('release', namespace, rid))
             return 1
         return 0
+
+    def release_targets(self, target_uuids, namespace):
+        return sum(self.release(rid, namespace) for rid in target_uuids)
 
 
 class FailingPrepareStore(MemoryStore):
@@ -313,7 +335,7 @@ def test_off_mode_release_all_does_not_access_optional_state():
     assert coalescer.release_all() == 0
 
 
-def test_rollout_disable_releases_state_before_reenable():
+def test_rollout_disable_repairs_state_before_reenable():
     for initial_mode in ('shadow', 'on'):
         rid = str(uuid.uuid4())
         coalescer, queue, store, registry = make_coalescer(mode=initial_mode)
@@ -321,12 +343,13 @@ def test_rollout_disable_releases_state_before_reenable():
 
         registry.settings['indexer.coalesce_secondary'] = 'off'
         assert coalescer.enabled is False
-        assert store.rows[(rid, 'env-a')]['pending'] is False
+        assert store.rows[(rid, 'env-a')]['pending'] is True
 
         registry.settings['indexer.coalesce_secondary'] = 'on'
         assert coalescer.enabled is True
+        assert queue.send_calls[-1][0][0]['origin'] == 'startup_repair'
         coalescer.enqueue([rid], sid=11)
-        assert queue.add_calls[-1][0] == [rid]
+        assert queue.add_calls[-1][0] == []
         assert store.rows[(rid, 'env-a')]['pending'] is True
 
 
@@ -338,14 +361,40 @@ def test_rollout_disable_cleanup_failure_keeps_off_mode_available():
     assert coalescer.enabled is False
 
 
-def test_bulk_reindex_cleanup_releases_pending_state():
+def test_bulk_reindex_cleanup_releases_only_selected_state():
     rid = str(uuid.uuid4())
+    unrelated = str(uuid.uuid4())
     coalescer, _, store, registry = make_coalescer()
-    coalescer.enqueue([rid], sid=10)
+    coalescer.enqueue([rid, unrelated], sid=10)
 
-    _release_secondary_coalescing(registry)
+    _release_secondary_coalescing_targets(registry, [rid])
 
     assert store.rows[(rid, 'env-a')]['pending'] is False
+    assert store.rows[(unrelated, 'env-a')]['pending'] is True
+
+
+def test_restart_rearms_pending_state_before_enabled_consumption():
+    rid = str(uuid.uuid4())
+    store = MemoryStore()
+    first, _, _, _ = make_coalescer(mode='on', store=store)
+    first.enqueue([rid], sid=10)
+
+    off, _, _, _ = make_coalescer(mode='off', store=store)
+    assert off.enabled is False
+
+    restarted, queue, _, _ = make_coalescer(mode='on', store=store)
+    assert restarted.enabled is True
+    assert queue.send_calls[-1][0][0]['origin'] == 'startup_repair'
+    assert store.rows[(rid, 'env-a')]['pending'] is True
+
+
+def test_listener_rechecks_coalescing_mode_and_interval():
+    coalescer, _, _, registry = make_coalescer(mode='off')
+    assert coalescing_sweep_configuration(coalescer, registry.settings) == (False, 0)
+
+    registry.settings['indexer.coalesce_secondary'] = 'on'
+    registry.settings['indexer.coalesce_secondary.sweep_interval'] = '17'
+    assert coalescing_sweep_configuration(coalescer, registry.settings) == (True, 17)
 
 
 def test_purge_queue_releases_matching_coalescing_namespace():

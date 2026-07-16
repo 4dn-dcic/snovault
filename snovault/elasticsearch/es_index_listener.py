@@ -47,6 +47,12 @@ def coalescing_sweep_interval(settings):
                   default_interval=DEFAULT_SWEEP_INTERVAL)
         return DEFAULT_SWEEP_INTERVAL
 
+
+def coalescing_sweep_configuration(coalescer, settings):
+    enabled = coalescer is not None and coalescer.enabled
+    return enabled, coalescing_sweep_interval(settings) if enabled else 0
+
+
 # We need this because of MVCC visibility.
 # See slide 9 at http://momjian.us/main/writings/pgsql/mvcc.pdf
 # https://devcenter.heroku.com/articles/postgresql-concurrency
@@ -68,12 +74,16 @@ def run(testapp, interval=DEFAULT_INTERVAL, dry_run=False, path='/index', update
 
     queue = testapp.app.registry[INDEXER_QUEUE]
     coalescer = testapp.app.registry.get(SECONDARY_INDEXING_COALESCER)
-    coalescing_enabled = coalescer is not None and coalescer.enabled
-    sweep_interval = coalescing_sweep_interval(testapp.app.registry.settings) if coalescing_enabled else 0
+    coalescing_enabled = False
     last_coalescing_sweep = 0
 
     # main listening loop
     while True:
+        next_coalescing_enabled, sweep_interval = coalescing_sweep_configuration(
+            coalescer, testapp.app.registry.settings)
+        if next_coalescing_enabled and not coalescing_enabled:
+            last_coalescing_sweep = 0
+        coalescing_enabled = next_coalescing_enabled
         if (coalescing_enabled and sweep_interval > 0
                 and time.monotonic() - last_coalescing_sweep >= sweep_interval):
             # Rearm rows in PostgreSQL and commit before contacting SQS. A send

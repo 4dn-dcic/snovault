@@ -137,6 +137,14 @@ class PostgresSecondaryIndexingStore:
            SET pending = FALSE
          WHERE rid = CAST(:rid AS uuid) AND namespace = :namespace
     """)
+    RELEASE_TARGETS = psql_text("""
+        UPDATE secondary_indexing_pending
+           SET pending = FALSE
+         WHERE namespace = :namespace
+           AND rid = ANY(CAST(:rids AS uuid[]))
+           AND pending
+         RETURNING rid
+    """)
     RELEASE_ALL = psql_text("""
         UPDATE secondary_indexing_pending
            SET pending = FALSE
@@ -156,6 +164,24 @@ class PostgresSecondaryIndexingStore:
         )
         UPDATE secondary_indexing_pending AS work
            SET queued_at = CURRENT_TIMESTAMP
+          FROM candidates
+         WHERE work.rid = candidates.rid
+           AND work.namespace = candidates.namespace
+        RETURNING work.rid, work.queued_sid, work.queued_at
+    """)
+    REARM_PENDING = psql_text("""
+        WITH candidates AS (
+            SELECT rid, namespace
+             FROM secondary_indexing_pending
+             WHERE namespace = :namespace
+               AND pending
+               AND queued_at < :before
+             ORDER BY queued_at, rid
+             LIMIT :row_limit
+             FOR UPDATE SKIP LOCKED
+        )
+        UPDATE secondary_indexing_pending AS work
+           SET queued_at = :before
           FROM candidates
          WHERE work.rid = candidates.rid
            AND work.namespace = candidates.namespace
@@ -295,6 +321,17 @@ class PostgresSecondaryIndexingStore:
                 {'rid': rid, 'namespace': namespace},
             ).rowcount
 
+    def release_targets(self, target_uuids, namespace):
+        targets = sorted({str(uuid.UUID(str(target))) for target in target_uuids})
+        released = 0
+        for batch in self._chunks(targets):
+            with self._transaction() as connection:
+                released += sum(1 for _ in connection.execute(
+                    self.RELEASE_TARGETS,
+                    {'rids': batch, 'namespace': namespace},
+                ))
+        return released
+
     def rearm_stale(self, namespace, stale_seconds, row_limit):
         with self._transaction() as connection:
             return [
@@ -304,6 +341,20 @@ class PostgresSecondaryIndexingStore:
                     {
                         'namespace': namespace,
                         'stale_seconds': max(int(stale_seconds), 0),
+                        'row_limit': min(max(int(row_limit), 1), MAX_OPERATION_ROWS),
+                    },
+                ).mappings()
+            ]
+
+    def rearm_pending(self, namespace, before, row_limit=MAX_OPERATION_ROWS):
+        with self._transaction() as connection:
+            return [
+                dict(row)
+                for row in connection.execute(
+                    self.REARM_PENDING,
+                    {
+                        'namespace': namespace,
+                        'before': before,
                         'row_limit': min(max(int(row_limit), 1), MAX_OPERATION_ROWS),
                     },
                 ).mappings()
@@ -379,23 +430,13 @@ class SecondaryIndexingCoalescer:
         self.registry = registry
         self.queue = registry[INDEXER_QUEUE]
         self.store = store or PostgresSecondaryIndexingStore(registry)
-        self._observed_mode = coalescing_mode(self.registry.settings)
+        self._repair_on_enable = coalescing_mode(self.registry.settings) in {'shadow', 'on'}
 
     @property
     def mode(self):
         mode = coalescing_mode(self.registry.settings)
-        if mode != self._observed_mode and (mode == 'off' or self._observed_mode == 'off'):
-            try:
-                self.store.release_all(self.namespace)
-            except Exception:
-                log.exception(
-                    'Secondary coalescing mode transition cleanup failed',
-                    coalescing_event='mode_transition_cleanup_failure',
-                    from_mode=self._observed_mode,
-                    to_mode=mode,
-                    namespace=self.namespace,
-                )
-        self._observed_mode = mode
+        if mode == 'off':
+            self._repair_on_enable = True
         return mode
 
     @property
@@ -404,7 +445,11 @@ class SecondaryIndexingCoalescer:
 
     @property
     def enabled(self):
-        return self.mode in {'shadow', 'on'}
+        mode = self.mode
+        if mode in {'shadow', 'on'} and self._repair_on_enable:
+            self._repair_pending()
+            self._repair_on_enable = False
+        return mode in {'shadow', 'on'}
 
     def enqueue(self, target_uuids, sid=None, telemetry_id=None):
         started = time.monotonic()
@@ -509,12 +554,17 @@ class SecondaryIndexingCoalescer:
         return result
 
     def release_all(self):
-        if not self.enabled:
+        if self.mode not in {'shadow', 'on'}:
             return 0
         return self.store.release_all(self.namespace)
 
     def release(self, rid):
         return self.store.release(rid, self.namespace)
+
+    def release_targets(self, target_uuids):
+        if self.mode not in {'shadow', 'on'}:
+            return 0
+        return self.store.release_targets(target_uuids, self.namespace)
 
     @staticmethod
     def _messages(rows, origin):
@@ -530,6 +580,45 @@ class SecondaryIndexingCoalescer:
             }
             for row in rows
         ]
+
+    def _repair_pending(self):
+        cutoff = datetime.datetime.now(datetime.timezone.utc)
+        rearmed = 0
+        failed_count = 0
+        while True:
+            try:
+                rows = self.store.rearm_pending(self.namespace, cutoff)
+            except Exception as error:
+                log.exception(
+                    'Secondary coalescing startup repair failed',
+                    coalescing_event='startup_repair_failure',
+                    namespace=self.namespace,
+                    error=repr(error),
+                )
+                return
+            if not rows:
+                break
+            messages = self._messages(rows, 'startup_repair')
+            rearmed += len(rows)
+            try:
+                failed = self.queue.send_messages(messages, target_queue='secondary')
+            except Exception as error:
+                log.exception(
+                    'Secondary coalescing startup repair send failed',
+                    coalescing_event='startup_repair_send_failure',
+                    namespace=self.namespace,
+                    rearmed=len(rows),
+                    error=repr(error),
+                )
+                break
+            failed_count += len(failed)
+        log.info(
+            'Secondary coalescing startup repair completed',
+            coalescing_event='startup_repair',
+            namespace=self.namespace,
+            rearmed=rearmed,
+            send_failures=failed_count,
+        )
 
     def sweep(self):
         if not self.enabled:
