@@ -36,6 +36,17 @@ log = structlog.getLogger(__name__)
 EPILOG = __doc__
 DEFAULT_INTERVAL = 3  # 3 second default
 
+
+def coalescing_sweep_interval(settings):
+    try:
+        interval = int(settings.get(COALESCING_SWEEP_INTERVAL_SETTING, DEFAULT_SWEEP_INTERVAL))
+        return max(0, interval)
+    except (TypeError, ValueError, OverflowError):
+        log.error('Invalid secondary coalescing sweep interval; using default',
+                  configured_interval=settings.get(COALESCING_SWEEP_INTERVAL_SETTING),
+                  default_interval=DEFAULT_SWEEP_INTERVAL)
+        return DEFAULT_SWEEP_INTERVAL
+
 # We need this because of MVCC visibility.
 # See slide 9 at http://momjian.us/main/writings/pgsql/mvcc.pdf
 # https://devcenter.heroku.com/articles/postgresql-concurrency
@@ -57,13 +68,13 @@ def run(testapp, interval=DEFAULT_INTERVAL, dry_run=False, path='/index', update
 
     queue = testapp.app.registry[INDEXER_QUEUE]
     coalescer = testapp.app.registry.get(SECONDARY_INDEXING_COALESCER)
+    coalescing_enabled = coalescer is not None and coalescer.enabled
+    sweep_interval = coalescing_sweep_interval(testapp.app.registry.settings) if coalescing_enabled else 0
     last_coalescing_sweep = 0
 
     # main listening loop
     while True:
-        sweep_interval = int(testapp.app.registry.settings.get(
-            COALESCING_SWEEP_INTERVAL_SETTING, DEFAULT_SWEEP_INTERVAL))
-        if (coalescer is not None and coalescer.enabled and sweep_interval > 0
+        if (coalescing_enabled and sweep_interval > 0
                 and time.monotonic() - last_coalescing_sweep >= sweep_interval):
             # Rearm rows in PostgreSQL and commit before contacting SQS. A send
             # failure therefore remains recoverable on a later bounded sweep.

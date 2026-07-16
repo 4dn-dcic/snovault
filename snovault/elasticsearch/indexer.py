@@ -391,18 +391,15 @@ class Indexer(object):
                     if msg_body['strict'] is False:
                         non_strict_uuids.add(msg_uuid)
                     counter[0] += 1  # do not increment on error
-                    to_delete.append(msg)
-
-                # delete messages when we have the right number
-                if len(to_delete) == self.queue.delete_batch_size:
-                    self.queue.delete_messages(to_delete, target_queue=target_queue)
-                    to_delete = []
 
                 # CHANGE - this needs to happen PER MESSAGE now
                 # add to secondary queue, if applicable
                 # search for all items that linkTo the non-strict items or contain
                 # a rev_link to them
                 if non_strict_uuids or rev_linked_uuids:
+                    if to_delete and len(to_delete) + 1 >= self.queue.delete_batch_size:
+                        self.queue.delete_messages(to_delete, target_queue=target_queue)
+                        to_delete = []
                     queued, failed = self.find_and_queue_secondary_items(non_strict_uuids,  # THIS IS NOW A SINGLE UUID
                                                                          rev_linked_uuids,
                                                                          msg_sid,
@@ -414,6 +411,14 @@ class Indexer(object):
                         errors.append({'error_message': error_msg})
                     non_strict_uuids = set()
                     rev_linked_uuids = set()
+
+                if error is None:
+                    to_delete.append(msg)
+
+                # delete messages when we have the right number
+                if len(to_delete) == self.queue.delete_batch_size:
+                    self.queue.delete_messages(to_delete, target_queue=target_queue)
+                    to_delete = []
 
             # if we need to restart the worker, break out of while loop
             if deferred:

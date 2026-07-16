@@ -51,7 +51,7 @@ from .calculated_property_signature import (
     calculated_properties_signature,
 )
 from ..schema_utils import load_schema
-from .interfaces import ELASTIC_SEARCH, INDEXER_QUEUE
+from .interfaces import ELASTIC_SEARCH, INDEXER_QUEUE, SECONDARY_INDEXING_COALESCER
 from ..settings import Settings
 
 
@@ -1319,6 +1319,10 @@ def run(app, collections=None, dry_run=False, check_first=False, skip_indexing=F
         log.info('___PURGING THE QUEUE (IF NECESSARY) AND CLEARING INDEXING RECORDS BEFORE MAPPING___\n', cat=cat)
         if not indexer_queue.queue_is_empty(secondary_only=False, include_inflight=True):
             indexer_queue.purge_queue()
+        else:
+            coalescer = registry.get(SECONDARY_INDEXING_COALESCER)
+            if coalescer is not None:
+                coalescer.release_all()
         # we also want to remove the 'indexing' index, which stores old records
         # it's not guaranteed to be there, though
         es_safe_execute(es.indices.delete, index=namespaced_index, ignore=[404])

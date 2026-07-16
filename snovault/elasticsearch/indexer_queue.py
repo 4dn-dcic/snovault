@@ -223,6 +223,7 @@ class QueueManager(object):
         self.receive_batch_size = 10
         self.delete_batch_size = 10
         self.replace_batch_size = 10
+        self.registry = registry
         if self.USE_RATE_MANAGER:
             self.collision_manager = RateManager(action="purge_queue", interval_seconds=self.PURGE_QUEUE_LOCKOUT_SECONDS,
                                                  safety_seconds=self.PURGE_QUEUE_SAFETY_SECONDS,
@@ -511,6 +512,10 @@ class QueueManager(object):
             except self.client.exceptions.PurgeQueueInProgress:
                 log.warning('\n___QUEUE IS ALREADY BEING PURGED: %s___\n' % queue_url,
                             queue_url=queue_url)
+        coalescer = (self.registry.get(SECONDARY_INDEXING_COALESCER)
+                     if hasattr(self.registry, 'get') else None)
+        if coalescer is not None and coalescer.namespace == self.env_name:
+            coalescer.release_all()
 
     def clear_queue(self):
         """

@@ -103,6 +103,12 @@ class PostgresSecondaryIndexingStore:
            SET pending = FALSE
          WHERE rid = CAST(:rid AS uuid) AND namespace = :namespace
     """)
+    RELEASE_ALL = psql_text("""
+        UPDATE secondary_indexing_pending
+           SET pending = FALSE
+         WHERE namespace = :namespace AND pending
+         RETURNING rid
+    """)
     REARM_STALE = psql_text("""
         WITH candidates AS (
             SELECT rid, namespace
@@ -241,6 +247,11 @@ class PostgresSecondaryIndexingStore:
             except Exception:
                 transaction.rollback()
                 raise
+
+    def release_all(self, namespace):
+        with self._transaction() as connection:
+            return sum(1 for _ in connection.execute(
+                self.RELEASE_ALL, {'namespace': namespace}))
 
     def rearm_stale(self, namespace, stale_seconds, row_limit):
         with self._transaction() as connection:
@@ -440,6 +451,9 @@ class SecondaryIndexingCoalescer:
             duration_ms=round((time.monotonic() - started) * 1000, 3),
         )
         return result
+
+    def release_all(self):
+        return self.store.release_all(self.namespace)
 
     @staticmethod
     def _messages(rows, origin):

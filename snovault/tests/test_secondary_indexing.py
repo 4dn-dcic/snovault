@@ -16,6 +16,7 @@ from sqlalchemy import create_mock_engine
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.schema import CreateIndex
 
+from ..elasticsearch.es_index_listener import coalescing_sweep_interval
 from ..elasticsearch.indexer import Indexer
 from ..elasticsearch.indexer_queue import QueueManager, dlq_to_primary, queue_indexing
 from ..elasticsearch.interfaces import (
@@ -164,6 +165,15 @@ class MemoryStore:
             self.events.append(('reset_commit', namespace, requeue, len(selected)))
         return selected
 
+    def release_all(self, namespace):
+        released = 0
+        for (rid, row_namespace), row in self.rows.items():
+            if row_namespace == namespace and row['pending']:
+                row['pending'] = False
+                released += 1
+        self.events.append(('release_all', namespace, released))
+        return released
+
 
 class FailingPrepareStore(MemoryStore):
     def prepare_targets(self, target_uuids, namespace, queued_sid):
@@ -270,6 +280,48 @@ def test_on_mode_suppresses_only_after_state_commit_and_merges_sid():
     assert store.rows[(rid, 'env-a')]['queued_sid'] == 12
     assert store.events[0][0] == 'commit'
     assert store.events[1][0] == 'send'
+
+
+def test_release_all_clears_pending_state_for_queue_purges():
+    rid = str(uuid.uuid4())
+    coalescer, _, store, _ = make_coalescer()
+    coalescer.enqueue([rid], sid=10)
+
+    assert coalescer.release_all() == 1
+    assert store.rows[(rid, 'env-a')]['pending'] is False
+
+
+def test_purge_queue_releases_matching_coalescing_namespace():
+    rid = str(uuid.uuid4())
+    coalescer, _, store, _ = make_coalescer()
+    coalescer.enqueue([rid], sid=10)
+    manager = object.__new__(QueueManager)
+    manager.registry = {SECONDARY_INDEXING_COALESCER: coalescer}
+    manager.env_name = 'env-a'
+    manager.queue_url = 'primary'
+    manager.second_queue_url = 'secondary'
+    manager.dlq_url = 'dlq'
+    manager._wait_until_purge_queue_allowed = mock.Mock()
+
+    class PurgeExceptions:
+        PurgeQueueInProgress = type('PurgeQueueInProgress', (Exception,), {})
+
+    manager.client = SimpleNamespace(
+        purge_queue=mock.Mock(), exceptions=PurgeExceptions)
+
+    manager.purge_queue()
+
+    assert manager.client.purge_queue.call_count == 3
+    assert store.rows[(rid, 'env-a')]['pending'] is False
+
+
+def test_invalid_sweep_interval_uses_safe_default_and_zero_disables_sweeping():
+    assert coalescing_sweep_interval({
+        'indexer.coalesce_secondary.sweep_interval': 'invalid'
+    }) == 300
+    assert coalescing_sweep_interval({
+        'indexer.coalesce_secondary.sweep_interval': '-1'
+    }) == 0
 
 
 def test_shadow_runs_state_machine_but_sends_would_be_suppressed_targets():
@@ -671,3 +723,37 @@ def test_failed_render_releases_no_sqs_message_and_redelivery_can_retry():
     # redeliver and safely take the no-op claim path.
     assert store.rows[(rid, 'env-a')]['pending'] is False
     assert coalescer.claim(rid, 120, 120)['outcome'] == 'noop_not_pending'
+
+
+def test_secondary_enqueue_failure_retains_cause_message_at_delete_batch_boundary():
+    rid = str(uuid.uuid4())
+    coalescer, secondary_queue, _, _ = make_coalescer(store=FailingPrepareStore())
+    secondary_queue.fail_next_add = True
+    message = {
+        'MessageId': 'one', 'ReceiptHandle': 'receipt',
+        'Body': json.dumps({
+            'uuid': rid, 'sid': 130, 'strict': False,
+            'timestamp': datetime.datetime.utcnow().isoformat(),
+        }),
+        'Attributes': {},
+    }
+    indexer = object.__new__(Indexer)
+    indexer.secondary_coalescer = coalescer
+    indexer.queue = mock.Mock(delete_batch_size=1)
+    indexer.get_messages_from_queue = mock.Mock(side_effect=[([message], 'primary')])
+    indexer.update_object = mock.Mock(return_value=None)
+    indexer.find_and_queue_secondary_items = mock.Mock(
+        side_effect=lambda source, reverse, sid, telemetry_id, diff=None:
+        coalescer.enqueue(source | reverse, sid=sid, telemetry_id=telemetry_id))
+    request = SimpleNamespace(registry={
+        STORAGE: SimpleNamespace(write=SimpleNamespace(get_max_sid=lambda: 130)),
+    })
+
+    try:
+        indexer.update_objects_queue(request, [0])
+    except RuntimeError as error:
+        assert 'injected SQS add failure' in str(error)
+    else:
+        raise AssertionError('secondary enqueue failure must retain the cause message')
+
+    indexer.queue.delete_messages.assert_not_called()
