@@ -345,6 +345,23 @@ def test_clear_queue_releases_matching_coalescing_namespace():
     assert store.rows[(rid, 'env-a')]['pending'] is False
 
 
+def test_delete_secondary_queue_releases_matching_coalescing_namespace():
+    rid = str(uuid.uuid4())
+    coalescer, _, store, _ = make_coalescer()
+    coalescer.enqueue([rid], sid=10)
+    manager = object.__new__(QueueManager)
+    manager.registry = {SECONDARY_INDEXING_COALESCER: coalescer}
+    manager.env_name = 'env-a'
+    manager.queue_url = 'primary'
+    manager.second_queue_url = 'secondary'
+    manager.dlq_url = 'dlq'
+    manager.client = SimpleNamespace(delete_queue=mock.Mock())
+
+    manager.delete_queue('secondary')
+
+    assert store.rows[(rid, 'env-a')]['pending'] is False
+
+
 def test_invalid_sweep_interval_uses_safe_default_and_zero_disables_sweeping():
     assert coalescing_sweep_interval({
         'indexer.coalesce_secondary.sweep_interval': 'invalid'

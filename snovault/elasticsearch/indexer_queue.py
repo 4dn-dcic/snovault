@@ -540,6 +540,8 @@ class QueueManager(object):
         response = self.client.delete_queue(
             QueueUrl=queue_url
         )
+        if queue_url in {self.second_queue_url, self.dlq_url}:
+            self._release_secondary_state()
         setattr(self, queue_url, None)
         return response
 
