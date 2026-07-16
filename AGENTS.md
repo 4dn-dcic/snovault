@@ -384,8 +384,9 @@ enabled; subsequent unchanged deployments can skip it. See
 
 `snovault/elasticsearch/secondary_indexing.py` coalesces only the final strict targets
 from `Indexer.find_and_queue_secondary_items`; primary edit hooks, bulk reindexing, and
-manual queueing bypass it. The PostgreSQL state key must remain `(rid, queue namespace)`
-because blue and green fan out to separate secondary queues. Preserve the protocol's
+manual queueing bypass coalescing suppression. The PostgreSQL state key must remain
+`(rid, queue namespace)` because blue and green fan out to separate secondary queues.
+Preserve the protocol's
 commit-before-send, unconditional target locking, `queued_sid` stale-snapshot defer,
 claim-before-render, and sweeper repair invariants together; simplifying the row to a
 boolean can strand or lose invalidations. Operational settings, rollout/reset rules,

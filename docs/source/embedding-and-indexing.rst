@@ -89,7 +89,7 @@ for the same target while retaining SQS as the transport.  The allowed rollout
 values are ``off`` (the default), ``shadow`` (run the state machine and measure
 suppression, but send every message), and ``on`` (suppress work already covered by
 an outstanding message).  Primary POST/PATCH messages, bulk reindex messages, and
-manual ``/queue_indexing`` requests do not use this state.
+manual ``/queue_indexing`` requests bypass coalescing suppression.
 
 Coalescing happens in ``Indexer.find_and_queue_secondary_items`` only after the ES
 linker lookup, invalidation-scope filtering, and new reverse-link augmentation have
@@ -185,8 +185,6 @@ The queue is only actively cleared when create-mapping is run for a total reinde
 Please note that you must have the correct AWS credentials configured for your project to use it.
 
 Further possible improvements to the queue system include:
-- Evolving the single-slot PostgreSQL state into a full durable work/outbox table while retaining SQS as a doorbell during migration.
-- Change the /index endpoint to only pull and index one item per transaction, which would eliminate need for the deferred queue.
 - Ordering of items on the queue, either at time of create_mapping (initial indexing) or for ongoing indexing.
 - Speed up indexing by refining what items are considered invalid when an item is indexed (in most cases, secondary items do not need to be reindexed).
 
