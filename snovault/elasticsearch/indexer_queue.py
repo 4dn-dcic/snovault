@@ -606,14 +606,27 @@ class QueueManager(object):
                 to_retry = []
                 for fail_message in failed_messages:
                     fail_id = fail_message.get('Id')
-                    if not fail_id:
+                    if fail_id is None:
                         log.error('INDEXING: Non-retryable error sending message: %s' %
                                   str(fail_message), target_queue=target_queue)
                         continue  # cannot retry this message without an Id
                     to_retry.extend([json.loads(ent['MessageBody']) for ent in entries if ent['Id'] == fail_id])
                 if to_retry:
                     failed_messages = self.send_messages(to_retry, target_queue, retries=retries+1)
-            failed.extend(failed_messages)
+            for failed_message in failed_messages:
+                if (isinstance(failed_message, dict)
+                        and not failed_message.get('uuid')):
+                    fail_id = failed_message.get('Id')
+                    try:
+                        failed_index = int(fail_id)
+                    except (TypeError, ValueError):
+                        failed_index = None
+                    if (failed_index is not None and 0 <= failed_index < len(msg_batch)
+                            and isinstance(msg_batch[failed_index], dict)
+                            and msg_batch[failed_index].get('uuid')):
+                        failed_message = dict(failed_message)
+                        failed_message['uuid'] = msg_batch[failed_index]['uuid']
+                failed.append(failed_message)
         return failed
 
     def receive_messages(self, target_queue='primary', wait_time_seconds=2):

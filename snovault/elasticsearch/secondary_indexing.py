@@ -137,13 +137,25 @@ class PostgresSecondaryIndexingStore:
            SET pending = FALSE
          WHERE rid = CAST(:rid AS uuid) AND namespace = :namespace
     """)
-    RELEASE_TARGETS = psql_text("""
-        UPDATE secondary_indexing_pending
-           SET pending = FALSE
+    CAPTURE_TARGETS = psql_text("""
+        SELECT rid, queued_sid
+          FROM secondary_indexing_pending
          WHERE namespace = :namespace
            AND rid = ANY(CAST(:rids AS uuid[]))
            AND pending
-         RETURNING rid
+    """)
+    RELEASE_TARGETS = psql_text("""
+        UPDATE secondary_indexing_pending AS work
+           SET pending = FALSE
+          FROM unnest(
+              CAST(:rids AS uuid[]),
+              CAST(:queued_sids AS integer[])
+          ) AS target(rid, queued_sid)
+         WHERE work.namespace = :namespace
+           AND work.rid = target.rid
+           AND work.pending
+           AND work.queued_sid = target.queued_sid
+         RETURNING work.rid
     """)
     RELEASE_ALL = psql_text("""
         UPDATE secondary_indexing_pending
@@ -164,24 +176,6 @@ class PostgresSecondaryIndexingStore:
         )
         UPDATE secondary_indexing_pending AS work
            SET queued_at = CURRENT_TIMESTAMP
-          FROM candidates
-         WHERE work.rid = candidates.rid
-           AND work.namespace = candidates.namespace
-        RETURNING work.rid, work.queued_sid, work.queued_at
-    """)
-    REARM_PENDING = psql_text("""
-        WITH candidates AS (
-            SELECT rid, namespace
-             FROM secondary_indexing_pending
-             WHERE namespace = :namespace
-               AND pending
-               AND queued_at < :before
-             ORDER BY queued_at, rid
-             LIMIT :row_limit
-             FOR UPDATE SKIP LOCKED
-        )
-        UPDATE secondary_indexing_pending AS work
-           SET queued_at = :before
           FROM candidates
          WHERE work.rid = candidates.rid
            AND work.namespace = candidates.namespace
@@ -321,14 +315,35 @@ class PostgresSecondaryIndexingStore:
                 {'rid': rid, 'namespace': namespace},
             ).rowcount
 
-    def release_targets(self, target_uuids, namespace):
+    def capture_targets(self, target_uuids, namespace):
         targets = sorted({str(uuid.UUID(str(target))) for target in target_uuids})
-        released = 0
+        captured = {}
         for batch in self._chunks(targets):
+            with self._connection() as connection:
+                captured.update({
+                    str(row['rid']): int(row['queued_sid'])
+                    for row in connection.execute(
+                        self.CAPTURE_TARGETS,
+                        {'rids': batch, 'namespace': namespace},
+                    ).mappings()
+                })
+        return captured
+
+    def release_targets(self, target_states, namespace):
+        states = sorted(
+            (str(uuid.UUID(str(target))), int(queued_sid))
+            for target, queued_sid in target_states.items()
+        )
+        released = 0
+        for batch in self._chunks(states):
             with self._transaction() as connection:
                 released += sum(1 for _ in connection.execute(
                     self.RELEASE_TARGETS,
-                    {'rids': batch, 'namespace': namespace},
+                    {
+                        'rids': [target for target, queued_sid in batch],
+                        'queued_sids': [queued_sid for target, queued_sid in batch],
+                        'namespace': namespace,
+                    },
                 ))
         return released
 
@@ -341,20 +356,6 @@ class PostgresSecondaryIndexingStore:
                     {
                         'namespace': namespace,
                         'stale_seconds': max(int(stale_seconds), 0),
-                        'row_limit': min(max(int(row_limit), 1), MAX_OPERATION_ROWS),
-                    },
-                ).mappings()
-            ]
-
-    def rearm_pending(self, namespace, before, row_limit=MAX_OPERATION_ROWS):
-        with self._transaction() as connection:
-            return [
-                dict(row)
-                for row in connection.execute(
-                    self.REARM_PENDING,
-                    {
-                        'namespace': namespace,
-                        'before': before,
                         'row_limit': min(max(int(row_limit), 1), MAX_OPERATION_ROWS),
                     },
                 ).mappings()
@@ -430,14 +431,10 @@ class SecondaryIndexingCoalescer:
         self.registry = registry
         self.queue = registry[INDEXER_QUEUE]
         self.store = store or PostgresSecondaryIndexingStore(registry)
-        self._repair_on_enable = coalescing_mode(self.registry.settings) in {'shadow', 'on'}
 
     @property
     def mode(self):
-        mode = coalescing_mode(self.registry.settings)
-        if mode == 'off':
-            self._repair_on_enable = True
-        return mode
+        return coalescing_mode(self.registry.settings)
 
     @property
     def namespace(self):
@@ -445,11 +442,7 @@ class SecondaryIndexingCoalescer:
 
     @property
     def enabled(self):
-        mode = self.mode
-        if mode in {'shadow', 'on'} and self._repair_on_enable:
-            self._repair_pending()
-            self._repair_on_enable = False
-        return mode in {'shadow', 'on'}
+        return self.mode in {'shadow', 'on'}
 
     def enqueue(self, target_uuids, sid=None, telemetry_id=None):
         started = time.monotonic()
@@ -561,10 +554,15 @@ class SecondaryIndexingCoalescer:
     def release(self, rid):
         return self.store.release(rid, self.namespace)
 
-    def release_targets(self, target_uuids):
+    def snapshot_targets(self, target_uuids):
+        if self.mode not in {'shadow', 'on'}:
+            return {}
+        return self.store.capture_targets(target_uuids, self.namespace)
+
+    def release_targets(self, target_states):
         if self.mode not in {'shadow', 'on'}:
             return 0
-        return self.store.release_targets(target_uuids, self.namespace)
+        return self.store.release_targets(target_states, self.namespace)
 
     @staticmethod
     def _messages(rows, origin):
@@ -580,45 +578,6 @@ class SecondaryIndexingCoalescer:
             }
             for row in rows
         ]
-
-    def _repair_pending(self):
-        cutoff = datetime.datetime.now(datetime.timezone.utc)
-        rearmed = 0
-        failed_count = 0
-        while True:
-            try:
-                rows = self.store.rearm_pending(self.namespace, cutoff)
-            except Exception as error:
-                log.exception(
-                    'Secondary coalescing startup repair failed',
-                    coalescing_event='startup_repair_failure',
-                    namespace=self.namespace,
-                    error=repr(error),
-                )
-                return
-            if not rows:
-                break
-            messages = self._messages(rows, 'startup_repair')
-            rearmed += len(rows)
-            try:
-                failed = self.queue.send_messages(messages, target_queue='secondary')
-            except Exception as error:
-                log.exception(
-                    'Secondary coalescing startup repair send failed',
-                    coalescing_event='startup_repair_send_failure',
-                    namespace=self.namespace,
-                    rearmed=len(rows),
-                    error=repr(error),
-                )
-                break
-            failed_count += len(failed)
-        log.info(
-            'Secondary coalescing startup repair completed',
-            coalescing_event='startup_repair',
-            namespace=self.namespace,
-            rearmed=rearmed,
-            send_failures=failed_count,
-        )
 
     def sweep(self):
         if not self.enabled:

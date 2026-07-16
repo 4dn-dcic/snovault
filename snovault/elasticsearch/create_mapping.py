@@ -1239,10 +1239,28 @@ def _release_secondary_coalescing(registry):
         coalescer.release_all()
 
 
-def _release_secondary_coalescing_targets(registry, target_uuids):
+def _snapshot_secondary_coalescing_targets(registry, target_uuids):
     coalescer = registry.get(SECONDARY_INDEXING_COALESCER)
     if coalescer is not None and target_uuids:
-        coalescer.release_targets(target_uuids)
+        return coalescer.snapshot_targets(target_uuids)
+    return {}
+
+
+def _release_secondary_coalescing_targets(registry, target_states):
+    coalescer = registry.get(SECONDARY_INDEXING_COALESCER)
+    if coalescer is not None and target_states:
+        coalescer.release_targets(target_states)
+
+
+def _successful_secondary_targets(queued, failed):
+    if not failed:
+        return list(queued)
+    failed_uuids = set()
+    for failure in failed:
+        if not isinstance(failure, dict) or not failure.get('uuid'):
+            return []
+        failed_uuids.add(failure['uuid'])
+    return [target for target in queued if target not in failed_uuids]
 
 
 # Will thinks this is no longer needed. -kmp 11-Mar-2023
@@ -1433,9 +1451,11 @@ def run(app, collections=None, dry_run=False, check_first=False, skip_indexing=F
                      cat='uuids to index', count=len(to_index_list))
 
             # Will suggested this substitute way to implement this indexing action. -kmp 11-Mar-2023
+            target_states = _snapshot_secondary_coalescing_targets(registry, to_index_list)
             vapp = make_indexer_testapp(app)
-            vapp.post_json('/index', {'record': True, 'uuids': to_index_list})
-            _release_secondary_coalescing_targets(registry, to_index_list)
+            result = vapp.post_json('/index', {'record': True, 'uuids': to_index_list})
+            if result.json.get('errors') == []:
+                _release_secondary_coalescing_targets(registry, target_states)
             # run_indexing(app, to_index_list)
 
         else:
@@ -1454,17 +1474,14 @@ def run(app, collections=None, dry_run=False, check_first=False, skip_indexing=F
             to_index_list = flatten_and_sort_uuids(app.registry, uuids_to_index, item_order)
             log.info('\n___UUIDS TO INDEX (QUEUED)___: %s\n' % len(to_index_list),
                      cat='uuids to index', count=len(to_index_list))
+            target_states = _snapshot_secondary_coalescing_targets(registry, to_index_list)
             queued, failed = indexer_queue.add_uuids(
                 app.registry, to_index_list, strict=use_strict,
                 target_queue='secondary', telemetry_id=telemetry_id)
-            failed_uuids = {
-                failure.get('uuid')
-                for failure in failed or []
-                if isinstance(failure, dict) and failure.get('uuid')
-            }
+            successful = _successful_secondary_targets(queued, failed)
             _release_secondary_coalescing_targets(
                 registry,
-                [target for target in queued if target not in failed_uuids],
+                {target: target_states[target] for target in successful if target in target_states},
             )
     return timings
 
@@ -1495,16 +1512,13 @@ def reindex_by_type_staggered(app):
         build_index(app, es, namespaced_index, i_type, mapping, uuids, False)
         mapping_end = timer()
         to_index_list = flatten_and_sort_uuids(app.registry, uuids, None)  # none here is fine since we pre-ordered
+        target_states = _snapshot_secondary_coalescing_targets(registry, to_index_list)
         queued, failed = indexer_queue.add_uuids(
             app.registry, to_index_list, strict=True, target_queue='secondary')
-        failed_uuids = {
-            failure.get('uuid')
-            for failure in failed or []
-            if isinstance(failure, dict) and failure.get('uuid')
-        }
+        successful = _successful_secondary_targets(queued, failed)
         _release_secondary_coalescing_targets(
             registry,
-            [target for target in queued if target not in failed_uuids],
+            {target: target_states[target] for target in successful if target in target_states},
         )
         log.warning(f'Queued type {i_type} ({len(to_index_list)} total items) in {mapping_end - current_start}')
         log.warning(f'First 10 items: {list(uuid for uuid in to_index_list[0:10])}')

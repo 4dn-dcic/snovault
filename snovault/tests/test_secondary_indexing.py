@@ -20,7 +20,10 @@ from ..elasticsearch.es_index_listener import (
     coalescing_sweep_configuration,
     coalescing_sweep_interval,
 )
-from ..elasticsearch.create_mapping import _release_secondary_coalescing_targets
+from ..elasticsearch.create_mapping import (
+    _release_secondary_coalescing_targets,
+    _successful_secondary_targets,
+)
 from ..elasticsearch.indexer import Indexer
 from ..elasticsearch.indexer_queue import QueueManager, dlq_to_primary, queue_indexing
 from ..elasticsearch.interfaces import (
@@ -131,22 +134,6 @@ class MemoryStore:
         self.events.append(('sweep_commit', namespace, len(candidates)))
         return candidates
 
-    def rearm_pending(self, namespace, before, row_limit=1000):
-        candidates = []
-        for (rid, row_namespace), row in sorted(self.rows.items()):
-            if (row_namespace != namespace or not row['pending']
-                    or row['queued_at'] >= before):
-                continue
-            row['queued_at'] = datetime.datetime.now(datetime.timezone.utc)
-            candidates.append({
-                'rid': rid,
-                'queued_sid': row['queued_sid'],
-                'queued_at': row['queued_at'],
-            })
-            if len(candidates) == row_limit:
-                break
-        return candidates
-
     def status(self, namespace):
         matching = [row for (rid, ns), row in self.rows.items() if ns == namespace]
         pending = [row for row in matching if row['pending']]
@@ -204,8 +191,21 @@ class MemoryStore:
             return 1
         return 0
 
-    def release_targets(self, target_uuids, namespace):
-        return sum(self.release(rid, namespace) for rid in target_uuids)
+    def capture_targets(self, target_uuids, namespace):
+        return {
+            rid: self.rows[(rid, namespace)]['queued_sid']
+            for rid in {str(uuid.UUID(str(target))) for target in target_uuids}
+            if self.rows.get((rid, namespace), {}).get('pending')
+        }
+
+    def release_targets(self, target_states, namespace):
+        released = 0
+        for rid, queued_sid in target_states.items():
+            row = self.rows.get((rid, namespace))
+            if row is not None and row['pending'] and row['queued_sid'] == queued_sid:
+                row['pending'] = False
+                released += 1
+        return released
 
 
 class FailingPrepareStore(MemoryStore):
@@ -335,7 +335,7 @@ def test_off_mode_release_all_does_not_access_optional_state():
     assert coalescer.release_all() == 0
 
 
-def test_rollout_disable_repairs_state_before_reenable():
+def test_rollout_disable_preserves_state_for_reenable():
     for initial_mode in ('shadow', 'on'):
         rid = str(uuid.uuid4())
         coalescer, queue, store, registry = make_coalescer(mode=initial_mode)
@@ -347,7 +347,7 @@ def test_rollout_disable_repairs_state_before_reenable():
 
         registry.settings['indexer.coalesce_secondary'] = 'on'
         assert coalescer.enabled is True
-        assert queue.send_calls[-1][0][0]['origin'] == 'startup_repair'
+        assert queue.send_calls == []
         coalescer.enqueue([rid], sid=11)
         assert queue.add_calls[-1][0] == []
         assert store.rows[(rid, 'env-a')]['pending'] is True
@@ -367,25 +367,43 @@ def test_bulk_reindex_cleanup_releases_only_selected_state():
     coalescer, _, store, registry = make_coalescer()
     coalescer.enqueue([rid, unrelated], sid=10)
 
-    _release_secondary_coalescing_targets(registry, [rid])
+    target_states = coalescer.snapshot_targets([rid])
+    _release_secondary_coalescing_targets(registry, target_states)
 
     assert store.rows[(rid, 'env-a')]['pending'] is False
     assert store.rows[(unrelated, 'env-a')]['pending'] is True
 
 
-def test_restart_rearms_pending_state_before_enabled_consumption():
+def test_bulk_reindex_cleanup_does_not_release_newer_fanout():
+    rid = str(uuid.uuid4())
+    store = MemoryStore()
+    coalescer, _, _, _ = make_coalescer(mode='on', store=store)
+    coalescer.enqueue([rid], sid=10)
+    target_states = coalescer.snapshot_targets([rid])
+    coalescer.enqueue([rid], sid=11)
+
+    _release_secondary_coalescing_targets(coalescer.registry, target_states)
+
+    assert store.rows[(rid, 'env-a')]['pending'] is True
+    assert store.rows[(rid, 'env-a')]['queued_sid'] == 11
+
+
+def test_bulk_cleanup_releases_only_correlated_successful_sends():
+    assert _successful_secondary_targets(['a', 'b'], [{'Id': '1', 'uuid': 'b'}]) == ['a']
+    assert _successful_secondary_targets(['a', 'b'], [{'Id': '1'}]) == []
+
+
+def test_restart_does_not_duplicate_live_pending_marker():
     rid = str(uuid.uuid4())
     store = MemoryStore()
     first, _, _, _ = make_coalescer(mode='on', store=store)
     first.enqueue([rid], sid=10)
 
-    off, _, _, _ = make_coalescer(mode='off', store=store)
-    assert off.enabled is False
-
     restarted, queue, _, _ = make_coalescer(mode='on', store=store)
     assert restarted.enabled is True
-    assert queue.send_calls[-1][0][0]['origin'] == 'startup_repair'
-    assert store.rows[(rid, 'env-a')]['pending'] is True
+    assert queue.send_calls == []
+    restarted.enqueue([rid], sid=11)
+    assert queue.add_calls[-1][0] == []
 
 
 def test_listener_rechecks_coalescing_mode_and_interval():

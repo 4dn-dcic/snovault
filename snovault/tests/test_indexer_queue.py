@@ -159,6 +159,16 @@ def test_send_messages_retries_failed_entries_by_id():
     assert retried_bodies == [{'uuid': 'b'}]
 
 
+def test_send_messages_correlates_final_batch_failures_to_uuids():
+    manager, mock_boto3_client = make_queue_manager(env_name="some-env")
+    mock_client = mock_boto3_client.return_value
+    mock_client.send_message_batch.return_value = {'Failed': [{'Id': '1'}]}
+
+    failed = manager.send_messages([{'uuid': 'a'}, {'uuid': 'b'}], target_queue='secondary')
+
+    assert failed == [{'Id': '1', 'uuid': 'b'}]
+
+
 class FakeQueue:
     """ Minimal stand-in exposing just receive_messages/delete_messages, for testing the
     receive_n_messages test helper's surplus-handling logic in isolation from real SQS. """
