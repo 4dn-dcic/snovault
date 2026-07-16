@@ -1232,6 +1232,13 @@ def flatten_and_sort_uuids(registry, uuids_to_index, item_order):
         to_index_list.extend(uuids_to_index[itype])
     return to_index_list
 
+
+def _release_secondary_coalescing(registry):
+    coalescer = registry.get(SECONDARY_INDEXING_COALESCER)
+    if coalescer is not None:
+        coalescer.release_all()
+
+
 # Will thinks this is no longer needed. -kmp 11-Mar-2023
 #
 # def run_indexing(app, indexing_uuids):
@@ -1320,9 +1327,7 @@ def run(app, collections=None, dry_run=False, check_first=False, skip_indexing=F
         if not indexer_queue.queue_is_empty(secondary_only=False, include_inflight=True):
             indexer_queue.purge_queue()
         else:
-            coalescer = registry.get(SECONDARY_INDEXING_COALESCER)
-            if coalescer is not None:
-                coalescer.release_all()
+            _release_secondary_coalescing(registry)
         # we also want to remove the 'indexing' index, which stores old records
         # it's not guaranteed to be there, though
         es_safe_execute(es.indices.delete, index=namespaced_index, ignore=[404])
@@ -1383,6 +1388,9 @@ def run(app, collections=None, dry_run=False, check_first=False, skip_indexing=F
              cat='overall mapping time', duration=str(overall_end - overall_start))
     if skip_indexing or print_count_only:
         return timings
+
+    if uuids_to_index and not dry_run:
+        _release_secondary_coalescing(registry)
 
     # now, queue items for indexing in the secondary queue
     # get a total list of all uuids to index among types for invalidation checking
@@ -1473,6 +1481,7 @@ def reindex_by_type_staggered(app):
         build_index(app, es, namespaced_index, i_type, mapping, uuids, False)
         mapping_end = timer()
         to_index_list = flatten_and_sort_uuids(app.registry, uuids, None)  # none here is fine since we pre-ordered
+        _release_secondary_coalescing(registry)
         indexer_queue.add_uuids(app.registry, to_index_list, strict=True,
                                 target_queue='secondary')
         log.warning(f'Queued type {i_type} ({len(to_index_list)} total items) in {mapping_end - current_start}')

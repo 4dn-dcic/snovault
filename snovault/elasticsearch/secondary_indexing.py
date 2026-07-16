@@ -287,6 +287,14 @@ class PostgresSecondaryIndexingStore:
             return sum(1 for _ in connection.execute(
                 self.RELEASE_ALL, {'namespace': namespace}))
 
+    def release(self, rid, namespace):
+        rid = str(uuid.UUID(str(rid)))
+        with self._transaction() as connection:
+            return connection.execute(
+                self.RELEASE_TARGET,
+                {'rid': rid, 'namespace': namespace},
+            ).rowcount
+
     def rearm_stale(self, namespace, stale_seconds, row_limit):
         with self._transaction() as connection:
             return [
@@ -371,10 +379,24 @@ class SecondaryIndexingCoalescer:
         self.registry = registry
         self.queue = registry[INDEXER_QUEUE]
         self.store = store or PostgresSecondaryIndexingStore(registry)
+        self._observed_mode = coalescing_mode(self.registry.settings)
 
     @property
     def mode(self):
-        return coalescing_mode(self.registry.settings)
+        mode = coalescing_mode(self.registry.settings)
+        if mode != self._observed_mode and (mode == 'off' or self._observed_mode == 'off'):
+            try:
+                self.store.release_all(self.namespace)
+            except Exception:
+                log.exception(
+                    'Secondary coalescing mode transition cleanup failed',
+                    coalescing_event='mode_transition_cleanup_failure',
+                    from_mode=self._observed_mode,
+                    to_mode=mode,
+                    namespace=self.namespace,
+                )
+        self._observed_mode = mode
+        return mode
 
     @property
     def namespace(self):
@@ -490,6 +512,9 @@ class SecondaryIndexingCoalescer:
         if not self.enabled:
             return 0
         return self.store.release_all(self.namespace)
+
+    def release(self, rid):
+        return self.store.release(rid, self.namespace)
 
     @staticmethod
     def _messages(rows, origin):

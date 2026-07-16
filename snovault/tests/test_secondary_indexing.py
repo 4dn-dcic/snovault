@@ -17,6 +17,7 @@ from sqlalchemy.dialects import postgresql
 from sqlalchemy.schema import CreateIndex
 
 from ..elasticsearch.es_index_listener import coalescing_sweep_interval
+from ..elasticsearch.create_mapping import _release_secondary_coalescing
 from ..elasticsearch.indexer import Indexer
 from ..elasticsearch.indexer_queue import QueueManager, dlq_to_primary, queue_indexing
 from ..elasticsearch.interfaces import (
@@ -175,6 +176,15 @@ class MemoryStore:
         self.events.append(('release_all', namespace, released))
         return released
 
+    def release(self, rid, namespace):
+        rid = str(uuid.UUID(str(rid)))
+        row = self.rows.get((rid, namespace))
+        if row is not None and row['pending']:
+            row['pending'] = False
+            self.events.append(('release', namespace, rid))
+            return 1
+        return 0
+
 
 class FailingPrepareStore(MemoryStore):
     def prepare_targets(self, target_uuids, namespace, queued_sid):
@@ -301,6 +311,41 @@ def test_off_mode_release_all_does_not_access_optional_state():
     coalescer, _, _, _ = make_coalescer(mode='off', store=FailingReleaseStore())
 
     assert coalescer.release_all() == 0
+
+
+def test_rollout_disable_releases_state_before_reenable():
+    for initial_mode in ('shadow', 'on'):
+        rid = str(uuid.uuid4())
+        coalescer, queue, store, registry = make_coalescer(mode=initial_mode)
+        coalescer.enqueue([rid], sid=10)
+
+        registry.settings['indexer.coalesce_secondary'] = 'off'
+        assert coalescer.enabled is False
+        assert store.rows[(rid, 'env-a')]['pending'] is False
+
+        registry.settings['indexer.coalesce_secondary'] = 'on'
+        assert coalescer.enabled is True
+        coalescer.enqueue([rid], sid=11)
+        assert queue.add_calls[-1][0] == [rid]
+        assert store.rows[(rid, 'env-a')]['pending'] is True
+
+
+def test_rollout_disable_cleanup_failure_keeps_off_mode_available():
+    coalescer, _, _, registry = make_coalescer(mode='on', store=FailingReleaseStore())
+
+    registry.settings['indexer.coalesce_secondary'] = 'off'
+
+    assert coalescer.enabled is False
+
+
+def test_bulk_reindex_cleanup_releases_pending_state():
+    rid = str(uuid.uuid4())
+    coalescer, _, store, registry = make_coalescer()
+    coalescer.enqueue([rid], sid=10)
+
+    _release_secondary_coalescing(registry)
+
+    assert store.rows[(rid, 'env-a')]['pending'] is False
 
 
 def test_purge_queue_releases_matching_coalescing_namespace():
@@ -857,3 +902,36 @@ def test_claim_failure_falls_back_to_strict_rendering():
         curr_time=mock.ANY, telemetry_id=None)
     indexer.queue.delete_messages.assert_called_once_with(
         [message], target_queue='secondary')
+
+
+def test_off_mode_coalesced_marker_releases_state_after_render():
+    rid = str(uuid.uuid4())
+    coalescer, _, store, _ = make_coalescer(mode='off')
+    store.rows[(rid, 'env-a')] = {
+        'pending': True,
+        'queued_sid': 150,
+        'queued_at': datetime.datetime.now(datetime.timezone.utc),
+    }
+    message = {
+        'MessageId': 'one', 'ReceiptHandle': 'receipt',
+        'Body': json.dumps({
+            'uuid': rid, 'sid': 150, 'strict': True,
+            'timestamp': datetime.datetime.utcnow().isoformat(),
+            'coalesced': True, 'origin': 'fanout',
+        }),
+        'Attributes': {},
+    }
+    indexer = object.__new__(Indexer)
+    indexer.secondary_coalescer = coalescer
+    indexer.queue = mock.Mock(delete_batch_size=10)
+    indexer.get_messages_from_queue = mock.Mock(side_effect=[([message], 'secondary'), ([], None)])
+    indexer.update_object = mock.Mock(return_value=None)
+    request = SimpleNamespace(registry={
+        STORAGE: SimpleNamespace(write=SimpleNamespace(get_max_sid=lambda: 150)),
+    })
+
+    errors, deferred = indexer.update_objects_queue(request, [0])
+
+    assert errors == [] and deferred is False
+    assert store.rows[(rid, 'env-a')]['pending'] is False
+    indexer.queue.delete_messages.assert_called_once_with([message], target_queue='secondary')

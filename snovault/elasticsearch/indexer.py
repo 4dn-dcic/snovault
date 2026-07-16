@@ -323,10 +323,11 @@ class Indexer(object):
 
                 msg_telemetry = msg_body.get('telemetry_id')
                 msg_diff = msg_body.get('diff', None)
+                coalesced_message = bool(msg_body.get('coalesced'))
 
                 effective_sid = msg_sid
                 error = None
-                if msg_body.get('coalesced') and self.secondary_coalescer.enabled:
+                if coalesced_message and self.secondary_coalescer.enabled:
                     try:
                         claim = self.secondary_coalescer.claim(
                             msg_uuid,
@@ -383,6 +384,17 @@ class Indexer(object):
                         errors.append(error)
                 else:
                     # Sucessfully processed! (i.e. indexed or discarded conflict)
+                    if coalesced_message and not self.secondary_coalescer.enabled:
+                        try:
+                            self.secondary_coalescer.release(msg_uuid)
+                        except Exception as release_error:
+                            log.exception(
+                                'Secondary coalescing marker cleanup failed',
+                                coalescing_event='marker_cleanup_failure',
+                                item_uuid=msg_uuid,
+                                namespace=self.secondary_coalescer.namespace,
+                                error=repr(release_error),
+                            )
                     # if non-strict, adding will queue associated items to secondary
                     if msg_body['strict'] is False:
                         non_strict_uuids.add(msg_uuid)
