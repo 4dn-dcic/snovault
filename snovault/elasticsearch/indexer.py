@@ -341,12 +341,8 @@ class Indexer(object):
                             coalescing_event='claim_failure',
                             item_uuid=msg_uuid,
                             namespace=self.secondary_coalescer.namespace,
+                            error=repr(claim_error),
                         )
-                        error = {
-                            'error_message': repr(claim_error),
-                            'time': msg_curr_time,
-                            'uuid': str(msg_uuid),
-                        }
                     else:
                         effective_sid = claim['effective_sid']
                         if claim['outcome'] == 'deferred_stale':

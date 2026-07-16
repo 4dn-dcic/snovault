@@ -30,6 +30,7 @@ from ..elasticsearch.secondary_indexing import (
     PostgresSecondaryIndexingStore,
     SecondaryIndexingCoalescer,
     coalescing_mode,
+    coalescing_repair_settings,
     reset_secondary_coalescing,
     secondary_coalescing_status,
 )
@@ -326,6 +327,24 @@ def test_purge_queue_releases_matching_coalescing_namespace():
     assert store.rows[(rid, 'env-a')]['pending'] is False
 
 
+def test_clear_queue_releases_matching_coalescing_namespace():
+    rid = str(uuid.uuid4())
+    coalescer, _, store, _ = make_coalescer()
+    coalescer.enqueue([rid], sid=10)
+    message = {'MessageId': 'one', 'ReceiptHandle': 'receipt'}
+    manager = object.__new__(QueueManager)
+    manager.registry = {SECONDARY_INDEXING_COALESCER: coalescer}
+    manager.env_name = 'env-a'
+    manager.queue_targets = ['primary', 'secondary', 'dlq']
+    manager.receive_messages = mock.Mock(side_effect=[[message], [], [], []])
+    manager.delete_messages = mock.Mock()
+
+    manager.clear_queue()
+
+    manager.delete_messages.assert_called_once_with([message], 'primary')
+    assert store.rows[(rid, 'env-a')]['pending'] is False
+
+
 def test_invalid_sweep_interval_uses_safe_default_and_zero_disables_sweeping():
     assert coalescing_sweep_interval({
         'indexer.coalesce_secondary.sweep_interval': 'invalid'
@@ -333,6 +352,27 @@ def test_invalid_sweep_interval_uses_safe_default_and_zero_disables_sweeping():
     assert coalescing_sweep_interval({
         'indexer.coalesce_secondary.sweep_interval': '-1'
     }) == 0
+
+
+def test_invalid_repair_settings_use_safe_bounded_defaults():
+    assert coalescing_repair_settings({
+        'indexer.coalesce_secondary.stale_seconds': 'invalid',
+        'indexer.coalesce_secondary.sweep_limit': 'invalid',
+    }) == (1800, 500)
+    assert coalescing_repair_settings({
+        'indexer.coalesce_secondary.stale_seconds': '-1',
+        'indexer.coalesce_secondary.sweep_limit': '0',
+    }) == (0, 1)
+    coalescer, _, store, registry = make_coalescer()
+    registry.settings.update({
+        'indexer.coalesce_secondary.stale_seconds': 'invalid',
+        'indexer.coalesce_secondary.sweep_limit': 'invalid',
+    })
+    store.rearm_stale = mock.Mock(return_value=[])
+
+    coalescer.sweep()
+
+    store.rearm_stale.assert_called_once_with('env-a', 1800, 500)
 
 
 def test_shadow_runs_state_machine_but_sends_would_be_suppressed_targets():
@@ -768,3 +808,35 @@ def test_secondary_enqueue_failure_retains_cause_message_at_delete_batch_boundar
         raise AssertionError('secondary enqueue failure must retain the cause message')
 
     indexer.queue.delete_messages.assert_not_called()
+
+
+def test_claim_failure_falls_back_to_strict_rendering():
+    rid = str(uuid.uuid4())
+    message = {
+        'MessageId': 'one', 'ReceiptHandle': 'receipt',
+        'Body': json.dumps({
+            'uuid': rid, 'sid': 140, 'strict': True,
+            'timestamp': datetime.datetime.utcnow().isoformat(),
+            'coalesced': True, 'origin': 'fanout',
+        }),
+        'Attributes': {},
+    }
+    coalescer = mock.Mock(enabled=True, namespace='env-a')
+    coalescer.claim.side_effect = RuntimeError('state table unavailable')
+    indexer = object.__new__(Indexer)
+    indexer.secondary_coalescer = coalescer
+    indexer.queue = mock.Mock(delete_batch_size=10)
+    indexer.get_messages_from_queue = mock.Mock(side_effect=[([message], 'secondary'), ([], None)])
+    indexer.update_object = mock.Mock(return_value=None)
+    request = SimpleNamespace(registry={
+        STORAGE: SimpleNamespace(write=SimpleNamespace(get_max_sid=lambda: 140)),
+    })
+
+    errors, deferred = indexer.update_objects_queue(request, [0])
+
+    assert errors == [] and deferred is False
+    indexer.update_object.assert_called_once_with(
+        request, rid, add_to_secondary=None, sid=140, max_sid=140,
+        curr_time=mock.ANY, telemetry_id=None)
+    indexer.queue.delete_messages.assert_called_once_with(
+        [message], target_queue='secondary')

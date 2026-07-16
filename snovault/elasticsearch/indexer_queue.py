@@ -512,6 +512,9 @@ class QueueManager(object):
             except self.client.exceptions.PurgeQueueInProgress:
                 log.warning('\n___QUEUE IS ALREADY BEING PURGED: %s___\n' % queue_url,
                             queue_url=queue_url)
+        self._release_secondary_state()
+
+    def _release_secondary_state(self):
         coalescer = (self.registry.get(SECONDARY_INDEXING_COALESCER)
                      if hasattr(self.registry, 'get') else None)
         if coalescer is not None and coalescer.namespace == self.env_name:
@@ -527,6 +530,7 @@ class QueueManager(object):
             while msgs:
                 self.delete_messages(msgs, target)
                 msgs = self.receive_messages(target)
+        self._release_secondary_state()
 
     def delete_queue(self, queue_url):
         """

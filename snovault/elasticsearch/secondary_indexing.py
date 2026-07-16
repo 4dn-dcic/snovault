@@ -36,6 +36,40 @@ MAX_OPERATION_ROWS = 1000
 TARGET_BATCH_SIZE = 500
 
 
+def _bounded_setting(settings, key, default, minimum, maximum=None):
+    value = settings.get(key, default)
+    try:
+        value = int(value)
+    except (TypeError, ValueError, OverflowError):
+        log.error(
+            'Invalid secondary coalescing setting; using default',
+            setting=key,
+            configured_value=value,
+            default_value=default,
+        )
+        value = default
+    value = max(value, minimum)
+    return min(value, maximum) if maximum is not None else value
+
+
+def coalescing_repair_settings(settings):
+    return (
+        _bounded_setting(
+            settings,
+            COALESCING_STALE_SECONDS_SETTING,
+            DEFAULT_STALE_SECONDS,
+            minimum=0,
+        ),
+        _bounded_setting(
+            settings,
+            COALESCING_SWEEP_LIMIT_SETTING,
+            DEFAULT_SWEEP_LIMIT,
+            minimum=1,
+            maximum=MAX_OPERATION_ROWS,
+        ),
+    )
+
+
 def includeme(config):
     config.add_route('reset_secondary_coalescing', '/reset_secondary_coalescing')
     config.add_route('secondary_coalescing_status', '/secondary_coalescing_status')
@@ -476,10 +510,7 @@ class SecondaryIndexingCoalescer:
         if not self.enabled:
             return {'rearmed': 0, 'sent': 0, 'failed': 0}
         started = time.monotonic()
-        stale_seconds = max(0, int(self.registry.settings.get(
-            COALESCING_STALE_SECONDS_SETTING, DEFAULT_STALE_SECONDS)))
-        row_limit = min(MAX_OPERATION_ROWS, max(1, int(self.registry.settings.get(
-            COALESCING_SWEEP_LIMIT_SETTING, DEFAULT_SWEEP_LIMIT))))
+        stale_seconds, row_limit = coalescing_repair_settings(self.registry.settings)
         rows = self.store.rearm_stale(self.namespace, stale_seconds, row_limit)
         messages = self._messages(rows, 'sweeper')
         try:
