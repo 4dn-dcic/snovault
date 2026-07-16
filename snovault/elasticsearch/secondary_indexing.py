@@ -190,7 +190,6 @@ class PostgresSecondaryIndexingStore:
         targets = sorted({str(uuid.UUID(str(target))) for target in target_uuids})
         queued_sid = int(queued_sid or 0)
         suppressed = set()
-        tracked = set()
         for batch in self._chunks(targets):
             params = {'rids': batch, 'namespace': namespace, 'queued_sid': queued_sid}
             with self._transaction() as connection:
@@ -199,7 +198,6 @@ class PostgresSecondaryIndexingStore:
                     for row in connection.execute(self.INSERT_MISSING, params)
                 }
                 locked = connection.execute(self.LOCK_TARGETS, params).mappings().all()
-                tracked.update(str(row['rid']) for row in locked)
                 suppressed.update(
                     str(row['rid']) for row in locked
                     if row['pending'] and str(row['rid']) not in inserted
@@ -209,7 +207,6 @@ class PostgresSecondaryIndexingStore:
         # it preserves the pre-feature behavior and lets normal missing-item handling run.
         return {
             'targets': targets,
-            'tracked': tracked,
             'suppressed': suppressed,
             'send': set(targets) - suppressed,
         }

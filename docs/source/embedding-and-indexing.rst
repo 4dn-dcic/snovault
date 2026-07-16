@@ -120,9 +120,9 @@ Defaults are 1,800 seconds before repair, a 300 second sweep interval, and 500 r
 per sweep; configure these with
 ``indexer.coalesce_secondary.stale_seconds``,
 ``indexer.coalesce_secondary.sweep_interval``, and
-``indexer.coalesce_secondary.sweep_limit``.  The sweeper uses the partial covering
-index and ``FOR UPDATE SKIP LOCKED`` so multiple listeners or operator actions do
-not wait on hot rows.
+``indexer.coalesce_secondary.sweep_limit``.  The sweeper uses the partial
+``(namespace, queued_at) WHERE pending`` index and ``FOR UPDATE SKIP LOCKED`` so
+multiple listeners or operator actions do not wait on hot rows.
 
 Operations and rollout
 ~~~~~~~~~~~~~~~~~~~~~~
@@ -159,9 +159,11 @@ The table is registered in ``snovault.storage.Base`` and is created by the norma
 disable automatic table creation must apply the SQLAlchemy-generated table, index,
 and storage-parameter DDL before enabling ``shadow``; no backfill is required.
 The table uses fillfactor 70 and aggressive per-table autovacuum scale factors
-(0.02 vacuum, 0.05 analyze).  Suppression updates normally touch only the unindexed
-``queued_sid`` and are HOT-eligible; transitions necessarily change the partial
-index predicate.  Resource deletion cascades to state rows, and inactive rows are
+(0.02 vacuum, 0.05 analyze).  ``queued_sid`` is deliberately kept out of every
+index (keys and INCLUDE lists alike; INCLUDE columns also block HOT), so
+suppression updates that only merge a newer sid into an already-pending row are
+HOT-eligible; pending transitions and sweeper re-arms necessarily touch the
+partial index.  Resource deletion cascades to state rows, and inactive rows are
 bounded by resources multiplied by active environment namespaces.
 
 Each producer batch or consumer claim checks out one additional connection only
@@ -170,8 +172,8 @@ call or an ES render.  Before enabling ``shadow``, operators must verify databas
 pool and PostgreSQL ``max_connections`` headroom for the maximum concurrent indexer
 workers, then measure actual table/index growth, WAL, dead tuples/autovacuum cadence,
 batch transaction latency, sweep lag, and suppression ratio.  The implementation
-batches at 500 targets, uses primary-key point locks, and uses a covering partial
-index for sweeps; these measurements, rather than an assumed production item or
+batches at 500 targets, uses primary-key point locks, and uses a partial index
+for sweeps; these measurements, rather than an assumed production item or
 edit count, determine capacity.
 
 A couple endpoints were added to make the queue more useful. First, /indexing_status takes a GET request and returns waiting and in-flight counts for the three queues. The /queue_indexing endpoint is a POST endpoint used to manually queue items. It requires administrator privileges and takes a JSON body where you can either specify a list of `collections` (e.g. file_fastq or biosample) or a list of `uuids` for indexing. You can also specify whether the items should be indexed in strict mode using the `strict` keyword and a boolean value. Lastly, you can specify which queue you want to send your items to using the `target_queue` keyword and a value of `primary`, `secondary`, or `dlq`. The default strict value is False and the default target is primary.

@@ -85,7 +85,6 @@ class MemoryStore:
             self.events.append(('commit', namespace, tuple(targets)))
             return {
                 'targets': targets,
-                'tracked': set(targets),
                 'suppressed': suppressed,
                 'send': set(targets) - suppressed,
             }
@@ -216,7 +215,7 @@ def make_coalescer(mode='on', namespace='env-a', store=None):
     return coalescer, queue, store, registry
 
 
-def test_table_is_narrow_namespace_keyed_and_sweeper_index_is_covering():
+def test_table_is_narrow_namespace_keyed_and_sweeper_index_allows_hot_suppression():
     table = SecondaryIndexingPending.__table__
     assert list(table.columns.keys()) == ['rid', 'namespace', 'pending', 'queued_sid', 'queued_at']
     assert [column.name for column in table.primary_key.columns] == ['rid', 'namespace']
@@ -225,8 +224,11 @@ def test_table_is_narrow_namespace_keyed_and_sweeper_index_is_covering():
     index = next(iter(table.indexes))
     ddl = str(CreateIndex(index).compile(dialect=postgresql.dialect()))
     assert '(namespace, queued_at)' in ddl
-    assert 'INCLUDE (rid, queued_sid)' in ddl
     assert 'WHERE pending' in ddl
+    # queued_sid must stay out of every index (keys and INCLUDE lists alike) so
+    # that merging a newer sid into an already-pending row stays a HOT update.
+    assert 'INCLUDE' not in ddl
+    assert 'queued_sid' not in ddl
     statements = []
 
     def capture(statement, *args, **kwargs):

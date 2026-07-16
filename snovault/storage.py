@@ -1011,12 +1011,14 @@ class SecondaryIndexingPending(Base):
     queued_at = Column(types.DateTime(timezone=True), nullable=False)
 
     __table_args__ = (
+        # No INCLUDE columns: the sweep locks rows FOR UPDATE (heap access either
+        # way), while keeping queued_sid out of every index leaves the common
+        # suppression update (newer sid on an already-pending row) HOT-eligible.
         schema.Index(
             'secondary_indexing_pending_sweep_idx',
             namespace,
             queued_at,
             postgresql_where=pending,
-            postgresql_include=['rid', 'queued_sid'],
         ),
     )
 
