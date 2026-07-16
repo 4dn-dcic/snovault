@@ -106,6 +106,7 @@ def test_receive_messages_passes_wait_time_seconds():
         QueueUrl=manager.queue_url,
         MaxNumberOfMessages=manager.receive_batch_size,
         WaitTimeSeconds=2,
+        AttributeNames=['ApproximateReceiveCount', 'SentTimestamp'],
     )
 
     mock_client.receive_message.reset_mock()
@@ -114,6 +115,7 @@ def test_receive_messages_passes_wait_time_seconds():
         QueueUrl=manager.queue_url,
         MaxNumberOfMessages=manager.receive_batch_size,
         WaitTimeSeconds=20,
+        AttributeNames=['ApproximateReceiveCount', 'SentTimestamp'],
     )
 
 

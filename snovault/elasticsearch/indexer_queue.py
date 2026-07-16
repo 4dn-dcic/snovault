@@ -17,7 +17,11 @@ from dcicutils.misc_utils import ignored, RateManager, LockoutManager
 from pyramid.view import view_config
 
 from .indexer_utils import get_uuids_for_types
-from .interfaces import INDEXER_QUEUE, INDEXER_QUEUE_MIRROR
+from .interfaces import (
+    INDEXER_QUEUE,
+    INDEXER_QUEUE_MIRROR,
+    SECONDARY_INDEXING_COALESCER,
+)
 from ..util import debug_log
 
 log = structlog.getLogger(__name__)
@@ -125,6 +129,17 @@ def indexing_status(context, request):
     else:
         for queue in numbers:
             response[queue] = numbers[queue]
+        coalescer = request.registry.get(SECONDARY_INDEXING_COALESCER)
+        if coalescer is not None and coalescer.enabled:
+            try:
+                response['secondary_coalescing'] = coalescer.status()
+            except Exception as error:
+                log.exception('Unable to read secondary coalescing status')
+                response['secondary_coalescing'] = {
+                    'mode': coalescer.mode,
+                    'namespace': coalescer.namespace,
+                    'status_error': repr(error),
+                }
         response['display_title'] = 'Indexing Status'
         response['status'] = 'Success'
     return response
@@ -301,7 +316,7 @@ class QueueManager(object):
         return namespace[:80].replace('.', '-').replace(' ', '').replace("’", '')
 
     def add_uuids(self, registry, uuids, strict=False, target_queue='primary',
-                  sid=None, telemetry_id=None):
+                  sid=None, telemetry_id=None, coalesced=False, origin=None):
         """
         Takes a list of string uuids queues them up. Also requires a registry,
         which is passed in automatically when using the /queue_indexing route.
@@ -322,6 +337,10 @@ class QueueManager(object):
             temp = {'uuid': uuid, 'sid': sid, 'strict': strict, 'timestamp': curr_time}
             if telemetry_id:
                 temp['telemetry_id'] = telemetry_id
+            if coalesced:
+                temp['coalesced'] = True
+            if origin:
+                temp['origin'] = origin
             items.append(temp)
         failed = self.send_messages(items, target_queue=target_queue)
         return uuids, failed
@@ -610,7 +629,8 @@ class QueueManager(object):
         response = self.client.receive_message(
             QueueUrl=queue_url,
             MaxNumberOfMessages=self.receive_batch_size,
-            WaitTimeSeconds=wait_time_seconds
+            WaitTimeSeconds=wait_time_seconds,
+            AttributeNames=['ApproximateReceiveCount', 'SentTimestamp'],
         )
         # messages in response include ReceiptHandle and Body, most importantly
         return response.get('Messages', [])
@@ -640,7 +660,15 @@ class QueueManager(object):
                 QueueUrl=queue_url,
                 Entries=batch
             )
-            failed.extend(response.get('Failed', []))
+            batch_failures = response.get('Failed', [])
+            if batch_failures:
+                log.error(
+                    'INDEXING: SQS message deletion failed',
+                    target_queue=target_queue,
+                    failure_count=len(batch_failures),
+                    failures=batch_failures,
+                )
+            failed.extend(batch_failures)
         return failed
 
     def replace_messages(self, messages, target_queue='primary', vis_timeout=5):

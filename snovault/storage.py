@@ -8,7 +8,7 @@ from botocore.client import Config
 from dcicutils.misc_utils import ignored, get_error_message
 from pyramid.httpexceptions import HTTPConflict, HTTPLocked, HTTPInternalServerError
 from pyramid.threadlocal import get_current_request
-from sqlalchemy import Column, ForeignKey, bindparam, func, orm, schema, types
+from sqlalchemy import Column, DDL, ForeignKey, bindparam, event, func, orm, schema, types
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.dialects.postgresql import JSONB as JSON
 from sqlalchemy.exc import IntegrityError
@@ -988,6 +988,50 @@ class Resource(Base):
 
     def used_for(self, item):
         pass
+
+
+class SecondaryIndexingPending(Base):
+    """Single-slot secondary indexing work state, isolated by queue namespace.
+
+    SQS remains the transport.  This narrow row only records whether a full-render
+    secondary job is already outstanding and the newest source sid it must cover.
+    """
+
+    __tablename__ = 'secondary_indexing_pending'
+
+    rid = Column(
+        UUID,
+        ForeignKey('resources.rid', ondelete='CASCADE'),
+        nullable=False,
+        primary_key=True,
+    )
+    namespace = Column(types.String, nullable=False, primary_key=True)
+    pending = Column(types.Boolean, nullable=False, default=False, server_default='false')
+    queued_sid = Column(types.Integer, nullable=False, default=0, server_default='0')
+    queued_at = Column(types.DateTime(timezone=True), nullable=False)
+
+    __table_args__ = (
+        schema.Index(
+            'secondary_indexing_pending_sweep_idx',
+            namespace,
+            queued_at,
+            postgresql_where=pending,
+            postgresql_include=['rid', 'queued_sid'],
+        ),
+    )
+
+
+event.listen(
+    SecondaryIndexingPending.__table__,
+    'after_create',
+    DDL("""
+        ALTER TABLE secondary_indexing_pending SET (
+            fillfactor = 70,
+            autovacuum_vacuum_scale_factor = 0.02,
+            autovacuum_analyze_scale_factor = 0.05
+        )
+    """).execute_if(dialect='postgresql'),
+)
 
 
 class Blob(Base):

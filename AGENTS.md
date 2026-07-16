@@ -380,6 +380,19 @@ exists receives one conservative full type reindex the first time selective mode
 enabled; subsequent unchanged deployments can skip it. See
 `snovault/tests/test_selective_reindex.py` for the decision matrix.
 
+## Secondary-only indexing coalescing
+
+`snovault/elasticsearch/secondary_indexing.py` coalesces only the final strict targets
+from `Indexer.find_and_queue_secondary_items`; primary edit hooks, bulk reindexing, and
+manual queueing bypass it. The PostgreSQL state key must remain `(rid, queue namespace)`
+because blue and green fan out to separate secondary queues. Preserve the protocol's
+commit-before-send, unconditional target locking, `queued_sid` stale-snapshot defer,
+claim-before-render, and sweeper repair invariants together; simplifying the row to a
+boolean can strand or lose invalidations. Operational settings, rollout/reset rules,
+DB capacity notes, and query interfaces are documented in
+`docs/source/embedding-and-indexing.rst`; local-only race/failure coverage is in
+`snovault/tests/test_secondary_indexing.py`.
+
 ## Maintaining this file
 
 Keep this file for knowledge useful to almost every future agent session in this project.
