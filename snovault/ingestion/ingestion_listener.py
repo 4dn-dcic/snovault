@@ -37,6 +37,7 @@ from .ingestion_listener_base import (
     DEBUG_SUBMISSIONS,
     IngestionListenerBase,
 )
+from .ingestion_message import IngestionMessage
 from .ingestion_message_handler_decorator import call_ingestion_message_handler
 from .ingestion_processor_decorator import get_ingestion_processor
 from .queue_utils import IngestionQueueManager
@@ -45,6 +46,22 @@ from .queue_utils import IngestionQueueManager
 log = structlog.getLogger(__name__)
 EPILOG = __doc__
 INGESTION_QUEUE = 'ingestion_queue'
+
+
+def summarize_message_for_log(raw_message):
+    """ Return a short, safe identifier for an SQS ingestion message for diagnostic logging.
+
+        Deliberately does NOT include the message ``Body``: it may be large and may carry
+        submission data we should not spray into logs. Only the SQS-assigned ``MessageId``
+        (and body checksum, if present) are emitted -- enough to correlate a poison message
+        with the SQS console / metrics without leaking its contents.
+    """
+    if isinstance(raw_message, dict):
+        return "MessageId=%s MD5OfBody=%s" % (
+            raw_message.get('MessageId', '<unknown>'),
+            raw_message.get('MD5OfBody', '<unknown>'),
+        )
+    return "<non-dict message %s>" % type(raw_message).__name__
 
 
 def includeme(config):
@@ -380,6 +397,13 @@ class IngestionListener(IngestionListenerBase):
     DELETE_RETRIES = 3
     INGEST_AS_USER = environ_bool('INGEST_AS_USER', default=True)  # The new way, but possible to disable for now
 
+    # Dispositions returned by handle_one_message(), consumed by run() to decide what to do
+    # with the underlying SQS message. See handle_one_message for the full contract.
+    MESSAGE_HANDLED = 'handled'      # a handler processed it successfully -> delete (ack)
+    MESSAGE_UNHANDLED = 'unhandled'  # a handler ran but returned falsy -> leave (prior fallback-ack behavior)
+    MESSAGE_DEFERRED = 'deferred'    # a handler raised -> leave for redelivery, do NOT ack
+    MESSAGE_POISON = 'poison'        # message could not even be parsed -> delete so it cannot crash-loop
+
     def __init__(self, vapp, _queue_manager=None, _update_status=None):
         self.vapp = vapp
 
@@ -464,6 +488,47 @@ class IngestionListener(IngestionListenerBase):
             }              # from we assume the msg has sufficient info to work backwards from - Will 4/9/21
         ]
 
+    def handle_one_message(self, message):
+        """ Parse and dispatch a single raw SQS ingestion message, isolating ALL failures so
+            that one bad message cannot crash (and crash-loop) the entire listener.
+
+            Returns one of:
+              - MESSAGE_POISON:    the raw message could not be parsed into an IngestionMessage
+                                   (malformed JSON, missing "Body"/"uuid", etc.). It is
+                                   structurally invalid and can never be processed, so the caller
+                                   should delete it to stop it from redelivering and crash-looping.
+              - MESSAGE_DEFERRED:  the message parsed fine but a registered handler raised. The
+                                   message is (structurally) valid, so we must NOT acknowledge it;
+                                   the caller leaves it for SQS redelivery instead of deleting.
+              - MESSAGE_HANDLED:   a handler processed it and returned truthy -> caller deletes it.
+              - MESSAGE_UNHANDLED: a handler ran and returned falsy -> caller preserves the prior
+                                   behavior (message left in the batch for the fallback delete).
+
+            This method never raises for a single message: parsing and handler dispatch are each
+            guarded, and a safe (body-free) message identity is logged for diagnosis.
+        """
+        try:
+            parsed = IngestionMessage(message)
+        except Exception as e:
+            # Structurally invalid message (bad JSON, missing uuid, ...). Historically this
+            # exception propagated out of run() and, in composite mode, tripped
+            # ErrorHandlingThread's SIGINT self-restart -- so a single poison message with the
+            # queue's 3h visibility timeout would restart the listener every 3h indefinitely.
+            log.error("Discarding unparseable ingestion message (%s): %r"
+                      % (summarize_message_for_log(message), e))
+            return self.MESSAGE_POISON
+        try:
+            handled = call_ingestion_message_handler(parsed, self)
+        except Exception as e:
+            # A registered handler raised unexpectedly. The message parsed, so treat it as
+            # possibly-transient: do NOT ack it, leave it for redelivery. (The default handler
+            # already swallows its own exceptions, so in practice this covers custom handlers
+            # and the "no handler registered" RuntimeError.)
+            log.error("Error handling ingestion message (%s, type=%s): %r"
+                      % (summarize_message_for_log(message), getattr(parsed, 'type', None), e))
+            return self.MESSAGE_DEFERRED
+        return self.MESSAGE_HANDLED if handled else self.MESSAGE_UNHANDLED
+
     def run(self, vapp=None):
         """ Main process for this class. Runs forever doing ingestion as needed.
 
@@ -504,12 +569,27 @@ class IngestionListener(IngestionListenerBase):
 
                 debuglog("Message:", message)
 
-                # C4-990/2023-02-09/dmichaels
-                # This calls at most one our message handlers
-                # registered via the @ingestion_message_handler decorator.
-                if call_ingestion_message_handler(message, self):
-                    # Here one of our message handlers was called and it processed this message.
+                # This dispatches (at most) one of our @ingestion_message_handler-registered
+                # handlers, isolating parse/handler failures so one bad message cannot crash the
+                # whole listener (see handle_one_message for the disposition contract).
+                disposition = self.handle_one_message(message)
+
+                if disposition == self.MESSAGE_POISON:
+                    # Unparseable message: delete it so it can't redeliver and crash-loop the
+                    # listener. Skip note_post_ingestion -- we have no valid parsed message to note.
                     discard(message)
+                    continue
+                if disposition == self.MESSAGE_DEFERRED:
+                    # Handler raised on an otherwise-valid message. Do NOT acknowledge it: drop it
+                    # from our local to-do list (so the fallback delete below can't ack it) and
+                    # leave it in SQS for redelivery once its visibility timeout elapses.
+                    messages.remove(message)
+                    continue
+                if disposition == self.MESSAGE_HANDLED:
+                    # A handler processed this message; remove it from SQS.
+                    discard(message)
+                # else MESSAGE_UNHANDLED: a handler ran but returned falsy -- leave the message in
+                # `messages` so the fallback delete below acks it (unchanged prior behavior).
                 app_project().note_post_ingestion(message, context=vapp)
 
             # This is just fallback cleanup in case messages weren't cleaned up within the loop.
