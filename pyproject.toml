@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "dcicsnovault"
-version = "11.33.1"
+version = "11.34.0"
 description = "Storage support for 4DN Data Portals."
 authors = ["4DN-DCIC Team <support@4dnucleome.org>"]
 license = "MIT"
@@ -51,10 +51,13 @@ future = "^0.18.3"
 html5lib = ">=1.1"  # experimental, should be OK now that we're not using moto server
 humanfriendly = "^1.44.9"
 netaddr = ">=0.8.0,<1"
+# numpy is intentionally retained even though snovault itself does not import it: consumer
+# apps (fourfront/cgap/smaht-portal/encoded-core) rely on dcicsnovault as their *declared*
+# numpy provider and do not declare numpy themselves, so removing it here would break their
+# transitive provision. (pmdarima -- an unused time-series forecasting stack -- was removed.)
 numpy = "^1.26.4"
 passlib = "^1.7.4"
 pillow = "^11.1.0"
-pmdarima = "^2.0.4"
 psutil = "^5.9.0"
 psycopg2-binary = "^2.9.1"
 PyBrowserID = ">=0.10.0,<1"
@@ -86,7 +89,6 @@ venusian = "^3.1.0"
 WebOb = "^1.8.7"
 WebTest = "^2.0.35"
 WSGIProxy2 = "0.4.2"
-xlrd = "^1.0.0"
 "zope.deprecation" = "^4.4.0"
 "zope.interface" = ">=4.7.2,<6"
 "zope.sqlalchemy" = "1.6"

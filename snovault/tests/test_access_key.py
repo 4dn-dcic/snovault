@@ -115,3 +115,75 @@ def test_access_key_defaults_to_requesting_user(app, testapp):
     res = attacker_testapp.post_json('/access-keys', {}, status=201)
     access_key = res.json['@graph'][0]
     assert access_key['user'].strip('/').split('/')[-1] == attacker['uuid']
+
+
+# ---------------------------------------------------------------------------
+# Regression tests for the AccessKey `reset-secret` broken-object-level-authorization
+# (BOLA/IDOR) fix. The `reset-secret` view rotates a key's secret and returns the new
+# plaintext `secret_access_key`. It was historically gated on `permission='add'`; on an
+# AccessKey *item* context that permission has no matching ACE (the item ACL's terminal
+# deny only covers view/edit), so it fell through to the access-keys *collection*'s
+# `(Allow, Authenticated, 'add')` -- meaning ANY authenticated user could rotate and read
+# ANY user's key secret and then authenticate as that user. The fix changes the view to
+# `permission='edit'`, which on the item context is granted only to `role.owner` and
+# `group.admin`. These tests assert owner + admin succeed while an authenticated non-owner
+# is refused. (Against the pre-fix `permission='add'`, the non-owner case returns 200 with
+# a new secret rather than 403 -- i.e. these tests fail on the old code, confirming they
+# exercise the hole.)
+# ---------------------------------------------------------------------------
+
+def _create_access_key_for(owner_testapp):
+    """ Create an access key owned by the user behind `owner_testapp` and return the item
+        (its `@id` is the item path used to reach the `reset-secret` view). """
+    res = owner_testapp.post_json('/access-keys', {}, status=201)
+    return res.json['@graph'][0]
+
+
+def _reset_secret(some_testapp, access_key, status='*'):
+    return some_testapp.post_json('%s@@reset-secret' % access_key['@id'], {}, status=status)
+
+
+def test_access_key_reset_secret_owner_succeeds(app, testapp):
+    """ The key's owner may rotate its own secret and receive the new plaintext secret. """
+    owner = _create_user(testapp, 'Olive', 'Owner', 'olive.owner@example.com')
+    owner_testapp = _testapp_for_user(app, owner)
+    access_key = _create_access_key_for(owner_testapp)
+
+    res = _reset_secret(owner_testapp, access_key)
+    assert res.status_int == 200, (
+        "Expected the key owner to be able to reset their own secret, got %s: %r"
+        % (res.status_int, res.json))
+    assert res.json.get('secret_access_key'), (
+        "Owner reset should return a fresh plaintext secret_access_key, got: %r" % res.json)
+
+
+def test_access_key_reset_secret_admin_succeeds(app, testapp):
+    """ An admin (the `testapp` fixture) may reset any key's secret. """
+    owner = _create_user(testapp, 'Owen', 'Owner', 'owen.owner@example.com')
+    owner_testapp = _testapp_for_user(app, owner)
+    access_key = _create_access_key_for(owner_testapp)
+
+    res = _reset_secret(testapp, access_key)
+    assert res.status_int == 200, (
+        "Expected an admin to be able to reset any key's secret, got %s: %r"
+        % (res.status_int, res.json))
+    assert res.json.get('secret_access_key'), (
+        "Admin reset should return a fresh plaintext secret_access_key, got: %r" % res.json)
+
+
+def test_access_key_reset_secret_non_owner_forbidden(app, testapp):
+    """ CORE SECURITY REGRESSION: an authenticated user who is NOT the key's owner (and not
+        an admin) must NOT be able to rotate/read another user's key secret. Against the
+        pre-fix `permission='add'` this returned 200 with a usable new secret. """
+    owner = _create_user(testapp, 'Victor', 'Keyowner', 'victor.keyowner@example.com')
+    attacker = _create_user(testapp, 'Mallory', 'Attacker', 'mallory.attacker@example.com')
+    owner_testapp = _testapp_for_user(app, owner)
+    attacker_testapp = _testapp_for_user(app, attacker)
+    access_key = _create_access_key_for(owner_testapp)
+
+    res = _reset_secret(attacker_testapp, access_key)
+    assert res.status_int == 403, (
+        "Expected a non-owner authenticated user to be forbidden (403) from resetting "
+        "another user's key secret, got %s: %r" % (res.status_int, res.json))
+    assert not res.json.get('secret_access_key'), (
+        "A forbidden reset must not leak a new secret_access_key, got: %r" % res.json)

@@ -1,5 +1,66 @@
 from dcicutils.qa_utils import known_bug_expected
 
+from snovault.stats import stats_tween_factory
+
+
+# ---------------------------------------------------------------------------
+# Audit finding T4: the per-request "Request timings" structured log bound its environment
+# field (`ff_env`) from a mistyped setting key `env_name` (underscore) that no code ever sets,
+# instead of the dotted `env.name` used everywhere else in the framework -- so `ff_env` was
+# silently always absent (degrading log-aggregation filtering and any consumer Sentry
+# LoggingIntegration that captures this event). These DB-free unit tests exercise the real
+# `stats_tween` and assert it now reads `env.name`. (The discriminating test below fails
+# against the pre-fix code, which read `env_name`.)
+# ---------------------------------------------------------------------------
+
+class _FakeRegistry:
+    def __init__(self, settings):
+        self.settings = settings
+
+
+class _FakeResponse:
+    def __init__(self):
+        self.headers = {}
+
+
+class _FakeRequest:
+    def __init__(self, settings, params=None):
+        self.registry = _FakeRegistry(settings)
+        self.params = params or {}
+        self.path = '/some/path'
+        self.query_string = ''
+        self.host = 'example.org:6543'
+        self.environ = {}
+
+
+def _run_stats_tween(settings):
+    """ Run the real stats_tween with a trivial handler and return the internal stats dict
+        (which includes the bound log_keys, i.e. ff_env when set). No DB/ES/live services. """
+    def handler(request):
+        return _FakeResponse()
+    tween = stats_tween_factory(handler, _FakeRegistry(settings))
+    request = _FakeRequest(settings)
+    tween(request)
+    return request._stats
+
+
+def test_stats_tween_binds_ff_env_from_env_dot_name():
+    """ DISCRIMINATING: with the dotted `env.name` set, ff_env must be bound. Fails against the
+        pre-fix code (which read the underscore `env_name`). """
+    stats = _run_stats_tween({'env.name': 'fourfront-mastertest'})
+    assert stats.get('ff_env') == 'fourfront-mastertest'
+
+
+def test_stats_tween_ignores_legacy_underscore_env_name():
+    """ The old underscore key is no longer honored (nothing in the framework ever sets it). """
+    stats = _run_stats_tween({'env_name': 'legacy-should-be-ignored'})
+    assert 'ff_env' not in stats
+
+
+def test_stats_tween_omits_ff_env_when_unset():
+    stats = _run_stats_tween({})
+    assert 'ff_env' not in stats
+
 
 def test_query_param_unicode_decode_error_c4_887_regression(testapp):
     """
