@@ -38,6 +38,16 @@ Change Log
   as their declared ``numpy`` provider and do not declare it themselves, so removing it would
   break their transitive provision.
 
+* Observability (audit finding T4): fix the per-request "Request timings" structured log so its
+  environment field (``ff_env``) is populated. ``stats_tween`` read the setting from a mistyped
+  key ``env_name`` (underscore) that no code ever sets, instead of the dotted ``env.name`` used
+  everywhere else in the framework, so ``ff_env`` -- the primary environment filter for log
+  aggregation and for any consumer Sentry ``LoggingIntegration`` that captures this event -- was
+  silently always absent. Snovault deliberately does NOT initialize Sentry or depend on
+  ``sentry-sdk``: Sentry is initialized consumer-side (via the ``SENTRY_DSN`` deployment setting,
+  see ``dcicutils`` deployment support), and consumers capture snovault's request/DB timing
+  telemetry by pointing a Sentry (or other) log integration at this now-correct structured event.
+
 11.33.1
 =======
 
