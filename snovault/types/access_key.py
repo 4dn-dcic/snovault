@@ -142,7 +142,12 @@ def access_key_add(context, request):
 
 
 @view_config(name='reset-secret', context=AccessKey,
-             permission='add',
+             # Must be 'edit' (an item-scoped permission owned only by role.owner + group.admin
+             # per STATUS_ACL), NOT 'add'. On an AccessKey *item* context, 'add' has no matching
+             # ACE (the item ACL's terminal deny only covers view/edit), so it falls through to the
+             # collection's (Allow, Authenticated, 'add') -- which would let ANY authenticated user
+             # rotate and read ANY key's secret. See test_access_key.py::test_access_key_reset_secret_*.
+             permission='edit',
              request_method='POST', subpath_segments=0)
 @debug_log
 def access_key_reset_secret(context, request):
