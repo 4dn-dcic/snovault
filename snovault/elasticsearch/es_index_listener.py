@@ -24,13 +24,34 @@ from dcicutils.log_utils import set_logging
 from dcicutils.misc_utils import ignored
 from pyramid import paster
 
-from .interfaces import ELASTIC_SEARCH, INDEXER_QUEUE
+from .interfaces import ELASTIC_SEARCH, INDEXER_QUEUE, SECONDARY_INDEXING_COALESCER
+from .secondary_indexing import (
+    COALESCING_SWEEP_INTERVAL_SETTING,
+    DEFAULT_SWEEP_INTERVAL,
+)
 
 
 log = structlog.getLogger(__name__)
 
 EPILOG = __doc__
 DEFAULT_INTERVAL = 3  # 3 second default
+
+
+def coalescing_sweep_interval(settings):
+    try:
+        interval = int(settings.get(COALESCING_SWEEP_INTERVAL_SETTING, DEFAULT_SWEEP_INTERVAL))
+        return max(0, interval)
+    except (TypeError, ValueError, OverflowError):
+        log.error('Invalid secondary coalescing sweep interval; using default',
+                  configured_interval=settings.get(COALESCING_SWEEP_INTERVAL_SETTING),
+                  default_interval=DEFAULT_SWEEP_INTERVAL)
+        return DEFAULT_SWEEP_INTERVAL
+
+
+def coalescing_sweep_configuration(coalescer, settings):
+    enabled = coalescer is not None and coalescer.enabled
+    return enabled, coalescing_sweep_interval(settings) if enabled else 0
+
 
 # We need this because of MVCC visibility.
 # See slide 9 at http://momjian.us/main/writings/pgsql/mvcc.pdf
@@ -52,9 +73,27 @@ def run(testapp, interval=DEFAULT_INTERVAL, dry_run=False, path='/index', update
     es.info()
 
     queue = testapp.app.registry[INDEXER_QUEUE]
+    coalescer = testapp.app.registry.get(SECONDARY_INDEXING_COALESCER)
+    coalescing_enabled = False
+    last_coalescing_sweep = 0
 
     # main listening loop
     while True:
+        next_coalescing_enabled, sweep_interval = coalescing_sweep_configuration(
+            coalescer, testapp.app.registry.settings)
+        if next_coalescing_enabled and not coalescing_enabled:
+            last_coalescing_sweep = 0
+        coalescing_enabled = next_coalescing_enabled
+        if (coalescing_enabled and sweep_interval > 0
+                and time.monotonic() - last_coalescing_sweep >= sweep_interval):
+            # Rearm rows in PostgreSQL and commit before contacting SQS. A send
+            # failure therefore remains recoverable on a later bounded sweep.
+            try:
+                coalescer.sweep()
+            except Exception:
+                log.exception('Secondary coalescing sweep failed')
+            finally:
+                last_coalescing_sweep = time.monotonic()
         # if not messages to index, skip the /index call. Counts are approximate
         queue_counts = queue.number_of_messages()
         if not queue_counts['primary_waiting'] and not queue_counts['secondary_waiting']:

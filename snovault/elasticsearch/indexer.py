@@ -23,7 +23,9 @@ from .indexer_utils import get_namespaced_index, find_uuids_for_indexing, filter
 from .interfaces import (
     ELASTIC_SEARCH,
     INDEXER,
-    INDEXER_QUEUE, INVALIDATION_SCOPE_ENABLED
+    INDEXER_QUEUE,
+    INVALIDATION_SCOPE_ENABLED,
+    SECONDARY_INDEXING_COALESCER,
 )
 from ..embed import MissingIndexItemException
 from ..util import debug_log, dictionary_lookup
@@ -168,6 +170,7 @@ class Indexer(object):
         self.registry = registry
         self.es = registry[ELASTIC_SEARCH]
         self.queue = registry[INDEXER_QUEUE]
+        self.secondary_coalescer = registry[SECONDARY_INDEXING_COALESCER]
 
     def update_objects(self, request, counter):
         """
@@ -232,6 +235,14 @@ class Indexer(object):
         secondary_uuids |= rev_linked_uuids
 
         # items queued through this function are ALWAYS strict in secondary queue
+        # and contain no field diffs. Coalescing happens only here, after linker
+        # discovery, invalidation-scope filtering, and rev-link augmentation have
+        # selected the final full-render target set.
+        if self.secondary_coalescer.enabled:
+            return self.secondary_coalescer.enqueue(
+                secondary_uuids, sid=sid, telemetry_id=telemetry_id)
+        # Keep the rollout-off path byte-for-byte behavior-compatible with the
+        # original secondary producer (including payload shape and queue call).
         return self.queue.add_uuids(self.registry, list(secondary_uuids), strict=True,
                                     target_queue='secondary', sid=sid,
                                     telemetry_id=telemetry_id)
@@ -269,6 +280,25 @@ class Indexer(object):
         while len(messages) > 0:
             for idx, msg in enumerate(messages):
                 msg_body = json.loads(msg['Body'])
+                msg_attributes = msg.get('Attributes', {})
+                receive_count = msg_attributes.get('ApproximateReceiveCount')
+                sent_timestamp = msg_attributes.get('SentTimestamp')
+                queue_latency_ms = None
+                try:
+                    if sent_timestamp is not None:
+                        queue_latency_ms = max(0, int(time.time() * 1000) - int(sent_timestamp))
+                except (TypeError, ValueError):
+                    pass
+                log.info(
+                    'Indexer queue message received',
+                    target_queue=target_queue,
+                    item_uuid=msg_body.get('uuid'),
+                    strict=msg_body.get('strict'),
+                    coalesced=msg_body.get('coalesced', False),
+                    origin=msg_body.get('origin'),
+                    approximate_receive_count=receive_count,
+                    queue_latency_ms=queue_latency_ms,
+                )
 
                 # handle case where worker needs to restart
                 # recycle additional messages (no effect on dlq count) and
@@ -293,19 +323,46 @@ class Indexer(object):
 
                 msg_telemetry = msg_body.get('telemetry_id')
                 msg_diff = msg_body.get('diff', None)
+                coalesced_message = bool(msg_body.get('coalesced'))
+
+                effective_sid = msg_sid
+                error = None
+                if coalesced_message and self.secondary_coalescer.enabled:
+                    try:
+                        claim = self.secondary_coalescer.claim(
+                            msg_uuid,
+                            msg_sid,
+                            max_sid,
+                            origin=msg_body.get('origin'),
+                            receive_count=receive_count,
+                        )
+                    except Exception as claim_error:
+                        log.exception(
+                            'Secondary coalescing consumer claim failed',
+                            coalescing_event='claim_failure',
+                            item_uuid=msg_uuid,
+                            namespace=self.secondary_coalescer.namespace,
+                            error=repr(claim_error),
+                        )
+                    else:
+                        effective_sid = claim['effective_sid']
+                        if claim['outcome'] == 'deferred_stale':
+                            # The claim transaction rolled back, so pending remains true
+                            # while the existing defer/resend path obtains a fresh snapshot.
+                            error = {'error_message': 'defer_resend'}
 
                 # build the object and index into ES
                 # if strict, do not add uuids rev_linking to item to queue
-                if msg_body['strict'] is True:
+                if error is None and msg_body['strict'] is True:
                     error = self.update_object(request, msg_uuid,
                                                add_to_secondary=None,
-                                               sid=msg_sid, max_sid=max_sid,
+                                               sid=effective_sid, max_sid=max_sid,
                                                curr_time=msg_curr_time,
                                                telemetry_id=msg_telemetry)
-                else:
+                elif error is None:
                     error = self.update_object(request, msg_uuid,
                                                add_to_secondary=rev_linked_uuids,
-                                               sid=msg_sid, max_sid=max_sid,
+                                               sid=effective_sid, max_sid=max_sid,
                                                curr_time=msg_curr_time,
                                                telemetry_id=msg_telemetry)
                 if error:
@@ -327,22 +384,30 @@ class Indexer(object):
                         errors.append(error)
                 else:
                     # Sucessfully processed! (i.e. indexed or discarded conflict)
+                    if coalesced_message and not self.secondary_coalescer.enabled:
+                        try:
+                            self.secondary_coalescer.release(msg_uuid)
+                        except Exception as release_error:
+                            log.exception(
+                                'Secondary coalescing marker cleanup failed',
+                                coalescing_event='marker_cleanup_failure',
+                                item_uuid=msg_uuid,
+                                namespace=self.secondary_coalescer.namespace,
+                                error=repr(release_error),
+                            )
                     # if non-strict, adding will queue associated items to secondary
                     if msg_body['strict'] is False:
                         non_strict_uuids.add(msg_uuid)
                     counter[0] += 1  # do not increment on error
-                    to_delete.append(msg)
-
-                # delete messages when we have the right number
-                if len(to_delete) == self.queue.delete_batch_size:
-                    self.queue.delete_messages(to_delete, target_queue=target_queue)
-                    to_delete = []
 
                 # CHANGE - this needs to happen PER MESSAGE now
                 # add to secondary queue, if applicable
                 # search for all items that linkTo the non-strict items or contain
                 # a rev_link to them
                 if non_strict_uuids or rev_linked_uuids:
+                    if to_delete and len(to_delete) + 1 >= self.queue.delete_batch_size:
+                        self.queue.delete_messages(to_delete, target_queue=target_queue)
+                        to_delete = []
                     queued, failed = self.find_and_queue_secondary_items(non_strict_uuids,  # THIS IS NOW A SINGLE UUID
                                                                          rev_linked_uuids,
                                                                          msg_sid,
@@ -354,6 +419,14 @@ class Indexer(object):
                         errors.append({'error_message': error_msg})
                     non_strict_uuids = set()
                     rev_linked_uuids = set()
+
+                if error is None:
+                    to_delete.append(msg)
+
+                # delete messages when we have the right number
+                if len(to_delete) == self.queue.delete_batch_size:
+                    self.queue.delete_messages(to_delete, target_queue=target_queue)
+                    to_delete = []
 
             # if we need to restart the worker, break out of while loop
             if deferred:
@@ -481,21 +554,49 @@ class Indexer(object):
                 # this may be somewhat common and is not harmful
                 # do not return an error so item is removed from queue
                 duration = timer() - start
-                log.warning('Conflict indexing', sid=result['sid'], duration=duration, cat=cat)
+                log.warning(
+                    'Conflict indexing',
+                    sid=result['sid'],
+                    requested_sid=sid,
+                    snapshot_max_sid=max_sid,
+                    index_outcome='conflict_stale_write',
+                    duration=duration,
+                    cat=cat,
+                )
                 return
             except (ConnectionError, ReadTimeoutError, TransportError) as e:
                 duration = timer() - start
-                log.warning('Retryable error indexing', error=str(e), duration=duration, cat=cat)
+                log.warning(
+                    'Retryable error indexing',
+                    error=str(e),
+                    index_outcome='retryable_failure',
+                    duration=duration,
+                    cat=cat,
+                )
                 last_exc = repr(e)
             except Exception as e:
                 duration = timer() - start
-                log.error('Error indexing', duration=duration, exc_info=True, cat=cat)
+                log.error(
+                    'Error indexing',
+                    index_outcome='failure',
+                    duration=duration,
+                    exc_info=True,
+                    cat=cat,
+                )
                 last_exc = repr(e)
                 break
             else:
                 # success! Do not return an error so item is removed from queue
                 duration = timer() - start
-                log.info('Time to index', duration=duration, cat=cat)
+                log.info(
+                    'Time to index',
+                    sid=result['sid'],
+                    requested_sid=sid,
+                    snapshot_max_sid=max_sid,
+                    index_outcome='success',
+                    duration=duration,
+                    cat=cat,
+                )
                 return
         # returning an error message means item did not index
         return {'error_message': last_exc, 'time': curr_time, 'uuid': str(uuid)}

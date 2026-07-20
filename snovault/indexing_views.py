@@ -8,6 +8,7 @@ from pyramid.settings import asbool
 from timeit import default_timer as timer
 
 from .elasticsearch.indexer_utils import find_uuids_for_indexing
+from .elasticsearch.interfaces import SECONDARY_INDEXING_COALESCER
 from .embed import make_subrequest
 from .interfaces import CONNECTION, STORAGE
 from .resources import Item
@@ -271,6 +272,12 @@ def indexing_info(context, request):
     es_model = request.registry[STORAGE].read.get_by_uuid(uuid)
     es_sid = es_model.sid if es_model is not None else None
     response = {'sid_db': db_sid, 'sid_es': es_sid, 'title': 'Indexing Info for %s' % uuid}
+    coalescer = request.registry.get(SECONDARY_INDEXING_COALESCER)
+    if coalescer is not None and coalescer.enabled:
+        try:
+            response['secondary_coalescing'] = coalescer.inspect(uuid)
+        except Exception as error:
+            response['secondary_coalescing_error'] = repr(error)
     if asbool(request.params.get('run', True)):
         request._indexing_view = True
         request.datastore = 'database'

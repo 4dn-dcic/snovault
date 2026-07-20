@@ -6,6 +6,15 @@ snovault
 Change Log
 ----------
 
+11.34.1
+=======
+
+* Add rollout-gated PostgreSQL coalescing for secondary-only indexing fan-out while
+  retaining SQS transport and leaving primary edit events unchanged. Namespace-keyed
+  pending state, sid-aware consumer claims, stranded-send sweeping, bounded audited
+  controls, and structured pressure/latency instrumentation preserve at-least-once
+  full renders across concurrency, redelivery, crashes, and blue/green operation.
+
 11.34.0
 =======
 
