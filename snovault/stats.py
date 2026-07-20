@@ -79,8 +79,15 @@ def stats_tween_factory(handler, registry):
                 log_keys['telemetry_id'] = request.params['telemetry_id']
             if 'log_action' in request.params:
                 log_keys['log_action'] = request.params['log_action']
-            if request.registry.settings.get('env_name'):
-                log_keys['ff_env'] = request.registry.settings.get('env_name')
+            # NOTE: the setting key is the dotted 'env.name' (as read everywhere else in the
+            # framework -- util.get_env_name, authentication, root, indexer_queue, ...), NOT the
+            # underscore 'env_name'. The underscore form was a typo that no code ever sets, so
+            # 'ff_env' -- the primary environment filter/facet for log aggregation and for any
+            # consumer Sentry LoggingIntegration that captures this "Request timings" event --
+            # was silently always absent. (Audit finding T4.)
+            env_name = request.registry.settings.get('env.name')
+            if env_name:
+                log_keys['ff_env'] = env_name
 
             # If stray unicode characters are inserted in the query string, for example, it's possible
             # to get an error such as:

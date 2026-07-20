@@ -6,14 +6,56 @@ snovault
 Change Log
 ----------
 
-11.34.0
-========
+11.34.1
+=======
 
 * Add rollout-gated PostgreSQL coalescing for secondary-only indexing fan-out while
   retaining SQS transport and leaving primary edit events unchanged. Namespace-keyed
   pending state, sid-aware consumer claims, stranded-send sweeping, bounded audited
   controls, and structured pressure/latency instrumentation preserve at-least-once
   full renders across concurrency, redelivery, crashes, and blue/green operation.
+
+11.34.0
+=======
+
+* Security (audit finding T0): fix a broken-object-level-authorization flaw in the
+  ``AccessKey`` ``reset-secret`` view (``snovault/types/access_key.py``). The view was gated
+  on ``permission='add'``; on an ``AccessKey`` *item* context that permission has no matching
+  ACE (the item ACL's terminal deny covers only ``view``/``edit``), so it fell through to the
+  access-keys collection's ``(Allow, Authenticated, 'add')`` -- letting any authenticated user
+  rotate and read any other user's access-key secret, then authenticate as that user. The view
+  is now gated on ``permission='edit'`` (item-scoped to ``role.owner`` + ``group.admin``).
+  Collection-level ``add`` (self-service key creation) is unchanged. Adds owner/admin/non-owner
+  regression tests.
+
+* Reliability (audit finding T8): a single malformed SQS ingestion message no longer
+  crash-loops the ingestion listener. ``IngestionListener.run`` now routes each message through
+  a new ``handle_one_message`` that isolates JSON/uuid parse failures and handler exceptions,
+  logs a body-free message identity for diagnosis, deletes unparseable (poison) messages so
+  they cannot redeliver-and-crash the listener every visibility-timeout window, and leaves
+  handler-errored (but structurally valid) messages for redelivery instead of acknowledging
+  them. Adds offline mocked tests for invalid JSON, missing ``uuid``, and handler
+  success/failure/raise. (The separate ES indexer dead-letter-queue policy question, audit
+  finding B-ES-1, is intentionally left unaddressed here.)
+
+* Dependencies (audit finding T7): remove the unused heavy direct dependencies ``pmdarima``
+  and ``xlrd`` (neither is imported anywhere in snovault; both were vestiges of an abandoned
+  Python-3.12 upgrade attempt). This drops the entire ``pmdarima`` scientific-computing closure
+  (``scikit-learn``, ``statsmodels``, ``patsy``, ``scipy``, ``joblib``, ``cython``, ``pandas``,
+  ...) from the lockfile, shrinking installs and CVE surface. ``numpy`` is deliberately
+  retained: consumer apps (fourfront/cgap/smaht-portal/encoded-core) rely on ``dcicsnovault``
+  as their declared ``numpy`` provider and do not declare it themselves, so removing it would
+  break their transitive provision.
+
+* Observability (audit finding T4): fix the per-request "Request timings" structured log so its
+  environment field (``ff_env``) is populated. ``stats_tween`` read the setting from a mistyped
+  key ``env_name`` (underscore) that no code ever sets, instead of the dotted ``env.name`` used
+  everywhere else in the framework, so ``ff_env`` -- the primary environment filter for log
+  aggregation and for any consumer Sentry ``LoggingIntegration`` that captures this event -- was
+  silently always absent. Snovault deliberately does NOT initialize Sentry or depend on
+  ``sentry-sdk``: Sentry is initialized consumer-side (via the ``SENTRY_DSN`` deployment setting,
+  see ``dcicutils`` deployment support), and consumers capture snovault's request/DB timing
+  telemetry by pointing a Sentry (or other) log integration at this now-correct structured event.
 
 11.33.1
 =======
