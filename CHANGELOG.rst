@@ -6,6 +6,39 @@ snovault
 Change Log
 ----------
 
+11.35.0
+=======
+
+* Indexing performance (SQLAlchemy optimization, behavior-preserving): hoist the per-document
+  ``SELECT max(current_propsheets.sid)`` query out of the ``@@index-data`` render. During a
+  queue drain, ``Indexer.update_objects_queue`` already computes the drain-level ``max_sid``
+  once; it now stores it on the request (``request._batch_max_sid``), which
+  ``embed._embed`` propagates to the ``@@index-data`` subrequest, and
+  ``indexing_views.item_index_data`` reuses it instead of recomputing ``context.max_sid`` for
+  every document. Because the drain runs in a single ``READ ONLY REPEATABLE READ`` transaction,
+  the hoisted value is snapshot-invariant, so the indexed ``max_sid`` -- and every other indexed
+  byte -- is unchanged. In the warm batch steady state this removes the only remaining SQL query
+  per document (1 -> 0). Any render outside an indexer drain (a direct
+  ``GET /<uuid>/@@index-data``, or the synchronous indexing path, neither of which sets
+  ``_batch_max_sid``) still computes ``context.max_sid`` exactly as before.
+
+* Testing (indexing-performance guardrails): add deterministic, PostgreSQL-only regression
+  tests (no Elasticsearch). ``test_indexing_perf_guardrails.py`` asserts that (a) the batch
+  path issues zero ``MAX(sid)`` queries while the fallback path issues exactly one, (b) the
+  indexed ``@@index-data`` document is deep-equal with and without the hoist (excluding the
+  non-deterministic ``indexing_stats`` timing block), and (c) canonical cold render query
+  counts are pinned so a new N+1 in the render path fails loudly.
+  ``test_indexer_auth_debug_config.py`` locks in that snovault's shipped configs
+  (``base.ini`` and the ``*.ini.template`` files) never enable
+  ``pyramid.debug_authorization``, which would otherwise add per-view overhead to the indexer
+  render path in production.
+
+* Note: several further indexing optimizations identified during evaluation remain
+  deliberately deferred (request-scoped upgraded-properties memoization, batched reverse-link
+  status loading, embedded link-target prefetch, Pyramid subrequest fast paths, MPIndexer
+  cache-lifetime changes, and a SQLAlchemy 2.0 / de-``baked`` migration). This change ships only
+  the output-neutral ``MAX(sid)`` hoist and its guardrails.
+
 11.34.0
 =======
 

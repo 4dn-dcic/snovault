@@ -27,6 +27,10 @@ def includeme(config):
     config.add_request_method(lambda request: {}, '_aggregated_items', reify=True)
     config.add_request_method(lambda request: {}, '_aggregate_for', reify=True)
     config.add_request_method(lambda request: False, '_indexing_view', reify=True)
+    # Drain-level MAX(sid) hoisted by Indexer.update_objects_queue; defaults to
+    # None so any render outside an indexer drain falls back to context.max_sid
+    # in item_index_data. See indexing_views.item_index_data and _embed below.
+    config.add_request_method(lambda request: None, '_batch_max_sid', reify=True)
     config.add_request_method(lambda request: None, '__parent__', reify=True)
 
 
@@ -178,6 +182,9 @@ def _embed(request, path, as_user='EMBED'):
     subreq._aggregate_for = request._aggregate_for
     subreq._aggregated_items = request._aggregated_items
     subreq._sid_cache = request._sid_cache
+    # Propagate the hoisted drain-level max_sid (None outside an indexer drain)
+    # so the @@index-data render reuses it instead of recomputing MAX(sid).
+    subreq._batch_max_sid = request._batch_max_sid
     if as_user is not True:
         if 'HTTP_COOKIE' in subreq.environ:
             del subreq.environ['HTTP_COOKIE']

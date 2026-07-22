@@ -264,6 +264,15 @@ class Indexer(object):
         # retrieved by a "newer" worker you are guaranteeing an up-to-date embed cache. A rare case indeed but still a
         # possibility. - Will Sept 13 2022
         max_sid = request.registry[STORAGE].write.get_max_sid()
+        # Hoist the drain-level max_sid onto the request so each @@index-data
+        # render (below, via update_object -> request.embed) reuses it instead of
+        # recomputing SELECT max(sid) per document. The drain runs in a single
+        # READ ONLY REPEATABLE READ transaction (set in update_objects), so this
+        # value is snapshot-invariant for the whole drain and the indexed
+        # `max_sid` is byte-identical to the former per-item context.max_sid. A
+        # render outside a drain (e.g. a direct GET /<uuid>/@@index-data, or the
+        # sync path which never sets this) falls back to context.max_sid.
+        request._batch_max_sid = max_sid
         deferred = False  # if true, we need to restart the worker
         messages, target_queue = self.get_messages_from_queue()
         while len(messages) > 0:
