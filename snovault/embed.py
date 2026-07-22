@@ -182,9 +182,10 @@ def _embed(request, path, as_user='EMBED'):
     subreq._aggregate_for = request._aggregate_for
     subreq._aggregated_items = request._aggregated_items
     subreq._sid_cache = request._sid_cache
-    # Propagate the hoisted drain-level max_sid (None outside an indexer drain)
-    # so the @@index-data render reuses it instead of recomputing MAX(sid).
-    subreq._batch_max_sid = request._batch_max_sid
+    # Only the top-level @@index-data subrequest needs the hoisted max_sid.
+    # Do not expose a drain's value to unrelated nested embeds.
+    if '@@index-data' in path:
+        subreq._batch_max_sid = request._batch_max_sid
     if as_user is not True:
         if 'HTTP_COOKIE' in subreq.environ:
             del subreq.environ['HTTP_COOKIE']

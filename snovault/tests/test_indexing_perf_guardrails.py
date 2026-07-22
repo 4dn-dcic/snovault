@@ -32,13 +32,17 @@ does not enter -- so ``execute_counter`` would silently count zero here. The
 recorder counts unconditionally on the engine, so it observes both paths.
 """
 import contextlib
+import json
 import pytest
 
 from copy import deepcopy
+from unittest.mock import Mock
 from dcicutils.qa_utils import notice_pytest_fixtures
 from pyramid.threadlocal import manager
 from sqlalchemy import event
 
+from ..elasticsearch.indexer import Indexer
+from ..embed import _embed
 from ..interfaces import DBSESSION, STORAGE
 
 
@@ -156,6 +160,32 @@ def _cold_reset(registry):
     registry[DBSESSION]().expunge_all()
 
 
+def test_batch_max_sid_only_propagates_to_index_data(dummy_request, monkeypatch):
+    """A drain value must not leak into unrelated nested embed subrequests."""
+    propagated = {}
+
+    def invoke_subrequest(subrequest):
+        propagated[subrequest.path] = subrequest.__dict__.get('_batch_max_sid')
+        # Supply the bookkeeping normally initialized while Pyramid invokes the
+        # subrequest; the result itself is immaterial to this propagation test.
+        subrequest._linked_uuids = set()
+        subrequest._rev_linked_uuids_by_item = {}
+        subrequest._aggregated_items = {}
+        subrequest._sid_cache = {}
+        return {}
+
+    monkeypatch.setattr(dummy_request, 'invoke_subrequest', invoke_subrequest)
+    dummy_request._batch_max_sid = 42
+
+    _embed(dummy_request, '/unrelated/@@object', as_user='INDEXER')
+    _embed(dummy_request, '/target/@@index-data', as_user='INDEXER')
+
+    assert propagated == {
+        '/unrelated/@@object': None,
+        '/target/@@index-data': 42,
+    }
+
+
 # ---------------------------------------------------------------------------
 # 1. MAX(sid) hoist: batch path removes the per-document MAX(sid) query, and the
 #    indexed document is unchanged. Covers both the batch and fallback paths.
@@ -192,6 +222,62 @@ def test_index_data_batch_max_sid_hoist(guardrail_content, dummy_request, thread
     assert batch_doc['max_sid'] == fallback_doc['max_sid'] == batch_max_sid
     assert _doc_without_timings(batch_doc) == _doc_without_timings(fallback_doc)
 
+    # Zero is a valid supplied max_sid, not the fallback sentinel.
+    with sql_recorder.recording():
+        zero_doc = _render_index_data(dummy_request, coll, uuid_val,
+                                      batch_max_sid=0)
+    assert sql_recorder.max_sid_count == 0, uuid_key
+    assert zero_doc['max_sid'] == 0
+
+
+def test_queue_drain_reuses_one_max_sid_for_all_documents(
+        guardrail_content, dummy_request, threadlocals, sql_recorder):
+    """Exercise update_objects_queue -> update_object -> @@index-data itself.
+
+    This guards the actual batch wiring, rather than merely simulating it by
+    setting ``_batch_max_sid`` immediately before a synthetic render.
+    """
+    notice_pytest_fixtures(guardrail_content, dummy_request, threadlocals,
+                           sql_recorder)
+    registry = dummy_request.registry
+    uuids = [GUARDRAIL_SOURCES[0]['uuid'], GUARDRAIL_TARGET['uuid']]
+    messages = []
+    for uuid in uuids:
+        model = registry[STORAGE].write.get_by_uuid(uuid)
+        messages.append({
+            'Body': json.dumps({
+                'uuid': uuid,
+                'sid': model.sid,
+                'timestamp': '2026-01-01T00:00:00',
+                'strict': True,
+            }),
+        })
+    expected_max_sid = registry[STORAGE].write.get_max_sid()
+
+    indexer = Indexer.__new__(Indexer)
+    indexer.registry = registry
+    indexer.es = Mock()
+    indexer.queue = Mock(delete_batch_size=10)
+    indexer.get_messages_from_queue = Mock(side_effect=[
+        (messages, 'primary'),
+        ([], None),
+    ])
+    counter = [0]
+
+    with sql_recorder.recording():
+        errors, deferred = indexer.update_objects_queue(dummy_request, counter)
+
+    assert errors == []
+    assert deferred is False
+    assert counter == [len(uuids)]
+    assert sql_recorder.max_sid_count == 1, sql_recorder.statements
+    assert indexer.es.index.call_count == len(uuids)
+    indexed_documents = [call.kwargs['body']
+                         for call in indexer.es.index.call_args_list]
+    assert [document['uuid'] for document in indexed_documents] == uuids
+    assert all(document['max_sid'] == expected_max_sid
+               for document in indexed_documents)
+
 
 # ---------------------------------------------------------------------------
 # 2. N+1 guardrail: pin the cold query count of a canonical rev-linked render so
@@ -208,14 +294,16 @@ def test_index_data_cold_query_count_is_pinned(guardrail_content, dummy_request,
     with sql_recorder.recording():
         _render_index_data(dummy_request, '/testing-link-targets-sno/',
                            GUARDRAIL_TARGET['uuid'])
-    target_cold = sql_recorder.count
+    target_statements = list(sql_recorder.statements)
+    target_cold = len(target_statements)
 
     # Simple source with a single linkTo, rendered cold (fallback path).
     _cold_reset(registry)
     with sql_recorder.recording():
         _render_index_data(dummy_request, '/testing-link-sources-sno/',
                            GUARDRAIL_SOURCES[0]['uuid'])
-    source_cold = sql_recorder.count
+    source_statements = list(sql_recorder.statements)
+    source_cold = len(source_statements)
 
     # Pinned expectations (see module docstring). Both counts include exactly one
     # MAX(sid) aggregate (fallback path). A new N+1 in the render path makes these
@@ -229,8 +317,8 @@ def test_index_data_cold_query_count_is_pinned(guardrail_content, dummy_request,
     #   additional current source -- that linear growth is exactly the N+1 shape.
     # Source (single linkTo that transitively embeds its target's rev-links)
     #   = 8 cold queries (also 1 MAX(sid)); depends on the same 4-source fan-in.
-    assert target_cold == EXPECTED_TARGET_COLD_QUERIES, sql_recorder.statements
-    assert source_cold == EXPECTED_SOURCE_COLD_QUERIES, sql_recorder.statements
+    assert target_cold == EXPECTED_TARGET_COLD_QUERIES, target_statements
+    assert source_cold == EXPECTED_SOURCE_COLD_QUERIES, source_statements
 
 
 # Baselined empirically (see module docstring and the breakdown above). The
