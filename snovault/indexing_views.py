@@ -214,6 +214,15 @@ def item_index_data(context, request):
             # TODO: This should probably be logged. -kmp 22-Oct-2020
             pass
 
+    # Reuse the drain-level max_sid when indexing through the queue (set on the
+    # request by Indexer.update_objects_queue). It is snapshot-invariant under
+    # the drain's READ ONLY REPEATABLE READ transaction, so this is byte-identical
+    # to context.max_sid but avoids a per-document SELECT max(sid). Any render
+    # outside an indexer drain leaves _batch_max_sid unset (None) and computes
+    # context.max_sid as before. Note `0` is a valid max_sid, so test `is None`.
+    batch_max_sid = request._batch_max_sid
+    max_sid = context.max_sid if batch_max_sid is None else batch_max_sid
+
     document = {
         'aggregated_items': aggregated_items,
         'embedded': embedded_view,
@@ -222,7 +231,7 @@ def item_index_data(context, request):
         'linked_uuids_embedded': join_linked_uuids_sids(request, linked_uuids_embedded),
         'linked_uuids_object': join_linked_uuids_sids(request, linked_uuids_object),
         'links': links,
-        'max_sid': context.max_sid,
+        'max_sid': max_sid,
         'object': object_view,
         'paths': sorted(paths),
         'principals_allowed': principals_allowed,
