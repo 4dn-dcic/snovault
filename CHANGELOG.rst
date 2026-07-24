@@ -6,6 +6,21 @@ snovault
 Change Log
 ----------
 
+11.35.1
+=======
+
+* Fix logging noise (Sentry error events) from ``extra_kwargs_for_s3_encrypt_key_id``
+  (``snovault/util.py``): the normal, successful encrypted-upload path -- reached on every
+  routine ``s3_output_stream``/``create_empty_s3_file`` upload once a KMS encrypt key is
+  configured -- previously logged at ``log.error``, generating a Sentry error event for
+  completely expected behavior. That path now logs at ``log.info`` instead, and no longer
+  includes the KMS key identifier value in the log message. The no-key path (this setting is
+  optional; many environments legitimately have no KMS key configured) is downgraded to
+  ``log.warning`` rather than removed, so it stays visible without generating a Sentry error.
+  The actual S3 ``ExtraArgs`` (``ServerSideEncryption: aws:kms`` / ``SSEKMSKeyId``) are
+  unchanged. Added regression coverage in ``snovault/tests/test_util.py`` asserting the built
+  ``ExtraArgs`` for both paths and that the encrypted path no longer logs at error level.
+
 11.35.0
 =======
 
