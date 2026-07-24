@@ -3,10 +3,13 @@ import pytest
 import random
 import re
 
+from unittest import mock
+
 from dcicutils.misc_utils import override_environ
+from .. import util
 from ..util import (
     dictionary_lookup, DictionaryKeyError, merge_calculated_into_properties, CachedField,
-    generate_indexer_namespace_for_testing,
+    generate_indexer_namespace_for_testing, extra_kwargs_for_s3_encrypt_key_id, ExtraArgs,
 )
 
 
@@ -225,3 +228,40 @@ class TestCachedField:
         assert field.timeout == self.DEFAULT_TIMEOUT
         field.set_timeout(30)
         assert field.timeout == 30
+
+
+class TestExtraKwargsForS3EncryptKeyId:
+    """ extra_kwargs_for_s3_encrypt_key_id's normal (has-key) path must not log at error
+        level -- that previously generated a Sentry error event on every routine encrypted
+        S3 upload -- while the actual S3 encryption ExtraArgs must be unchanged. """
+
+    KEY_ID = "some-kms-key-id"
+
+    def test_encrypted_path_builds_correct_extra_args(self):
+        extra_kwargs = extra_kwargs_for_s3_encrypt_key_id(s3_encrypt_key_id=self.KEY_ID,
+                                                          client_name='test_client')
+        assert extra_kwargs == {
+            "ExtraArgs": {
+                ExtraArgs.SERVER_SIDE_ENCRYPTION: "aws:kms",
+                ExtraArgs.SSE_KMS_KEY_ID: self.KEY_ID,
+            }
+        }
+
+    def test_encrypted_path_does_not_log_error(self):
+        with mock.patch.object(util, 'log') as mocked_log:
+            extra_kwargs_for_s3_encrypt_key_id(s3_encrypt_key_id=self.KEY_ID, client_name='test_client')
+        assert mocked_log.error.call_count == 0
+        assert mocked_log.info.call_count == 1
+        # The KMS key identifier itself should not be logged.
+        logged_message = mocked_log.info.call_args[0][0]
+        assert self.KEY_ID not in logged_message
+
+    def test_no_key_path_returns_no_extra_args(self):
+        extra_kwargs = extra_kwargs_for_s3_encrypt_key_id(s3_encrypt_key_id=None, client_name='test_client')
+        assert extra_kwargs == {}
+
+    def test_no_key_path_logs_warning_not_error(self):
+        with mock.patch.object(util, 'log') as mocked_log:
+            extra_kwargs_for_s3_encrypt_key_id(s3_encrypt_key_id=None, client_name='test_client')
+        assert mocked_log.error.call_count == 0
+        assert mocked_log.warning.call_count == 1
