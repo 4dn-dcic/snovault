@@ -314,8 +314,13 @@ def filter_invalidation_scope(registry, diff, invalidated_with_type, secondary_u
             # be embedded! In addition, if you embed * on a linkTo, modifications to that linkTo will ALWAYS
             # invalidate the item_type
             for field in all_possible_diffs:
-                # if terminal field matches a diff exactly, invalidate
-                if terminal_field == field:
+                # if terminal field matches a diff exactly, or the diff is a link/object field
+                # that lies on the embedded path to the terminal field (e.g. terminal
+                # 'sample_objects.associated_sample.alias' with diff 'sample_objects.associated_sample',
+                # a nested-object/array-of-object linkTo edit), invalidate. The `field + '.'` guard
+                # keeps this a token-boundary prefix match, not an unbounded string prefix, so a diff
+                # like 'associated_sample' does not match a sibling 'associated_sample_other'.
+                if terminal_field == field or terminal_field.startswith(field + '.'):
                     log.info(f'Invalidating item type {invalidated_item_type} based on edit to field {field} given exact'
                              f'embed {terminal_field}')
                 # if terminal field is *, invalidate

@@ -366,6 +366,126 @@ class TestInvalidationScopeUnit:
         assert abstract_item_type_child_types == ['AbstractItemTestSecondSubItem', 'AbstractItemTestSubItem']
 
 
+class _FakeTypeInfo:
+    """ Minimal stand-in for a registry TypeInfo: crawl_schema only needs `.schema`. """
+    def __init__(self, schema):
+        self.schema = schema
+
+
+class _FakeTypes:
+    """ Minimal stand-in for registry[TYPES]: crawl_schema only needs `.all[linkTo]`. """
+    def __init__(self, mapping):
+        self.all = mapping
+
+
+class _FakeRegistry:
+    """ Minimal registry that only answers registry['types'] (what crawl_schema uses).
+        All other registry access in filter_invalidation_scope goes through the
+        extract_*/determine_* helpers, which these tests mock out. """
+    def __init__(self, types):
+        self._types = types
+
+    def __getitem__(self, key):
+        if key == 'types':
+            return self._types
+        raise KeyError(key)
+
+
+class TestInvalidationScopeNestedLinkUnit:
+    """ Regression coverage for the false negative where a linkTo nested inside an object or
+        array-of-objects on an intermediate linked item was not recognized as lying on an embed
+        path to a deeper leaf, so embedders were wrongly pruned and kept a stale ES document.
+
+        These drive the REAL filter_invalidation_scope + crawl_schema against a small fake type
+        registry (no ES/Postgres needed): an 'Embedder' type embeds through a leading linkTo into
+        an 'Intermediate' type whose nested link points at a 'Leaf' type. The edit repoints that
+        nested link on 'Intermediate' (the exact shape DiffManager produces for a nested-object or
+        array-of-object linkTo patch, with array subscripts elided). """
+
+    EMBEDDER = 'Embedder'
+    INTERMEDIATE = 'Intermediate'
+    LEAF = 'Leaf'
+
+    LEAF_SCHEMA = {'properties': {'name': {'type': 'string'}, 'other': {'type': 'string'}}}
+
+    # Intermediate reached via leading linkTo 'leading_link'; it holds the nested link two ways.
+    OBJECT_INTERMEDIATE_SCHEMA = {
+        'properties': {
+            'meta': {
+                'type': 'object',
+                'properties': {
+                    'owner': {'type': 'string', 'linkTo': LEAF},
+                    'sibling': {'type': 'string', 'linkTo': LEAF},
+                }
+            }
+        }
+    }
+    ARRAY_INTERMEDIATE_SCHEMA = {
+        'properties': {
+            'samples': {
+                'type': 'array',
+                'items': {
+                    'type': 'object',
+                    'properties': {
+                        'associated': {'type': 'string', 'linkTo': LEAF},
+                        'sibling': {'type': 'string', 'linkTo': LEAF},
+                    }
+                }
+            }
+        }
+    }
+
+    EMBEDDER_SCHEMA = {'leading_link': {'type': 'string', 'linkTo': INTERMEDIATE}}
+
+    def _run(self, intermediate_schema, embedded_list, diff):
+        """ Returns len(secondary) after filtering a single Embedder uuid. """
+        registry = _FakeRegistry(_FakeTypes({
+            self.INTERMEDIATE: _FakeTypeInfo(intermediate_schema),
+            self.LEAF: _FakeTypeInfo(self.LEAF_SCHEMA),
+        }))
+        invalidated = [(UUID1, self.EMBEDDER)]
+        secondary = {UUID1}
+        with invalidation_scope_mocks(schema=self.EMBEDDER_SCHEMA, embedded_list=embedded_list,
+                                      base_types=[], child_types=[]):
+            filter_invalidation_scope(registry, diff, invalidated, secondary)
+        return len(secondary)
+
+    def test_nested_object_link_edit_invalidates(self):
+        """ Editing meta.owner (nested-object linkTo) on Intermediate must invalidate an embedder
+            of leading_link.meta.owner.name. """
+        assert self._run(self.OBJECT_INTERMEDIATE_SCHEMA,
+                         ['leading_link.meta.owner.name'],
+                         [self.INTERMEDIATE + '.meta.owner']) == 1
+
+    def test_array_of_object_link_edit_invalidates(self):
+        """ Editing samples.associated (array-of-object linkTo) on Intermediate must invalidate an
+            embedder of leading_link.samples.associated.name. """
+        assert self._run(self.ARRAY_INTERMEDIATE_SCHEMA,
+                         ['leading_link.samples.associated.name'],
+                         [self.INTERMEDIATE + '.samples.associated']) == 1
+
+    def test_nested_object_sibling_link_edit_does_not_invalidate(self):
+        """ True negative: editing a sibling nested link (meta.sibling) that is not on the embed
+            path must NOT invalidate. """
+        assert self._run(self.OBJECT_INTERMEDIATE_SCHEMA,
+                         ['leading_link.meta.owner.name'],
+                         [self.INTERMEDIATE + '.meta.sibling']) == 0
+
+    def test_array_of_object_sibling_link_edit_does_not_invalidate(self):
+        """ True negative (array variant): editing samples.sibling must NOT invalidate an embedder
+            of leading_link.samples.associated.name. """
+        assert self._run(self.ARRAY_INTERMEDIATE_SCHEMA,
+                         ['leading_link.samples.associated.name'],
+                         [self.INTERMEDIATE + '.samples.sibling']) == 0
+
+    def test_token_boundary_prefix_does_not_invalidate(self):
+        """ The prefix match is token-bounded (field + '.'), so a diff that is a bare string prefix
+            of a path token (meta.own vs meta.owner) must NOT invalidate. """
+        assert self._run(self.OBJECT_INTERMEDIATE_SCHEMA,
+                         ['leading_link.meta.owner.name'],
+                         [self.INTERMEDIATE + '.meta.own']) == 0
+
+
 ###########################################################
 # Tests based on actual views defined in testing_views.py #
 ###########################################################
@@ -591,6 +711,29 @@ class TestingInvalidationScopeIntegrated:
         secondary = {obj['@id'] for obj in groups}
         with type_embedded_list_mock(embedded_list=['sources.sample_objects.notes']):
             self.runtest(testapp, diff, invalidated, secondary, 1)
+
+    def test_invalidation_scope_integrated_nested_array_link_edit(self, testapp, invalidation_scope_workbook):
+        """ Regression (real schemas) for the nested array-of-object link false negative: patching
+            biosource.sample_objects.associated_sample (repointing the nested linkTo) must invalidate
+            a biogroup that embeds through it via sources.sample_objects.associated_sample.alias -
+            editing the nested link changes the embedded alias, so the embedder must be re-indexed. """
+        groups, _, _, _ = invalidation_scope_workbook
+        diff = ['TestingBiosourceSno.sample_objects.associated_sample']
+        invalidated = [(obj['@id'], obj['@type'][0]) for obj in groups]
+        secondary = {obj['@id'] for obj in groups}
+        with type_embedded_list_mock(embedded_list=['sources.sample_objects.associated_sample.alias']):
+            self.runtest(testapp, diff, invalidated, secondary, 1)
+
+    def test_invalidation_scope_integrated_nested_array_sibling_edit(self, testapp, invalidation_scope_workbook):
+        """ True negative companion to the above: patching a sibling nested field (sample_objects.notes)
+            that is not on the sources.sample_objects.associated_sample.alias embed path must NOT
+            invalidate the biogroup. """
+        groups, _, _, _ = invalidation_scope_workbook
+        diff = ['TestingBiosourceSno.sample_objects.notes']
+        invalidated = [(obj['@id'], obj['@type'][0]) for obj in groups]
+        secondary = {obj['@id'] for obj in groups}
+        with type_embedded_list_mock(embedded_list=['sources.sample_objects.associated_sample.alias']):
+            self.runtest(testapp, diff, invalidated, secondary, 0)
 
     @pytest.mark.parametrize('diff,expected', [
         (['TestingNoteSno.superseding_note'], 2),

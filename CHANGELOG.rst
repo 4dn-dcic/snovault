@@ -6,14 +6,89 @@ snovault
 Change Log
 ----------
 
-11.34.1
-=======
+11.36.0.0b1
+===========
 
 * Add rollout-gated PostgreSQL coalescing for secondary-only indexing fan-out while
   retaining SQS transport and leaving primary edit events unchanged. Namespace-keyed
   pending state, sid-aware consumer claims, stranded-send sweeping, bounded audited
   controls, and structured pressure/latency instrumentation preserve at-least-once
   full renders across concurrency, redelivery, crashes, and blue/green operation.
+  Prerelease/beta cut for pinning and integration testing from smaht-portal ahead of
+  the ``11.36.0`` final.
+
+11.35.2
+=======
+
+* Invalidation-scope correctness (``snovault/elasticsearch/indexer_utils.py``,
+  ``filter_invalidation_scope``): fix a false negative in secondary-reindexing scope. When a
+  changed item had a ``linkTo`` field nested inside an object or array-of-objects (e.g. a diff
+  ``sample_objects.associated_sample``), the field-match loop only recognized a diff as lying on
+  an embed path when the terminal embed field equaled it exactly or was a single path token in the
+  embed. A nested link is a multi-token string, so an embed such as
+  ``sources.sample_objects.associated_sample.alias`` was not matched and every embedder was wrongly
+  pruned from re-indexing, leaving a stale Elasticsearch document. The match loop now also treats a
+  diff field as on-path when the terminal embed field starts with ``field + '.'`` (a token-boundary
+  prefix, not an unbounded string prefix, so ``associated_sample`` still does not match a sibling
+  ``associated_sample_other``). Behavior for direct links, leaf edits, wildcard embeds, parent/child
+  types, default embeds, creates/deletes, and reverse links is unchanged.
+
+* Testing: add focused regression coverage in ``snovault/tests/test_invalidation_scope.py`` for the
+  above -- ``TestInvalidationScopeNestedLinkUnit`` (service-free unit tests driving the real
+  ``filter_invalidation_scope``/``crawl_schema`` against a small fake type registry, covering both
+  the nested-object and array-of-object link edits plus true-negative sibling and token-boundary
+  cases) and two integrated tests exercising the real biosource ``sample_objects.associated_sample``
+  schema shape (positive and true-negative sibling). The pre-existing ``TestInvalidationScopeUnit``
+  class remains skipped: its mocks predate the current backtracking matcher and crawl into fake
+  ``linkTo`` target types that are not registered, so repairing it was out of scope for this fix.
+
+11.35.1
+=======
+
+* Fix logging noise (Sentry error events) from ``extra_kwargs_for_s3_encrypt_key_id``
+  (``snovault/util.py``): the normal, successful encrypted-upload path -- reached on every
+  routine ``s3_output_stream``/``create_empty_s3_file`` upload once a KMS encrypt key is
+  configured -- previously logged at ``log.error``, generating a Sentry error event for
+  completely expected behavior. That path now logs at ``log.info`` instead, and no longer
+  includes the KMS key identifier value in the log message. The no-key path (this setting is
+  optional; many environments legitimately have no KMS key configured) is downgraded to
+  ``log.warning`` rather than removed, so it stays visible without generating a Sentry error.
+  The actual S3 ``ExtraArgs`` (``ServerSideEncryption: aws:kms`` / ``SSEKMSKeyId``) are
+  unchanged. Added regression coverage in ``snovault/tests/test_util.py`` asserting the built
+  ``ExtraArgs`` for both paths and that the encrypted path no longer logs at error level.
+
+11.35.0
+=======
+
+* Indexing performance (SQLAlchemy optimization, behavior-preserving): hoist the per-document
+  ``SELECT max(current_propsheets.sid)`` query out of the ``@@index-data`` render. During a
+  queue drain, ``Indexer.update_objects_queue`` already computes the drain-level ``max_sid``
+  once; it now stores it on the request (``request._batch_max_sid``), which
+  ``embed._embed`` propagates to the ``@@index-data`` subrequest, and
+  ``indexing_views.item_index_data`` reuses it instead of recomputing ``context.max_sid`` for
+  every document. Because the drain runs in a single ``READ ONLY REPEATABLE READ`` transaction,
+  the hoisted value is snapshot-invariant, so the indexed ``max_sid`` -- and every other indexed
+  byte -- is unchanged. In the warm batch steady state this removes the only remaining SQL query
+  per document (1 -> 0). Any render outside an indexer drain (a direct
+  ``GET /<uuid>/@@index-data``, or the synchronous indexing path, neither of which sets
+  ``_batch_max_sid``) still computes ``context.max_sid`` exactly as before.
+
+* Testing (indexing-performance guardrails): add deterministic, PostgreSQL-only regression
+  tests (no Elasticsearch). ``test_indexing_perf_guardrails.py`` asserts that (a) the batch
+  path issues zero ``MAX(sid)`` queries while the fallback path issues exactly one, (b) the
+  indexed ``@@index-data`` document is deep-equal with and without the hoist (excluding the
+  non-deterministic ``indexing_stats`` timing block), and (c) canonical cold render query
+  counts are pinned so a new N+1 in the render path fails loudly.
+  ``test_indexer_auth_debug_config.py`` locks in that snovault's shipped configs
+  (``base.ini`` and the ``*.ini.template`` files) never enable
+  ``pyramid.debug_authorization``, which would otherwise add per-view overhead to the indexer
+  render path in production.
+
+* Note: several further indexing optimizations identified during evaluation remain
+  deliberately deferred (request-scoped upgraded-properties memoization, batched reverse-link
+  status loading, embedded link-target prefetch, Pyramid subrequest fast paths, MPIndexer
+  cache-lifetime changes, and a SQLAlchemy 2.0 / de-``baked`` migration). This change ships only
+  the output-neutral ``MAX(sid)`` hoist and its guardrails.
 
 11.34.0
 =======
