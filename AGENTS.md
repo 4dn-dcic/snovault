@@ -349,6 +349,20 @@ real `testapp.app.registry` so `crawl_schema` can resolve the real embed path â€
 `snovault/tests/test_invalidation_scope.py`. Before trusting a regression test for a
 mutation/aliasing bug, temporarily revert the fix and confirm the test actually fails.
 
+The field-match loop's on-path check is a **token-boundary prefix**: a diff field counts as
+lying on an embed path when the terminal embed field equals it *or* starts with `field + '.'`
+(never a bare unbounded `startswith`, which would let `associated_sample` match a sibling
+`associated_sample_other`). This is what makes an edit to a `linkTo` nested inside an object or
+array-of-objects (diff `sample_objects.associated_sample`) invalidate an embedder of
+`sources.sample_objects.associated_sample.alias`; before this, only exact-terminal or
+single-token top-level links matched, so nested-link edits silently kept a stale ES doc.
+The service-free way to exercise the matcher for both nested-object and array-of-object shapes
+is `TestInvalidationScopeNestedLinkUnit` (a tiny fake type registry feeding the real
+`filter_invalidation_scope`/`crawl_schema`). Note the older `TestInvalidationScopeUnit` class is
+**deliberately still `@pytest.mark.skip`**: its mocks predate the current backtracking matcher and
+crawl into fake `linkTo` target types (`Item_C`, ...) that are not registered, so `crawl_schema`
+raises on the full-embed prefix â€” don't waste time trying to just un-skip it.
+
 ## `ItemNamespace.__getattr__` sharp edge (calculated.py)
 
 `ItemNamespace.__getattr__` resolves unknown names via `self.registry` / `self._properties`
