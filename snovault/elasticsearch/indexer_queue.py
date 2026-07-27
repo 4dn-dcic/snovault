@@ -17,7 +17,11 @@ from dcicutils.misc_utils import ignored, RateManager, LockoutManager
 from pyramid.view import view_config
 
 from .indexer_utils import get_uuids_for_types
-from .interfaces import INDEXER_QUEUE, INDEXER_QUEUE_MIRROR
+from .interfaces import (
+    INDEXER_QUEUE,
+    INDEXER_QUEUE_MIRROR,
+    SECONDARY_INDEXING_COALESCER,
+)
 from ..util import debug_log
 
 log = structlog.getLogger(__name__)
@@ -125,6 +129,17 @@ def indexing_status(context, request):
     else:
         for queue in numbers:
             response[queue] = numbers[queue]
+        coalescer = request.registry.get(SECONDARY_INDEXING_COALESCER)
+        if coalescer is not None and coalescer.enabled:
+            try:
+                response['secondary_coalescing'] = coalescer.status()
+            except Exception as error:
+                log.exception('Unable to read secondary coalescing status')
+                response['secondary_coalescing'] = {
+                    'mode': coalescer.mode,
+                    'namespace': coalescer.namespace,
+                    'status_error': repr(error),
+                }
         response['display_title'] = 'Indexing Status'
         response['status'] = 'Success'
     return response
@@ -208,6 +223,7 @@ class QueueManager(object):
         self.receive_batch_size = 10
         self.delete_batch_size = 10
         self.replace_batch_size = 10
+        self.registry = registry
         if self.USE_RATE_MANAGER:
             self.collision_manager = RateManager(action="purge_queue", interval_seconds=self.PURGE_QUEUE_LOCKOUT_SECONDS,
                                                  safety_seconds=self.PURGE_QUEUE_SAFETY_SECONDS,
@@ -301,7 +317,7 @@ class QueueManager(object):
         return namespace[:80].replace('.', '-').replace(' ', '').replace("’", '')
 
     def add_uuids(self, registry, uuids, strict=False, target_queue='primary',
-                  sid=None, telemetry_id=None):
+                  sid=None, telemetry_id=None, coalesced=False, origin=None):
         """
         Takes a list of string uuids queues them up. Also requires a registry,
         which is passed in automatically when using the /queue_indexing route.
@@ -322,6 +338,10 @@ class QueueManager(object):
             temp = {'uuid': uuid, 'sid': sid, 'strict': strict, 'timestamp': curr_time}
             if telemetry_id:
                 temp['telemetry_id'] = telemetry_id
+            if coalesced:
+                temp['coalesced'] = True
+            if origin:
+                temp['origin'] = origin
             items.append(temp)
         failed = self.send_messages(items, target_queue=target_queue)
         return uuids, failed
@@ -492,6 +512,13 @@ class QueueManager(object):
             except self.client.exceptions.PurgeQueueInProgress:
                 log.warning('\n___QUEUE IS ALREADY BEING PURGED: %s___\n' % queue_url,
                             queue_url=queue_url)
+        self._release_secondary_state()
+
+    def _release_secondary_state(self):
+        coalescer = (self.registry.get(SECONDARY_INDEXING_COALESCER)
+                     if hasattr(self.registry, 'get') else None)
+        if coalescer is not None and coalescer.namespace == self.env_name:
+            coalescer.release_all()
 
     def clear_queue(self):
         """
@@ -503,6 +530,7 @@ class QueueManager(object):
             while msgs:
                 self.delete_messages(msgs, target)
                 msgs = self.receive_messages(target)
+        self._release_secondary_state()
 
     def delete_queue(self, queue_url):
         """
@@ -512,6 +540,8 @@ class QueueManager(object):
         response = self.client.delete_queue(
             QueueUrl=queue_url
         )
+        if queue_url in {self.second_queue_url, self.dlq_url}:
+            self._release_secondary_state()
         setattr(self, queue_url, None)
         return response
 
@@ -576,14 +606,27 @@ class QueueManager(object):
                 to_retry = []
                 for fail_message in failed_messages:
                     fail_id = fail_message.get('Id')
-                    if not fail_id:
+                    if fail_id is None:
                         log.error('INDEXING: Non-retryable error sending message: %s' %
                                   str(fail_message), target_queue=target_queue)
                         continue  # cannot retry this message without an Id
                     to_retry.extend([json.loads(ent['MessageBody']) for ent in entries if ent['Id'] == fail_id])
                 if to_retry:
                     failed_messages = self.send_messages(to_retry, target_queue, retries=retries+1)
-            failed.extend(failed_messages)
+            for failed_message in failed_messages:
+                if (isinstance(failed_message, dict)
+                        and not failed_message.get('uuid')):
+                    fail_id = failed_message.get('Id')
+                    try:
+                        failed_index = int(fail_id)
+                    except (TypeError, ValueError):
+                        failed_index = None
+                    if (failed_index is not None and 0 <= failed_index < len(msg_batch)
+                            and isinstance(msg_batch[failed_index], dict)
+                            and msg_batch[failed_index].get('uuid')):
+                        failed_message = dict(failed_message)
+                        failed_message['uuid'] = msg_batch[failed_index]['uuid']
+                failed.append(failed_message)
         return failed
 
     def receive_messages(self, target_queue='primary', wait_time_seconds=2):
@@ -610,7 +653,8 @@ class QueueManager(object):
         response = self.client.receive_message(
             QueueUrl=queue_url,
             MaxNumberOfMessages=self.receive_batch_size,
-            WaitTimeSeconds=wait_time_seconds
+            WaitTimeSeconds=wait_time_seconds,
+            AttributeNames=['ApproximateReceiveCount', 'SentTimestamp'],
         )
         # messages in response include ReceiptHandle and Body, most importantly
         return response.get('Messages', [])
@@ -640,7 +684,15 @@ class QueueManager(object):
                 QueueUrl=queue_url,
                 Entries=batch
             )
-            failed.extend(response.get('Failed', []))
+            batch_failures = response.get('Failed', [])
+            if batch_failures:
+                log.error(
+                    'INDEXING: SQS message deletion failed',
+                    target_queue=target_queue,
+                    failure_count=len(batch_failures),
+                    failures=batch_failures,
+                )
+            failed.extend(batch_failures)
         return failed
 
     def replace_messages(self, messages, target_queue='primary', vis_timeout=5):

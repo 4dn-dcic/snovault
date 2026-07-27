@@ -751,6 +751,7 @@ class RunQueue:
 
     def add_uuids(self, registry, uuids, **kwargs):
         self.added.append((uuids, kwargs))
+        return uuids, []
 
 
 class RunIndices:

@@ -106,6 +106,7 @@ def test_receive_messages_passes_wait_time_seconds():
         QueueUrl=manager.queue_url,
         MaxNumberOfMessages=manager.receive_batch_size,
         WaitTimeSeconds=2,
+        AttributeNames=['ApproximateReceiveCount', 'SentTimestamp'],
     )
 
     mock_client.receive_message.reset_mock()
@@ -114,6 +115,7 @@ def test_receive_messages_passes_wait_time_seconds():
         QueueUrl=manager.queue_url,
         MaxNumberOfMessages=manager.receive_batch_size,
         WaitTimeSeconds=20,
+        AttributeNames=['ApproximateReceiveCount', 'SentTimestamp'],
     )
 
 
@@ -155,6 +157,16 @@ def test_send_messages_retries_failed_entries_by_id():
     retry_kwargs = mock_client.send_message_batch.call_args_list[1].kwargs
     retried_bodies = [json.loads(e['MessageBody']) for e in retry_kwargs['Entries']]
     assert retried_bodies == [{'uuid': 'b'}]
+
+
+def test_send_messages_correlates_final_batch_failures_to_uuids():
+    manager, mock_boto3_client = make_queue_manager(env_name="some-env")
+    mock_client = mock_boto3_client.return_value
+    mock_client.send_message_batch.return_value = {'Failed': [{'Id': '1'}]}
+
+    failed = manager.send_messages([{'uuid': 'a'}, {'uuid': 'b'}], target_queue='secondary')
+
+    assert failed == [{'Id': '1', 'uuid': 'b'}]
 
 
 class FakeQueue:
