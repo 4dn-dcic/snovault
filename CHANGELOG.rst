@@ -6,6 +6,31 @@ snovault
 Change Log
 ----------
 
+11.35.2
+=======
+
+* Invalidation-scope correctness (``snovault/elasticsearch/indexer_utils.py``,
+  ``filter_invalidation_scope``): fix a false negative in secondary-reindexing scope. When a
+  changed item had a ``linkTo`` field nested inside an object or array-of-objects (e.g. a diff
+  ``sample_objects.associated_sample``), the field-match loop only recognized a diff as lying on
+  an embed path when the terminal embed field equaled it exactly or was a single path token in the
+  embed. A nested link is a multi-token string, so an embed such as
+  ``sources.sample_objects.associated_sample.alias`` was not matched and every embedder was wrongly
+  pruned from re-indexing, leaving a stale Elasticsearch document. The match loop now also treats a
+  diff field as on-path when the terminal embed field starts with ``field + '.'`` (a token-boundary
+  prefix, not an unbounded string prefix, so ``associated_sample`` still does not match a sibling
+  ``associated_sample_other``). Behavior for direct links, leaf edits, wildcard embeds, parent/child
+  types, default embeds, creates/deletes, and reverse links is unchanged.
+
+* Testing: add focused regression coverage in ``snovault/tests/test_invalidation_scope.py`` for the
+  above -- ``TestInvalidationScopeNestedLinkUnit`` (service-free unit tests driving the real
+  ``filter_invalidation_scope``/``crawl_schema`` against a small fake type registry, covering both
+  the nested-object and array-of-object link edits plus true-negative sibling and token-boundary
+  cases) and two integrated tests exercising the real biosource ``sample_objects.associated_sample``
+  schema shape (positive and true-negative sibling). The pre-existing ``TestInvalidationScopeUnit``
+  class remains skipped: its mocks predate the current backtracking matcher and crawl into fake
+  ``linkTo`` target types that are not registered, so repairing it was out of scope for this fix.
+
 11.35.1
 =======
 
