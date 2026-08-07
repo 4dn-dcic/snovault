@@ -35,9 +35,11 @@ Change Log
   one. The ordinary (not ``validate_only``) load path is unchanged and still writes.
 
 * Regression coverage in ``snovault/tests/test_post_put_patch.py`` (rejected/accepted cases,
-  ``validate=false``, exact ``asbool`` parameter parsing, unit coverage of ``parse_skip_links``)
-  and ``snovault/tests/test_loadxl_validate_only.py`` (the ``validate_only``/``patch_only``
-  boundary, asserted against the stored item and its revision history).
+  ``validate=false``, exact ``asbool`` parameter parsing, unit coverage of ``parse_skip_links``,
+  and a test pinning that the schema-level sites themselves go through it) and
+  ``snovault/tests/test_loadxl_validate_only.py`` (the ``validate_only``/``patch_only`` boundary
+  asserted against the stored item and its revision history, plus round one's sanctioned
+  ``check_only=true&skip_links=true`` existing-item validation PATCH).
 
 11.35.2
 =======
