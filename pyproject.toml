@@ -46,6 +46,12 @@ elasticsearch = "7.13.4"  # versions >= 7.14.0 lock out AWS ES
 elasticsearch_dsl = "^7.4.0"
 #python-3.12 elasticsearch = "^7.17.9"
 #python-3.12 elasticsearch_dsl = "^7.4.1"
+# NOTE: Redis session authentication (snovault/authentication.py) needs dcicutils to raise
+# RedisException for infrastructure failures across its whole session API. As of 8.19.0 only
+# store_session_token does; from_redis/delete_session_token/update_session_token still leak raw
+# driver errors. Snovault deliberately does not compensate locally. Raise this floor to the
+# release that completes that contract when it ships -- a strict xfail in
+# snovault/tests/test_redis_session_auth.py fails loudly at that moment.
 dcicutils = "^8.18.0"
 future = "^0.18.3"
 html5lib = ">=1.1"  # experimental, should be OK now that we're not using moto server

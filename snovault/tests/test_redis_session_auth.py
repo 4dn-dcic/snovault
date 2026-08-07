@@ -16,7 +16,6 @@ from pyramid.registry import Registry
 from pyramid.request import Request
 from dcicutils.redis_tools import RedisSessionToken
 from dcicutils.redis_utils import RedisException
-from redis.exceptions import ConnectionError as RedisConnectionError
 from unittest import mock
 
 from .. import authentication as auth_module
@@ -430,7 +429,7 @@ def test_redis_mode_never_authenticates_a_raw_jwt_cookie():
 
 def test_redis_anonymous_request_does_not_touch_redis():
     """ No credential at all is anonymous, not an error - even while Redis is down. """
-    redis = FakeRedis(fail_with=RedisConnectionError('redis is down'))
+    redis = FakeRedis(fail_with=RedisException('redis is down'))
     request = make_request(make_registry(redis_handler=redis))
 
     assert Auth0AuthenticationPolicy().unauthenticated_userid(request) is None
@@ -504,10 +503,6 @@ def test_redis_logout_revokes_token_supplied_by_header():
     lambda: None,
     # connection lost at call time, reported with dcicutils' own error type
     lambda: FakeRedis(fail_with=RedisException('down')),
-    # ...and reported as a raw driver error, which is what actually escapes today: dcicutils
-    # normalizes to RedisException in store_session_token only, not in from_redis. See the
-    # REDIS_OPERATIONAL_ERRORS upstream-gap note in authentication.py.
-    lambda: FakeRedis(fail_with=RedisConnectionError('down')),
 ])
 def test_redis_outage_on_authentication_is_operational_error(handler_factory):
     request = make_request(make_registry(redis_handler=handler_factory()),
@@ -517,6 +512,56 @@ def test_redis_outage_on_authentication_is_operational_error(handler_factory):
         Auth0AuthenticationPolicy().unauthenticated_userid(request)
     assert 500 <= exc.value.code < 600
     assert exc.value.code == 503
+
+
+class UnnormalizedRedisFailure(Exception):
+    """ Stands in for any infrastructure error dcicutils has not yet wrapped in RedisException.
+
+        Deliberately NOT `redis.exceptions.ConnectionError`: snovault holds no knowledge of the
+        driver's exception hierarchy, in production code or here.
+    """
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason="PENDING dcicutils release: from_redis does not yet normalize infrastructure errors to "
+           "RedisException (store_session_token already does). Snovault deliberately does not "
+           "bridge this locally - see REDIS_ERROR_CONTRACT_DEPENDENCY in authentication.py. When "
+           "this test XPASSes, the upstream fix has landed: raise the dcicutils floor in "
+           "pyproject.toml and remove this marker."
+)
+def test_unnormalized_redis_error_becomes_503_once_dcicutils_normalizes():
+    """ Locks in the behavior snovault expects once the canonical error contract is complete, and
+        acts as the alarm that tells us the upstream release has shipped.
+    """
+    request = make_request(
+        make_registry(redis_handler=FakeRedis(fail_with=UnnormalizedRedisFailure('down'))),
+        cookie='some-session-token')
+
+    with pytest.raises(RedisSessionUnavailable) as exc:
+        Auth0AuthenticationPolicy().unauthenticated_userid(request)
+    assert exc.value.code == 503
+
+
+def test_unnormalized_redis_error_is_never_a_downgrade():
+    """ The property that must hold regardless of how the upstream error contract evolves: an
+        infrastructure failure never becomes an authentication success or a stateless-JWT fallback.
+
+        Deliberately accepts either outcome, so this test does not itself break when the fix lands:
+        today an unnormalized error escapes as an untyped 500 (a degraded error *label*, not a
+        correctness hole); afterwards it will be a 503. The strict xfail above is the single alarm
+        that tells us which regime we are in.
+    """
+    request = make_request(
+        make_registry(redis_handler=FakeRedis(fail_with=UnnormalizedRedisFailure('down'))),
+        cookie=make_jwt())  # a *valid* JWT: any fallback would authenticate it
+
+    with mock.patch.object(Auth0AuthenticationPolicy, 'get_token_info') as mocked:
+        with pytest.raises((UnnormalizedRedisFailure, RedisSessionUnavailable)):
+            Auth0AuthenticationPolicy().unauthenticated_userid(request)
+        assert mocked.call_count == 0, 'must not fall back to decoding the JWT'
+    # ...and it did not quietly resolve to an authenticated identity
+    assert not hasattr(request, '_auth0_authenticated')
 
 
 def test_redis_outage_on_authentication_does_not_fall_back_to_jwt():
@@ -559,7 +604,7 @@ def test_redis_outage_is_distinct_from_authentication_failure():
 
 def test_session_errors_do_not_leak_the_token(caplog):
     token = 'super-secret-session-token'
-    redis = FakeRedis(fail_with=RedisConnectionError('down'))
+    redis = FakeRedis(fail_with=RedisException('down'))
     request = make_request(make_registry(redis_handler=redis), cookie=token)
 
     with pytest.raises(RedisSessionUnavailable) as exc:

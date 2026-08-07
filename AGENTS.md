@@ -155,10 +155,15 @@ Invariants worth knowing before touching this area:
 - Failure kinds must not collapse: token miss/expiry/revocation/malformation is a 401;
   Redis being unreachable is `RedisSessionUnavailable` (503). `RedisSessionToken.from_redis`
   signals a miss by returning `None`, not by raising, so the distinction never rests on
-  exception types. Known upstream gap: dcicutils normalizes driver errors to `RedisException`
-  in `store_session_token` **only** — `from_redis`, `delete_session_token` and
-  `update_session_token` leak raw `redis.exceptions.*`, which is why
-  `REDIS_OPERATIONAL_ERRORS` still has to name `RedisError`. Drop it if that is fixed upstream.
+  exception types.
+- **Catch only `dcicutils.redis_utils.RedisException`** — never a `redis.exceptions.*` type.
+  Normalizing driver errors is dcicutils' job. As of dcicutils 8.19.0 only
+  `store_session_token` does so; `from_redis`, `delete_session_token` and
+  `update_session_token` still leak raw driver errors, so those paths currently yield an
+  untyped 500 instead of a 503. Snovault deliberately does **not** compensate for that
+  locally — an upstream fix is in progress. A `strict` xfail in
+  `test_redis_session_auth.py` fails loudly once it lands; the follow-up is to raise the
+  `dcicutils` floor in `pyproject.toml` and drop the marker. See `snovault/redis/README.rst`.
 - `registry[REDIS]` can legitimately be `None`: `redis/redis_connection.py::includeme`
   swallows startup connection errors and stores `None`. Always go through
   `get_redis_handler`.

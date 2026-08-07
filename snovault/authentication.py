@@ -30,7 +30,6 @@ from urllib.parse import urlencode
 from snovault.redis.interfaces import REDIS
 from dcicutils.redis_tools import RedisSessionToken
 from dcicutils.redis_utils import RedisException
-from redis.exceptions import RedisError
 
 
 log = structlog.getLogger(__name__)
@@ -79,21 +78,35 @@ SESSION_COOKIE_NAME = 'jwtToken'
 # configured. Only reachable in local/test configurations; deployed environments always set one.
 DEFAULT_SESSION_NAMESPACE = 'snovault'
 
-# Redis failures we treat as *operational* (=> 5xx). A token miss is NOT in here: dcicutils
-# signals that by returning None from `from_redis`, so the 503-vs-401 distinction never depends on
-# exception types.
+# `RedisException` is dcicutils' own error type and the ONLY exception snovault treats as an
+# operational Redis failure. Snovault deliberately holds no knowledge of the redis driver's
+# exception hierarchy: normalizing driver errors is dcicutils' responsibility, and duplicating that
+# contract here would mean two places to keep in step.
 #
-# UPSTREAM GAP: this tuple should ideally be just `RedisException`, dcicutils' own error type, so
-# snovault needs no knowledge of the driver. Today `dcicutils.redis_tools` normalizes driver errors
-# in exactly one of the operations snovault uses -- `store_session_token`, which wraps its body in
-# `except Exception -> raise RedisException`. `from_redis`, `delete_session_token` and
-# `update_session_token` (and every `RedisBase` primitive beneath them) let raw `redis.exceptions.*`
-# through untouched. `from_redis` is on the per-request authentication path, so dropping `RedisError`
-# would turn every request during a Redis outage into an untyped 500 instead of the contracted 503.
-# `redis` is already a direct snovault dependency (pyproject.toml), so this is not a new coupling --
-# but it should be removed once dcicutils normalizes those three functions. Deliberately narrow
-# rather than `except Exception` so genuine programming errors still surface as 500s, not 503s.
-REDIS_OPERATIONAL_ERRORS = (RedisException, RedisError)
+# A token miss is not an error at all -- dcicutils signals it by *returning* None from `from_redis`
+# -- so the 503-vs-401 distinction never depends on exception types.
+#
+# DEPENDENCY: see `REDIS_ERROR_CONTRACT_DEPENDENCY` below for the dcicutils version this requires.
+REDIS_OPERATIONAL_ERRORS = (RedisException,)
+
+# Snovault requires dcicutils to raise `RedisException` for infrastructure failures across the whole
+# session API. As of dcicutils 8.19.0 (checked against 8.18.3, byte-identical) that holds for
+# `store_session_token` only, which wraps its body in `except Exception -> raise RedisException`;
+# `from_redis`, `delete_session_token` and `update_session_token` still let raw driver exceptions
+# through. A dcicutils change completing that contract is in progress.
+#
+# Until it is released and the floor in pyproject.toml is raised, the interim behavior on the
+# unnormalized paths is an untyped 500 rather than the intended 503. That is a degraded error
+# *label*, not a correctness hole: the failure is still 5xx, still logged, and is never silently
+# downgraded into an authentication failure or a stateless-JWT fallback - the properties the
+# two-mode contract actually depends on. Snovault deliberately does NOT bridge the gap locally.
+# `snovault/tests/test_redis_session_auth.py` carries a strict xfail that flips to a hard failure
+# the moment the upstream fix lands, so this note cannot be forgotten.
+REDIS_ERROR_CONTRACT_DEPENDENCY = (
+    'dcicutils must raise RedisException for infrastructure failures in from_redis, '
+    'delete_session_token and update_session_token, as store_session_token already does. '
+    'Pending upstream release; raise the dcicutils floor in pyproject.toml when it ships.'
+)
 
 SESSION_TOKEN_MODE_NOTES = """
 Snovault supports two mutually exclusive authentication modes, selected by configuration:
@@ -184,9 +197,11 @@ def get_redis_handler(request):
 
 
 def _redis_session_call(operation, description, detail):
-    """ Runs one canonical `dcicutils.redis_tools` operation, translating an infrastructure failure
-        into `RedisSessionUnavailable` (503). Pyramid-facing error translation is snovault's job;
-        the Redis behavior itself belongs to dcicutils and is never reimplemented here.
+    """ Runs one canonical `dcicutils.redis_tools` operation, translating dcicutils' own
+        `RedisException` into `RedisSessionUnavailable` (503). Pyramid-facing error translation is
+        snovault's job; the Redis behavior itself belongs to dcicutils and is never reimplemented
+        here - including the job of normalizing driver errors, which is why only `RedisException`
+        is caught (see `REDIS_ERROR_CONTRACT_DEPENDENCY`).
 
         Catching here does NOT blur the outage-vs-invalid-token distinction: dcicutils signals a
         token miss by *returning* None from `from_redis`, never by raising. Only genuine

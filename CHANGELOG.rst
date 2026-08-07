@@ -69,14 +69,22 @@ Change Log
   revocation and rotation resolve the real record first, so the ``<namespace>:session:<token>``
   layout exists only in dcicutils. See the delegation table in ``snovault/redis/README.rst``.
 
-* Known upstream gap (documented, not worked around): ``dcicutils.redis_tools`` normalizes driver
-  errors to ``RedisException`` in ``store_session_token`` only -- ``from_redis``,
-  ``delete_session_token`` and ``update_session_token`` leak raw ``redis.exceptions.*``. Since
-  ``from_redis`` is on the per-request authentication path, ``REDIS_OPERATIONAL_ERRORS`` must still
-  name ``redis.exceptions.RedisError`` or an outage would surface as an untyped 500 rather than the
-  contracted 503. That entry should be removed once dcicutils normalizes those three functions.
+* Snovault catches only ``dcicutils.redis_utils.RedisException`` and holds no knowledge of the
+  redis driver's exception hierarchy; normalizing driver errors is dcicutils' responsibility.
+  As of dcicutils 8.19.0 that contract is only partly implemented -- ``store_session_token``
+  wraps its body in ``except Exception -> raise RedisException``, while ``from_redis``,
+  ``delete_session_token`` and ``update_session_token`` still let raw driver exceptions through.
+  A dcicutils change completing the contract is in progress and snovault deliberately does not
+  compensate for it locally.
 
-* Testing: add ``snovault/tests/test_redis_session_auth.py`` -- 47 tests covering unchanged
+  Interim behavior on the unnormalized paths is an untyped 500 rather than the intended 503 -- a
+  degraded error label, not a correctness hole: the failure is still 5xx, still logged, and is
+  never silently downgraded into an authentication failure or a stateless-JWT fallback. When the
+  dcicutils release lands, raise its floor in ``pyproject.toml`` and drop the ``strict`` xfail in
+  ``test_redis_session_auth.py``, which fails loudly at that moment so the follow-up cannot be
+  lost. See ``snovault/redis/README.rst``.
+
+* Testing: add ``snovault/tests/test_redis_session_auth.py`` -- 48 tests covering unchanged
   no-Redis behavior, Redis-mode login/callback/authenticated request/registration/logout, expiry,
   revocation, re-login, raw-JWT non-bypass, outage-vs-auth-failure distinction, and error messages
   not leaking token values, plus delegation tests pinning the canonical dcicutils primitives.

@@ -69,20 +69,32 @@ In particular, snovault never derives a Redis key itself: revocation and rotatio
 record through ``from_redis`` first, so ``<namespace>:session:<token>`` exists in exactly one place
 (dcicutils) and cannot drift.
 
-Known upstream gap: error normalization
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Dependency: the dcicutils error contract
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-``dcicutils.redis_tools`` normalizes driver errors to its own ``RedisException`` in exactly one of
-the operations snovault uses -- ``store_session_token``, which wraps its body in
-``except Exception -> raise RedisException``. ``from_redis``, ``delete_session_token`` and
-``update_session_token`` (and every ``RedisBase`` primitive beneath them) let raw
-``redis.exceptions.*`` through untouched.
+Snovault catches **only** ``dcicutils.redis_utils.RedisException`` and holds no knowledge of the
+redis driver's exception hierarchy. Normalizing driver errors is dcicutils' responsibility;
+duplicating that contract here would mean two places to keep in step.
 
-Because ``from_redis`` is on the per-request authentication path, snovault's
-``REDIS_OPERATIONAL_ERRORS`` must currently include ``redis.exceptions.RedisError`` alongside
-``RedisException`` -- otherwise every request during a Redis outage would surface as an untyped 500
-instead of the contracted 503. If dcicutils normalizes those three functions, that entry should be
-dropped and snovault will need no knowledge of the driver at all.
+As of dcicutils 8.19.0 (checked against 8.18.3 -- byte-identical) that contract is only partly
+implemented. ``store_session_token`` wraps its body in ``except Exception -> raise RedisException``;
+``from_redis``, ``delete_session_token`` and ``update_session_token`` (and every ``RedisBase``
+primitive beneath them) still let raw driver exceptions through. **A dcicutils change completing
+the contract is in progress.**
+
+Interim behavior on the unnormalized paths is an untyped 500 rather than the intended 503. That is
+a degraded error *label*, not a correctness hole -- the failure is still 5xx, still logged, and is
+never silently downgraded into an authentication failure or a stateless-JWT fallback, which are the
+properties the two-mode contract actually depends on.
+
+When the dcicutils release lands:
+
+1. Raise the ``dcicutils`` floor in ``pyproject.toml`` (there is a note at that line).
+2. Remove the ``@pytest.mark.xfail`` from
+   ``test_unnormalized_redis_error_becomes_503_once_dcicutils_normalizes``.
+
+That xfail is ``strict``, so it turns into a hard test failure the moment the upstream fix is
+present -- the reminder cannot be lost. No snovault code change should be needed.
 
 Key namespace
 -------------
