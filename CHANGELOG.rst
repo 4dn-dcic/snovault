@@ -6,6 +6,66 @@ snovault
 Change Log
 ----------
 
+11.36.0
+=======
+
+* Configurable side-by-side authentication (``snovault/authentication.py``). Snovault now supports
+  exactly two mutually exclusive authentication modes, selected by configuration alone -- the
+  presence of the ``redis.server`` setting, which is the same condition that decides whether
+  ``snovault.redis`` is included at all. The contract is stated in
+  ``authentication.SESSION_TOKEN_MODE_NOTES`` and in ``snovault/redis/README.rst``.
+
+  * **No Redis configured**: the existing stateless Auth0 JWT behavior is unchanged for login,
+    request authentication, registration, logout and cookie handling. ``/callback`` remains
+    refused.
+  * **Redis configured**: ``POST /login`` (the SPA flow the front-end actually uses) and
+    ``GET /callback`` verify the provider JWT once, store it in Redis under
+    ``<namespace>:session:<token>`` with a TTL, and return only an opaque session token. Previously
+    only ``/callback`` had any Redis implementation, so Redis mode was unreachable through the live
+    login flow.
+
+* Redis mode is now strict about failure kinds and cannot be bypassed:
+
+  * The caller-supplied credential is never decoded as a JWT, so a raw JWT presented as a cookie or
+    bearer token is just an unknown Redis key and is rejected. There is no fallback to the
+    stateless path once Redis mode is selected.
+  * Absent / unknown / expired / revoked / malformed session tokens are authentication failures
+    (401) and mark ``request.auth0_expired`` so ``renderers.py`` unsets the stale cookie.
+  * A Redis outage -- including the ``registry[REDIS] is None`` state that
+    ``redis/redis_connection.py::includeme`` leaves behind when it cannot connect at startup -- now
+    raises ``RedisSessionUnavailable`` (HTTP 503) rather than producing a ``500``/``AttributeError``
+    or silently misbehaving.
+  * Anonymous requests return before touching Redis, so an outage cannot take down unauthenticated
+    traffic.
+
+* Per-request authentication (``Auth0AuthenticationPolicy.unauthenticated_userid``) resolves the
+  session token to the identity recorded server-side before authorization. Previously it always
+  tried to decode the cookie as a JWT, so no authenticated request could succeed in Redis mode.
+  Identity comes from the email recorded at login; the server-held JWT is only decoded as a
+  fallback (which keeps the RAS/RS256 flow working and keeps session lifetime governed by exactly
+  one clock, the Redis TTL).
+
+* ``/logout`` now revokes the session server-side in Redis, and ``/login`` and ``/callback`` revoke
+  the caller's previous session before minting a new one. ``/impersonate-user`` wraps its minted
+  token in a session in Redis mode instead of setting a raw JWT cookie that could never resolve.
+
+* ``/callback`` repairs: ``auth0_response.json()`` was called on ``auth0_response`` while it was
+  still ``None`` (an unconditional crash on the Auth0 branch); ``registry.settings['env.name']`` and
+  ``registry[REDIS]`` were read without guards; and ``get_token_info(...).get(...)`` could raise on
+  a ``None`` return. Registration (``create-unauthorized-user``) likewise called
+  ``RedisSessionToken.from_redis(...).decode_jwt(...)`` without checking for the ``None`` returned
+  on a session miss.
+
+* Cookie/token handling is consolidated in ``set_session_cookie`` / ``get_auth_token`` behind the
+  ``SESSION_COOKIE_NAME`` constant so every touchpoint agrees. ``get_jwt`` is retained as a
+  delegating alias for downstream callers.
+
+* Testing: add ``snovault/tests/test_redis_session_auth.py`` -- 40 tests covering unchanged
+  no-Redis behavior, Redis-mode login/callback/authenticated request/registration/logout, expiry,
+  revocation, re-login, raw-JWT non-bypass, outage-vs-auth-failure distinction, and error messages
+  not leaking token values. Runs against a dict-backed ``RedisBase`` fake and locally-signed
+  synthetic JWTs: no live Redis, no cloud credentials and no outbound Auth0 calls.
+
 11.35.2
 =======
 

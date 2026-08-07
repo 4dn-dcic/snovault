@@ -14,7 +14,7 @@ from pyramid.authentication import (
     BasicAuthAuthenticationPolicy as _BasicAuthAuthenticationPolicy,
     CallbackAuthenticationPolicy
 )
-from pyramid.httpexceptions import HTTPForbidden, HTTPUnauthorized
+from pyramid.httpexceptions import HTTPForbidden, HTTPServiceUnavailable, HTTPUnauthorized
 from pyramid.path import DottedNameResolver, caller_package
 from pyramid.security import NO_PERMISSION_REQUIRED
 from pyramid.view import view_config
@@ -29,6 +29,8 @@ from snovault.validators import no_validate_item_content_post
 from urllib.parse import urlencode
 from snovault.redis.interfaces import REDIS
 from dcicutils.redis_tools import RedisSessionToken
+from dcicutils.redis_utils import RedisException
+from redis.exceptions import RedisError
 
 
 log = structlog.getLogger(__name__)
@@ -64,6 +66,40 @@ CONTENT_TYPE = "Content-Type"
 JSON_CONTENT_TYPE = "application/json"
 STANDARD_HEADERS = {CONTENT_TYPE: JSON_CONTENT_TYPE}
 
+# Name of the cookie carrying the caller's credential. Historically this always held a raw
+# Auth0 JWT; when Redis session configuration is present it instead holds an opaque, server-side
+# session token. The name is unchanged in both modes so downstream front-ends keep working, but
+# the *interpretation* is never ambiguous: it is decided solely by `redis_is_active(request)`,
+# i.e. by the presence of the `redis.server` setting - the same condition that decides whether
+# `snovault.redis` is even included (see snovault/__init__.py::main). See
+# `SESSION_TOKEN_MODE_NOTES` below for the full contract.
+SESSION_COOKIE_NAME = 'jwtToken'
+
+# Fallback namespace for Redis session keys when neither `env.name` nor `indexer.namespace` is
+# configured. Only reachable in local/test configurations; deployed environments always set one.
+DEFAULT_SESSION_NAMESPACE = 'snovault'
+
+# Redis failures we treat as *operational* (=> 5xx). Deliberately narrow: a cache miss is not an
+# error (RedisSessionToken.from_redis returns None), and a broad `except Exception` here would
+# collapse the exact distinction between "Redis is down" (5xx) and "this token is not valid"
+# (401) that the two-mode contract depends on.
+REDIS_OPERATIONAL_ERRORS = (RedisException, RedisError)
+
+SESSION_TOKEN_MODE_NOTES = """
+Snovault supports two mutually exclusive authentication modes, selected by configuration:
+
+1. Stateless JWT mode (no `redis.server` setting). The `jwtToken` cookie / `Authorization: Bearer`
+   value IS the Auth0 JWT. It is decoded and verified on every request. This is the historical
+   behavior and is unchanged.
+
+2. Redis session mode (`redis.server` configured). The `jwtToken` cookie / `Authorization: Bearer`
+   value is an opaque session token minted by `make_session_token()`. The Auth0 JWT never leaves
+   the server; it is stored in Redis under `<namespace>:session:<token>` with a TTL. In this mode
+   the server NEVER attempts to interpret the caller-supplied value as a JWT, and never falls back
+   to mode 1 - an unknown/expired/revoked/malformed token is an authentication failure (401) and a
+   Redis outage is an operational failure (503).
+"""
+
 
 def includeme(config):
     config.include('.edw_hash')
@@ -88,9 +124,180 @@ def includeme(config):
     config.add_route('callback', '/callback')
     config.scan(__name__)
 
+class RedisSessionUnavailable(HTTPServiceUnavailable):
+    """ Raised when Redis session mode is configured but the session store cannot be reached.
+
+        This is deliberately a 5xx: it is an operational failure of a required dependency, NOT an
+        authentication failure, and it must never be downgraded into a stateless-JWT fallback.
+    """
+    title = 'Session Store Unavailable'
+
+
 def redis_is_active(request):
-    """ Quick helper to standardize detecting whether redis is in use """
+    """ Quick helper to standardize detecting whether redis is in use.
+
+        NOTE: this intentionally mirrors the exact condition used in snovault/__init__.py::main to
+        decide whether to `config.include('snovault.redis')`, so mode selection can never disagree
+        with whether the Redis machinery was configured at all.
+    """
     return 'redis.server' in request.registry.settings
+
+
+def session_namespace(registry):
+    """ Resolves the Redis key namespace for session tokens.
+
+        Must be resolved identically at every touchpoint (login, callback, per-request auth,
+        registration, logout) - a mismatch would silently 401 every session.
+
+        `env.name` is preferred, but is deliberately NOT required: it is absent in test settings and
+        must stay absent there (a truthy `env.name` makes snovault.elasticsearch's includeme attempt
+        a blue/green mirror lookup that raises without an IDENTITY - see CLAUDE.md).
+    """
+    settings = registry.settings
+    return settings.get('env.name') or settings.get('indexer.namespace') or DEFAULT_SESSION_NAMESPACE
+
+
+def get_redis_handler(request):
+    """ Returns the RedisBase handle for this app, or raises RedisSessionUnavailable (503).
+
+        snovault/redis/redis_connection.py::includeme swallows connection errors at startup and
+        stores None, so a Redis that was unreachable at boot is indistinguishable from a healthy one
+        by looking at settings alone - it has to be caught here.
+    """
+    handler = request.registry.get(REDIS)
+    if handler is None:
+        log.error('Redis session mode is configured but no Redis connection is available')
+        raise RedisSessionUnavailable(
+            detail='Session store is not available. Authentication cannot be performed.'
+        )
+    return handler
+
+
+def resolve_session_token(request, token):
+    """ Resolves an opaque session token to its stored RedisSessionToken record.
+
+        Tri-state, and the distinction matters (each is separately asserted in the test suite):
+          * returns a RedisSessionToken  -> the session is live
+          * returns None                 -> absent / unknown / expired / revoked / malformed token,
+                                            i.e. an authentication failure. NO JWT decode is ever
+                                            attempted on the caller-supplied value, so a raw JWT
+                                            presented in Redis mode simply misses and is rejected.
+          * raises RedisSessionUnavailable -> Redis itself is unreachable (operational, 5xx)
+    """
+    if not token:
+        return None
+    handler = get_redis_handler(request)
+    try:
+        return RedisSessionToken.from_redis(
+            redis_handler=handler,
+            namespace=session_namespace(request.registry),
+            token=token
+        )
+    except REDIS_OPERATIONAL_ERRORS as e:
+        # Note: no token value in the log message - session tokens are credentials.
+        log.error(f'Redis error resolving session token: {type(e).__name__}: {e}')
+        raise RedisSessionUnavailable(
+            detail='Session store is not available. Authentication cannot be performed.'
+        )
+
+
+def create_session_token(request, *, jwt_token, email):
+    """ Mints and persists a new opaque session token wrapping the given (already validated) JWT. """
+    handler = get_redis_handler(request)
+    session = RedisSessionToken(
+        namespace=session_namespace(request.registry),
+        jwt=jwt_token,
+        email=email
+    )
+    try:
+        session.store_session_token(redis_handler=handler)
+    except REDIS_OPERATIONAL_ERRORS as e:
+        log.error(f'Redis error storing session token: {type(e).__name__}: {e}')
+        raise RedisSessionUnavailable(detail='Session store is not available. Cannot establish session.')
+    return session
+
+
+def revoke_session_token(request, token):
+    """ Deletes the given session token from Redis, immediately invalidating it server-side.
+
+        Constructs the key directly rather than reading the record first - revocation should not
+        depend on the record being readable, and it saves a round trip.
+    """
+    if not token:
+        return False
+    handler = get_redis_handler(request)
+    session = RedisSessionToken(
+        namespace=session_namespace(request.registry),
+        jwt='', email='', token=token
+    )
+    try:
+        return session.delete_session_token(redis_handler=handler)
+    except REDIS_OPERATIONAL_ERRORS as e:
+        log.error(f'Redis error revoking session token: {type(e).__name__}: {e}')
+        raise RedisSessionUnavailable(detail='Session store is not available. Cannot revoke session.')
+
+
+def decode_session_jwt(request, session):
+    """ Decodes the JWT held server-side by a resolved session, handling both the Auth0 (HS256 +
+        shared secret) and RAS (RS256 + public key) configurations. Returns None if it cannot be
+        decoded - callers must treat that as an authentication failure, not as an outage.
+    """
+    settings = request.registry.settings
+    auth0_domain = settings.get('auth0.domain') or ''
+    if 'auth0' in auth0_domain:
+        secret = settings.get('auth0.secret')
+        algorithms = JWT_DECODING_ALGORITHMS
+    else:  # RAS
+        secret = settings.get('auth0.public.key')
+        algorithms = ['RS256']
+    if not secret:
+        log.error('No key configured with which to decode the session JWT')
+        return None
+    try:
+        return session.decode_jwt(
+            audience=settings.get('auth0.client'),
+            secret=secret,
+            algorithms=algorithms
+        )
+    except jwt.exceptions.PyJWTError as e:
+        log.error(f'Could not decode JWT held by session: {type(e).__name__}: {e}')
+        return None
+
+
+def session_identity(request, session):
+    """ Returns the lower-cased email identifying a resolved session, or None.
+
+        The stored email is authoritative: it was established by a validated Auth0/RAS login before
+        the session was ever written, and using it (rather than re-decoding the JWT on every
+        request) keeps the session's lifetime governed by exactly one clock - the Redis TTL - and
+        keeps the RAS flow working, whose JWTs `Auth0AuthenticationPolicy.get_token_info` cannot
+        verify. The JWT is only consulted if no email was recorded.
+    """
+    email = session.get_email()
+    if email:  # note: from_redis yields '' (not None) when no email was stored
+        return email.lower()
+    jwt_info = decode_session_jwt(request, session)
+    if not jwt_info:
+        return None
+    email = jwt_info.get('email')
+    return email.lower() if email else None
+
+
+def set_session_cookie(request, value, *, samesite):
+    """ Sets the credential cookie. `value` is a raw JWT in stateless mode and an opaque session
+        token in Redis mode; see SESSION_TOKEN_MODE_NOTES.
+    """
+    request.response.set_cookie(
+        SESSION_COOKIE_NAME,
+        value=value,
+        domain=request.domain,
+        path='/',
+        httponly=True,
+        samesite=samesite,
+        overwrite=True,
+        secure=(request.scheme == 'https')
+    )
+
 
 @view_config(route_name='callback', request_method='GET', permission=NO_PERMISSION_REQUIRED)
 def callback(context, request):
@@ -102,7 +309,6 @@ def callback(context, request):
     auth0_code = request.params.get('code', None)
     if not auth0_code:
         raise HTTPForbidden('No code sent back from Auth0')
-    is_https = request.scheme == "https"
 
     # Acquire Auth0 configuration
     registry = request.registry
@@ -127,7 +333,6 @@ def callback(context, request):
         auth0_post_url = f'https://{auth0_domain}/oauth/token'
         auth0_payload_json = json.dumps(auth0_payload)
         auth0_headers = STANDARD_HEADERS
-        auth0_response_json = auth0_response.json()
         auth0_response = requests.post(auth0_post_url, data=auth0_payload_json, headers=auth0_headers)
     elif 'nih.gov' in auth0_domain:
         # RAS
@@ -139,34 +344,39 @@ def callback(context, request):
     else:
         raise HTTPForbidden('Unknown authentication domain, no callback possible')
    
-    auth0_response_json = auth0_response.json()
+    try:
+        auth0_response_json = auth0_response.json()
+    except ValueError:
+        raise LoginDenied('Malformed response from the authentication provider')
     auth0_jwt = auth0_response_json.get('id_token')
     if not auth0_jwt:
         raise LoginDenied('No JWT returned from Auth0, check Auth0 configuration')
-    
+
     # email
+    email = ''
     if 'auth0' in auth0_domain:
         # Check that the user exists in our database, if they do not, redirect them to /registration
-        email = Auth0AuthenticationPolicy.get_token_info(auth0_jwt, request).get('email', '').lower()
+        token_info = Auth0AuthenticationPolicy.get_token_info(auth0_jwt, request) or {}
+        email = (token_info.get('email') or '').lower()
     elif 'nih.gov' in auth0_domain:
         # In RAS authentication, user info is not included in the JWT token, but in a passport that requires an extra request.
         passport_post_url = f'https://{auth0_domain}/openid/connect/v1/userinfo'
         passport_headers = {'Authorization': f'Bearer {auth0_response_json["access_token"]}'}
         passport_response = requests.post(passport_post_url, headers=passport_headers)
         passport_response_json = passport_response.json()
-        email = passport_response_json.get('email', '').lower()
+        email = (passport_response_json.get('email') or '').lower()
 
     if not email:
         raise LoginDenied('No email extracted from JWT, not possible to continue')
-    
-    # Generate a session from Redis
-    redis_handler = registry[REDIS]
-    env_name = registry.settings['env.name']
-    redis_session_token = RedisSessionToken(
-        namespace=env_name,
-        jwt=auth0_jwt,
-        email=email
-    )
+
+    # Re-login: if the caller already holds a session token, revoke it before minting a new one so
+    # a single browser never leaves live orphaned sessions behind in Redis.
+    revoke_session_token(request, request.cookies.get(SESSION_COOKIE_NAME))
+
+    # Generate a session from Redis. Note this is stored *before* the DB lookup below: the token is
+    # issued unconditionally (see comment further down), and storing first keeps the "what is in
+    # Redis" and "what is in the cookie" answers identical on every exit path from here.
+    redis_session_token = create_session_token(request, jwt_token=auth0_jwt, email=email)
 
     try:
         Auth0AuthenticationPolicy.get_user_info(request, email, redis_session_token.get_session_token())
@@ -189,21 +399,15 @@ def callback(context, request):
             'title': 'callback'
     }
 
-    # Give a session token unconditionally so we can retrieve JWT later on
-    # in the registration scenario (if an unknown user) or make auth'd requests
-    # as an existing user
-    redis_session_token.store_session_token(redis_handler=redis_handler)
-    request.response.set_cookie(
-        'jwtToken',  # note that although we are setting jwtToken, it is NOT a JWT when going through this route
-        value=redis_session_token.get_session_token(),
-        domain=request.domain,
-        path='/',
-        httponly=True,
-        samesite='lax',
-        overwrite=True,
-        secure=is_https
-    )
+    # The session token is handed back unconditionally so we can retrieve the JWT later on, either
+    # in the registration scenario (if an unknown user) or to make auth'd requests as an existing
+    # user. Note that although the cookie is named jwtToken, its value here is NOT a JWT - it is the
+    # opaque session token. See SESSION_TOKEN_MODE_NOTES.
+    # samesite is 'lax' rather than 'strict' because this cookie is set on the top-level navigation
+    # back from the identity provider.
+    set_session_cookie(request, redis_session_token.get_session_token(), samesite='lax')
     return resp_json
+
 
 class NamespacedAuthenticationPolicy(object):
     """ Wrapper for authentication policy classes
@@ -338,11 +542,16 @@ class Auth0AuthenticationPolicy(CallbackAuthenticationPolicy):
             return cached
 
         # try to find the token in the request (should be in the header)
-        id_token = get_jwt(request)
+        id_token = get_auth_token(request)
         if not id_token:
+            # No credential at all: this is an anonymous request. Return before touching Redis so a
+            # session-store outage cannot take down unauthenticated traffic.
             # can I thrown an 403 here?
             # print('Missing assertion.', 'unauthenticated_userid', request)
             return None
+
+        if redis_is_active(request):
+            return self._redis_unauthenticated_userid(request, id_token)
 
         jwt_info = self.get_token_info(id_token, request)
         if not jwt_info:
@@ -354,6 +563,35 @@ class Auth0AuthenticationPolicy(CallbackAuthenticationPolicy):
         # but we don't know yet if this email is in our database. `authenticated_userid` should take care of this.
 
         app_project().note_auth0_authentication_policy_unauthenticated_userid(self, request, email, id_token)
+
+        return email
+
+    def _redis_unauthenticated_userid(self, request, session_token):
+        """ Redis session mode: resolve the caller-supplied opaque session token to the identity
+            recorded server-side. The supplied value is NEVER decoded as a JWT here, so presenting a
+            raw JWT in this mode is just an unknown key and fails authentication like any other.
+
+            A Redis outage propagates out of `resolve_session_token` as a 503; it is never
+            downgraded to the stateless JWT path.
+        """
+        session = resolve_session_token(request, session_token)
+        email = session_identity(request, session) if session is not None else None
+        if not email:
+            # Absent / unknown / expired / revoked / malformed session token. Mark the request the
+            # same way an expired JWT is marked so renderers.py unsets the stale cookie and reports
+            # the expired session to the front-end.
+            request.set_property(lambda r: True, 'auth0_expired')
+            return None
+
+        request.set_property(lambda r: False, 'auth0_expired')
+        request._auth0_authenticated = email
+        # The JWT stays server-side; stash it on the request for the (few) call sites that need the
+        # underlying provider token without going back to Redis.
+        request._auth0_session_jwt = session.get_jwt()
+
+        app_project().note_auth0_authentication_policy_unauthenticated_userid(
+            self, request, email, session.get_jwt()
+        )
 
         return email
 
@@ -460,16 +698,29 @@ def get_jwt_from_auth_header(request):
     return None
 
 
-def get_jwt(request):
+def get_auth_token(request):
+    """ Returns the caller-supplied credential, from the Authorization header if present and the
+        cookie otherwise.
 
-    # First try to obtain JWT from headers (case: some REST API requests)
+        In stateless mode this is a raw Auth0 JWT; in Redis session mode it is an opaque session
+        token. This function does not (and must not) attempt to tell which - that is decided by
+        configuration, not by inspecting the value. See SESSION_TOKEN_MODE_NOTES.
+    """
+    # First try to obtain the token from headers (case: some REST API requests)
     token = get_jwt_from_auth_header(request)
 
-    # If the JWT is not in the headers, get it from cookies (case: AJAX requests from portal & other clients)
+    # If not in the headers, get it from cookies (case: AJAX requests from portal & other clients)
     if not token:
-        token = request.cookies.get('jwtToken')
+        token = request.cookies.get(SESSION_COOKIE_NAME)
 
     return token
+
+
+def get_jwt(request):
+    """ Retained under its historical name for downstream callers. Prefer `get_auth_token`: in
+        Redis session mode the value returned is an opaque session token, not a JWT.
+    """
+    return get_auth_token(request)
 
 
 @view_config(route_name='login', request_method='POST', permission=NO_PERMISSION_REQUIRED)
@@ -480,7 +731,14 @@ def login_view(context, request, samesite: str = "strict"):
 
 def login(context, request, *, samesite: str = "strict"):
     """
-    Save JWT as httpOnly cookie
+    Establish a session for the caller.
+
+    Stateless mode (no Redis configured): save the caller-supplied Auth0 JWT as an httpOnly cookie,
+    exactly as before.
+
+    Redis session mode: validate the caller-supplied Auth0 JWT, keep it server-side in Redis, and
+    hand back only an opaque session token. This is the SPA login flow - the same flow the
+    front-end already uses - so Redis mode is reachable without also adopting the /callback flow.
     """
     ignored(context)
 
@@ -490,18 +748,39 @@ def login(context, request, *, samesite: str = "strict"):
     if request_token is None:
         request_token = request.json_body.get("id_token", None)
 
-    is_https = (request.scheme == "https")
+    if redis_is_active(request):
+        return _redis_login(request, request_token, samesite=samesite)
 
-    request.response.set_cookie(
-        "jwtToken",
-        value=request_token,
-        domain=request.domain,
-        path="/",
-        httponly=True,
-        samesite=samesite,
-        overwrite=True,
-        secure=is_https
-    )
+    set_session_cookie(request, request_token, samesite=samesite)
+
+    return {"saved_cookie": True}
+
+
+def _redis_login(request, id_token, *, samesite: str):
+    """ Redis session mode implementation of `login`.
+
+        The JWT supplied here is the provider's token from the SPA's Auth0 handshake - this is the
+        one place it is legitimately accepted from the caller, and it is verified before anything is
+        written to Redis. Every *subsequent* request must present the opaque session token instead.
+    """
+    if not id_token:
+        raise LoginDenied(domain=request.domain, title='No id_token supplied')
+
+    jwt_info = Auth0AuthenticationPolicy.get_token_info(id_token, request)
+    if not jwt_info:
+        raise LoginDenied(domain=request.domain)
+
+    email = (jwt_info.get('email') or '').lower()
+    if not email:
+        raise LoginDenied(domain=request.domain, title='No email present on supplied id_token')
+
+    # Re-login: revoke whatever session the caller was previously holding rather than leaving it
+    # live in Redis until its TTL lapses. Read the cookie directly - `get_auth_token` prefers the
+    # Authorization header, which on this route carries the *new* id_token, not the old session.
+    revoke_session_token(request, request.cookies.get(SESSION_COOKIE_NAME))
+
+    session = create_session_token(request, jwt_token=id_token, email=email)
+    set_session_cookie(request, session.get_session_token(), samesite=samesite)
 
     return {"saved_cookie": True}
 
@@ -523,12 +802,19 @@ def logout(context, request):
 
     The front-end handles logging out by discarding the locally-held JWT from
     browser cookies and re-requesting the current 4DN URL.
+
+    In Redis session mode the server-side session is revoked first, so the token is dead even if
+    the client keeps presenting it. If Redis is unreachable the revocation cannot be honored, and
+    that surfaces as a 503 rather than a logout that silently did nothing.
     """
     ignored(context)
 
+    if redis_is_active(request):
+        revoke_session_token(request, get_auth_token(request))
+
     # Deletes the cookie
     request.response.set_cookie(
-        name='jwtToken',
+        name=SESSION_COOKIE_NAME,
         value=None,
         domain=request.domain,
         max_age=0,
@@ -707,18 +993,16 @@ def impersonate_user(context, request):
         algorithm=JWT_ENCODING_ALGORITHM
     )
 
-    is_https = request.scheme == "https"
     token_value = id_token.decode('utf-8') if isinstance(id_token, bytes) else id_token
-    request.response.set_cookie(
-        "jwtToken",
-        value=token_value,
-        domain=request.domain,
-        path="/",
-        httponly=True,
-        samesite="strict",
-        overwrite=True,
-        secure=is_https
-    )
+
+    if redis_is_active(request):
+        # In Redis mode a raw JWT cookie would simply fail to resolve on the next request (it is
+        # never decoded as a JWT), so the impersonation token has to be wrapped in a session too.
+        revoke_session_token(request, request.cookies.get(SESSION_COOKIE_NAME))
+        session = create_session_token(request, jwt_token=token_value, email=userid)
+        token_value = session.get_session_token()
+
+    set_session_cookie(request, token_value, samesite="strict")
 
     return user_properties
 
@@ -804,8 +1088,6 @@ def create_unauthorized_user(context, request):
     if not recaptcha_resp:
         raise LoginDenied(f'Did not receive response from recaptcha!')
     
-    registry = request.registry
-
     # old method for retrieving auth'd email - request object should have _auth0_authenticated set
     # NOTE: it is not obvious to me how this works... probably should be looked into - Will March 29 2023
     if not redis_is_active(request):
@@ -816,31 +1098,13 @@ def create_unauthorized_user(context, request):
     # new method for retrieving auth'd email - request should have transmitted a session token
     # from which we can get the JWT and the email they auth'd with
     else:
-        id_token = get_jwt(request)
-        redis_handler = registry[REDIS]
-        env_name = registry.settings['env.name']
-        auth0_domain = request.registry.settings['auth0.domain']
-        if 'auth0' in auth0_domain:
-            secret = request.registry.settings['auth0.secret']
-            algorithms = JWT_DECODING_ALGORITHMS
-        else:
-            # RAS
-            secret = request.registry.settings['auth0.public.key']
-            algorithms = ['RS256']
-
-        redis_session_token = RedisSessionToken.from_redis(
-            redis_handler=redis_handler,
-            namespace=env_name,
-            token=id_token
-        )
-        jwt_info = redis_session_token.decode_jwt(
-                audience=request.registry.settings['auth0.client'],
-                secret=secret,
-                algorithms=algorithms
-        )
-        if jwt_info.get('email') is None:
-            jwt_info['email'] = redis_session_token.get_email()
-        email = jwt_info.get('email', '<no e-mail supplied>').lower()
+        # A miss here (unknown/expired/revoked/malformed token) is an authentication failure, not a
+        # server error; a Redis outage raises RedisSessionUnavailable (503) out of this call.
+        session = resolve_session_token(request, get_auth_token(request))
+        email = session_identity(request, session) if session is not None else None
+        if not email:
+            raise LoginDenied(domain=request.domain,
+                              title='No valid session; log in again before registering')
 
     user_props = request.json
     user_props_email = user_props.get("email", "<no e-mail supplied>").lower()
