@@ -93,3 +93,22 @@ def test_loadxl_validate_only_creates_nothing(testapp, external_tx):
     assert not any(line.startswith('ERROR:') for line in output)
     assert any(line.startswith('CHECK:') for line in output)
     testapp.get(f'/{uuid}', status=404)
+
+
+def test_loadxl_validate_only_existing_item_uses_check_only_skip_links(testapp, loadxl_item):
+    """ The primary sanctioned skip_links use in the tree: round one's existing-item validation
+        PATCH (loadxl.py, ?check_only=true&skip_links=true). It must stay legal under the new
+        contract and must still not persist.
+    """
+    store = {ITEM_TYPE: [{'uuid': EXISTING_ITEM['uuid'],
+                          'required': 'never written',
+                          'simple1': 'never written'}]}
+    output = run_load_all_gen(testapp, store, overwrite=True, validate_only=True, skip_links=True)
+
+    assert not any(line.startswith('ERROR:') for line in output)
+    # the item already exists, so round one takes the SKIP path (which issues the check_only PATCH)
+    assert any(line.startswith('SKIP:') for line in output)
+
+    res = testapp.get(loadxl_item)
+    assert res.json['required'] == EXISTING_ITEM['required']
+    assert res.json['simple1'] == 'simple1 default'

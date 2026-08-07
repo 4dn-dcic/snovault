@@ -516,3 +516,29 @@ def test_parse_skip_links_unit():
     assert is_check_only_request(FakeRequest(check_only='true')) is True
     assert is_check_only_request(FakeRequest()) is False
     assert is_check_only_request(None) is False
+
+
+def test_schema_level_sites_enforce_skip_links_contract():
+    """ Pins that the generic link validation and link normalization sites themselves go through
+        parse_skip_links - the view level guard alone would not cover validation entry points
+        outside collection_add/item_edit (eg. authentication.create_unauthorized_user,
+        embed.validate_request, or a downstream app's own views).
+    """
+    from pyramid import testing
+    from pyramid.httpexceptions import HTTPBadRequest
+    from pyramid.threadlocal import get_current_request
+    from snovault.schema_utils import linkTo
+    from snovault.schema_validation import normalize_links
+
+    testing.setUp(request=testing.DummyRequest(params={'skip_links': 'true'}))
+    try:
+        # guard against a vacuous pass if the threadlocal was not actually pushed
+        assert get_current_request() is not None
+
+        # both guards are the first statement in their function, before any registry access
+        with pytest.raises(HTTPBadRequest):
+            list(linkTo(None, 'TestingLinkTargetSno', 'anything', {}))
+        with pytest.raises(HTTPBadRequest):
+            normalize_links(None, ['anything'], 'TestingLinkTargetSno')
+    finally:
+        testing.tearDown()
