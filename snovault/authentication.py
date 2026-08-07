@@ -79,10 +79,20 @@ SESSION_COOKIE_NAME = 'jwtToken'
 # configured. Only reachable in local/test configurations; deployed environments always set one.
 DEFAULT_SESSION_NAMESPACE = 'snovault'
 
-# Redis failures we treat as *operational* (=> 5xx). Deliberately narrow: a cache miss is not an
-# error (RedisSessionToken.from_redis returns None), and a broad `except Exception` here would
-# collapse the exact distinction between "Redis is down" (5xx) and "this token is not valid"
-# (401) that the two-mode contract depends on.
+# Redis failures we treat as *operational* (=> 5xx). A token miss is NOT in here: dcicutils
+# signals that by returning None from `from_redis`, so the 503-vs-401 distinction never depends on
+# exception types.
+#
+# UPSTREAM GAP: this tuple should ideally be just `RedisException`, dcicutils' own error type, so
+# snovault needs no knowledge of the driver. Today `dcicutils.redis_tools` normalizes driver errors
+# in exactly one of the operations snovault uses -- `store_session_token`, which wraps its body in
+# `except Exception -> raise RedisException`. `from_redis`, `delete_session_token` and
+# `update_session_token` (and every `RedisBase` primitive beneath them) let raw `redis.exceptions.*`
+# through untouched. `from_redis` is on the per-request authentication path, so dropping `RedisError`
+# would turn every request during a Redis outage into an untyped 500 instead of the contracted 503.
+# `redis` is already a direct snovault dependency (pyproject.toml), so this is not a new coupling --
+# but it should be removed once dcicutils normalizes those three functions. Deliberately narrow
+# rather than `except Exception` so genuine programming errors still surface as 500s, not 503s.
 REDIS_OPERATIONAL_ERRORS = (RedisException, RedisError)
 
 SESSION_TOKEN_MODE_NOTES = """
@@ -173,8 +183,25 @@ def get_redis_handler(request):
     return handler
 
 
+def _redis_session_call(operation, description, detail):
+    """ Runs one canonical `dcicutils.redis_tools` operation, translating an infrastructure failure
+        into `RedisSessionUnavailable` (503). Pyramid-facing error translation is snovault's job;
+        the Redis behavior itself belongs to dcicutils and is never reimplemented here.
+
+        Catching here does NOT blur the outage-vs-invalid-token distinction: dcicutils signals a
+        token miss by *returning* None from `from_redis`, never by raising. Only genuine
+        infrastructure failures reach this handler.
+    """
+    try:
+        return operation()
+    except REDIS_OPERATIONAL_ERRORS as e:
+        # Note: never log the token value - session tokens are credentials.
+        log.error(f'Redis session store failure while {description}: {type(e).__name__}: {e}')
+        raise RedisSessionUnavailable(detail=detail)
+
+
 def resolve_session_token(request, token):
-    """ Resolves an opaque session token to its stored RedisSessionToken record.
+    """ Resolves an opaque session token via `RedisSessionToken.from_redis`.
 
         Tri-state, and the distinction matters (each is separately asserted in the test suite):
           * returns a RedisSessionToken  -> the session is live
@@ -187,54 +214,69 @@ def resolve_session_token(request, token):
     if not token:
         return None
     handler = get_redis_handler(request)
-    try:
-        return RedisSessionToken.from_redis(
-            redis_handler=handler,
-            namespace=session_namespace(request.registry),
-            token=token
-        )
-    except REDIS_OPERATIONAL_ERRORS as e:
-        # Note: no token value in the log message - session tokens are credentials.
-        log.error(f'Redis error resolving session token: {type(e).__name__}: {e}')
-        raise RedisSessionUnavailable(
-            detail='Session store is not available. Authentication cannot be performed.'
-        )
+    namespace = session_namespace(request.registry)
+    return _redis_session_call(
+        lambda: RedisSessionToken.from_redis(redis_handler=handler, namespace=namespace, token=token),
+        'resolving a session token',
+        'Session store is not available. Authentication cannot be performed.'
+    )
 
 
 def create_session_token(request, *, jwt_token, email):
-    """ Mints and persists a new opaque session token wrapping the given (already validated) JWT. """
+    """ Mints and persists a new session via `RedisSessionToken` + `store_session_token`.
+
+        Token generation, key derivation and TTL are all dcicutils' concern; snovault only supplies
+        the namespace and the already-validated JWT/email.
+    """
     handler = get_redis_handler(request)
     session = RedisSessionToken(
         namespace=session_namespace(request.registry),
         jwt=jwt_token,
         email=email
     )
-    try:
-        session.store_session_token(redis_handler=handler)
-    except REDIS_OPERATIONAL_ERRORS as e:
-        log.error(f'Redis error storing session token: {type(e).__name__}: {e}')
-        raise RedisSessionUnavailable(detail='Session store is not available. Cannot establish session.')
+    _redis_session_call(
+        lambda: session.store_session_token(redis_handler=handler),
+        'storing a session token',
+        'Session store is not available. Cannot establish session.'
+    )
     return session
 
 
 def revoke_session_token(request, token):
-    """ Deletes the given session token from Redis, immediately invalidating it server-side.
+    """ Revokes a session via `RedisSessionToken.delete_session_token`, immediately invalidating it
+        server-side. Returns False when there was no live session to revoke.
 
-        Constructs the key directly rather than reading the record first - revocation should not
-        depend on the record being readable, and it saves a round trip.
+        Resolves the record first rather than deriving the Redis key here: key layout is dcicutils'
+        contract (`<namespace>:session:<token>`), and snovault must not encode a second copy of it.
     """
-    if not token:
+    session = resolve_session_token(request, token)
+    if session is None:
         return False
     handler = get_redis_handler(request)
-    session = RedisSessionToken(
-        namespace=session_namespace(request.registry),
-        jwt='', email='', token=token
+    return _redis_session_call(
+        lambda: session.delete_session_token(redis_handler=handler),
+        'revoking a session token',
+        'Session store is not available. Cannot revoke session.'
     )
-    try:
-        return session.delete_session_token(redis_handler=handler)
-    except REDIS_OPERATIONAL_ERRORS as e:
-        log.error(f'Redis error revoking session token: {type(e).__name__}: {e}')
-        raise RedisSessionUnavailable(detail='Session store is not available. Cannot revoke session.')
+
+
+def rotate_session_token(request, *, previous_token, jwt_token, email):
+    """ Establishes a session for a caller who may already hold one (login / callback / impersonate).
+
+        When a live session exists this is `RedisSessionToken.update_session_token`, dcicutils' own
+        rotation primitive: it deletes the old key, mints a fresh token and stores the new JWT under
+        it, so no orphaned session is left live until its TTL lapses. Otherwise it is a plain mint.
+    """
+    existing = resolve_session_token(request, previous_token)
+    if existing is None:
+        return create_session_token(request, jwt_token=jwt_token, email=email)
+    handler = get_redis_handler(request)
+    _redis_session_call(
+        lambda: existing.update_session_token(redis_handler=handler, jwt=jwt_token, email=email),
+        'rotating a session token',
+        'Session store is not available. Cannot establish session.'
+    )
+    return existing
 
 
 def decode_session_jwt(request, session):
@@ -388,14 +430,17 @@ def callback(context, request):
     if not email:
         raise LoginDenied('No email extracted from JWT, not possible to continue')
 
-    # Re-login: if the caller already holds a session token, revoke it before minting a new one so
-    # a single browser never leaves live orphaned sessions behind in Redis.
-    revoke_session_token(request, request.cookies.get(SESSION_COOKIE_NAME))
-
-    # Generate a session from Redis. Note this is stored *before* the DB lookup below: the token is
-    # issued unconditionally (see comment further down), and storing first keeps the "what is in
-    # Redis" and "what is in the cookie" answers identical on every exit path from here.
-    redis_session_token = create_session_token(request, jwt_token=auth0_jwt, email=email)
+    # Generate a session from Redis, rotating whatever session the caller was already holding so no
+    # orphaned session is left live until its TTL lapses. Note this happens *before* the DB lookup
+    # below: the token is issued unconditionally (see comment further down), and establishing it
+    # first keeps the "what is in Redis" and "what is in the cookie" answers identical on every exit
+    # path from here.
+    redis_session_token = rotate_session_token(
+        request,
+        previous_token=request.cookies.get(SESSION_COOKIE_NAME),
+        jwt_token=auth0_jwt,
+        email=email
+    )
 
     try:
         Auth0AuthenticationPolicy.get_user_info(request, email, redis_session_token.get_session_token())
@@ -794,12 +839,15 @@ def _redis_login(request, id_token, *, samesite: str):
     if not email:
         raise LoginDenied(domain=request.domain, title='No email present on supplied id_token')
 
-    # Re-login: revoke whatever session the caller was previously holding rather than leaving it
+    # Re-login rotates whatever session the caller was previously holding rather than leaving it
     # live in Redis until its TTL lapses. Read the cookie directly - `get_auth_token` prefers the
     # Authorization header, which on this route carries the *new* id_token, not the old session.
-    revoke_session_token(request, request.cookies.get(SESSION_COOKIE_NAME))
-
-    session = create_session_token(request, jwt_token=id_token, email=email)
+    session = rotate_session_token(
+        request,
+        previous_token=request.cookies.get(SESSION_COOKIE_NAME),
+        jwt_token=id_token,
+        email=email
+    )
     set_session_cookie(request, session.get_session_token(), samesite=samesite)
     _note_session_established(request)
 
@@ -1019,8 +1067,12 @@ def impersonate_user(context, request):
     if redis_is_active(request):
         # In Redis mode a raw JWT cookie would simply fail to resolve on the next request (it is
         # never decoded as a JWT), so the impersonation token has to be wrapped in a session too.
-        revoke_session_token(request, request.cookies.get(SESSION_COOKIE_NAME))
-        session = create_session_token(request, jwt_token=token_value, email=userid)
+        session = rotate_session_token(
+            request,
+            previous_token=request.cookies.get(SESSION_COOKIE_NAME),
+            jwt_token=token_value,
+            email=userid
+        )
         token_value = session.get_session_token()
 
     set_session_cookie(request, token_value, samesite="strict")

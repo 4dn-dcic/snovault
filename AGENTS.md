@@ -147,10 +147,18 @@ Invariants worth knowing before touching this area:
 - Both modes use the same `jwtToken` cookie name (`SESSION_COOKIE_NAME`) so downstream
   front-ends are unaffected, but in Redis mode its value is an opaque session token and is
   **never** decoded as a JWT. A raw JWT presented in Redis mode is just an unknown Redis key.
+- **All Redis behavior belongs to dcicutils** (`redis_utils` / `redis_tools`); snovault only
+  reads pyramid settings and translates outcomes into HTTP. Never reimplement connection,
+  token generation, key layout, TTL, rotation or revocation here. In particular never derive
+  `<namespace>:session:<token>` yourself — resolve the record via `from_redis` first, so that
+  layout exists in exactly one place. `snovault/redis/README.rst` has the delegation table.
 - Failure kinds must not collapse: token miss/expiry/revocation/malformation is a 401;
-  Redis being unreachable is `RedisSessionUnavailable` (503). Scope `except` clauses to
-  `REDIS_OPERATIONAL_ERRORS`, not `Exception` — `RedisSessionToken.from_redis` signals a miss
-  by returning `None`, not by raising.
+  Redis being unreachable is `RedisSessionUnavailable` (503). `RedisSessionToken.from_redis`
+  signals a miss by returning `None`, not by raising, so the distinction never rests on
+  exception types. Known upstream gap: dcicutils normalizes driver errors to `RedisException`
+  in `store_session_token` **only** — `from_redis`, `delete_session_token` and
+  `update_session_token` leak raw `redis.exceptions.*`, which is why
+  `REDIS_OPERATIONAL_ERRORS` still has to name `RedisError`. Drop it if that is fixed upstream.
 - `registry[REDIS]` can legitimately be `None`: `redis/redis_connection.py::includeme`
   swallows startup connection errors and stores `None`. Always go through
   `get_redis_handler`.

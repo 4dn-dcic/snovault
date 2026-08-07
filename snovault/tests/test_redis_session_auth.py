@@ -14,6 +14,8 @@ import requests
 from pyramid.httpexceptions import HTTPForbidden, HTTPUnauthorized
 from pyramid.registry import Registry
 from pyramid.request import Request
+from dcicutils.redis_tools import RedisSessionToken
+from dcicutils.redis_utils import RedisException
 from redis.exceptions import ConnectionError as RedisConnectionError
 from unittest import mock
 
@@ -32,6 +34,7 @@ from ..authentication import (
     logout,
     redis_is_active,
     resolve_session_token,
+    revoke_session_token,
     session_identity,
     session_namespace,
 )
@@ -306,6 +309,69 @@ def test_redis_relogin_revokes_the_previous_session():
 
 
 # ---------------------------------------------------------------------------------------------
+# Snovault delegates to the canonical dcicutils API rather than reimplementing it
+# ---------------------------------------------------------------------------------------------
+
+def test_relogin_delegates_to_dcicutils_update_session_token():
+    """ Rotation is dcicutils' own primitive; snovault must not hand-roll delete-then-create. """
+    redis = FakeRedis()
+    registry = make_registry(redis_handler=redis)
+    first = make_request(registry, json_body={'id_token': make_jwt()})
+    login(None, first)
+
+    second = make_request(registry, cookie=response_cookie(first.response),
+                          json_body={'id_token': make_jwt()})
+    with mock.patch.object(RedisSessionToken, 'update_session_token',
+                           autospec=True, side_effect=RedisSessionToken.update_session_token) as spy:
+        login(None, second)
+    assert spy.call_count == 1
+
+
+def test_logout_delegates_to_dcicutils_delete_session_token():
+    redis = FakeRedis()
+    registry = make_registry(redis_handler=redis)
+    session = create_session_token(make_request(registry), jwt_token=make_jwt(), email=USER_EMAIL)
+
+    with mock.patch.object(RedisSessionToken, 'delete_session_token',
+                           autospec=True, side_effect=RedisSessionToken.delete_session_token) as spy:
+        logout(None, make_request(registry, cookie=session.get_session_token()))
+    assert spy.call_count == 1
+    assert redis.store == {}
+
+
+def test_snovault_does_not_derive_redis_keys_itself():
+    """ Key layout (`<namespace>:session:<token>`) is dcicutils' contract. Snovault must reach every
+        key through a record dcicutils produced, so there is no second copy of that layout to drift.
+
+        Asserting the *mechanism*, not just the outcome: a hand-built
+        `RedisSessionToken(jwt='', email='', token=...)` would derive an identical key and delete
+        the same entry, so an outcome-only assertion cannot tell the two apart. Spying on
+        `from_redis` can.
+    """
+    redis = FakeRedis()
+    registry = make_registry(redis_handler=redis)
+    session = create_session_token(make_request(registry), jwt_token=make_jwt(), email=USER_EMAIL)
+
+    assert list(redis.store) == [session.get_redis_key()]
+
+    with mock.patch.object(RedisSessionToken, 'from_redis',
+                           side_effect=RedisSessionToken.from_redis) as spy:
+        revoke_session_token(make_request(registry), session.get_session_token())
+    assert spy.call_count == 1, 'revocation must resolve the real record, not fabricate one'
+    assert redis.store == {}
+
+
+def test_revoking_an_unknown_token_is_a_no_op_not_an_error():
+    redis = FakeRedis()
+    registry = make_registry(redis_handler=redis)
+    live = create_session_token(make_request(registry), jwt_token=make_jwt(), email=USER_EMAIL)
+
+    assert revoke_session_token(make_request(registry), 'never-issued') is False
+    # an unrelated live session is untouched
+    assert live.get_redis_key() in redis.store
+
+
+# ---------------------------------------------------------------------------------------------
 # Redis mode: per-request authentication resolves the token
 # ---------------------------------------------------------------------------------------------
 
@@ -433,12 +499,19 @@ def test_redis_logout_revokes_token_supplied_by_header():
 # Redis mode: outages are operational failures, never a downgrade
 # ---------------------------------------------------------------------------------------------
 
-@pytest.mark.parametrize('handler', [
-    None,                                                # never connected (includeme stored None)
-    FakeRedis(fail_with=RedisConnectionError('down')),   # connection lost at call time
+@pytest.mark.parametrize('handler_factory', [
+    # never connected - redis_connection.py::includeme stores None when it cannot connect at boot
+    lambda: None,
+    # connection lost at call time, reported with dcicutils' own error type
+    lambda: FakeRedis(fail_with=RedisException('down')),
+    # ...and reported as a raw driver error, which is what actually escapes today: dcicutils
+    # normalizes to RedisException in store_session_token only, not in from_redis. See the
+    # REDIS_OPERATIONAL_ERRORS upstream-gap note in authentication.py.
+    lambda: FakeRedis(fail_with=RedisConnectionError('down')),
 ])
-def test_redis_outage_on_authentication_is_operational_error(handler):
-    request = make_request(make_registry(redis_handler=handler), cookie='some-session-token')
+def test_redis_outage_on_authentication_is_operational_error(handler_factory):
+    request = make_request(make_registry(redis_handler=handler_factory()),
+                           cookie='some-session-token')
 
     with pytest.raises(RedisSessionUnavailable) as exc:
         Auth0AuthenticationPolicy().unauthenticated_userid(request)

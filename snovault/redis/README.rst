@@ -45,6 +45,45 @@ Rules that hold in Redis session mode
 * ``POST /logout`` revokes the session server-side; re-login revokes the caller's previous session
   before minting the new one.
 
+All Redis behavior lives in dcicutils
+-------------------------------------
+
+Snovault does **not** implement Redis connection, session or token behavior. Connection setup,
+token generation, key layout, TTL, storage, lookup, rotation and revocation are all
+``dcicutils.redis_utils`` / ``dcicutils.redis_tools``. Snovault contributes only what is
+genuinely its own: reading pyramid settings, and translating outcomes into HTTP.
+
+===================================  ==================================================
+Snovault integration point           Canonical dcicutils call it delegates to
+===================================  ==================================================
+``redis_connection.py::includeme``   ``RedisBase(create_redis_client(url=...))``
+``authentication.create_session_token``  ``RedisSessionToken(...)`` + ``store_session_token``
+``authentication.resolve_session_token`` ``RedisSessionToken.from_redis``
+``authentication.rotate_session_token``  ``RedisSessionToken.update_session_token``
+``authentication.revoke_session_token``  ``RedisSessionToken.delete_session_token``
+``authentication.decode_session_jwt``    ``RedisSessionToken.decode_jwt``
+``authentication.session_identity``      ``RedisSessionToken.get_email`` / ``get_jwt``
+===================================  ==================================================
+
+In particular, snovault never derives a Redis key itself: revocation and rotation resolve the real
+record through ``from_redis`` first, so ``<namespace>:session:<token>`` exists in exactly one place
+(dcicutils) and cannot drift.
+
+Known upstream gap: error normalization
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+``dcicutils.redis_tools`` normalizes driver errors to its own ``RedisException`` in exactly one of
+the operations snovault uses -- ``store_session_token``, which wraps its body in
+``except Exception -> raise RedisException``. ``from_redis``, ``delete_session_token`` and
+``update_session_token`` (and every ``RedisBase`` primitive beneath them) let raw
+``redis.exceptions.*`` through untouched.
+
+Because ``from_redis`` is on the per-request authentication path, snovault's
+``REDIS_OPERATIONAL_ERRORS`` must currently include ``redis.exceptions.RedisError`` alongside
+``RedisException`` -- otherwise every request during a Redis outage would surface as an untyped 500
+instead of the contracted 503. If dcicutils normalizes those three functions, that entry should be
+dropped and snovault will need no knowledge of the driver at all.
+
 Key namespace
 -------------
 

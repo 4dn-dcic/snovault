@@ -60,11 +60,28 @@ Change Log
   ``SESSION_COOKIE_NAME`` constant so every touchpoint agrees. ``get_jwt`` is retained as a
   delegating alias for downstream callers.
 
-* Testing: add ``snovault/tests/test_redis_session_auth.py`` -- 42 tests covering unchanged
+* All Redis connection, session and token behavior is delegated to the canonical
+  ``dcicutils.redis_utils`` / ``dcicutils.redis_tools`` API; snovault contributes only pyramid
+  settings resolution and HTTP translation. ``create_session_token`` uses ``RedisSessionToken`` +
+  ``store_session_token``, ``resolve_session_token`` uses ``from_redis``, ``rotate_session_token``
+  uses ``update_session_token`` (dcicutils' own rotation primitive) and ``revoke_session_token``
+  uses ``delete_session_token``. In particular snovault never derives a Redis key itself:
+  revocation and rotation resolve the real record first, so the ``<namespace>:session:<token>``
+  layout exists only in dcicutils. See the delegation table in ``snovault/redis/README.rst``.
+
+* Known upstream gap (documented, not worked around): ``dcicutils.redis_tools`` normalizes driver
+  errors to ``RedisException`` in ``store_session_token`` only -- ``from_redis``,
+  ``delete_session_token`` and ``update_session_token`` leak raw ``redis.exceptions.*``. Since
+  ``from_redis`` is on the per-request authentication path, ``REDIS_OPERATIONAL_ERRORS`` must still
+  name ``redis.exceptions.RedisError`` or an outage would surface as an untyped 500 rather than the
+  contracted 503. That entry should be removed once dcicutils normalizes those three functions.
+
+* Testing: add ``snovault/tests/test_redis_session_auth.py`` -- 47 tests covering unchanged
   no-Redis behavior, Redis-mode login/callback/authenticated request/registration/logout, expiry,
   revocation, re-login, raw-JWT non-bypass, outage-vs-auth-failure distinction, and error messages
-  not leaking token values. Runs against a dict-backed ``RedisBase`` fake and locally-signed
-  synthetic JWTs: no live Redis, no cloud credentials and no outbound Auth0 calls.
+  not leaking token values, plus delegation tests pinning the canonical dcicutils primitives.
+  Runs against a dict-backed ``RedisBase`` fake and locally-signed synthetic JWTs: no live Redis,
+  no cloud credentials and no outbound Auth0 calls.
 
 11.35.2
 =======
