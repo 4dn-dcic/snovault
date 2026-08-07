@@ -2,12 +2,57 @@ from copy import deepcopy
 from jsonschema import Draft202012Validator
 from jsonschema import validators
 from jsonschema.exceptions import ValidationError
+from pyramid.httpexceptions import HTTPBadRequest
 from pyramid.settings import asbool
 from pyramid.threadlocal import get_current_request
 from pyramid.traversal import find_resource
 
 
 NO_DEFAULT = object()
+
+SKIP_LINKS_PARAM = 'skip_links'
+CHECK_ONLY_PARAM = 'check_only'
+
+SKIP_LINKS_REQUIRES_CHECK_ONLY_MESSAGE = (
+    f"The '{SKIP_LINKS_PARAM}=true' request parameter defers link (linkTo) resolution and integrity"
+    f" checking, so it is only allowed on non-persisting validation requests."
+    f" Pass '{CHECK_ONLY_PARAM}=true' along with it, or drop '{SKIP_LINKS_PARAM}'."
+)
+
+
+def is_check_only_request(request=None) -> bool:
+    """ Returns True iff the given (or current) request carries check_only=true, meaning the
+        request runs validators but must not persist anything.
+    """
+    request = request if request is not None else get_current_request()
+    if request is None:
+        return False
+    return asbool(request.params.get(CHECK_ONLY_PARAM, False))
+
+
+def parse_skip_links(request=None) -> bool:
+    """ Single point of truth for the skip_links request parameter.
+
+        skip_links=true tells the schema machinery to tolerate unresolvable linkTo values, which is
+        legitimate only for callers doing partial/out-of-order validation that never writes (notably
+        smaht-submitr, via check_only=true). Honoring it on a request that actually persists would
+        write items whose links were never validated, so that combination is rejected outright with
+        an HTTP 400 rather than being silently honored (unsafe) or silently ignored (confusing).
+
+        Returns True if link checks may be deferred, False otherwise.
+        Raises HTTPBadRequest if skip_links=true is used without check_only=true.
+    """
+    request = request if request is not None else get_current_request()
+    if request is None:
+        return False
+    if not asbool(request.params.get(SKIP_LINKS_PARAM, False)):
+        return False
+    if not is_check_only_request(request):
+        raise HTTPBadRequest(
+            detail=SKIP_LINKS_REQUIRES_CHECK_ONLY_MESSAGE,
+            comment=SKIP_LINKS_REQUIRES_CHECK_ONLY_MESSAGE,
+        )
+    return True
 
 
 def get_resource_base(validator, linkTo):
@@ -22,7 +67,7 @@ def get_resource_base(validator, linkTo):
 
 
 def normalize_links(validator, links, linkTo):
-    skip_links = (request := get_current_request()) and asbool(request.params.get('skip_links', False))
+    skip_links = parse_skip_links()
     resource_base = get_resource_base(validator, linkTo)
     normalized_links = []
     errors = []
@@ -49,6 +94,8 @@ def normalize_links(validator, links, linkTo):
             # 2024-02-21/dmichaels:
             # If skip_links then ignore reference/linkTo errors.
             # Currently ONLY used by smaht-submitr (via smaht-portal/loadxl_extensions.py).
+            # See parse_skip_links: this can only be set on a check_only=true (non-persisting)
+            # request, so a real write never stores links that were never resolved.
 
             if not skip_links:
                 errors.append(

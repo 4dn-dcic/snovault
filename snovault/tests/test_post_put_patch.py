@@ -366,3 +366,153 @@ def test_create_es_item_without_es(content, testapp):
     target_data = {'name': 'es_target_test'}
     res = testapp.post_json('/testing-link-targets-elastic-search/', target_data, status=500)
     assert res.json['detail'] == 'Forced datastore elasticsearch is not configured'
+
+
+LINK_SOURCE_URL = '/testing-link-sources-sno/'
+UNRESOLVABLE_LINK = 'c0ffee00-0000-4000-8000-000000000bad'
+
+
+def test_skip_links_rejected_without_check_only(content, testapp):
+    """ skip_links=true defers link integrity checking, so it may never ride along on a request
+        that actually persists - such a request is a 400, not a silent skip.
+    """
+    url = content['@id']
+    for query in ['?skip_links=true', '?skip_links=true&check_only=false',
+                  '?skip_links=true&delete_fields=field_no_default']:
+        res = testapp.patch_json(url + query, {'simple1': 'supplied simple1'}, status=400)
+        assert 'check_only=true' in res.json['detail']
+        res = testapp.put_json(url + query, item_with_uuid[0], status=400)
+        assert 'check_only=true' in res.json['detail']
+    testapp.post_json(COLLECTION_URL + '?skip_links=true', {'required': ''}, status=400)
+    # The item was not modified by any of the above.
+    assert testapp.get(url).json['simple1'] == 'simple1 default'
+
+
+def test_skip_links_rejected_without_check_only_on_unvalidated_write(content, testapp):
+    """ validate=false skips the schema machinery entirely, so this case is caught only by the
+        view level guard - without it skip_links would be silently ignored here.
+    """
+    url = content['@id']
+    testapp.patch_json(url + '?validate=false&skip_links=true', {'simple1': 'supplied simple1'},
+                       status=400)
+    testapp.put_json(url + '?validate=false&skip_links=true', item_with_uuid[0], status=400)
+    testapp.post_json(COLLECTION_URL + '?validate=false&skip_links=true', {'required': ''},
+                      status=400)
+    assert testapp.get(url).json['simple1'] == 'simple1 default'
+
+
+def test_skip_links_rejected_on_write_with_unresolvable_link(testapp, link_targets):
+    """ The pre-existing failure mode: an unresolvable link plus skip_links used to be written
+        through as-is. It is now a 400 and nothing is created.
+    """
+    notice_pytest_fixtures(link_targets)
+    testapp.post_json(LINK_SOURCE_URL + '?skip_links=true',
+                      {'name': 'skip-links-write', 'target': UNRESOLVABLE_LINK}, status=400)
+    testapp.get('/testing-link-sources-sno/skip-links-write', status=404)
+
+
+def test_skip_links_allowed_with_check_only(content, testapp, link_targets):
+    """ The supported (non-persisting) partial validation workflow still works, and still defers
+        link checks.
+    """
+    notice_pytest_fixtures(link_targets)
+    url = content['@id']
+    query = '?check_only=true&skip_links=true'
+
+    # POST of an item whose link cannot be resolved validates cleanly and creates nothing
+    res = testapp.post_json(LINK_SOURCE_URL + query,
+                            {'name': 'skip-links-check', 'target': UNRESOLVABLE_LINK}, status=200)
+    assert res.json['status'] == 'success'
+    assert res.json['@type'] == ['result']
+    testapp.get('/testing-link-sources-sno/skip-links-check', status=404)
+
+    # PATCH and PUT likewise validate without persisting
+    res = testapp.patch_json(url + query, {'simple1': 'supplied simple1'}, status=200)
+    assert res.json['status'] == 'success'
+    res = testapp.put_json(url + query, item_with_uuid[0], status=200)
+    assert res.json['status'] == 'success'
+    assert testapp.get(url).json['simple1'] == 'simple1 default'
+
+    # and without skip_links the unresolvable link is still reported
+    res = testapp.post_json(LINK_SOURCE_URL + '?check_only=true',
+                            {'name': 'skip-links-check-2', 'target': UNRESOLVABLE_LINK},
+                            status=422)
+    assert any('Unable to resolve link' in error['description'] for error in res.json['errors'])
+
+
+def test_skip_links_absent_or_false_does_not_disturb_normal_writes(content, testapp):
+    """ Normal create/update, with and without an explicitly false skip_links, is unaffected. """
+    url = content['@id']
+    res = testapp.patch_json(url, {'simple1': 'supplied simple1'}, status=200)
+    assert res.json['@graph'][0]['simple1'] == 'supplied simple1'
+    res = testapp.patch_json(url + '?skip_links=false', {'simple2': 'supplied simple2'},
+                             status=200)
+    assert res.json['@graph'][0]['simple2'] == 'supplied simple2'
+    res = testapp.post_json(COLLECTION_URL + '?skip_links=0', {'required': 'required value'},
+                            status=201)
+    assert res.json['@graph'][0]['required'] == 'required value'
+
+
+@pytest.mark.parametrize('value,rejected', [
+    ('true', True),
+    ('True', True),
+    ('TRUE', True),
+    ('t', True),
+    ('1', True),
+    ('yes', True),
+    ('on', True),
+    ('false', False),
+    ('False', False),
+    ('0', False),
+    ('no', False),
+    ('', False),
+    ('banana', False),  # pyramid asbool treats anything unrecognized as False
+])
+def test_skip_links_parameter_parsing(content, testapp, value, rejected):
+    """ Parsing is exactly pyramid's asbool over the parsed query parameter - no substring or raw
+        URL matching, so `skip_links=banana` is False (allowed) rather than merely "present".
+    """
+    url = content['@id']
+    status = 400 if rejected else 200
+    testapp.patch_json(f'{url}?skip_links={value}', {'simple1': 'supplied simple1'}, status=status)
+
+
+def test_skip_links_parameter_parsing_not_fooled_by_lookalike_params(content, testapp):
+    """ A parameter merely containing the name, or a check_only lookalike, is not the parameter. """
+    url = content['@id']
+    # not skip_links at all
+    testapp.patch_json(url + '?no_skip_links=true', {'simple1': 'supplied simple1'}, status=200)
+    # check_only must itself parse as true to license skip_links
+    testapp.patch_json(url + '?skip_links=true&check_only=banana', {'simple1': 'x'}, status=400)
+    testapp.patch_json(url + '?skip_links=true&check_only=1', {'simple1': 'x'}, status=200)
+
+
+def test_parse_skip_links_unit():
+    """ Unit level coverage of the single parse point used by both the views and the schema
+        machinery (generic linkTo validation and link normalization).
+    """
+    from pyramid.httpexceptions import HTTPBadRequest
+    from snovault.schema_validation import is_check_only_request, parse_skip_links
+
+    class FakeRequest:
+        def __init__(self, **params):
+            self.params = params
+
+    # no request at all (eg. non-request contexts) is simply False, never an error
+    assert parse_skip_links(None) is False
+
+    assert parse_skip_links(FakeRequest()) is False
+    assert parse_skip_links(FakeRequest(skip_links='false')) is False
+    assert parse_skip_links(FakeRequest(skip_links='true', check_only='true')) is True
+    assert parse_skip_links(FakeRequest(skip_links='1', check_only='yes')) is True
+    # skip_links=false does not need check_only, even on a persisting request
+    assert parse_skip_links(FakeRequest(skip_links='no', check_only='false')) is False
+
+    with pytest.raises(HTTPBadRequest):
+        parse_skip_links(FakeRequest(skip_links='true'))
+    with pytest.raises(HTTPBadRequest):
+        parse_skip_links(FakeRequest(skip_links='true', check_only='false'))
+
+    assert is_check_only_request(FakeRequest(check_only='true')) is True
+    assert is_check_only_request(FakeRequest()) is False
+    assert is_check_only_request(None) is False
