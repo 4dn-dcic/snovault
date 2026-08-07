@@ -6,6 +6,91 @@ snovault
 Change Log
 ----------
 
+11.36.0
+=======
+
+* Configurable side-by-side authentication (``snovault/authentication.py``). Snovault now supports
+  exactly two mutually exclusive authentication modes, selected by configuration alone -- the
+  presence of the ``redis.server`` setting, which is the same condition that decides whether
+  ``snovault.redis`` is included at all. The contract is stated in
+  ``authentication.SESSION_TOKEN_MODE_NOTES`` and in ``snovault/redis/README.rst``.
+
+  * **No Redis configured**: the existing stateless Auth0 JWT behavior is unchanged for login,
+    request authentication, registration, logout and cookie handling. ``/callback`` remains
+    refused.
+  * **Redis configured**: ``POST /login`` (the SPA flow the front-end actually uses) and
+    ``GET /callback`` verify the provider JWT once, store it in Redis under
+    ``<namespace>:session:<token>`` with a TTL, and return only an opaque session token. Previously
+    only ``/callback`` had any Redis implementation, so Redis mode was unreachable through the live
+    login flow.
+
+* Redis mode is now strict about failure kinds and cannot be bypassed:
+
+  * The caller-supplied credential is never decoded as a JWT, so a raw JWT presented as a cookie or
+    bearer token is just an unknown Redis key and is rejected. There is no fallback to the
+    stateless path once Redis mode is selected.
+  * Absent / unknown / expired / revoked / malformed session tokens are authentication failures
+    (401) and mark ``request.auth0_expired`` so ``renderers.py`` unsets the stale cookie.
+  * A Redis outage -- including the ``registry[REDIS] is None`` state that
+    ``redis/redis_connection.py::includeme`` leaves behind when it cannot connect at startup -- now
+    raises ``RedisSessionUnavailable`` (HTTP 503) rather than producing a ``500``/``AttributeError``
+    or silently misbehaving.
+  * Anonymous requests return before touching Redis, so an outage cannot take down unauthenticated
+    traffic.
+
+* Per-request authentication (``Auth0AuthenticationPolicy.unauthenticated_userid``) resolves the
+  session token to the identity recorded server-side before authorization. Previously it always
+  tried to decode the cookie as a JWT, so no authenticated request could succeed in Redis mode.
+  Identity comes from the email recorded at login; the server-held JWT is only decoded as a
+  fallback (which keeps the RAS/RS256 flow working and keeps session lifetime governed by exactly
+  one clock, the Redis TTL).
+
+* ``/logout`` now revokes the session server-side in Redis, and ``/login`` and ``/callback`` revoke
+  the caller's previous session before minting a new one. ``/impersonate-user`` wraps its minted
+  token in a session in Redis mode instead of setting a raw JWT cookie that could never resolve.
+
+* ``/callback`` repairs: ``auth0_response.json()`` was called on ``auth0_response`` while it was
+  still ``None`` (an unconditional crash on the Auth0 branch); ``registry.settings['env.name']`` and
+  ``registry[REDIS]`` were read without guards; and ``get_token_info(...).get(...)`` could raise on
+  a ``None`` return. Registration (``create-unauthorized-user``) likewise called
+  ``RedisSessionToken.from_redis(...).decode_jwt(...)`` without checking for the ``None`` returned
+  on a session miss.
+
+* Cookie/token handling is consolidated in ``set_session_cookie`` / ``get_auth_token`` behind the
+  ``SESSION_COOKIE_NAME`` constant so every touchpoint agrees. ``get_jwt`` is retained as a
+  delegating alias for downstream callers.
+
+* All Redis connection, session and token behavior is delegated to the canonical
+  ``dcicutils.redis_utils`` / ``dcicutils.redis_tools`` API; snovault contributes only pyramid
+  settings resolution and HTTP translation. ``create_session_token`` uses ``RedisSessionToken`` +
+  ``store_session_token``, ``resolve_session_token`` uses ``from_redis``, ``rotate_session_token``
+  uses ``update_session_token`` (dcicutils' own rotation primitive) and ``revoke_session_token``
+  uses ``delete_session_token``. In particular snovault never derives a Redis key itself:
+  revocation and rotation resolve the real record first, so the ``<namespace>:session:<token>``
+  layout exists only in dcicutils. See the delegation table in ``snovault/redis/README.rst``.
+
+* Snovault catches only ``dcicutils.redis_utils.RedisException`` and holds no knowledge of the
+  redis driver's exception hierarchy; normalizing driver errors is dcicutils' responsibility.
+  As of dcicutils 8.19.0 that contract is only partly implemented -- ``store_session_token``
+  wraps its body in ``except Exception -> raise RedisException``, while ``from_redis``,
+  ``delete_session_token`` and ``update_session_token`` still let raw driver exceptions through.
+  A dcicutils change completing the contract is in progress and snovault deliberately does not
+  compensate for it locally.
+
+  Interim behavior on the unnormalized paths is an untyped 500 rather than the intended 503 -- a
+  degraded error label, not a correctness hole: the failure is still 5xx, still logged, and is
+  never silently downgraded into an authentication failure or a stateless-JWT fallback. When the
+  dcicutils release lands, raise its floor in ``pyproject.toml`` and drop the ``strict`` xfail in
+  ``test_redis_session_auth.py``, which fails loudly at that moment so the follow-up cannot be
+  lost. See ``snovault/redis/README.rst``.
+
+* Testing: add ``snovault/tests/test_redis_session_auth.py`` -- 48 tests covering unchanged
+  no-Redis behavior, Redis-mode login/callback/authenticated request/registration/logout, expiry,
+  revocation, re-login, raw-JWT non-bypass, outage-vs-auth-failure distinction, and error messages
+  not leaking token values, plus delegation tests pinning the canonical dcicutils primitives.
+  Runs against a dict-backed ``RedisBase`` fake and locally-signed synthetic JWTs: no live Redis,
+  no cloud credentials and no outbound Auth0 calls.
+
 11.35.2
 =======
 

@@ -133,6 +133,57 @@ read` (needed by the `build` job's AWS OIDC auth); `contents: write` (needed to 
 tag) is scoped to the `publish` job only, since a job-level `permissions:` block replaces
 rather than merges with the workflow-level one.
 
+## Two authentication modes (stateless JWT vs. Redis session tokens)
+
+`snovault/authentication.py` implements two mutually exclusive authentication modes. Which
+one is active is decided **only** by configuration — `redis_is_active(request)`, i.e. whether
+`redis.server` is in settings, deliberately the same condition `snovault/__init__.py::main`
+uses to `config.include('snovault.redis')`. Never infer the mode by inspecting a token value.
+The contract itself is stated where it belongs, next to the code:
+`authentication.SESSION_TOKEN_MODE_NOTES` and `snovault/redis/README.rst`.
+
+Invariants worth knowing before touching this area:
+
+- Both modes use the same `jwtToken` cookie name (`SESSION_COOKIE_NAME`) so downstream
+  front-ends are unaffected, but in Redis mode its value is an opaque session token and is
+  **never** decoded as a JWT. A raw JWT presented in Redis mode is just an unknown Redis key.
+- **All Redis behavior belongs to dcicutils** (`redis_utils` / `redis_tools`); snovault only
+  reads pyramid settings and translates outcomes into HTTP. Never reimplement connection,
+  token generation, key layout, TTL, rotation or revocation here. In particular never derive
+  `<namespace>:session:<token>` yourself — resolve the record via `from_redis` first, so that
+  layout exists in exactly one place. `snovault/redis/README.rst` has the delegation table.
+- Failure kinds must not collapse: token miss/expiry/revocation/malformation is a 401;
+  Redis being unreachable is `RedisSessionUnavailable` (503). `RedisSessionToken.from_redis`
+  signals a miss by returning `None`, not by raising, so the distinction never rests on
+  exception types.
+- **Catch only `dcicutils.redis_utils.RedisException`** — never a `redis.exceptions.*` type.
+  Normalizing driver errors is dcicutils' job. As of dcicutils 8.19.0 only
+  `store_session_token` does so; `from_redis`, `delete_session_token` and
+  `update_session_token` still leak raw driver errors, so those paths currently yield an
+  untyped 500 instead of a 503. Snovault deliberately does **not** compensate for that
+  locally — an upstream fix is in progress. A `strict` xfail in
+  `test_redis_session_auth.py` fails loudly once it lands; the follow-up is to raise the
+  `dcicutils` floor in `pyproject.toml` and drop the marker. See `snovault/redis/README.rst`.
+- `registry[REDIS]` can legitimately be `None`: `redis/redis_connection.py::includeme`
+  swallows startup connection errors and stores `None`. Always go through
+  `get_redis_handler`.
+- Anonymous requests return before touching Redis, so an outage cannot take down public
+  traffic. Preserve that ordering.
+- Identity in Redis mode is the email recorded at login, not a per-request JWT decode. That
+  is what keeps the RAS (RS256/`auth0.public.key`) flow working —
+  `Auth0AuthenticationPolicy.get_token_info` is Auth0-only (HS256/`auth0.secret`) — and keeps
+  session lifetime on exactly one clock, the Redis TTL. `from_redis` yields `''` (not `None`)
+  for a record stored without an email, so the JWT fallback must test truthiness.
+- `session_namespace(registry)` (`env.name` → `indexer.namespace` → constant) must be used at
+  every touchpoint; a writer/reader mismatch silently 401s every session and looks like a
+  token bug.
+
+Tests: `snovault/tests/test_redis_session_auth.py` drives both modes with a dict-backed
+`RedisBase` fake and locally-signed synthetic JWTs — no live Redis, no cloud credentials, no
+outbound Auth0 calls, and no DB. Note that raising an `HTTPException` from a Pyramid tween or
+from the authentication policy does become a proper response (verified); the excview tween's
+"can't catch tweens above it" caveat does not apply to `HTTPException` subclasses.
+
 ## Self-registration field whitelist (`create_unauthorized_user`)
 
 `snovault/authentication.py::create_unauthorized_user` (`POST /create-unauthorized-user`)
