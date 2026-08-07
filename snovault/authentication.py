@@ -283,6 +283,25 @@ def session_identity(request, session):
     return email.lower() if email else None
 
 
+def _note_session_established(request):
+    """ Asserts the `auth0_expired` marker is clear now that a session has just been established.
+
+        Login and callback are the only routes where the *incoming* credential is legitimately not
+        a resolvable session - it is the provider's JWT, or a lapsed session being replaced - so
+        per-request authentication may already have marked the request expired earlier in the tween
+        chain (it does whenever an Authorization header is present, since renderers.security_tween
+        evaluates `request.authenticated_userid` before the view runs). That same tween re-reads the
+        flag AFTER the view returns and, if it is still set, overwrites the response's Set-Cookie
+        with a deletion and forces a 401 - destroying the session we just handed out.
+
+        On the Auth0 paths `get_token_info` already resets the flag as a side effect of verifying
+        the JWT, so this is belt-and-braces there; it is load-bearing on the RAS callback path,
+        which never calls `get_token_info`, and it keeps the invariant from depending on a side
+        effect of an unrelated function.
+    """
+    request.set_property(lambda r: False, 'auth0_expired')
+
+
 def set_session_cookie(request, value, *, samesite):
     """ Sets the credential cookie. `value` is a raw JWT in stateless mode and an opaque session
         token in Redis mode; see SESSION_TOKEN_MODE_NOTES.
@@ -406,6 +425,7 @@ def callback(context, request):
     # samesite is 'lax' rather than 'strict' because this cookie is set on the top-level navigation
     # back from the identity provider.
     set_session_cookie(request, redis_session_token.get_session_token(), samesite='lax')
+    _note_session_established(request)
     return resp_json
 
 
@@ -781,6 +801,7 @@ def _redis_login(request, id_token, *, samesite: str):
 
     session = create_session_token(request, jwt_token=id_token, email=email)
     set_session_cookie(request, session.get_session_token(), samesite=samesite)
+    _note_session_established(request)
 
     return {"saved_cookie": True}
 

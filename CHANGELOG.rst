@@ -60,7 +60,7 @@ Change Log
   ``SESSION_COOKIE_NAME`` constant so every touchpoint agrees. ``get_jwt`` is retained as a
   delegating alias for downstream callers.
 
-* Testing: add ``snovault/tests/test_redis_session_auth.py`` -- 40 tests covering unchanged
+* Testing: add ``snovault/tests/test_redis_session_auth.py`` -- 42 tests covering unchanged
   no-Redis behavior, Redis-mode login/callback/authenticated request/registration/logout, expiry,
   revocation, re-login, raw-JWT non-bypass, outage-vs-auth-failure distinction, and error messages
   not leaking token values. Runs against a dict-backed ``RedisBase`` fake and locally-signed

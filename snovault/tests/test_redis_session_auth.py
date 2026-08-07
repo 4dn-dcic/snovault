@@ -219,6 +219,52 @@ def test_redis_login_yields_opaque_session_token():
     assert '.' not in cookie_value  # a JWT always has two dots; a urlsafe token has none
     # The JWT itself is held server-side, keyed by the opaque token.
     assert redis.store[f'{DEFAULT_SESSION_NAMESPACE}:session:{cookie_value}'].startswith(id_token)
+    assert request.auth0_expired is False
+
+
+def test_redis_login_via_authorization_header_survives_the_security_tween():
+    """ renderers.security_tween evaluates request.authenticated_userid BEFORE the view whenever an
+        Authorization header is present, and re-reads request.auth0_expired AFTER the view returns:
+        if it is still set, it overwrites the response Set-Cookie with a deletion and forces a 401.
+
+        A header login legitimately presents the provider's JWT, which by design does not resolve
+        as a session - so login must clear that marker or it destroys the session it just minted.
+    """
+    redis = FakeRedis()
+    registry = make_registry(redis_handler=redis)
+    id_token = make_jwt()
+    request = make_request(registry, auth_header=id_token, json_body={'id_token': id_token})
+
+    # ...what the security tween does on the way in
+    assert Auth0AuthenticationPolicy().unauthenticated_userid(request) is None
+    assert request.auth0_expired is True
+
+    assert login(None, request) == {'saved_cookie': True}
+
+    # ...and what it re-reads on the way out
+    assert request.auth0_expired is False
+    token = response_cookie(request.response)
+    assert token and token != id_token
+    assert redis.store[f'{DEFAULT_SESSION_NAMESPACE}:session:{token}'].startswith(id_token)
+
+
+def test_redis_login_with_lapsed_cookie_survives_the_security_tween():
+    """ Same hazard on re-login after a session has expired: the stale cookie marks the request
+        expired before the view runs.
+    """
+    redis = FakeRedis()
+    registry = make_registry(redis_handler=redis)
+    id_token = make_jwt()
+    request = make_request(registry, cookie='lapsed-session-token',
+                           auth_header=id_token, json_body={'id_token': id_token})
+
+    assert Auth0AuthenticationPolicy().unauthenticated_userid(request) is None
+    assert request.auth0_expired is True
+
+    login(None, request)
+
+    assert request.auth0_expired is False
+    assert response_cookie(request.response)
 
 
 def test_redis_login_rejects_unverifiable_jwt_and_writes_nothing():
@@ -579,6 +625,8 @@ def test_redis_callback_mints_session_token_for_known_user():
     token = response_cookie(request.response)
     assert token and token != id_token
     assert redis.store[f'{DEFAULT_SESSION_NAMESPACE}:session:{token}'].startswith(id_token)
+    # not marked expired, or the security tween would delete the cookie we just set
+    assert request.auth0_expired is False
 
 
 def test_redis_callback_mints_session_token_for_unregistered_user():
@@ -599,6 +647,7 @@ def test_redis_callback_mints_session_token_for_unregistered_user():
     assert result['@graph'] == [USER_EMAIL]
     token = response_cookie(request.response)
     assert token
+    assert request.auth0_expired is False
     # ...and that session is immediately usable for the registration POST.
     assert session_identity(make_request(registry),
                             resolve_session_token(make_request(registry), token)) == USER_EMAIL
