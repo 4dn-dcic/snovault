@@ -444,9 +444,12 @@ class Indexer(object):
         except SidException as e:
             ignored(e)
             duration = timer() - start
-            log.warning('Invalid max sid. Resending...', duration=duration, cat=cat)
-            # causes the item to be deferred by restarting worker
-            # item will be re-sent (won't affect receive count)
+            # This is the expected snapshot/concurrency guard: update_objects_queue defers the
+            # message and restarts the drain, so a newer worker can render the current data.
+            # It is useful at debug level, but is not an indexing failure or data-loss warning.
+            log.debug('Invalid max sid. Resending...', duration=duration, cat=cat)
+            # Causes the item to be deferred by restarting worker; the item will be re-sent
+            # without affecting its receive count.
             return {'error_message': 'defer_resend'}
         except MissingIndexItemException:
             # cannot find item. This could be due to it being purged.

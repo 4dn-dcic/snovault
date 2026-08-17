@@ -413,6 +413,15 @@ and `snovault/tests/test_loadxl_validate_only.py`. loadxl tests over the framewo
 must pass `noset_last_modified=True` — those schemas have no `last_modified` mixin, so the injected
 field otherwise 422s.
 
+## Indexer operational logging
+
+The per-request `Request timings` record from `snovault/stats.py` is debug-level; request metrics
+remain available through the `X-Stats` response header. `Indexer.update_object`'s `Invalid max sid.
+Resending...` branch is also debug-level because `update_objects_queue` safely requeues the message
+and restarts the drain when a message is ahead of the read-only snapshot. Failed indexing remains
+visible through the existing warning/error paths. DB-free severity regression coverage is in
+`snovault/tests/test_indexer_logging.py`.
+
 ## Maintaining this file
 
 Keep this file for knowledge useful to almost every future agent session in this project.
