@@ -6,8 +6,8 @@ snovault
 Change Log
 ----------
 
-11.36.0.0b1
-===========
+11.36.0
+=======
 
 * Disallow ``skip_links=true`` on every persisting request.
 
