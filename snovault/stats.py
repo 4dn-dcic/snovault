@@ -122,8 +122,9 @@ def stats_tween_factory(handler, registry):
         if getattr(request, '_add_stats_cookie', False):
             response.set_cookie('X-Stats', xs)
 
-        # log all this stuff
-        log.bind(**stats).info("Request timings")
+        # Keep the metrics in X-Stats for request-level diagnostics, but avoid emitting one
+        # high-volume structured record at the normal operational log threshold per request.
+        log.bind(**stats).debug("Request timings")
 
         return response
 

@@ -426,6 +426,11 @@ def load_all_gen(testapp, inserts, docsdir, overwrite=True, itype=None, from_jso
         post_only (bool)   : if set to true posts full item no second round or lookup -
                              use with care - will not work if linkTos to items not in db yet
         skip_types (list)  : if set to a list of item files the process will ignore these files
+        validate_only (bool): if set to true no POST/PATCH persists anything; every request is
+                             made with check_only=true so only the validators run
+        skip_links (bool)  : if set to true, defer link (linkTo) integrity checking to the caller;
+                             only legal together with validate_only, as the server rejects
+                             skip_links=true on any request that is not check_only=true
     Yields:
         Bytes with information on POSTed/PATCHed items
 
@@ -601,6 +606,7 @@ def load_all_gen(testapp, inserts, docsdir, overwrite=True, itype=None, from_jso
                             # To be safe we will unconditionally do skip_links in this case;
                             # to get away with not doing this would require more analysis.
                             # See: https://github.com/4dn-dcic/snovault/pull/283
+                            # Legal because check_only=true above already makes this non-persisting.
                             validate_patch_path += "&skip_links=true"
                             try:
                                 progress(PROGRESS.PATCH) if progress else None
@@ -701,13 +707,20 @@ def load_all_gen(testapp, inserts, docsdir, overwrite=True, itype=None, from_jso
                 if not identifying_path:
                     raise Exception("Item has no uuid nor any other identifying property; cannot PATCH.")
                 normalized_item, deleted_properties = normalize_deleted_properties(an_item)
+                query_params = []
                 if deleted_properties:
-                    if validate_only and skip_links:
-                        identifying_path += f"?delete_fields={','.join(deleted_properties)}&skip_links=true"
-                    else:
-                        identifying_path += f"?delete_fields={','.join(deleted_properties)}"
-                elif validate_only and skip_links:
-                    identifying_path += f"?skip_links=true"
+                    query_params.append(f"delete_fields={','.join(deleted_properties)}")
+                if validate_only:
+                    # This round is normally unreachable in validate_only mode (round one leaves
+                    # second_round_items empty), EXCEPT when patch_only is also set, in which case
+                    # the items come from the patch_only branch above. Without check_only=true this
+                    # PATCH really persists, which both contradicts validate_only and would be the
+                    # one place snovault itself sends skip_links on a write. Make it non-persisting.
+                    query_params.append("check_only=true")
+                    if skip_links:
+                        query_params.append("skip_links=true")
+                if query_params:
+                    identifying_path += "?" + "&".join(query_params)
                 progress(PROGRESS.PATCH) if progress else None
                 res = testapp.patch_json(identifying_path, normalized_item)
                 assert res.status_code == 200
@@ -720,7 +733,9 @@ def load_all_gen(testapp, inserts, docsdir, overwrite=True, itype=None, from_jso
                     filename = " " + filename
                 else:
                     filename = ""
-                yield str.encode(f'PATCH: {identifying_value}{" " + a_type if verbose else ""}{filename}\n')
+                # Mirror round one: validate_only reports CHECK rather than PATCH, since nothing was written.
+                action = "CHECK" if validate_only else "PATCH"
+                yield str.encode(f'{action}: {identifying_value}{" " + a_type if verbose else ""}{filename}\n')
             except Exception as e:
                 progress(PROGRESS.ERROR) if progress else None
                 print('Patching {} failed. Patch body:\n{}\n\nError Message:\n{}'.format(

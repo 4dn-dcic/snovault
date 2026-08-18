@@ -24,6 +24,7 @@ from .resources import (
     Collection,
     Item,
 )
+from .schema_validation import parse_skip_links
 from .util import debug_log
 from .validation import ValidationFailure
 from .validators import (
@@ -178,6 +179,10 @@ def render_item(request, context, render, return_uri_also=False):
 @debug_log
 def collection_add(context, request, render=None):
     '''Endpoint for adding a new Item.'''
+    # Rejects skip_links=true unless this is a non-persisting (check_only=true) request. Done here,
+    # and not only in the schema machinery, so the contract also holds for requests that never reach
+    # link validation at all - eg. validate=false, or a body containing no linkTo fields.
+    parse_skip_links(request)
     check_only = asbool(request.params.get('check_only', False))
     if check_only:
         return {
@@ -230,6 +235,8 @@ def item_edit(context, request, render=None):
     PATCH, always return a dummy response with `check_only=true` and do not
     actually modify the DB with `update_item`
     '''
+    # See collection_add: skip_links=true is only valid on a non-persisting request.
+    parse_skip_links(request)
     check_only = asbool(request.params.get('check_only', False))
     if check_only:
         return {

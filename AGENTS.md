@@ -394,6 +394,34 @@ exists receives one conservative full type reindex the first time selective mode
 enabled; subsequent unchanged deployments can skip it. See
 `snovault/tests/test_selective_reindex.py` for the decision matrix.
 
+## `skip_links` is only legal on non-persisting (`check_only=true`) requests
+
+`skip_links=true` makes the schema machinery tolerate unresolvable `linkTo` values, so honoring it
+on a write would store links that were never validated. `snovault/schema_validation.py::parse_skip_links`
+is the **single** parse point (pyramid `asbool` over `request.params`; never raw-URL/substring
+matching) and raises `HTTPBadRequest` when `skip_links` is true without `check_only=true`. It is
+called from `schema_utils.linkTo`, `schema_validation.normalize_links`, and the top of
+`crud_views.collection_add`/`item_edit` — the view-level calls are load-bearing, because
+`validate=false` and bodies with no `linkTo` fields never reach the schema machinery at all. Add new
+`skip_links` reads through this helper, not a fresh `asbool(...)`.
+
+Corollary in `loadxl.load_all_gen`: `validate_only` must issue every request with `check_only=true`.
+The round-two PATCH is reachable under `validate_only` only when `patch_only` is also set (round one
+otherwise leaves `second_round_items` empty), and it used to persist while sending `skip_links`.
+Tests: `snovault/tests/test_post_put_patch.py` (`test_skip_links_*`, `test_parse_skip_links_unit`)
+and `snovault/tests/test_loadxl_validate_only.py`. loadxl tests over the framework's own test types
+must pass `noset_last_modified=True` — those schemas have no `last_modified` mixin, so the injected
+field otherwise 422s.
+
+## Indexer operational logging
+
+The per-request `Request timings` record from `snovault/stats.py` is debug-level; request metrics
+remain available through the `X-Stats` response header. `Indexer.update_object`'s `Invalid max sid.
+Resending...` branch is also debug-level because `update_objects_queue` safely requeues the message
+and restarts the drain when a message is ahead of the read-only snapshot. Failed indexing remains
+visible through the existing warning/error paths. DB-free severity regression coverage is in
+`snovault/tests/test_indexer_logging.py`.
+
 ## Maintaining this file
 
 Keep this file for knowledge useful to almost every future agent session in this project.

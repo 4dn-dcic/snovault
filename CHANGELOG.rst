@@ -6,6 +6,41 @@ snovault
 Change Log
 ----------
 
+11.36.0
+=======
+
+* Disallow ``skip_links=true`` on every persisting request.
+
+  ``skip_links=true`` tells the schema machinery to tolerate unresolvable ``linkTo`` values. That
+  is legitimate only for callers doing partial/out-of-order validation that never writes (notably
+  smaht-submitr), but nothing stopped it from riding along on a real POST/PUT/PATCH, which would
+  persist items whose links were never validated.
+
+  * New single parse point ``snovault/schema_validation.py::parse_skip_links`` (plus
+    ``is_check_only_request``). It parses the request parameter with pyramid's ``asbool`` - no raw
+    URL or substring inspection - and raises ``HTTPBadRequest`` (HTTP 400) when ``skip_links``
+    is true without ``check_only=true``, instead of silently honoring or silently ignoring it.
+  * Applied at every generic use: ``schema_utils.linkTo`` (generic link validation),
+    ``schema_validation.normalize_links`` (link normalization), and the top of
+    ``crud_views.collection_add`` / ``crud_views.item_edit`` so the contract also holds for
+    requests that never reach link validation (e.g. ``validate=false``, or a body with no links).
+  * The supported non-persisting workflow is unchanged: ``skip_links=true`` together with
+    ``check_only=true`` still validates without writing and still defers link checks.
+
+* ``loadxl``: fix ``validate_only`` + ``patch_only`` persisting updates while claiming to be
+  validation-only. With both set, round one is skipped and every item is handled by the round-two
+  PATCH, which was issued without ``check_only=true`` - a genuine write, and the one place snovault
+  itself sent ``skip_links`` on a write. The round-two PATCH is now issued with ``check_only=true``
+  whenever ``validate_only`` is set, and reports ``CHECK:`` rather than ``PATCH:`` to match round
+  one. The ordinary (not ``validate_only``) load path is unchanged and still writes.
+
+* Regression coverage in ``snovault/tests/test_post_put_patch.py`` (rejected/accepted cases,
+  ``validate=false``, exact ``asbool`` parameter parsing, unit coverage of ``parse_skip_links``,
+  and a test pinning that the schema-level sites themselves go through it) and
+  ``snovault/tests/test_loadxl_validate_only.py`` (the ``validate_only``/``patch_only`` boundary
+  asserted against the stored item and its revision history, plus round one's sanctioned
+  ``check_only=true&skip_links=true`` existing-item validation PATCH).
+
 11.35.2
 =======
 
