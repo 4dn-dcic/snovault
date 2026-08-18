@@ -7,6 +7,7 @@ from types import SimpleNamespace
 
 import pytest
 import structlog
+from elasticsearch.exceptions import ConnectionTimeout, RequestError
 
 from pyramid.decorator import reify
 
@@ -629,6 +630,48 @@ class MappingES:
         self.indices = MappingIndices(index_name, mapping)
 
 
+class DeleteRetryExhaustingIndices(MappingIndices):
+    def __init__(self, index_name, mapping):
+        super().__init__(index_name, mapping)
+        self.delete_attempts = 0
+        self.create_attempts = 0
+
+    def delete(self, index, ignore=None):
+        self.delete_attempts += 1
+        raise RequestError(
+            503,
+            'snapshot_in_progress',
+            {'error': {'type': 'snapshot_in_progress'}, 'status': 503},
+        )
+
+    def create(self, index, body):
+        self.create_attempts += 1
+        return {'acknowledged': True}
+
+
+class ExistsRetryExhaustingIndices(MappingIndices):
+    def __init__(self, index_name, mapping):
+        super().__init__(index_name, mapping)
+        self.exists_attempts = 0
+        self.create_attempts = 0
+
+    def exists(self, index):
+        self.exists_attempts += 1
+        raise ConnectionTimeout('timeout', 'msg', {})
+
+    def create(self, index, body):
+        self.create_attempts += 1
+        return {'acknowledged': True}
+
+
+class RepairDeleteRetryExhaustingES:
+    def __init__(self, indices):
+        self.indices = indices
+
+    def count(self, index):
+        return {'count': 0}
+
+
 def mapping_with_state(state, field_type='keyword'):
     mapping = {'properties': {'field': {'type': field_type}}}
     return build_index_record(
@@ -705,6 +748,82 @@ def test_index_without_stored_signature_is_rebuilt_only_in_selective_mode():
     assert compare_against_existing_mapping(
         es, 'root-index', 'root', record, selective_reindex=True
     ) is False
+
+
+def test_build_index_fails_closed_after_delete_retry_exhaustion(monkeypatch):
+    state = calculated_properties_signature(own_type_registry(), 'root')
+    indices = DeleteRetryExhaustingIndices('root-index', mapping_with_state(state))
+    es = SimpleNamespace(indices=indices)
+    collection = SimpleNamespace(index_settings=lambda: {})
+    app = SimpleNamespace(registry={COLLECTIONS: {'root': collection}})
+
+    monkeypatch.setattr(create_mapping.time, 'sleep', lambda _seconds: None)
+    monkeypatch.setattr(
+        create_mapping, 'calculated_properties_signature', lambda *args: state
+    )
+    monkeypatch.setattr(
+        create_mapping, 'compare_against_existing_mapping', lambda *args, **kwargs: False
+    )
+    monkeypatch.setattr(create_mapping, 'confirm_mapping', lambda *args, **kwargs: 0)
+
+    with pytest.raises(RuntimeError, match='refusing to recreate it'):
+        build_index(
+            app,
+            es,
+            'root-index',
+            'root',
+            {'properties': {'field': {'type': 'keyword'}}},
+            {},
+            False,
+            check_first=True,
+        )
+
+    assert indices.delete_attempts == 90  # 30 outer attempts * 3 safe-execute retries
+    assert indices.create_attempts == 0
+
+
+def test_build_index_fails_closed_after_existence_retry_exhaustion(monkeypatch):
+    state = calculated_properties_signature(own_type_registry(), 'root')
+    indices = ExistsRetryExhaustingIndices('root-index', mapping_with_state(state))
+    es = SimpleNamespace(indices=indices)
+    collection = SimpleNamespace(index_settings=lambda: {})
+    app = SimpleNamespace(registry={COLLECTIONS: {'root': collection}})
+
+    monkeypatch.setattr(
+        create_mapping, 'calculated_properties_signature', lambda *args: state
+    )
+
+    with pytest.raises(RuntimeError, match='could not determine whether'):
+        build_index(
+            app,
+            es,
+            'root-index',
+            'root',
+            {'properties': {'field': {'type': 'keyword'}}},
+            {},
+            False,
+            check_first=True,
+        )
+
+    assert indices.exists_attempts == 3
+    assert indices.create_attempts == 0
+
+
+def test_confirm_mapping_fails_closed_after_delete_retry_exhaustion(monkeypatch):
+    state = calculated_properties_signature(own_type_registry(), 'root')
+    indices = DeleteRetryExhaustingIndices('root-index', mapping_with_state(state))
+    es = RepairDeleteRetryExhaustingES(indices)
+    record = {'mappings': mapping_with_state(state), 'settings': {}}
+
+    monkeypatch.setattr(
+        create_mapping, 'compare_against_existing_mapping', lambda *args, **kwargs: False
+    )
+
+    with pytest.raises(RuntimeError, match='refusing to recreate it'):
+        create_mapping.confirm_mapping(es, 'root-index', 'root', record)
+
+    assert indices.delete_attempts == 3
+    assert indices.create_attempts == 0
 
 
 def test_changed_signature_rebuilds_type_and_queues_entire_collection(monkeypatch):
