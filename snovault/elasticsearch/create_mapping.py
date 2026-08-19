@@ -869,6 +869,7 @@ def build_index(app, es, index_name, in_type, mapping, uuids_to_index, dry_run,
     # note that sometimes we can encounter error because the index we are trying to delete
     # is being snapshot - wait for it to complete then try again
     if this_index_exists:
+        delete_succeeded = False
         allowed_time = as_seconds(minutes=10)  # snapshots can be very slow
         retry_wait = 20  # seconds
         for _ in range(allowed_time // retry_wait):  # recover from snapshot related errors, 10 mins max
@@ -877,15 +878,27 @@ def build_index(app, es, index_name, in_type, mapping, uuids_to_index, dry_run,
                 if res.get('status') == 404:
                     log.info('MAPPING: index %s not found and cannot be deleted' % in_type,
                              collection=in_type)
+                    delete_succeeded = True
                     break
                 else:
-                    assert res.get('acknowledged') is True
+                    if res.get('acknowledged') is not True:
+                        raise RuntimeError(
+                            'MAPPING: delete of existing index %s for %s was not acknowledged; '
+                            'refusing to recreate it' % (index_name, in_type)
+                        )
                     log.info('MAPPING: index successfully deleted for %s' % in_type,
                              collection=in_type)
+                    delete_succeeded = True
                     break
             else:
                 log.error('MAPPING: error on delete index for %s' % in_type, collection=in_type)
                 time.sleep(retry_wait)
+
+        if not delete_succeeded:
+            raise RuntimeError(
+                'MAPPING: could not delete existing index %s for %s after retry budget; '
+                'refusing to recreate it' % (index_name, in_type)
+            )
 
     # first, create the mapping. adds settings and mappings in the body
     res = es_safe_execute(es.indices.create, index=index_name, body=this_index_record)
@@ -912,7 +925,13 @@ def build_index(app, es, index_name, in_type, mapping, uuids_to_index, dry_run,
 
 
 def check_if_index_exists(es, in_type):
-    return es_safe_execute(es.indices.exists, index=in_type)
+    result = es_safe_execute(es.indices.exists, index=in_type)
+    if result is None:
+        raise RuntimeError(
+            'MAPPING: could not determine whether Elasticsearch index %s exists after retries' %
+            in_type
+        )
+    return result
 
 
 def check_and_reindex_existing(app, es, in_type, uuids_to_index, index_diff=False, print_counts=False):
@@ -1147,7 +1166,23 @@ def confirm_mapping(es, index_name, in_type, this_index_record):
             count = es.count(index=index_name).get('count', 0)
             log.info(f'___BAD MAPPING FOUND FOR {in_type}. RETRYING___\nDocument count in that index is {count}.',
                      collection=in_type, count=count, cat='bad mapping')
-            es_safe_execute(es.indices.delete, index=index_name)
+            delete_res = es_safe_execute(es.indices.delete, index=index_name, ignore=[404])
+            if delete_res is None:
+                raise RuntimeError(
+                    'MAPPING: could not delete index %s while repairing mapping for %s; '
+                    'refusing to recreate it' % (index_name, in_type)
+                )
+            if delete_res.get('status') == 404:
+                log.info('MAPPING: index %s not found while repairing mapping for %s' %
+                         (index_name, in_type), collection=in_type)
+            elif delete_res.get('acknowledged') is True:
+                log.info('MAPPING: index successfully deleted while repairing %s' % in_type,
+                         collection=in_type)
+            else:
+                raise RuntimeError(
+                    'MAPPING: delete of index %s while repairing mapping for %s was not '
+                    'acknowledged; refusing to recreate it' % (index_name, in_type)
+                )
             # do not increment tries if an error arises from creating the index
             try:
                 es_safe_execute(es.indices.create, index=index_name, body=this_index_record)
