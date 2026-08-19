@@ -6,6 +6,15 @@ snovault
 Change Log
 ----------
 
+11.36.1
+========
+
+* Elasticsearch mapping creation now fails closed before recreating an index when
+  deletion or existence checks exhaust their retry budgets without a confirmed result.
+  This prevents a timed-out or unacknowledged delete from being followed by a create
+  that collides with the still-existing index; mapping repair follows the same rule.
+  Added focused regression coverage for delete and existence retry exhaustion.
+
 11.36.0
 =======
 
