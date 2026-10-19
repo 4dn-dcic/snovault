@@ -1377,6 +1377,42 @@ def make_s3_client():
     return s3_client
 
 
+def make_s3_client_for_ingestion():
+    """ Builds the S3 client used by the metadata bundle ingestion paths.
+
+        This deliberately does NOT source credentials from the legacy static S3 IAM user keys
+        (``S3_AWS_ACCESS_KEY_ID`` / ``S3_AWS_SECRET_ACCESS_KEY``) carried in the global application
+        configuration. Ingestion runs entirely server-side -- the ``submit_for_ingestion`` view in
+        the portal task and ``process_submission`` in the ingester task -- where the boto3 default
+        credential provider chain already resolves the ECS task role's temporary, self-refreshing
+        credentials. Those are the same credentials ``SubmissionFolio`` has always used to write
+        results to the same metadata bundles bucket.
+
+        Everything else is identical to ``make_s3_client``: same region and same signature version,
+        so SSE-KMS behavior is unchanged. There is deliberately no second ``AssumeRole`` hop and no
+        fallback to static keys if the chain yields nothing or the call is denied -- such a failure
+        must surface rather than be papered over.
+
+        ``make_s3_client`` is intentionally left alone. It also backs ``build_s3_presigned_get_url``,
+        and a URL presigned with temporary credentials stops working when that session expires, which
+        would silently shorten download URL lifetimes.
+    """
+    s3_client_extra_args = {}
+    if 'IDENTITY' in os.environ:
+        identity = assume_identity()
+        s3_client_extra_args['region_name'] = ECSUtils.REGION
+        log.warning("make_s3_client_for_ingestion using the default credential chain"
+                    " (no static S3 entity ID) in boto3 client creation call.")
+        if 'ENCODED_S3_ENCRYPT_KEY_ID' in identity:
+            # This setting is required when testing locally and encrypted buckets need to be accessed.
+            s3_client_extra_args['config'] = Config(signature_version='s3v4')
+    else:
+        log.warning('make_s3_client_for_ingestion called with no identity')
+
+    s3_client = boto3.client('s3', **s3_client_extra_args)
+    return s3_client
+
+
 def build_s3_presigned_get_url(*, params):
     """ Helper function that builds a presigned URL. """
     s3_client = make_s3_client()

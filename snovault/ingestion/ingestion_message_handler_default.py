@@ -3,7 +3,7 @@ import structlog
 from dcicutils.misc_utils import ignored, PRINT
 from .ingestion_listener import (IngestionListener, DEBUG_SUBMISSIONS)
 from ..types.ingestion import SubmissionFolio
-from ..util import (debuglog, vapp_for_email, make_s3_client)
+from ..util import (debuglog, vapp_for_email, make_s3_client_for_ingestion)
 from .common import metadata_bundles_bucket
 from .ingestion_message import IngestionMessage
 from .ingestion_message_handler_decorator import ingestion_message_handler
@@ -57,7 +57,7 @@ def ingestion_message_handler_default(message: IngestionMessage, listener: Inges
 def process_submission(*, submission_id, ingestion_type, app, bundles_bucket=None, s3_client=None):
     ignored(s3_client)  # we might want to restore the ability to pass this, but no one actually does. -kmp 6-Dec-2021
     bundles_bucket = bundles_bucket or metadata_bundles_bucket(app.registry)
-    s3_client = make_s3_client()
+    s3_client = make_s3_client_for_ingestion()
     manifest_name = "{id}/manifest.json".format(id=submission_id)
     log.warning(f'Processing submission {manifest_name}')
     obj = s3_client.get_object(Bucket=bundles_bucket, Key=manifest_name)

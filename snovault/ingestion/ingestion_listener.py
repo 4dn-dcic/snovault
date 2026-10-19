@@ -29,7 +29,7 @@ from ..types.ingestion import SubmissionFolio, IngestionSubmission
 from ..util import (
     debuglog, get_trusted_email, beanstalk_env_from_request,
     register_path_content_type, vapp_for_email,  # vapp_for_ingestion,
-    SettingsKey, make_s3_client, extra_kwargs_for_s3_encrypt_key_id,
+    SettingsKey, make_s3_client_for_ingestion, extra_kwargs_for_s3_encrypt_key_id,
 )
 from .common import metadata_bundles_bucket, get_parameter, IngestionReport
 from .exceptions import UnspecifiedFormParameter, SubmissionFailure  # , BadParameter
@@ -233,7 +233,7 @@ def submit_for_ingestion(context, request):
     manifest_name = "{id}/manifest.json".format(id=submission_id)
 
     # We might need to extract some additional information from the GAC
-    s3_client = make_s3_client()
+    s3_client = make_s3_client_for_ingestion()
 
     upload_time = datetime.datetime.utcnow().isoformat()
     success = True
@@ -320,7 +320,7 @@ def ingestion_status(context, request):
 def process_submission(*, submission_id, ingestion_type, app, bundles_bucket=None, s3_client=None):
     ignored(s3_client)  # we might want to restore the ability to pass this, but no one actually does. -kmp 6-Dec-2021
     bundles_bucket = bundles_bucket or metadata_bundles_bucket(app.registry)
-    s3_client = make_s3_client()
+    s3_client = make_s3_client_for_ingestion()
     manifest_name = "{id}/manifest.json".format(id=submission_id)
     log.warning(f'Processing submission {manifest_name}')
     obj = s3_client.get_object(Bucket=bundles_bucket, Key=manifest_name)
