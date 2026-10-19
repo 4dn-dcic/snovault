@@ -6,6 +6,38 @@ snovault
 Change Log
 ----------
 
+11.36.2
+=======
+
+* Stop the metadata bundle ingestion S3 client from using the legacy static S3 IAM user keys
+  (``S3_AWS_ACCESS_KEY_ID`` / ``S3_AWS_SECRET_ACCESS_KEY``) from the global application
+  configuration. Those keys are not provisioned in newer environments, so every metadata bundle
+  upload failed with ``InvalidAccessKeyId`` on ``PutObject``, and the ingester hit the same error
+  one step later on ``GetObject`` of ``manifest.json``.
+
+  * New ``snovault/util.py::make_s3_client_for_ingestion``, used by
+    ``ingestion_listener.submit_for_ingestion`` and by both ``process_submission``
+    implementations (``ingestion_listener`` and ``ingestion_message_handler_default``). It builds
+    the client from the boto3 default credential provider chain, which server-side resolves the
+    ECS task role's temporary, self-refreshing credentials -- the same credentials
+    ``SubmissionFolio`` already uses to write results to that bucket. Region and signature
+    version, and therefore SSE-KMS behavior, are unchanged.
+  * There is deliberately no second ``AssumeRole`` hop (notably not through the files-only
+    ``S3_UPLOAD_ROLE_ARN``, whose policy does not cover the metadata bundles bucket) and no
+    fallback to static keys when the chain yields nothing or the call is denied: such failures now
+    surface instead of being masked.
+  * ``make_s3_client`` itself is unchanged, so presigned download URLs keep their current
+    credentials and their 36-hour lifetime.
+  * Operator note: the portal and ingester tasks must run under a role with
+    ``s3:PutObject``/``s3:GetObject`` on the metadata bundles bucket and use of the bucket's KMS
+    key. The standard ECS task role already carries both; no IAM or KMS policy widening is
+    proposed. Deployments that were relying on static S3 user keys for ingestion will now use the
+    task role instead.
+  * Regression coverage in ``snovault/tests/test_ingestion_s3_credentials.py`` drives the real
+    view and handlers against a local fake S3 transport that answers based on the access key id in
+    the signed request, plus a loopback container-credentials endpoint for refresh behavior. No
+    network, no AWS, no SQS.
+
 11.36.1
 ========
 
